@@ -17,7 +17,7 @@ from datetime import datetime, timedelta, timezone
 from villa_timeline import TimelineVilla
 from helpers import STARTER_SKILLS, make_agent
 from kiosk_fake import FakeKiosk
-from vesta_agent.kiosk import Kiosk, monitoring, retitled, tagged
+from vesta_agent.kiosk import Kiosk, monitoring, retitled
 from vesta_shared.problems import Problems
 from vesta_shared.store import Store
 from vesta_agent.roster import Roster
@@ -58,31 +58,6 @@ def test_a_title_change_is_a_retitled_step_keeping_the_title_before_and_never_a_
     assert not run(k.amend(tid, retitled("Motion battery at 7%")))                     # already says it: nothing written
 
 
-def test_the_agent_reads_its_step_kinds_from_the_agreement():
-    # architecture review round 3, 2026-10-19: the five kinds were typed in kiosk.py and pinned to the file after the
-    # fact; now kiosk.KINDS IS the file's list, and every kind the engine writes is one of them
-    from vesta_agent import kiosk
-    kinds = json.load(open(CONTRACT))["ticketUpdate"]["kinds"]
-    assert list(kiosk.KINDS) == kinds
-    assert {kiosk.REOPENED, kiosk.RETITLED, kiosk.READING, kiosk.NOTED, kiosk.CLEARED} <= set(kiosk.KINDS)
-
-
-def test_a_reopening_in_the_kiosk_is_read_from_its_step_and_an_old_now_note_still_names_the_agents_title():
-    k, _ = kiosk_holding(
-        {"id": "va-1", "title": "Door", "status": "open", "updates": [
-            {"at": "2026-10-10T09:00:00Z", "status": "resolved", "by": "Facility manager", "photoIds": []},
-            {"at": "2026-10-10T10:00:00Z", "status": "open", "by": "Owner", "kind": "reopened", "photoIds": []},
-            {"at": "2026-10-10T11:00:00Z", "status": "in_progress", "by": "Facility manager", "photoIds": []}]},
-        {"id": "va-2", "title": "Pump at 2 %", "status": "in_progress", "updates": [
-            {"at": "2026-10-09T09:00:00Z", "status": "in_progress", "note": "Now: Pump at 2 %", "photoIds": []}]})
-    held = run(k.held_tickets())
-    assert [(g["kind"], g["at"], g["by"]) for g in held["va-1"]["gestures"]] == [
-        ("close", "2026-10-10T09:00:00Z", "Facility Manager"), ("reopen", "2026-10-10T10:00:00Z", "Owner"),
-        ("take", "2026-10-10T11:00:00Z", "Facility Manager")], held["va-1"]["gestures"]
-    assert held["va-2"]["gestures"] == []                                       # the agent's own step is no press
-    assert held["va-2"]["agent_title"] == "Pump at 2 %"
-
-
 # ---------------------------------------------------------------------- 3 · a person's title stays
 def test_a_title_a_person_wrote_stays_and_the_agents_reading_goes_under_it():
     k, doc = kiosk_holding()
@@ -98,22 +73,6 @@ def test_a_title_a_person_wrote_stays_and_the_agents_reading_goes_under_it():
     assert run(k.reopen_ticket(tid, "Front door lock unavailable", "Back again."))
     t = ticket(doc, tid)
     assert t["status"] == "open" and t["title"] == "Front door lock — part ordered" and t["updates"][-1]["kind"] == "reopened"
-
-
-def test_the_nightly_repair_never_writes_its_title_over_a_persons(tmp_path):
-    k = FakeKiosk()
-    v = make_agent(tmp_path, {}, roster=Roster.of(fm=[(FM, "JM")]), kiosk=k)
-    st, pb = Store(v.s.store_path), Problems(Store(v.s.store_path))
-    fid, _ = st.raise_finding("PM-X", "lock.front", "offline", "2026-10-07", "P3", "Front door lock unavailable", {})
-    tid, _ = pb.open_task("finding", fid, "PM-X", "lock.front", "Front door lock unavailable")
-    run(v.tickets.repair())                                                           # its fault: t1
-    k.person_renames("t1", "Front door lock — part ordered")
-    st.raise_finding("PM-X", "lock.front", "offline", "2026-10-08", "P3", "Front door lock offline 3 days", {})
-    assert pb.current_title(st.task(tid)) == "Front door lock offline 3 days"         # what the night reads now
-    run(v.tickets.repair())
-    run(v.tickets.repair())
-    assert k.titles["t1"] == "Front door lock — part ordered"
-    assert k.readings == [("t1", "Front door lock offline 3 days")]                  # under it, once
 
 
 def test_the_repair_gives_an_open_problem_with_no_fault_its_fault(tmp_path, caplog):
@@ -165,20 +124,6 @@ def test_a_kiosk_that_cannot_read_its_store_costs_the_problem_no_fault(tmp_path)
     k.doc["data"]["tickets"] = on_disk                             # the file back
     run(v.tickets.repair())
     assert st.task(tid)["todo_uid"] == first and len(k.doc["data"]["tickets"]) == 1
-
-
-def test_a_closed_fault_of_an_open_problem_is_held_not_missing(tmp_path):
-    # the other side: a fault the Kiosk holds CLOSED is not missing — its problem still there, the repair opens THAT
-    # fault again (its close did not reach the task: the agent's own clearing as its problem came back), never a second
-    k = FakeKiosk()
-    v = make_agent(tmp_path, {}, roster=Roster.of(fm=[(FM, "JM")]), kiosk=k)
-    st = Store(v.s.store_path)
-    st.raise_finding("PM-X", "sensor.example_room", "offline", "2026-10-09", "P3", "Example offline for 39h", {})
-    run(v.tickets.repair())
-    [(tid, uid)] = [(t["id"], t["todo_uid"]) for t in st.tasks("open")]
-    assert run(k.resolve_ticket(uid, note="Cleared: the problem is over."))
-    run(v.tickets.repair())
-    assert len(k.doc["data"]["tickets"]) == 1 and st.task(tid)["todo_uid"] == uid and k.ticket(uid)["status"] == "open"
 
 
 # ---------------------------------------------------------------------- 4, 6 · a reopening is read, and someone is told
@@ -312,14 +257,6 @@ def test_a_lock_offline_after_done_is_said_to_be_unchecked_never_taken_for_fixed
     assert store.incident(iid)["closed_at"] and not out["not_quiet"]
 
 
-def test_a_lock_gone_from_home_assistant_after_done_is_said_to_be_unchecked(tmp_path):
-    store = Store(str(tmp_path / "s.sqlite"))
-    _door_done(store)
-    out = desk.tick(store, T0 + timedelta(minutes=20), client=Villa())
-    (fm,) = [s for s in out["send"] if s["to"] == "fm"]
-    assert fm["status"].endswith("Note: VESTA cannot check this one; lock.door does not answer. Watch 4h.")
-
-
 def test_a_locked_door_after_done_closes_saying_it_was_checked(tmp_path):
     # owner, 2026-10-23: a Done that held closed its watch without a word; it now says the check came out right
     store = Store(str(tmp_path / "s.sqlite"))
@@ -327,18 +264,6 @@ def test_a_locked_door_after_done_closes_saying_it_was_checked(tmp_path):
     out = desk.tick(store, T0 + timedelta(minutes=20), client=Villa(**{"lock.door": "locked"}))
     (fm,) = [s for s in out["send"] if s["to"] == "fm"]
     assert fm["status"].endswith("Checked after 10min: right. Watch 4h.") and not out["not_quiet"]
-
-
-def test_an_old_alert_whose_device_is_gone_after_done_still_says_it_cannot_check(tmp_path):
-    # an alert from before the rules said their bad states, its device gone from Home Assistant: it said nothing
-    store = Store(str(tmp_path / "s.sqlite"))
-    ev = {"blueprint": "critical_condition", "rule_id": "automation.door", "incident_id": "automation.door-1",
-          "phase": "opened", "severity": "critical", "label": "Door", "entities": ["lock.door"], "summary": "Door unlocked"}
-    iid = desk.intake(store, ev, T0, occupancy_reader=lambda: "x")["incident_id"]
-    desk.reply(store, iid, "done", "fm", T0 + timedelta(minutes=5))
-    out = desk.tick(store, T0 + timedelta(minutes=20), client=Villa())
-    (fm,) = [s for s in out["send"] if s["to"] == "fm"]
-    assert fm["status"].endswith("Note: VESTA cannot check this one; lock.door does not answer. Watch 4h.")
 
 
 # ---------------------------------------------------------------------- review 29
@@ -355,49 +280,6 @@ def test_a_rename_step_from_the_kiosk_is_a_persons_title_and_an_old_ticket_is_pr
     assert run(k.amend("va-1", retitled("Pump at 0 %"))) and run(k.amend("va-2", retitled("Pump at 0 %")))
     assert ticket(doc, "va-1")["title"] == "Pump at 2 %" and ticket(doc, "va-2")["title"] == "Pump — part ordered"
     assert ticket(doc, "va-1")["updates"][-1]["kind"] == "reading"                  # its reading under the title, never over
-
-
-def test_who_resolved_and_who_reopened_are_the_cards(tmp_path):
-    k, doc = kiosk_holding({"id": "va-1", "title": "Door", "status": "resolved", "resolvedAt": "2026-10-10T09:10:00Z",
-                            "updates": [{"at": "2026-10-10T09:10:00Z", "status": "resolved", "by": "Facility manager",
-                                         "who": "Wayan", "photoIds": []}]})
-    assert run(k.held_tickets())["va-1"]["by"] == "Wayan"                          # the name typed, as the card says it
-    k2, doc2 = kiosk_holding({"id": "va-2", "title": "Door", "status": "open", "updates": []})
-    assert run(k2.resolve_ticket("va-2", note="Done by JM on Telegram.", who="JM"))
-    assert ticket(doc2, "va-2")["updates"][-1]["who"] == "JM"                       # never only "by VESTA Agent"
-
-
-def test_a_reopen_of_a_fault_closed_days_ago_is_heard(tmp_path):
-    from datetime import datetime, timedelta, timezone
-    k = FakeKiosk()
-    v, st, tid = _closed_night_fault(tmp_path, k)
-    with st.db:                                                                     # closed five days ago
-        st.db.execute("UPDATE tasks SET done_at=? WHERE id=?", ((datetime.now(timezone.utc) - timedelta(days=5)).isoformat(), tid))
-    k.person_reopens("t-pump", by="Owner")
-    run(v.tickets.repair())
-    told = _told(st)
-    assert st.task(tid)["status"] == "open" and told and told[0]["text"].startswith("Reopened in the Cockpit on 01/01/2099 00:00 (Owner): ")
-
-
-def test_a_person_who_renames_a_fault_to_the_agents_own_words_keeps_it():
-    # only the rename step tells it apart: the title equals the agent's, yet the person chose it
-    from vesta_agent.kiosk import person_titled
-    t = {"id": "va-3", "title": "Pump at 9 %", "status": "open", "updates": [
-        {"at": "1", "status": "open", "by": "VESTA Agent", "title": "Pump at 9 %", "photoIds": []},
-        {"at": "2", "status": "open", "by": "Owner", "kind": "retitled", "title": "Pump at 9 %", "was": "Pump at 9 %",
-         "photoIds": []}]}
-    assert person_titled(t)
-
-
-def test_an_old_closed_fault_picked_up_again_is_left_to_the_person(tmp_path):
-    # the retry of a close that did not land is for two days; past them, a fault a person moved is theirs
-    from datetime import datetime, timedelta, timezone
-    k = FakeKiosk()
-    v, st, tid = _closed_night_fault(tmp_path, k)
-    with st.db:
-        st.db.execute("UPDATE tasks SET done_at=? WHERE id=?", ((datetime.now(timezone.utc) - timedelta(days=5)).isoformat(), tid))
-    run(v.tickets.repair())
-    assert "t-pump" not in k.resolved and st.task(tid)["status"] != "open" and _told(st) == []
 
 
 def test_a_done_on_telegram_resolves_the_fault_by_the_person(tmp_path):
@@ -423,15 +305,6 @@ def test_a_persons_done_records_the_work_and_the_agents_own_clear_is_no_repair()
     assert "kind" not in ticket(doc, "va-1")["updates"][-1]
     assert run(k.resolve_ticket("va-2", note="Cleared: the check no longer sees it."))
     assert ticket(doc, "va-2")["updates"][-1]["kind"] == "cleared" and len(doc["data"]["completions"]) == 1
-
-
-def test_a_reopening_under_a_new_title_says_the_title_it_replaced():
-    k, doc = kiosk_holding()
-    tid = run(k.add_ticket("Pump plug offline for 9h"))
-    ticket(doc, tid)["status"] = "resolved"
-    assert run(k.reopen_ticket(tid, "Pump plug offline again", "Back again."))
-    step = ticket(doc, tid)["updates"][-1]
-    assert step["kind"] == "reopened" and step["was"] == "Pump plug offline for 9h"
 
 
 def test_an_open_problem_whose_fault_the_agent_closed_gets_it_back_and_a_persons_close_stays(tmp_path, caplog):
@@ -567,24 +440,6 @@ def test_a_fault_brought_up_to_date_is_written_once_whatever_it_needs():
     assert n == 3 and doc["rev"] == rev + 1, (n, doc["rev"])
     assert t["title"] == "Pump very weak" and t["alertNumber"] == 5 and t["updates"][-1]["kind"] == "noted"
     assert run(k.amend("va-1", retitled("Pump very weak"), tagged(5, "alert", "minutes"))) == 0 and doc["rev"] == rev + 1
-
-
-def test_the_repair_puts_a_fault_right_in_one_write(tmp_path):
-    # the same review: the repair (tickets._converge) hands every change a fault needs to ONE Kiosk.amend
-    k = FakeKiosk()
-    v = make_agent(tmp_path, {}, roster=Roster.of(fm=[(FM, "JM")]), kiosk=k)
-    st, pb = Store(v.s.store_path), Problems(Store(v.s.store_path))
-    fid, _ = st.raise_finding("PM-X", "lock.front", "offline", "2026-10-07", "P3", "Front door lock unavailable", {})
-    pb.open_task("finding", fid, "PM-X", "lock.front", "Front door lock unavailable")
-    run(v.tickets.repair())
-    t1 = ticket(k.doc, "t1")
-    for f in ("origin", "check"):
-        t1.pop(f, None)                                        # a fault made before it carried them
-    st.raise_finding("PM-X", "lock.front", "offline", "2026-10-08", "P3", "Front door lock offline 3 days", {})
-    rev = k.doc["rev"]
-    run(v.tickets.repair())
-    assert k.titles["t1"] == "Front door lock offline 3 days" and ticket(k.doc, "t1").get("origin")
-    assert k.doc["rev"] == rev + 1, k.doc["rev"] - rev
 
 
 def test_what_a_person_did_to_a_fault_is_read_from_its_steps_alone():

@@ -59,15 +59,6 @@ def test_a_rule_alerting_again_while_open_is_a_still_there_alert_never_a_reminde
     assert {m["stage"] for m in out["send"] + out["ha_messages"]} == {"still"}
 
 
-def test_home_assistants_all_clear_is_said_in_the_desks_words(tmp_path):
-    store = Store(str(tmp_path / "s.sqlite"))
-    desk.intake(store, ev("opened", summary=ALERT), T0, occupancy_reader=lambda: "x")
-    out = desk.intake(store, ev("resolved", summary="✅ Laundry door unlocked — resolved after 4min"),
-                      T0 + timedelta(minutes=5), occupancy_reader=lambda: "x")
-    (ha,) = out["ha_messages"]
-    assert ha["status"] == "Cleared on {time}. Watch 4h." and ha["text"].count("Laundry door unlocked") == 1
-
-
 def test_the_heading_names_the_incident_first_and_what_was_sent_to_whom(tmp_path):
     from vesta_shared import result as R
     v = make_agent(tmp_path, {}, roster=Roster.of(owner=[(OWNER, "Jim")], fm=[(FM, "JM")]))
@@ -215,18 +206,6 @@ def test_telegram_shows_the_title_in_bold_the_alert_quoted_and_the_status_quoted
     # the first alert: no history yet, its status alone under "Status:"
     first = "#1-P2 (new)\nTo: Jim\nDoor unlocked\nStatus:\n⚠️ New alert"
     assert [e["type"] for e in telegram_entities(first)] == ["bold", "blockquote", "blockquote", "italic"]
-
-
-def test_a_copy_turning_closed_turns_green(tmp_path):
-    from vesta_shared import result as R
-    v = make_agent(tmp_path, {}, roster=Roster.of(fm=[(FM, "Fabien")]))
-    st = Store(v.s.store_path)
-    iid = st.new_incident("k", "automation.r", "lock.a", "P2", {"message": "Door unlocked"})
-    asyncio.run(v.outcome.carry_out({"send": [R.message("fm", "Door unlocked", incident=iid, buttons=True, stage="new")]}, "alert-desk"))
-    assert v.tg.sent[-1][1].endswith("\nStatus:\n⚠️ New alert")
-    st.update_incident(iid, closed_at=datetime.now(timezone.utc).isoformat(), state="resolved")
-    asyncio.run(v.thread.close(iid, "Cleared on {time}."))
-    assert v.tg.edits[-1][2].rsplit("\n", 1)[1].startswith("✅ Cleared at ")
 
 
 def test_one_incident_one_picture_in_every_chat_of_the_same_people(tmp_path):

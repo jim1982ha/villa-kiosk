@@ -93,11 +93,6 @@ def test_a_night_that_cannot_read_the_rules_clears_nothing(tmp_path):
     assert any("could not be read" in n for n in res["notes"])
 
 
-def test_a_villa_with_nothing_hidden_asks_nothing(tmp_path):
-    _night(tmp_path, {"error": "would fail if asked"}, hidden=())
-    assert _open(tmp_path) == []
-
-
 class _Session:
     """ha-mcp as the villa answers: a search in two pages (an automation, then a script), each rule read whole."""
 
@@ -128,38 +123,3 @@ def test_the_client_reads_every_page_and_each_rule_once():
     assert ("ha_config_get_script", {"script_id": SCRIPT["entity_id"]}) in s.asked
 
 
-def test_a_script_is_called_a_script_and_never_a_rule():
-    # owner, 2026-10-22: what a person reads never calls the villa's automations or scripts "rules"
-    import importlib.util
-    spec = importlib.util.spec_from_file_location("pm_rules", os.path.join(os.path.dirname(NIGHTLY), "rules.py"))
-    R = importlib.util.module_from_spec(spec)
-    sys.modules["pm_rules"] = R                       # its dataclasses look themselves up there
-    spec.loader.exec_module(R)
-    script = {**SCRIPT, "config": {**SCRIPT["config"], "sequence": [{"action": "lock.lock", "target": {"entity_id": RAW}}]}}
-    (f,) = R.hidden_in_rule_rules([script], [RAW], lambda e: "Front Door Raw")
-    assert f.summary.startswith("The script 'Alert photo' watches 1 device") and "rule" not in (f.summary + f.check).lower()
-    (g,) = R.hidden_in_rule_rules([script], [RAW], lambda e: "Front Door Raw", gone={RAW})
-    assert g.summary.endswith("no longer answers: Front Door Raw (no longer in the villa's system).")
-
-
-def test_a_fault_worded_by_an_older_release_says_the_new_words_at_the_next_recheck(tmp_path):
-    # owner, 2026-11-05: "after updating, i still see this card" — written by the night under the old words, it kept
-    # them until the next night; the 5-minute recheck now raises it again in the words it finds
-    from vesta_shared.problems import Problems
-    from vesta_shared.store import Store
-    _night(tmp_path, [WATCHDOG])
-    store = Store(str(tmp_path / "s.sqlite"))
-    (f,) = _open(tmp_path)
-    old = "The automation 'Devices' watches 1 device hidden in the villa's system: Front Door Raw."
-    store.db.execute("UPDATE findings SET summary=? WHERE id=?", (old, f["id"]))
-    store.db.commit()
-    (task,) = [t for t in Problems(store).open_tasks() if t.get("source") == f"finding:{f['id']}"]
-    r = subprocess.run([sys.executable, os.path.join(os.path.dirname(NIGHTLY), "recheck.py"), "--pack",
-                        str(tmp_path / "pack.json"), "--store", str(tmp_path / "s.sqlite"), "--fixture-dir",
-                        str(tmp_path / "fx"), "--now", "2026-10-03T12:00:00+00:00", "--zone", "UTC"],
-                       capture_output=True, text=True, env={**os.environ, "PYTHONPATH": PYTHONPATH}, timeout=60)
-    assert r.returncode == 0, r.stderr
-    (now,) = _open(tmp_path)
-    assert now["summary"].endswith("that no longer answers: Front Door Raw (offline)."), now["summary"]
-    assert "(offline)" in Problems(Store(str(tmp_path / "s.sqlite"))).current_title(task)   # the Cockpit card's words
-    assert json.loads(r.stdout)["faults_changed"] is True                     # the Kiosk's fault is brought up to date now

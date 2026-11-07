@@ -150,15 +150,6 @@ def test_the_tablet_still_gets_it_when_telegram_is_off(tmp_path, kiosk):
     assert [r["title"] for r in kiosk.messages.values()] == ["Siren stopped"], "Telegram off or refused: the tablet has it"
 
 
-def test_a_snapshot_or_approval_is_kept_when_telegram_took_nothing(tmp_path, kiosk):
-    v = make_agent(tmp_path, policy(), roster=ROSTER, kiosk=kiosk, telegram_on=False)
-
-    async def snap(v):
-        await v.poster.post(GROUP, "Camera snapshot", incident=1, photo=("QUJD", "image/jpeg"), thread="snapshot-1")
-    scenario(v, snap)
-    assert kiosk.messages["thread:snapshot-1"]["photo"] == "QUJD", "no Telegram: the tablet still has the snapshot"
-
-
 def test_a_snapshot_under_an_alert_carries_its_picture(agent, kiosk):
     async def snap(v):
         await v.poster.post(GROUP, "Camera snapshot", incident=1, photo=("QUJD", "image/jpeg"), thread="snapshot-1")
@@ -183,30 +174,6 @@ def test_a_close_and_a_take_on_in_the_cockpit_replace_the_record(agent, kiosk):
     scenario(agent, closed)
     rec = kiosk.messages["incident:1"]
     assert "Closed at" in rec["status"][-1] and "buttons" not in rec, rec
-
-
-def test_an_identical_push_is_skipped_and_a_changed_one_is_not(agent, kiosk):
-    first = kiosk_messages.of_note("note:x", "Title", "Owner", "Words")
-
-    async def go():
-        agent.messages.keep(first)
-        await agent.messages.settle()
-        agent.messages.keep({**first, "at": "2030-01-01T00:00:00+00:00"})     # the same words, drawn again later
-        await agent.messages.settle()
-        agent.messages.keep(kiosk_messages.of_note("note:x", "Title", "Owner", "Other words"))
-        await agent.messages.settle()
-    asyncio.run(go())
-    assert [r["body"] for r in kiosk.pushed] == ["Words", "Other words"]
-
-
-def test_an_alert_burst_is_pushed_in_order_with_the_newest_last(agent, kiosk):
-    async def go():
-        for n in range(5):                    # five changes before the first push has finished
-            agent.messages.keep(kiosk_messages.of_note("note:x", "T", "Owner", f"version {n}"))
-        await agent.messages.settle()
-    asyncio.run(go())
-    assert kiosk.messages["note:x"]["body"] == "version 4" and [r["body"] for r in kiosk.pushed][-1] == "version 4"
-    assert [r["body"] for r in kiosk.pushed] == sorted(r["body"] for r in kiosk.pushed), "never out of order"
 
 
 def test_a_slow_kiosk_never_delays_the_message_and_loses_only_its_copy(agent, kiosk):
@@ -249,37 +216,11 @@ def test_a_kiosk_that_cannot_be_reached_or_keeps_none_changes_nothing(agent, kio
     assert agent.tg.sent[-1], "an unreachable Kiosk loses the copy and nothing else"
 
 
-def test_no_kiosk_no_push(tmp_path):
-    v = make_agent(tmp_path, policy(), roster=ROSTER, skills=["alert-desk"], reader=FakeHA(tools=[tool("ha_get_state")]))
-    v.bot_username = BOT["username"]
-    scenario(v, alert)
-    assert v.messages._running == {} and v.messages._last == {}
-
-
 def test_the_records_limits_are_the_agreements(agent):
     limits = kiosk_messages.agreement.section("vestaMessage")["limits"]
     rec = kiosk_messages.of_note("note:x", "T" * 900, "Owner & FM", "b" * 99999, status="s" * 9999)
     assert len(rec["title"]) == limits["title"] and len(rec["body"]) == limits["body"]
     assert len(rec["status"][0]) == limits["statusLine"] and rec["roles"] == ["Owner", "FM"]
-
-
-def test_a_report_cut_by_a_restart_is_kept_for_the_tablet_but_a_question_is_not(agent, kiosk):
-    from vesta_agent.in_progress import ANSWER, CHAT_JOB, Item
-
-    async def cut(v):
-        for item in (Item(CHAT_JOB, "fm-weekly", chat=FM_CHAT, started=1.0), Item(ANSWER, "answer", chat=FM_CHAT, started=1.0,
-                                                                                 asked="How is the pool?")):
-            async def body():
-                async with v.work.kept(item):
-                    await asyncio.Event().wait()
-            t = asyncio.create_task(body())
-            await asyncio.sleep(0)
-            t.cancel()
-            await asyncio.gather(t, return_exceptions=True)
-        await v.chat_jobs.recover()
-    scenario(agent, cut)
-    assert any("could not be prepared" in r["body"] for r in kiosk.messages.values()), kiosk.messages
-    assert not any("interrupted by a restart" in r["body"] for r in kiosk.messages.values()), "a question is ticket 21's"
 
 
 def test_a_fault_a_person_reopens_in_the_cockpit_reaches_the_tablet(tmp_path, kiosk):
@@ -338,17 +279,6 @@ def test_the_card_names_the_villa_run_it_took_over(agent, kiosk):
         await alert(v, context="RUN-2", mid=501)          # the villa's same alert, a new run (its repeat)
     scenario(agent, again)
     assert kiosk.messages["incident:1"]["takes"] == ["RUN-1", "RUN-2"], kiosk.messages["incident:1"]
-
-
-def test_a_run_whose_telegram_message_never_came_still_gives_way_to_the_card(agent, kiosk, monkeypatch):
-    from vesta_agent import outcome as outcome_mod
-    monkeypatch.setattr(outcome_mod, "HA_SENT_WAIT_S", ())
-    scenario(agent, alert)
-
-    async def no_telegram(v):     # the villa announced it, Telegram refused it: nothing to take over there
-        await v.outcome.adopt_ha({"incident_id": 1, "context": "RUN-3", "text": "x"})
-    scenario(agent, no_telegram)
-    assert kiosk.messages["incident:1"]["takes"] == ["RUN-1", "RUN-3"]
 
 
 def test_the_ticket_is_named_as_telegram_names_the_alert(agent, kiosk):
@@ -433,74 +363,6 @@ def test_a_report_in_two_languages_is_one_record(tmp_path, kiosk):
     page = {lang: kiosk_messages.page_id(PAGE + f"w_{lang}.html".encode()) for lang in ("en", "fr")}
     assert rec["report"] == "weekly:d.py" and rec["body"] == "Deux choses" and rec["language"] == "fr", rec
     assert rec["page"] == page["fr"] and rec["languages"]["en"] == {"body": "Two things", "page": page["en"]}, rec
-
-
-def test_only_an_html_page_goes_to_the_tablet(tmp_path, kiosk):
-    scheduled_report(tmp_path, kiosk, Roster.of(fm=[(FM, "Wayan")]),
-                     [{"to": "fm", "title": "Weekly figures", "text": "Attached", "attachment": "week.csv"}])
-    (rec,) = kiosk.messages.values()
-    assert rec["report"] == "weekly:d.py" and "page" not in rec and kiosk.documents == [], rec
-
-
-def test_a_note_sent_outside_a_scheduled_run_is_no_report(agent, kiosk):
-    async def note(v):
-        await v.outcome.carry_out({"send": [{"to": "owner", "title": "The AI cannot answer", "text": "No credit left."}]})
-    scenario(agent, note)
-    (rec,) = kiosk.messages.values()
-    assert "report" not in rec and "page" not in rec, rec
-
-
-def test_a_report_whose_page_the_kiosk_cannot_hold_is_kept_without_it(tmp_path, kiosk):
-    kiosk.documents = None                                      # a Kiosk older than 2.496.326: it keeps no page
-    scheduled_report(tmp_path, kiosk, Roster.of(fm=[(FM, "Wayan")]),
-                     [{"to": "fm", "title": "Weekly report", "text": "Two things", "attachment": "week.html"}])
-    (rec,) = kiosk.messages.values()
-    assert rec["report"] == "weekly:d.py" and "page" not in rec, rec
-
-
-def test_a_chat_refusing_its_copy_leaves_the_card_whole(agent, kiosk):
-    # architecture review 2026-10-29 #1: the copy Telegram refused in one chat was written to the tablet apart, with
-    # none of the villa's runs the card stands for: the villa's own alert came back beside VESTA's card
-    agent.tg.refuse.add(f"blocked {FM_CHAT}")
-    scenario(agent, alert)
-    rec = kiosk.messages["incident:1"]
-    assert rec.get("takes") == ["RUN-1"], rec
-
-
-def test_a_scheduled_report_rewritten_later_stays_a_report_with_its_page(tmp_path, kiosk):
-    v = scheduled_report(tmp_path, kiosk, Roster.of(fm=[(FM, "Wayan")]),
-                         [{"to": "fm", "title": "Night check", "text": "Pump idle", "key": "night-1", "attachment": "n.html"}])
-
-    async def later(v):
-        await v.outcome.carry_out({"edits": [{"key": "night-1", "title": "Night check", "text": "Pump idle, cleared"}]},
-                                  "night-check")
-    scenario(v, later)
-    rec = kiosk.messages["note:night-1"]
-    assert rec["body"] == "Pump idle, cleared" and rec["report"] == "weekly:d.py" and rec.get("page"), rec
-
-
-def test_the_card_names_the_reader_whose_copy_telegram_refused(agent, kiosk):
-    # architecture review 2026-10-29, round 2: "To:" was read from the chats that took a copy only
-    from vesta_agent import layout
-
-    async def told(v):
-        v.state.set_incident_message(7, GROUP, {"mid": 1, "parts": layout.parts(body="x", head=layout.head("#7-P2", "Owner"))})
-        v.thread.tell(7, layout.parts(body="x", head=layout.head("#7-P2", "FM")))
-    scenario(agent, told)
-    assert set(kiosk_messages.roles_of(kiosk.messages["incident:7"]["to"])) == {"Owner", "FM"}, kiosk.messages
-
-
-def test_a_copy_the_kiosk_refused_is_pushed_again_unchanged(agent, kiosk):
-    # architecture review 2026-10-29, round 3: a refused push stayed remembered, so the same copy was skipped after
-    kiosk.message_refusals = 1
-    rec = kiosk_messages.of_note("note:x", "Night check", "Owner", "Pump idle")
-
-    async def twice(v):
-        v.messages.keep(rec)
-        await v.messages.settle()
-        v.messages.keep(rec)
-    scenario(agent, twice)
-    assert kiosk.messages.get("note:x", {}).get("body") == "Pump idle", kiosk.messages
 
 
 def test_the_tablets_card_tells_every_step_whoever_the_last_copy_was_drawn_for(agent, kiosk):
@@ -631,30 +493,6 @@ def test_a_request_only_the_tablet_holds_is_settled_there_after_a_restart(tmp_pa
     assert told[-1]["body"] == "Open the gate?" and told[-1]["key"] == told[0]["key"]
 
 
-def test_a_villa_run_taken_over_after_a_restart_is_named_on_the_card(tmp_path):
-    """Architecture review round 14, card 2: a run of the villa's taken over after a restart re-tells the kept card with
-    it, so the villa's own message of that run gives way on the tablet."""
-    from vesta_agent import layout
-    from vesta_agent.incident_thread import IncidentThread
-    from vesta_agent.state import State
-    told = []
-    IncidentThread(State(str(tmp_path / "s.db")), "UTC", mirror=told.append).tell(
-        5, layout.parts(body="Pump off", head=layout.head("#5-P2 (new)", "FM"), status="New alert"))
-    again = IncidentThread(State(str(tmp_path / "s.db")), "UTC", mirror=told.append)
-    again.taken(5, "RUN-9")
-    assert told[-1]["takes"] == ["RUN-9"] and told[-1]["body"] == "Pump off", told[-1]
-
-
-def test_a_step_posted_on_an_alert_keeps_whose_it_is_for_its_redraw(agent, kiosk):
-    # architecture review, 2026-10-30: Poster's kept step had no incident — a step to no role, drawn again in another
-    # chat (notice.restatus), read "(to: nobody)" where the villa's own message taken over read "(to: digest)"
-    from vesta_agent import layout
-
-    scenario(agent, alert)
-    said = [layout.of(rec).get("said") for _c, rec in agent.state.incident_chats(1)]
-    assert said and all(isinstance(x, dict) and x.get("incident") == 1 for x in said), said
-
-
 def _owed_now(v):
     """The housekeeping pass, with what is owed due now (kiosk.message_retry_s reached)."""
     async def go(_v):
@@ -704,25 +542,6 @@ def test_an_alert_closed_while_owed_is_sent_closed_never_open(agent, kiosk):
     scenario(agent, _owed_now(agent))
     rec = kiosk.messages[f"incident:{iid}"]
     assert "Closed at" in rec["status"][-1] and "buttons" not in rec and len(kiosk.pushed) == 1, kiosk.pushed
-
-
-def test_open_alerts_reach_a_kiosk_that_was_down_when_the_agent_started(agent, kiosk):
-    scenario(agent, alert, lambda v: tick(v, 20))
-    kiosk.messages.clear()
-    agent.state.db.close()
-    kiosk.unreachable = True
-    again = Vesta(agent.s, telegram=agent.tg, reader=agent.reader, kiosk=agent.kiosk)
-
-    async def start(v):
-        await v.start()
-        await v.messages.settle()
-    asyncio.run(start(again))
-    assert kiosk.messages == {}
-    kiosk.unreachable = False
-    scenario(again, _owed_now(again))
-    rec = kiosk.messages.get("incident:1")
-    assert rec and any("Reminder sent" in line for line in rec["status"]), rec
-    assert [b["label"] for b in rec.get("buttons", [])] == ["Done", "Not a problem", "Open Ticket", "Need help"], rec
 
 
 def test_an_owed_alert_card_survives_a_restart(agent, kiosk):

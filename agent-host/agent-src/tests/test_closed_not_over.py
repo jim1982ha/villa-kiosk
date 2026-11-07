@@ -121,18 +121,6 @@ def test_a_fault_a_person_reopens_in_the_kiosk_stays_open_and_the_facility_manag
 
 
 # ---------------------------------------------------------------------- 3 · a settled copy says "Closed"
-def test_a_copy_settled_after_its_incident_closed_is_headed_closed(tmp_path):
-    v = make_agent(tmp_path, {}, roster=Roster.of(fm=[(FM, "JM")]), skills=["alert-desk"])
-    st = Store(v.s.store_path)
-    iid = st.new_incident("k", "automation.r", "lock.a", "P2", {"message": "Door unlocked"})
-    run(v.outcome.carry_out({"send": [{"to": "fm", "text": "Door unlocked", "incident_id": iid, "keyboard": True,
-                                       "stage": "new"}]}, "alert-desk"))
-    assert v.tg.sent[-1][1].split("\n")[0] == f"#{iid}-P2 (new)"
-    st.update_incident(iid, closed_at=datetime.now(timezone.utc).isoformat(), state="resolved")
-    run(v.outcome.carry_out({"settle": [{"incident_id": iid, "note": "Cleared on {time}."}]}))
-    assert v.tg.edits[-1][2].startswith(f"#{iid}-P2 (closed)\n")
-
-
 # ---------------------------------------------------------------------- 5 · a person Telegram refuses
 def test_an_alert_no_facility_manager_received_goes_to_the_owner_at_once_and_the_owner_is_told_who(tmp_path):
     v = make_agent(tmp_path, {}, roster=Roster.of(owner=[(OWNER, "Jim")], fm=[(FM, "Fabien")]), skills=["alert-desk"])

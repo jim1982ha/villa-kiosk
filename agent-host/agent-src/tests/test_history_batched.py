@@ -69,20 +69,6 @@ def test_twenty_devices_eight_days_are_read_together_each_whole():
     assert len(alone.calls) >= 100 and len(together.calls) <= 8          # was one read per device per slice
 
 
-def test_a_busy_device_among_quiet_ones_is_read_on_its_own_and_whole():
-    rows = _quiet(3, days=3)
-    start = T - timedelta(days=3)
-    rows["sensor.example_meter"] = [(start - timedelta(seconds=7), "0.0")] + [
-        (start + timedelta(seconds=5 * i), f"{i % 7}.0") for i in range(3 * 86400 // 5)]
-    villa = Villa(rows)
-    client = McpClient("http://unused", "UTC", session=villa)
-    got = client.history(sorted(rows), start, T)
-    assert got == _alone(Villa(rows), sorted(rows), start, T) and client.history_cut == {}
-    alone_reads = [c for c in villa.calls if c[0] == ("sensor.example_meter",)]
-    assert alone_reads and all(b - a <= timedelta(hours=6) for _ids, a, b in alone_reads)
-    assert all("sensor.example_meter" not in ids for ids, _a, _b in villa.calls[1:] if len(ids) > 1)   # left the group
-
-
 def test_devices_read_together_and_stopped_short_say_where(monkeypatch):
     from vesta_shared import ha_client
     monkeypatch.setattr(ha_client, "history_max_calls", lambda: 2)

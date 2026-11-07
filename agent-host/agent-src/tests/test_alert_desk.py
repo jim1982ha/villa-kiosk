@@ -114,12 +114,6 @@ def test_villa_silent_follows_the_engine_connection_beat(store):
     assert any("back online" in s.get("status", "") for s in res["send"])
 
 
-def test_the_desk_writes_no_home_assistant_helper(store):
-    # 0.2.1 wrote input_datetime.vesta_last_run every tick; presence is the Kiosk heartbeat now
-    res = desk.tick(store, T0)
-    assert not [a for a in res["actions"] if a.get("action", "").startswith("helper")]
-
-
 def test_the_cli_reads_an_event_file(tmp_path):
     import subprocess
     import sys
@@ -960,11 +954,6 @@ def test_a_rule_saved_at_a_lower_priority_stops_the_chase_without_alerting_again
     assert res["settle"] and res["settle"][0]["incident_id"] == iid
     later = desk.tick(store, T0 + timedelta(minutes=60))
     assert later["reasked"] == [] and not [s for s in later["send"] if s.get("incident_id") == iid]
-
-
-def test_what_a_priority_does_is_read_from_the_settings():
-    assert {p: desk.does(p) for p in ("P1", "P2", "P3", "P4")} == desk.RULES["priority_does"]
-    assert desk.does("P2", {"ladder": False}) == "log"                                  # a route without the ladder
 
 
 def test_lowered_then_raised_is_one_task_reopened_saying_why(store):

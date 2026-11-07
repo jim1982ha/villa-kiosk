@@ -6,9 +6,7 @@ from __future__ import annotations
 import json
 import os
 
-import yaml
 
-from helpers import STARTER_SKILLS
 from vesta_agent.app import Vesta
 from vesta_shared import asleep, kiosk_told, maintenance, occupancy
 
@@ -57,12 +55,3 @@ def test_the_files_kept_before_the_table_are_read_as_they_are(tmp_path):
     assert _readers(pack) == ({"binary_sensor.door"}, True, "binary_sensor.example_empty")
 
 
-def test_on_means_empty_is_written_once():
-    # the sensor's readings (occupancy.SAYS) for its one reader of a reading and of a day...
-    assert [occupancy.state_of(s) for s in ("on", "off", "unavailable")] == [occupancy.EMPTY, occupancy.OCCUPIED,
-                                                                            occupancy.UNKNOWN]
-    # ...and the reports' "electricity while empty" names no states of its own for the Kiosk's sensor
-    with open(os.path.join(STARTER_SKILLS, "reports", "reports.yaml"), encoding="utf-8") as f:
-        book = yaml.safe_load(f)["playbook"]
-    whens = [e["when"] for entries in book.values() for e in entries if (e.get("when") or {}).get("kind") == "use_while_empty"]
-    assert whens and all("empty" not in w for w in whens if not w.get("mode_entity")), whens

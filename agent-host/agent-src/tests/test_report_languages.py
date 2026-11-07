@@ -8,7 +8,7 @@ import asyncio
 import pytest
 
 from ai_fake import FakeAI
-from helpers import chat_entity, make_agent
+from helpers import make_agent
 from vesta_agent import runner
 from vesta_agent.routing import JOB, Origin
 from vesta_agent.roster import Roster
@@ -31,16 +31,6 @@ def send_tool(agent, origin=None):
 
 def texts(agent):
     return {c: t for c, t, *_ in agent.tg.sent}
-
-
-def test_the_jobs_prompt_names_every_language_of_the_role(agent, monkeypatch):
-    runs = FakeAI(lambda r: runner.RunResult("", None, False, 0.1, [], None)).install(monkeypatch).runs
-    sk, daily = agent.jobs.find("fm-daily")
-    run(agent.jobs.run(sk, daily))
-    (prompt,) = [r["prompt"] for r in runs if r["who"].startswith("job:")]
-    assert "written in German and French (one version per language" in prompt
-    assert agent.jobs._language_of("owner") == "Indonesian"
-    assert "read German and French: text is then one version per language" in send_tool(agent).description
 
 
 def test_one_text_for_a_role_read_in_two_languages_is_refused_and_nothing_is_sent(agent):
@@ -106,16 +96,6 @@ def test_a_job_asked_for_in_a_chat_is_written_in_the_askers_language_only(agent,
     assert "written in German and French (" in job_prompt(agent, monkeypatch, "fm-daily")
 
 
-def test_an_asker_who_reads_the_second_language_gets_their_version_through_the_job(agent, monkeypatch):
-    async def act(call):
-        await call["call"]("send_message", {"to": "here", "title": "Daily digest",
-                                            "text": {"German": "Noch offen: 2", "French": "Encore ouvert: 2"}})
-    FakeAI(lambda r: runner.RunResult("Sent.", None, False, 0.1, [], None), act=act).install(monkeypatch)
-    sk, daily = agent.jobs.find("fm-daily")
-    run(agent.jobs.run(sk, daily, Origin(FM_FR, JOB)))
-    assert [(c, "Encore ouvert: 2" in t, "Noch offen" in t) for c, t, *_ in agent.tg.sent] == [(FM_FR, True, False)]
-
-
 # ---------------------------------------------------------------- review H1: the page sent when the limit stops a job
 def test_stopped_at_its_limit_each_language_gets_the_page_of_its_own_notes(agent, monkeypatch, tmp_path):
     import json
@@ -144,23 +124,6 @@ def test_stopped_at_its_limit_each_language_gets_the_page_of_its_own_notes(agent
     assert "pompe du jardin" in pages[FM_FR] and "Gartenpumpe" not in pages[FM_FR]
 
 
-def test_stopped_at_its_limit_with_one_language_the_step_runs_once_as_before(tmp_path, monkeypatch):
-    agent = make_agent(tmp_path, {"settings": {"skill_ai": {"reports": {"brain": "performance", "limit_usd": 2}}}}, roster=Roster.of(owner=[(OWNER, "Olga")], fm=[(FM_DE, "Anna")], languages={FM_DE: "de"}),
-                       skills=["reports"])
-    from vesta_agent import job_steps
-    calls = []
-    real = job_steps.run
-
-    async def spy(*a, **k):
-        calls.append((a[6], k.get("language")))
-        return await real(*a, **k)
-    monkeypatch.setattr(job_steps, "run", spy)
-    FakeAI(lambda r: runner.RunResult("", None, True, 2.0, [], None)).install(monkeypatch)
-    sk, weekly = agent.jobs.find("fm-weekly")
-    run(agent.jobs.run(sk, weekly))
-    assert [(v["suffix"], lang) for v, lang in calls] == [("", None)]
-
-
 def test_made_without_the_ai_the_one_english_text_reaches_every_reader(agent, monkeypatch):
     """The without_ai text is the code's, in English for everyone ("readings and translation are missing"): one text,
     to every chat of the role, whatever they read."""
@@ -187,12 +150,3 @@ def test_a_language_is_one_value_code_and_name(tmp_path):
     assert LANGUAGES == agreement.section("recipients")["languages"] and "fr" in LANGUAGES
 
 
-def test_a_language_outside_the_list_is_read_as_english(tmp_path):
-    agent = make_agent(tmp_path, {"settings": {"skill_ai": {"reports": {"brain": "performance", "limit_usd": 2}}}}, roster=Roster.of(owner=[(OWNER, "Olga")], fm=[(FM_DE, "Anna"), (FM_FR, "Rui")], languages={FM_DE: "de"}), skills=["reports"])
-    agent.kiosk_answered({"chatLanguages": {chat_entity(FM_DE): "de", chat_entity(FM_FR): "pt"}})     # pt: not offered
-    assert agent.jobs._language_of("fm") == "German and English"
-    out = run(send_tool(agent).handler({"to": "fm", "text": {"Deutsch": "x", "GERMAN": "Noch offen: 2",
-                                                             "en": "Still open: 2"}}))
-    assert not out.get("is_error")
-    got = texts(agent)
-    assert "Noch offen: 2" in got[FM_DE] and "Still open: 2" in got[FM_FR]

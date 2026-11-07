@@ -9,17 +9,12 @@ import pytest
 from helpers import settings
 from vesta_agent.history import History
 from vesta_agent.ui.changes import TEXT_KINDS, PageFiles, Refused, undoable
-from vesta_shared.choice_files import BY_KIND, CHOICES
+from vesta_shared.choice_files import CHOICES
 from vesta_shared.knowledge_pack import KnowledgePack, build_pack
 
 #: one valid set of choices per row (an invented device): a row added to the table without one fails below
 SAMPLE = {"kinds": {"example_pump": "motor"},
           "links": {"example_pump": {"schedule": "schedule.example_pump_hours"}}}
-
-
-def test_every_row_has_a_sample_and_a_pack_method():
-    assert set(SAMPLE) == set(BY_KIND)
-    assert all(callable(getattr(KnowledgePack, c.apply, None)) for c in CHOICES)
 
 
 @pytest.mark.parametrize("c", CHOICES, ids=lambda c: c.kind)

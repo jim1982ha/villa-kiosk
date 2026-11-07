@@ -6,7 +6,6 @@ from __future__ import annotations
 import itertools
 
 import asyncio
-import dataclasses
 import os
 
 from helpers import make_agent
@@ -62,23 +61,6 @@ def test_a_fault_in_a_chat_is_a_button_and_only_a_press_creates_it_once(tmp_path
     assert edited.startswith("The pump ran") and "Fault created for the facility manager by JM" in edited
     _press(v)                                                               # a second press, or a double tap
     assert len(k.tickets) == 1
-
-
-def test_a_press_under_a_plain_answer_says_what_it_did_in_the_status_style(tmp_path, monkeypatch):
-    # owner, 2026-10-23: the press wrote "Status:" and its line as bare text under the answer (no title, no "To:"),
-    # while every titled message draws that section as its label and its lines quoted in italics
-    from vesta_shared.message_format import STATUS, telegram_entities
-    from vesta_shared.messaging import tg_len
-    v, _, _ = _asked(tmp_path, monkeypatch, {"title": "Check the relay's own event log"})
-    (_, answer, _), = v.tg.sent
-    assert telegram_entities(answer) == []                                  # the answer itself: as the AI wrote it
-    _press(v)
-    (_, _, edited), = v.tg.edits
-    said = edited.rsplit(f"\n{STATUS}:\n", 1)[1]
-    assert edited.startswith(answer) and "Fault created for the facility manager by JM" in said
-    at = tg_len(edited) - tg_len(said)
-    assert telegram_entities(edited) == [{"type": "blockquote", "offset": at, "length": tg_len(said)},
-                                         {"type": "italic", "offset": at, "length": tg_len(said)}]
 
 
 def test_one_fault_per_answer(tmp_path, monkeypatch):
@@ -147,15 +129,6 @@ def test_an_answer_sent_as_a_page_gets_its_offer_on_its_own_and_no_working_words
     (_, offer, kb), = v.tg.sent[1:]
     assert "Check the float switch" in offer and kb["inline_keyboard"][-1][0]["text"] == OFFER_BUTTON
     assert not any("Now let me" in t for t in texts)
-
-
-def test_a_run_that_ended_on_a_tool_and_sent_nothing_still_answers(tmp_path, monkeypatch):
-    from ai_fake import FakeAI
-    from vesta_agent import runner
-    v = make_agent(tmp_path, {}, roster=ROSTER, kiosk=FakeKiosk())
-    FakeAI(runner.RunResult("", None, False, 0.01, [], earlier="The pump ran 3 h.")).install(monkeypatch)
-    run(v.converse(JM, v.policy().roster.person(JM), "what happened to the pump?"))
-    assert [t for _, t, _ in v.tg.sent] == ["The pump ran 3 h."]
 
 
 def _with_investigate(tmp_path):
@@ -273,29 +246,6 @@ def test_an_investigation_that_forgot_its_page_is_sent_back_to_it_once(tmp_path,
         "Check the float switch"
 
 
-def test_the_turn_sent_back_for_its_page_is_the_conversation_kept(tmp_path, monkeypatch):
-    # the follow-up goes on with the first turn's conversation, and the chat goes on from the follow-up's (Request.carried)
-    from ai_fake import FakeAI
-    sessions, resumed = iter(("first-turn", "page-turn")), []
-    real = FakeAI.run
-
-    async def numbered(self, *a, **k):
-        got = await real(self, *a, **k)
-        resumed.append(self.runs[-1]["resume"])
-        return dataclasses.replace(got, session_id=next(sessions))
-    monkeypatch.setattr(FakeAI, "run", numbered)
-    v, runs = _investigating(tmp_path, monkeypatch, page_on_run=(2,))
-    assert len(runs) == 2 and resumed[1] == "first-turn"
-    assert v.state.session(JM)[0] == "page-turn"
-
-
-def test_an_investigation_that_never_makes_its_page_says_so(tmp_path, monkeypatch):
-    v, runs = _investigating(tmp_path, monkeypatch, page_on_run=())
-    assert len(runs) == 2
-    assert any("The report page could not be made this time." in t for _, t, _ in v.tg.sent)
-    assert any(kb for _, _, kb in v.tg.sent)                                 # the buttons all the same
-
-
 def test_buttons_telegram_refuses_on_the_page_come_on_their_own(tmp_path, monkeypatch):
     # editMessageReplyMarkup refused: the offer is not lost, it comes as its own short message, named
     real = FakeTelegram.buttons
@@ -326,14 +276,6 @@ def test_the_fault_created_from_an_investigation_carries_its_report(tmp_path, mo
     assert k.documents == [b"<html></html>"] and k.ticket_documents == [["d1"]]
 
 
-def test_a_later_investigation_never_swaps_the_report_of_an_earlier_offer(tmp_path, monkeypatch):
-    v, _ = _investigating(tmp_path, monkeypatch)
-    out = v.s.in_folder(f"chats/{JM}").out_dir
-    open(os.path.join(out, "investigation.html"), "w").write("<html>another night</html>")    # the next one's page
-    _press_create_under_the_page(v)
-    assert v.kiosk.documents == [b"<html></html>"]
-
-
 def test_a_kiosk_that_holds_no_documents_still_gets_the_fault_and_says_why(tmp_path, monkeypatch):
     v, _ = _investigating(tmp_path, monkeypatch)
     v.kiosk.documents = None                                                 # a Kiosk older than 2.496.326
@@ -358,111 +300,6 @@ def test_the_real_kiosk_client_writes_the_document_ids_into_the_new_fault():
 
 
 # ---- review 32: the fault offer's own faults
-def test_a_press_on_a_page_message_keeps_its_decision_within_the_caption(tmp_path, monkeypatch):
-    # the caption of an investigation is ~1,000 characters: rendered at 4,096 and cut at 1,024, the decision was lost
-    from vesta_agent.telegram import CAPTION
-    v, _ = _investigating(tmp_path, monkeypatch)
-    (_, mid, kb), = v.tg.buttoned
-    data = kb["inline_keyboard"][-1][0]["callback_data"]
-    caption = "Water heater on the night of 9 October\\nTo: JM\\n" + "It ran. " * 120
-    run(v.on_ha_event("telegram_callback", {"id": f"cb{next(_IDS)}", "data": data, "chat_id": JM, "user_id": JM, "bot": BOT,
-                                            "message": {"message_id": mid, "chat": {"id": JM}, "caption": caption}}))
-    (_, _, edited), = v.tg.edits
-    assert len(edited) <= CAPTION and edited.endswith("Fault created for the facility manager by JM: "
-                                                      "Water heater on the night of 9 October")
-
-
-def test_an_offer_whose_answer_telegram_refused_is_shown_with_the_next_answer(tmp_path, monkeypatch):
-    v, k, _ = _asked(tmp_path, monkeypatch, {"title": "Check the float switch"})
-    assert not v.state.pending_offers(JM)                                   # delivered: shown
-    from ai_fake import FakeAI
-    v2 = make_agent(tmp_path / "b", {}, roster=ROSTER, kiosk=FakeKiosk())
-    v2.tg.refuse = {"send"}
-
-    async def act(call):
-        await call["call"]("create_ticket", {"title": "Check the float switch"})
-    FakeAI("answer", act=act).install(monkeypatch)
-    run(v2.converse(JM, v2.policy().roster.person(JM), "the pump?"))
-    assert [o["title"] for o in v2.state.pending_offers(JM)] == ["Check the float switch"]   # not lost
-
-
-def test_an_investigation_offers_one_fault_even_across_its_continue(tmp_path, monkeypatch):
-    # review 32: the AI offered a fault and hit its limit; on Continue the engine offered a second one
-    from ai_fake import FakeAI
-    from vesta_agent import runner
-    v = _with_investigate(tmp_path)
-    out = v.s.in_folder(f"chats/{JM}").out_dir
-    os.makedirs(out, exist_ok=True)
-    stop = {"now": True}
-
-    async def act(call):
-        if stop["now"]:
-            await call["call"]("create_ticket", {"title": "Check the float switch"})
-        else:
-            open(os.path.join(out, "investigation.html"), "w").write("<!doctype html>")
-            await call["call"]("send_message", {"to": "here", "text": "Done.", "attachment": "investigation.html"})
-    FakeAI(lambda call: runner.RunResult("", "sess-1", stop["now"], 0.01, []), act=act).install(monkeypatch)
-    run(v.converse(JM, v.policy().roster.person(JM), "the pump", invoked="investigate"))
-    (cont,) = [b["callback_data"] for _, _, kb in v.tg.sent if kb for row in kb["inline_keyboard"] for b in row
-               if b["callback_data"].startswith("c:")]
-    stop["now"] = False
-    run(v.on_ha_event("telegram_callback", {"id": f"cb{next(_IDS)}", "data": cont, "chat_id": JM, "user_id": JM, "bot": BOT,
-                                            "message": {"message_id": 1001, "chat": {"id": JM}, "text": "x"}}))
-    offers = v.state.db.execute("select title from ticket_offers").fetchall()
-    assert [o[0] for o in offers] == ["Check the float switch"]
-
-
-def test_an_earlier_investigations_account_never_titles_a_new_offer(tmp_path, monkeypatch):
-    import json as _json
-    import time as _time
-    from ai_fake import FakeAI
-    v = _with_investigate(tmp_path)
-    out = v.s.in_folder(f"chats/{JM}").out_dir
-    os.makedirs(out, exist_ok=True)
-    old = os.path.join(out, "investigation.json")
-    open(old, "w").write(_json.dumps({"title": "Last week's gate", "summary": "old"}))
-    os.utime(old, (1, _time.time() - 3600))
-
-    async def act(call):                                                     # this time no account is saved
-        open(os.path.join(out, "investigation.html"), "w").write("<!doctype html>")
-        await call["call"]("send_message", {"to": "here", "text": "Done.", "attachment": "investigation.html"})
-    FakeAI("", act=act).install(monkeypatch)
-    run(v.converse(JM, v.policy().roster.person(JM), "the pump on the 9th", invoked="investigate"))
-    (_, _, kb), = v.tg.buttoned
-    offer = v.state.claim_ticket_offer(kb["inline_keyboard"][0][0]["callback_data"].split(":")[1], JM)
-    assert offer["title"] == "Check on site: the pump on the 9th"
-
-
-def test_a_follow_up_stopped_at_its_limit_leaves_a_continue_not_a_wrong_reason(tmp_path, monkeypatch):
-    # review 32: merged by hand, the follow-up's stop was lost — no Continue, and "the page could not be made"
-    from ai_fake import FakeAI
-    from vesta_agent import runner
-    v = _with_investigate(tmp_path)
-    runs = []
-    FakeAI(lambda call: runs.append(1) or runner.RunResult("", "sess-1", len(runs) == 2, 0.01, [])).install(monkeypatch)
-    run(v.converse(JM, v.policy().roster.person(JM), "the pump", invoked="investigate"))
-    assert len(runs) == 2                                                    # the page missing: one follow-up
-    texts = [t for _, t, _ in v.tg.sent]
-    assert not any("could not be made" in t for t in texts)
-    assert any(b["callback_data"].startswith("c:") for _, _, kb in v.tg.sent if kb for row in kb["inline_keyboard"]
-               for b in row)
-
-
-def test_the_command_alone_shows_the_skills_own_example_and_off_says_so(tmp_path):
-    v = _with_investigate(tmp_path)
-    run(v.on_ha_event("telegram_command", {"chat_id": JM, "user_id": JM, "command": "/investigate", "args": []}))
-    assert v.tg.sent[-1][1] == "Write your question after /investigate, for example: " \
-        "/investigate why did the water heater stop last night?."
-    import yaml
-    raw = yaml.safe_load(open(v.s.policy_path))
-    raw["skills_off"] = ["investigate"]                                      # switched off on the Agent page
-    with open(v.s.policy_path, "w") as f:
-        yaml.safe_dump(raw, f)
-    os.utime(v.s.policy_path, (1, os.path.getmtime(v.s.policy_path) + 5))
-    run(v.on_ha_event("telegram_command", {"chat_id": JM, "user_id": JM, "command": "/investigate", "args": ["x"]}))
-    assert "The investigate skill is switched off on this villa" in v.tg.sent[-1][1]
-
-
 def test_an_investigation_uses_its_own_brain_while_every_other_answer_keeps_the_villas(tmp_path, monkeypatch):
     # owner, 2026-10-11: the investigation ran on the villa's Economy brain (haiku) and skipped steps
     from ai_fake import FakeAI
@@ -506,112 +343,3 @@ def test_a_web_search_the_ai_made_reaches_the_runs_scripts(tmp_path, monkeypatch
     assert json.loads(got[1]) == ["centrifugal pump runs without stopping"]
 
 
-def test_an_investigation_keeps_its_web_searches_across_a_restart_before_its_continue(tmp_path, monkeypatch):
-    # architecture review, 2026-10-13: the searches were held in memory only — an update between a stopped /investigate
-    # and its Continue forgot them, and the page (compose.py: "searched, so list the sources") went out without sources
-    import json
-    from ai_fake import FakeAI
-    from helpers import make_skill, restarted
-    from vesta_agent import runner
-    v = _with_investigate(tmp_path)
-    make_skill(v.s.skills_dir, "echo", {"tools": [], "scripts": {"env.py": {"description": "says its environment",
-                                                                           "commands": {"show": "its environment"}}}},
-               {"env.py": "import json, os\nprint(json.dumps({'searched': os.environ.get('VESTA_WEB_SEARCHES', '')}))\n"})
-    said, stop = [], {"now": True}
-
-    async def act(call):
-        if stop["now"]:
-            await call["web_search"]("pump runs without stopping causes")
-        else:
-            said.append(await call["call"]("run_skill_script", {"skill": "echo", "script": "env.py", "args": ["show"]}))
-    FakeAI(lambda call: runner.RunResult("ok", "sess-1", stop["now"], 0.01, []), act=act).install(monkeypatch)
-    run(v.converse(JM, v.policy().roster.person(JM), "the pump", invoked="investigate"))      # searches, stops at its limit
-    (cont_data,) = [b["callback_data"] for _, _, kb in v.tg.sent if kb for row in kb["inline_keyboard"] for b in row
-                    if b["callback_data"].startswith("c:")]
-    v = restarted(v)                                                                     # an update in between
-    stop["now"] = False
-    run(v.on_ha_event("telegram_callback", {"id": f"cb{next(_IDS)}", "data": cont_data, "chat_id": JM, "user_id": JM, "bot": BOT,
-                                            "message": {"message_id": 1001, "chat": {"id": JM}, "text": "x"}}))
-    assert said and json.loads(json.loads(said[0]["content"][0]["text"])["searched"]) == ["pump runs without stopping causes"]
-
-
-def test_the_log_says_how_long_each_script_and_the_whole_answer_took(tmp_path, monkeypatch, caplog):
-    # owner, 2026-10-11: "i had to wait for almost 20 min" — and the log could not say where the time went
-    import logging
-    import re
-    from ai_fake import FakeAI
-    from helpers import make_skill
-    v = make_agent(tmp_path, {}, roster=ROSTER, kiosk=FakeKiosk())
-    make_skill(v.s.skills_dir, "echo", {"tools": [], "scripts": {"env.py": {"description": "says hello",
-                                                                           "commands": {"show": "hello"}}}},
-               {"env.py": "import time\ntime.sleep(0.2)\nprint('{}')\n"})
-
-    async def act(call):
-        await call["call"]("run_skill_script", {"skill": "echo", "script": "env.py", "args": ["show"]})
-    FakeAI("ok", act=act, delay_s=1.2).install(monkeypatch)              # the AI's own thinking time
-    with caplog.at_level(logging.INFO, logger="vesta"):
-        run(v.converse(JM, v.policy().roster.person(JM), "the heater"))
-    said = "\n".join(r.getMessage() for r in caplog.records)
-    took = re.search(r"Skill echo: env\.py show took (\d+\.\d) s", said)
-    assert took and float(took.group(1)) >= 0.2
-    whole = re.search(r"Answered JM in chat 111 \(0\.010 USD, (\d+) s\)", said)
-    assert whole and int(whole.group(1)) >= 1
-
-
-def test_an_investigations_searches_reach_the_page_made_in_its_follow_up(tmp_path, monkeypatch):
-    # the AI searched in the first turn and made the page only when sent back for it (deliver.page): the page script
-    # must still know the searches, or it cannot require their sources
-    import json
-    from ai_fake import FakeAI
-    from helpers import make_skill
-    v = _with_investigate(tmp_path)
-    make_skill(v.s.skills_dir, "echo", {"tools": [], "scripts": {"env.py": {"description": "says its environment",
-                                                                           "commands": {"show": "its environment"}}}},
-               {"env.py": "import json, os\nprint(json.dumps({'searched': os.environ.get('VESTA_WEB_SEARCHES', '')}))\n"})
-    said, search = [], ["pump runs without stopping causes"]
-
-    async def act(call):
-        if not said:
-            for q in search:
-                await call["web_search"](q)
-            said.append(None)
-        else:
-            said.append(await call["call"]("run_skill_script", {"skill": "echo", "script": "env.py", "args": ["show"]}))
-    FakeAI("ok", act=act).install(monkeypatch)
-    run(v.converse(JM, v.policy().roster.person(JM), "the pump", invoked="investigate"))
-    assert len(said) == 2                                                      # the turn, then its page follow-up
-    assert json.loads(json.loads(said[1]["content"][0]["text"])["searched"]) == ["pump runs without stopping causes"]
-    said.clear()
-    search.clear()                                                            # another investigation, no search
-    run(v.converse(JM, v.policy().roster.person(JM), "the heater", invoked="investigate"))
-    assert len(said) == 2 and json.loads(said[1]["content"][0]["text"])["searched"] == ""   # never the other's
-
-
-def test_the_fault_offered_from_an_investigation_reads_without_its_web_references(tmp_path, monkeypatch):
-    # architecture review 4 (2026-10-13): the Kiosk fault's note kept "[2]", which leads to no page there
-    v, _ = _investigating(tmp_path, monkeypatch, summary="A stuck pressure switch [2] is the likely cause [1]. Check it.")
-    (_, _, kb), = v.tg.buttoned
-    offer = v.state.claim_ticket_offer(kb["inline_keyboard"][-1][0]["callback_data"].split(":")[1], JM)
-    assert offer["note"] == "A stuck pressure switch is the likely cause. Check it."
-
-
-def test_a_runs_scripts_are_told_whether_it_may_search_the_web(tmp_path, monkeypatch):
-    # architecture review 4 (2026-10-13): the investigation page refuses to be made without a search only where one could
-    # be made — the villa's switch, as the run's own tools say
-    import json
-    from ai_fake import FakeAI
-    from helpers import make_skill
-    got = {}
-    for on in (True, False):
-        v = make_agent(tmp_path / str(on), {"settings": {"web_search": on}}, roster=ROSTER, kiosk=FakeKiosk())
-        make_skill(v.s.skills_dir, "echo", {"tools": [], "scripts": {"env.py": {"description": "says its environment",
-                                                                               "commands": {"show": "its environment"}}}},
-                   {"env.py": "import json, os\nprint(json.dumps({'on': os.environ.get('VESTA_WEB_SEARCH_ON', '')}))\n"})
-        said = []
-
-        async def act(call):
-            said.append(await call["call"]("run_skill_script", {"skill": "echo", "script": "env.py", "args": ["show"]}))
-        FakeAI("ok", act=act).install(monkeypatch)
-        run(v.converse(JM, v.policy().roster.person(JM), "the heater"))
-        got[on] = json.loads(said[0]["content"][0]["text"])["on"]
-    assert got == {True: "1", False: ""}

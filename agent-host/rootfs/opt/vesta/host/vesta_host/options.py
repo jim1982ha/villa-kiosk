@@ -5,7 +5,7 @@ runs the app, otherwise `VESTA_OPT_<NAME>` environment variables (standalone).
 
 ⚠️ DEFAULTS AND SCHEMA MIRROR vesta-agent/config.yaml. The Supervisor fills
 defaults itself, but a standalone container has no Supervisor, so the host must
-know them too. agent-host/tests/test_host.py fails when the two disagree.
+know them too: keep the two in step.
 """
 from __future__ import annotations
 

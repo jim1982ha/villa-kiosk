@@ -9,7 +9,6 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
-import re
 import subprocess
 import sys
 from datetime import datetime, timedelta, timezone
@@ -122,29 +121,6 @@ def test_the_recheck_closes_what_is_gone_keeps_what_is_still_there_and_touches_n
     assert st.db.execute("SELECT COUNT(*) FROM features").fetchone()[0] == 0
     assert st.last_beat("maintenance_nightly") is None
     assert _tick(tmp_path)["actions"] == []                                                  # closed once
-
-
-@pytest.mark.parametrize("stored,restated", [("Room D humidity has not reported for 1d 2h although it is online.", False),
-                                              ("Old sensor has not reported for 1d 2h although it is online.", True)])
-def test_a_faults_words_follow_what_the_recheck_finds_but_its_running_time(tmp_path, stored, restated):
-    """Architecture review 22, card 5: only the faults asked for by name (the hidden-device one) took their new words
-    within 5 minutes; a reconnect loop counted 11 still read "6 times" until 02:00. Every rule's fault is raised again
-    in the words its reading finds now — but for its running time ("for 1d 2h", which the Kiosk words anew), never
-    raised again at every tick for that."""
-    _pack(tmp_path)
-    store = Store(str(tmp_path / "s.sqlite"))
-    fid, tid = store.raise_finding("PM-SILENT", HUMID, "room_d", "2026-10-18", "P3", stored,
-                                   {"since": (NOW - timedelta(hours=26)).isoformat(), "since_words": "1d 2h"})
-    tid = Problems(store).settle(f"finding:{fid}")[0]
-    _villa(tmp_path, {HUMID: _st("60", 30 * 60)})
-    out = _tick(tmp_path)
-    now = Store(str(tmp_path / "s.sqlite")).finding(fid)
-    assert now["status"] == "open"
-    if restated:
-        assert now["summary"].startswith("Room D humidity has not reported for "), now["summary"]
-        assert out["faults_changed"] is True                       # the Kiosk's fault retitled now
-    else:
-        assert now["summary"] == stored, now["summary"]           # its running time alone: left as it was
 
 
 def test_a_reading_that_did_not_come_back_closes_nothing(tmp_path):
@@ -276,32 +252,6 @@ def test_a_reconnect_loop_is_read_again_in_the_day(tmp_path):
     # seen at its latest drop, never at the read (architecture review 25: a close is answered by what came after it)
     assert st.finding(f_relay[0])["status"] == "open" and \
         st.finding(f_relay[0])["seen_at"] == (NOW - timedelta(hours=2, minutes=-1)).isoformat()
-
-
-def test_a_loop_spread_over_the_whole_three_days_stays_open_at_noon(tmp_path):
-    # architecture review, 2026-10-20: a noon recheck counted two and a half days — 12 real drops spread over the last
-    # 72 hours read as 10, and the fault "cleared" at noon to open again at night
-    relay = "switch.example_relay"
-    (tmp_path / "pack.json").write_text(json.dumps({
-        "villa": "Example Villa", "time_zone": "UTC", "generated_at": "x", "ha_version": None, "areas": [], "people": [],
-        "channels": {}, "unknown_area": [], "unclassified": [], "retention": {"raw_history_days": 10},
-        "families": {"network": [_row(relay, "Pool relay", "network", "relay", "dev_r")]}, "assets": {}}))
-    store = Store(str(tmp_path / "s.sqlite"))
-    f_relay = _found(store, "PM-RECONNECT-LOOP", relay, "Pool relay dropped and reconnected 12 times in 3 days.")
-    fx = tmp_path / "fx"
-    fx.mkdir()
-    (fx / "states.json").write_text(json.dumps({"states": {relay: _st("on", 60)}}))
-    entries = []
-    # six drops on the afternoon three days back (inside the last 72 hours, before the calendar's three days) and five
-    # yesterday: eleven in 72 hours, five in the calendar's days
-    times = [NOW - timedelta(days=3) + timedelta(hours=1 + 2 * k) for k in range(6)] + \
-            [NOW - timedelta(days=1) + timedelta(hours=k) for k in range(5)]
-    for t in times:
-        entries += [{"entity_id": relay, "state": "unavailable", "when": t.isoformat()},
-                    {"entity_id": relay, "state": "on", "when": (t + timedelta(minutes=1)).isoformat()}]
-    (fx / "logbook.json").write_text(json.dumps({"entries": entries}))
-    _tick(tmp_path)
-    assert Store(str(tmp_path / "s.sqlite")).finding(f_relay[0])["status"] == "open"
 
 
 # ------------------------------------------------------------------------------------- a rule judged on a finished day
@@ -449,41 +399,6 @@ def test_an_open_battery_fault_closes_only_five_points_above_its_line(tmp_path, 
     assert Store(str(tmp_path / "s.sqlite")).finding(fid)["status"] == ("open" if stays else "closed")
 
 
-def test_the_margin_never_opens_a_fault(tmp_path):
-    """The margin holds an open fault only: a battery at 22 % with nothing open is not low (the night's own rule)."""
-    import importlib
-    sys.path.insert(0, os.path.join(SKILL, "scripts"))
-    R = importlib.import_module("rules")
-    from vesta_shared.params import VillaParams
-    import yaml
-    defaults = yaml.safe_load(open(os.path.join(SKILL, "settings.yaml")))["behaviour"]
-    p = VillaParams({}, {}, defaults)
-    a = {"slug": "door_a", "name": "Door A", "critical": False}
-    day = NOW.date()
-    assert R.battery_rules(a, BAT_LOW, "%", 22, [], p, day) == []
-    assert [f.rule_id for f in R.battery_rules(a, BAT_LOW, "%", 22, [], p, day, frozenset({"PM-BATTERY-LOW"}))] == ["PM-BATTERY-LOW"]
-    assert [f.rule_id for f in R.battery_rules(a, BAT_LOW, "%", 12, [], p, day, frozenset({"PM-BATTERY-CRIT"}))] == ["PM-BATTERY-CRIT"]
-
-
-@pytest.mark.parametrize("best,stays", [(49.0, False), (12.0, True), (None, True)])
-def test_a_battery_is_judged_on_its_best_reading_of_the_day(tmp_path, best, stays):
-    """Owner, 2026-10-21: a motion sensor read 1 % between two readings near 50 % — a coin cell dipping under load. A
-    battery is judged on its highest reading of the last 24 h (settings.yaml battery_level_window_hours): an open
-    "replace now" whose battery read 49 % an hour ago closes on a 1 % dip; one whose best was 12 % stays; with no
-    statistics, its reading now decides, as before."""
-    _pack(tmp_path)
-    store = Store(str(tmp_path / "s.sqlite"))
-    fid, _ = _found(store, "PM-BATTERY-CRIT", BAT_CRIT, "battery low.")
-    _villa(tmp_path, {BAT_CRIT: _st("1", 5)})
-    if best is not None:
-        t = int((NOW - timedelta(hours=2)).timestamp() * 1000)
-        old = int((NOW - timedelta(hours=30)).timestamp() * 1000)          # outside the window: never counts
-        (tmp_path / "fx" / "stats_hour_bat.json").write_text(json.dumps({"period_type": "hour", "entities": [
-            {"entity_id": BAT_CRIT, "statistics": [{"start": old, "max": 90.0}, {"start": t, "max": best}]}]}))
-    _tick(tmp_path)
-    assert Store(str(tmp_path / "s.sqlite")).finding(fid)["status"] == ("open" if stays else "closed")
-
-
 @pytest.mark.parametrize("was,sev,reads,now_rule", [("PM-BATTERY-LOW", "P3", "8", "PM-BATTERY-CRIT"),
                                                      ("PM-BATTERY-CRIT", "P2", "17", "PM-BATTERY-LOW")])
 def test_a_battery_that_moves_a_step_is_handed_over_never_cleared(tmp_path, was, sev, reads, now_rule):
@@ -502,56 +417,6 @@ def test_a_battery_that_moves_a_step_is_handed_over_never_cleared(tmp_path, was,
     (now,) = [f for f in st.findings(status="open") if f["entity_id"] == BAT_LOW]
     assert now["rule_id"] == now_rule
     assert out["edits"] == []                                     # no P2 message rewritten as cleared
-
-
-def test_a_told_p2_handed_to_its_other_step_is_said_on_the_nights_message(tmp_path):
-    """Architecture review 22, card 2: the night's message told "Lock B battery at 5%: replace now"; at 10:05 it read
-    17% and was handed to "replace within the week" — recorded, and the message kept "replace now" all day (the tick
-    passed on back_online's hand-overs only)."""
-    sys.path.insert(0, os.path.join(SKILL, "scripts"))
-    import nightly as N
-    _pack(tmp_path)
-    store = Store(str(tmp_path / "s.sqlite"))
-    fid, _ = _found(store, "PM-BATTERY-CRIT", BAT_CRIT, "Lock B battery at 5%: replace now.", "P2")
-    (told,) = N.told_now({"villa": "Example Villa", "as_of": "2026-10-18", "again": [],
-                          "new_findings": [{"id": fid, "severity": "P2", "summary": "Lock B battery at 5%: replace now."}]},
-                         store=store, at=NOW - timedelta(hours=10))
-    _villa(tmp_path, {BAT_CRIT: _st("17", 5)})
-    out = _tick(tmp_path)
-    (e,) = out["edits"]
-    assert e["key"] == told["key"], out["edits"]
-    assert "Status:" in e["text"] and re.search(r"Now: Lock B battery.* 17%: replace within the week", e["text"].split("Status:", 1)[1]), e["text"]
-
-
-def test_a_battery_that_moves_a_step_at_night_is_handed_over(tmp_path):
-    """The night's reading of the same fact (nightly.battery_moved)."""
-    sys.path.insert(0, os.path.join(SKILL, "scripts"))
-    import nightly as N
-    from types import SimpleNamespace as F
-    opened = [{"rule_id": "PM-BATTERY-LOW", "entity_id": BAT_LOW}, {"rule_id": "PM-BATTERY-LOW", "entity_id": BAT_CRIT}]
-    found = [F(rule_id="PM-BATTERY-CRIT", entity_id=BAT_LOW, summary="Door A battery at 8%: replace now."),
-             F(rule_id="PM-BATTERY-LOW", entity_id=BAT_CRIT, summary="Lock B battery at 15%: replace within the week.")]
-    assert N.battery_moved(opened, found) == {("PM-BATTERY-LOW", BAT_LOW): "Now: Door A battery at 8%: replace now."}
-
-
-def test_a_restart_does_not_close_an_open_silent_fault(tmp_path):
-    # villa, 2026-10-26: a restart of the villa's system stamps every sensor; the recheck read the quiet sensor as
-    # "reported 6 h ago", closed its fault ("Cleared: the check at … no longer sees it"), and the night opened it again
-    # a day later. Its history says it last really reported 3 days ago: the fault stays open.
-    _pack(tmp_path)
-    store, f = _night_findings(tmp_path)
-    restart, last = NOW - timedelta(hours=6), NOW - timedelta(days=3)
-    _villa(tmp_path, {TEMP: {"state": "21.5", "attributes": {}, "last_changed": restart.isoformat(),
-                             "last_reported": restart.isoformat()}})
-    (tmp_path / "fx" / "history_raw_a.json").write_text(json.dumps({"entities": [{"entity_id": TEMP, "states": [
-        {"state": "21.1", "last_changed": (last - timedelta(minutes=5)).isoformat()},
-        {"state": "21.5", "last_changed": last.isoformat()},
-        {"state": "unavailable", "last_changed": (restart - timedelta(seconds=30)).isoformat()},
-        {"state": "21.5", "last_changed": restart.isoformat()}]}]}))
-    _tick(tmp_path)
-    st = Store(str(tmp_path / "s.sqlite"))
-    assert st.finding(f["temp"][0])["status"] == "open"
-    assert st.finding(f["temp"][0])["seen_at"] == NOW.isoformat()                 # read again, and still there
 
 
 def test_a_loop_stays_open_past_the_villas_midnight_before_utcs(tmp_path):

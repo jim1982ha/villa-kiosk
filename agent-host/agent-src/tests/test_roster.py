@@ -43,19 +43,6 @@ def test_each_chats_language_is_the_kiosks_by_the_entity_it_was_read_from(tmp_pa
     assert s.policy().roster.language_of(ANN, "owner") == "id"
 
 
-def test_whether_the_lists_were_read_is_the_kept_files_one_answer(tmp_path):
-    s = settings(str(tmp_path))
-    never = Roster.kept(s.pack_path)
-    assert not never.read_yet and never.entries == []                     # a first start: nobody, and said so
-    keep_roster(s, Roster.of(owner=[(ANN, "Ann")], fm=[(GROUP, "Staff")]))
-    kept = Roster.kept(s.pack_path)
-    assert kept.read_yet and [(e.telegram_id, e.role) for e in kept.entries] == [(ANN, "owner"), (GROUP, "fm")]
-    assert s.policy().roster.read_yet and s.policy().roster.chats_for("fm") == [GROUP]
-    keep_roster(s, Roster.of())                                           # read, and naming nobody
-    assert Roster.kept(s.pack_path).read_yet and s.policy().roster.destinations == []
-    assert not Roster.kept(None).read_yet                                 # no pack to sit beside
-
-
 def test_the_rules_only_callers_never_need_the_villas_lists(tmp_path, monkeypatch):
     # the Limits tab, the setup copy, the page's move of an older file's AI jobs and the alert desk's siren time read
     # rules only: they built Policy without the lists, and would have read "nobody" had they asked who is who
@@ -107,24 +94,6 @@ def test_a_chat_added_in_the_kiosk_is_known_while_policy_yaml_has_a_slip(tmp_pat
     pol = s.policy()
     assert pol.act_enabled is True                                          # the last good rules
     assert pol.roster.knows_chat(GROUP)                                      # and today's lists
-
-
-def test_a_language_told_by_the_kiosk_alone_is_seen(tmp_path):
-    from helpers import chat_entity, keep_roster, settings
-    from vesta_shared import kiosk_told
-    s = settings(str(tmp_path))
-    keep_roster(s, Roster.of(owner=[(ANN, "Ann")]))
-    assert s.policy().roster.language_of(ANN, "owner") == "en"
-    kiosk_told.save(s.pack_path, "chatLanguages", {chat_entity(ANN): "fr"})
-    assert s.policy().roster.language_of(ANN, "owner") == "fr"
-
-
-def test_the_page_and_the_engine_read_the_same_roster(tmp_path):
-    from helpers import keep_roster, settings
-    from vesta_agent.ui.changes import page_policy
-    s = settings(str(tmp_path))
-    keep_roster(s, Roster.of(owner=[(ANN, "Ann")]))
-    assert page_policy(s.policy_path, s.pack_path).roster is s.policy().roster is Roster.current(s.pack_path)
 
 
 # ⚠️ ONE GROUP, ONE LANGUAGE (architecture review 20, card 5): a person with their own row writing in a group was

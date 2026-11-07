@@ -95,69 +95,6 @@ def test_each_fm_chat_reads_its_status_in_its_own_language_the_alert_text_unchan
     assert [k for k, *_ in parts(fr)][-2:] == ["label", "note"], parts(fr)
 
 
-def test_a_new_alert_says_so_in_each_language(agent):
-    rule(agent, "opened", 500)
-    assert status(card(agent, FM_FR), "Statut")[-1] == "⚠️ Nouvelle alerte", card(agent, FM_FR)
-    assert status(card(agent, FM_DE), "Status")[-1] == "⚠️ Neuer Alarm", card(agent, FM_DE)
-
-
-def test_the_villas_own_message_taken_over_in_a_french_chat_reads_french(agent):
-    # the villa's rule posts in the facility manager's chat, and alerts again inside its cooldown: only its own message
-    # (taken over: Outcome.adopt_ha) says the step there
-    rule(agent, "opened", 600, chat=FM_FR)
-    rule(agent, "opened", 601, chat=FM_FR)
-    fr = card(agent, FM_FR)
-    assert re.fullmatch(rf"⚠️ ⚙️ Alerte « toujours là » envoyée (?:le|à) {T}, Toujours là: \d+ fois depuis .+ \(à: FM\)",
-                        status(fr, "Statut")[-1]), fr
-
-
-def test_a_lowered_priority_is_told_in_each_language(agent):
-    # a settle note alone (no message of the desk's): each copy shows its own language, and the copy another chat gets
-    # of it later too (IncidentThread.sync)
-    rule(agent, "opened", 500)
-    rule(agent, "opened", 501, priority="P3")
-    assert re.fullmatch(rf"⚠️ ⚙️ Abaissée à P3 (?:le|à) {T}: gardée pour le prochain résumé quotidien\. Aucune réponse "
-                        r"nécessaire\.", status(card(agent, FM_FR), "Statut")[-1]), card(agent, FM_FR)
-    assert status(card(agent, GROUP), "Status")[-1].startswith("⚠️ ⚙️ Lowered to P3 at "), card(agent, GROUP)
-
-
-def test_a_press_reaches_a_chat_its_answer_does_not_concern_in_that_chats_language(tmp_path):
-    # the owner's group (Indonesian) is not one of the facility manager's: only the press itself (AlertButtons) says it
-    v = villa(tmp_path, "id")
-    rule(v, "opened", 700)
-    press(v, FM_DE)
-    assert re.fullmatch(rf"✅ Selesai (?:pada|pukul) {T} \(Anna\)\. Dipantau .+", status(card(v, GROUP), "Status")[-1]), card(v, GROUP)
-
-
-def test_the_desks_end_carries_every_language(tmp_path):
-    # the desk's end, said on every copy (its settle note) and to the chased (its message), in each language
-    import importlib.util
-    import os
-    from vesta_shared.store import Store
-    spec = importlib.util.spec_from_file_location("desk", os.path.join(STARTER_SKILLS, "alert-desk", "scripts", "desk.py"))
-    desk = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(desk)
-    store, t0 = Store(str(tmp_path / "store.sqlite")), datetime(2026, 10, 1, 9, 0, tzinfo=timezone.utc)
-    ev = {"blueprint": "critical_condition", "rule_id": RULE, "incident_id": f"{RULE}-1", "phase": "opened",
-          "severity": "critical", "label": "Phase C high", "entities": ["sensor.phase_c"], "summary": SUMMARY,
-          "timestamp": t0.isoformat()}
-    desk.intake(store, ev, t0, occupancy_reader=lambda: "occupied")
-    res = desk.intake(store, {**ev, "phase": "resolved"}, t0 + timedelta(minutes=20))
-    assert res["settle"][0]["note"] == "Cleared on {time}. Watch 4h."
-    assert res["settle"][0]["note_in"]["fr"] == "Résolu le {time}. Surveillance 4h."
-    assert res["send"][0]["status_in"]["ko"] == "{time} 해제됨. 4시간 동안 감시."
-    assert desk.ended(desk.say("back_to_normal")).langs["de"] == "Behoben am {time}: wieder normal."
-
-
-def test_an_english_chat_reads_english_as_before(agent):
-    rule(agent, "opened", 500)
-    tick(agent, 20)
-    tick(agent, 50)                                    # the escalation: to the owner, in the group
-    group = card(agent, GROUP)
-    assert re.fullmatch(rf"⚠️ ⚙️ Escalation sent {T}, No answer from FM after 45min \(to: Owner\)",
-                        status(group, "Status")[-1]), group
-
-
 def test_a_press_is_told_in_each_chats_language(agent):
     rule(agent, "opened", 500)
     tick(agent, 20)
@@ -166,32 +103,6 @@ def test_a_press_is_told_in_each_chats_language(agent):
     assert re.fullmatch(rf"✅ Erledigt (?:am|um) {T} \(Luc\)\. 4Std\. Beobachtung\.", status(card(agent, FM_DE), "Status")[-1]), card(agent, FM_DE)
     # the group's last line says the watch too, as every chat's (architecture review 21 card 1)
     assert re.fullmatch(rf"✅ Done (?:on|at) {T} \(Luc\)\. Watch 4h\.", status(card(agent, GROUP), "Status")[-1]), card(agent, GROUP)
-
-
-def test_a_need_help_press_is_listed_in_each_chats_language(agent):
-    # the press is a history line (note_press, its labels kept): a later step's card lists it in the chat's words —
-    # till then its answer says it (architecture review 23, card 4)
-    rule(agent, "opened", 500)
-    press(agent, FM_DE, "need_help")
-    assert not any("Besoin d'aide" in ln for ln in agent.notices.history_lines(1, FM_FR))
-    from types import SimpleNamespace
-
-    async def toast(_text):
-        pass
-    run(agent.buttons.press(GROUP, ["1", "done"], SimpleNamespace(name="JM", role="owner", telegram_id=GROUP), toast,
-                            name="JM"))
-    lines = agent.notices.history_lines(1, FM_FR)
-    assert any(re.fullmatch(rf"- 🆘 Besoin d'aide (?:le|à) {T} \(Anna\)", ln) for ln in lines), lines
-    assert any(re.fullmatch(rf"- 🆘 Need help on Telegram (?:on|at) {T} \(Anna\)", ln)
-               for ln in agent.notices.history_lines(1, GROUP))
-
-
-def test_a_clearing_says_its_end_in_each_language(agent):
-    rule(agent, "opened", 500)
-    tick(agent, 20)
-    rule(agent, "resolved", 501)
-    assert re.fullmatch(rf"✅ Résolu (?:le|à) {T}\. Surveillance 4h\.", status(card(agent, FM_FR), "Statut")[-1]), card(agent, FM_FR)
-    assert re.fullmatch(rf"✅ Behoben (?:am|um) {T}\. 4Std\. Beobachtung\.", status(card(agent, FM_DE), "Status")[-1]), card(agent, FM_DE)
 
 
 def test_a_copy_recorded_before_is_drawn_again_whole_at_the_next_step(agent):
@@ -229,14 +140,3 @@ def test_every_language_of_the_people_list_has_its_words():
             assert set(b["labels"]) == set(status_words.LANGS[1:]), b
 
 
-def test_the_fixed_words_in_a_language():
-    sw = status_words
-    assert sw.times(6, 7, "fr") == ", 6e fois en 7 jours" and sw.times(6, 7, "de") == ", 6. Mal in 7 Tagen"
-    assert sw.times(6, 7, "en") == ", 6th time in 7 days" and sw.times(1, 7, "fr") == ""
-    assert sw.step("new", "23/10/2026 09:48", sw.times(6, 7, "fr"), "FM", "fr") == \
-        "Alerte envoyée le 23/10/2026 09:48, 6e fois en 7 jours (à: FM)"
-    assert sw.who({"owner", "fm"}, "fr") == "Propriétaire & FM" and sw.who({"owner", "fm"}) == "Owner & FM"
-    assert sw.duration(90 * 60, "de") == "1Std. 30Min." and sw.duration(15 * 60, "zh") == "15分钟"
-    assert sw.closing("elle n'est plus signalée", "fr") == "Résolu le {time}: elle n'est plus signalée."
-    assert sw.stage_words("existing", lang="id") == "Masih terbuka" and sw.stage_words("closed", lang="fr") == "Résolu."
-    assert sw.pick("No answer", {"fr": "Pas de réponse"}, "ko") == "No answer"

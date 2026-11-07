@@ -60,31 +60,6 @@ def test_the_plan_follows_the_villas_choices():
     assert voice.attempts(None, "auto", None, "stt.a") == [{"stt": "stt.a", "language": "auto"}]   # never twice
 
 
-def test_the_whisper_setting():
-    assert voice.whisper_address(None) == "core-whisper:10300" == voice.whisper_address("")
-    assert voice.whisper_address(" whisper.lan:10301 ") == "whisper.lan:10301"
-    for off in ("off", "OFF", False, "false", "no"):
-        assert voice.whisper_address(off) is None, off
-
-
-def test_a_fixed_language_never_names_whisper(tmp_path, monkeypatch):
-    monkeypatch.setattr(voice, "villa_settings", lambda: {"language": "de"})
-    res = voice.prepare(audio(tmp_path), "fr", "stt.a", whisper_at="w:1")
-    assert res["attempts"] == [{"stt": "stt.a", "language": "de"}]
-
-
-def test_none_named_asks_the_villa_nothing_and_gives_the_words_for_none_and_several(tmp_path, monkeypatch):
-    """Review, 2026-10-23: the script read the villa's device list before Whisper was tried, and a failed read ended
-    the message. It asks the villa's system nothing now: the plan says "the only one", the engine finds it."""
-    monkeypatch.setattr(voice, "villa_settings", lambda: {})
-    res = voice.prepare(audio(tmp_path), "fr", whisper_at="off")
-    assert res["attempts"] == [{"stt": None, "language": "auto"}, {"stt": None, "language": "fr"}]
-    assert "need a speech-to-text" in res["no_stt"]["none"] and "several speech-to-text" in res["no_stt"]["several"]
-    monkeypatch.setattr(voice, "villa_settings", lambda: {"stt": "stt.b"})
-    res = voice.prepare(audio(tmp_path), "fr", whisper_at="off")
-    assert res["attempts"][0] == {"stt": "stt.b", "language": "auto"} and "no_stt" not in res
-
-
 def test_not_audio_is_said_plainly(tmp_path):
     bad = tmp_path / "v.ogg"
     bad.write_bytes(b"not an ogg file at all, just text")

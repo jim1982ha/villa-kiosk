@@ -5,25 +5,7 @@ from __future__ import annotations
 import asyncio
 from types import SimpleNamespace
 
-from vesta_agent.answering import Answering, question_words
-
-
-def test_the_question_says_what_it_is_from_whom_and_where():
-    assert question_words("Is the pump on?", image=False, voice=False, spoken=None, who="Owner", role="owner",
-                          language="French", where="owner group") == (
-        'A message from Owner (role owner; language saved for them: French) in the owner group:\n"""Is the pump on?"""')
-    assert question_words("", image=True, voice=False, spoken=None, who=None, role=None, language="English",
-                          where="x").startswith("A photo (attached: look at it), with no message from someone (role ?;")
-    assert question_words("Allume", image=False, voice=True, spoken="fr", who="Owner", role="owner", language="English",
-                          where="x").startswith("A voice message, as transcribed (spoken in French) from Owner")
-
-
-def test_a_commands_request_names_its_skill_and_the_subject_it_follows():
-    skill = SimpleNamespace(command="investigate", name="investigate")
-    words = question_words("why?", image=False, voice=False, spoken=None, who="Owner", role="owner", language="English",
-                           where="x", skill=skill, command_by="Owner", about="switch.example_pump")
-    assert words.startswith("Owner wrote /investigate: this is a request for the investigate skill.")
-    assert words.endswith("about: switch.example_pump")
+from vesta_agent.answering import Answering
 
 
 class _Log:

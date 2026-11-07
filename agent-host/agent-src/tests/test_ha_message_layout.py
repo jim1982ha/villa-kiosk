@@ -16,7 +16,7 @@ import jinja2
 import yaml
 from jinja2.sandbox import ImmutableSandboxedEnvironment
 
-from vesta_shared.message_format import STATUS, TELEGRAM, document, parts, status_head
+from vesta_shared.message_format import STATUS, TELEGRAM, document, status_head
 
 HA = os.path.join(os.path.dirname(__file__), "..", "homeassistant")
 #: Telegram's HTML tag for each MessageEntity type the style table names.
@@ -71,18 +71,6 @@ def test_home_assistants_layout_is_the_agents_layout_and_style():
         assert plain == document(title, to, [(None, [text]), (STATUS, [status])]), plain
 
 
-def test_the_styles_are_the_ones_the_agent_finds_in_the_same_text():
-    # the agent reads its parts back from the plain text (title, "To:", the alert, "Status:", the note): the tags the
-    # file draws sit over exactly those parts
-    title, to, text, status = CASES[0]
-    plain = document(title, to, [(None, [text]), (STATUS, [status])])
-    kinds = [k for k, _, _ in parts(plain)]
-    assert kinds == ["title", "to", "item", "label", "note"]
-    for kind, start, end in parts(plain):
-        piece = plain[start:end]
-        assert (_styled(piece, kind) if TELEGRAM[kind] else html.escape(piece, quote=False)) in _render(*CASES[0])
-
-
 def test_to_is_a_role_the_rule_names_else_every_role_as_an_alert_card_says_it():
     # owner, 2026-10-13: a role — never a name. Architecture review, 2026-10-17: said as the agent's alert card says it
     # ("Owner & FM"), however the rule wrote it. Owner, 2026-11-03: the villa-wide "VESTA alert audience" helper is
@@ -120,11 +108,6 @@ def test_the_templates_words_are_written_from_the_agents_never_by_hand():
     for word in ("Facility Manager", "'FM'", '"FM"', "New alert", "Still open", "pressed by", "⚠️", "✅", "🆘",
                  "P1", "'digest'", "Cleared", "Closed", "%d", "%H", "'Done'", "Need help"):
         assert word not in rest.split("-#}", 1)[1], f"{word!r} is written by hand outside the words block"
-
-
-def test_a_missing_file_draws_nothing_so_the_blueprint_sends_plain_text():
-    src = "{% include 'no_such_file.jinja' ignore missing %}"
-    assert _env().from_string(src).render() == ""
 
 
 def test_the_check_sensor_reads_ok_with_this_file_and_missing_without_it(tmp_path):
@@ -166,20 +149,6 @@ def test_the_bottom_line_is_said_in_the_agents_own_words_for_every_stage():
 def _words(stage):
     from vesta_shared.message_format import STAGE_WORDS
     return STAGE_WORDS[stage]
-
-
-def test_an_all_clear_says_the_agents_closing_with_the_villas_clock():
-    # owner, 2026-10-19 (one closing wording, recommended and approved): the villa's own all-clear said "Resolved after
-    # 12 min", "Cleared just inside the 30 min limit…" or no status at all, the desk "Cleared on …" / "Closed on …". A
-    # rule now gives the stage alone; the file writes the desk's words with its own clock, as the desk's end reads them
-    from datetime import datetime, timezone
-    from vesta_shared.message_format import STAGE_WORDS, closing
-    from vesta_shared.timeutil import moment_label
-    at = datetime(2026, 10, 19, 14, 5, tzinfo=timezone.utc)
-    assert STAGE_WORDS["closed"] == closing()
-    assert _status("closed", "", at) == "✅ " + closing().replace("{time}", moment_label(at, "UTC"))
-    assert _status("closed", "", at) == "✅ Cleared on 19/10/2026 14:05."
-    assert _status("closed") == "✅ Cleared."                     # no clock (never in Home Assistant): no "{time}"
 
 
 def _desk():

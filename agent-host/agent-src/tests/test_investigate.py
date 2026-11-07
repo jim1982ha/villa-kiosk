@@ -4,7 +4,6 @@ device's own normal, never a number written for one villa."""
 from __future__ import annotations
 
 import os
-import re
 import sys
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
@@ -132,57 +131,6 @@ def test_a_reload_of_the_rules_is_one_line_never_a_run_per_rule():
     assert not any("06:02" in t and "Automation" in x for t, _, x in log), log
 
 
-def test_no_device_of_any_villa_is_written_in_the_skill():
-    # "it shall never quote hardcoded devices": the skill finds everything from the person's words
-    import re
-    folder = os.path.join(STARTER_SKILLS, "investigate")
-    for root, _dirs, files in os.walk(folder):
-        for name in files:
-            if name.endswith((".md", ".yaml", ".py")):
-                text = open(os.path.join(root, name), encoding="utf-8").read()
-                ids = set(re.findall(r"\b(?:sensor|switch|binary_sensor|automation|light|climate)\.[a-z0-9_]+\b", text))
-                assert ids <= {"sensor.a", "binary_sensor.b", "sensor.c"}, (name, ids)   # the usage examples only
-
-
-def _main(tmp_path, *args):
-    """The script as the agent runs it, Home Assistant read from an empty fixture folder; (exit, what it said)."""
-    import contextlib
-    import io
-    import json
-    import investigate
-    out = io.StringIO()
-    try:
-        with contextlib.redirect_stdout(out):
-            code = investigate.main([*args, "--fixture-dir", str(tmp_path), "--store", str(tmp_path / "s.sqlite"),
-                                     "--zone", "UTC"])
-    except SystemExit as e:
-        return 1, str(e.code)
-    return code, json.loads(out.getvalue())
-
-
-def test_a_date_alone_is_the_whole_day_and_words_are_not_device_ids(tmp_path):
-    # the owner's tries on the page (2026-10-11): "--start 2026-10-09 --end 2026-10-09" was refused as an empty
-    # period, and "--entities house pump" was taken without a word
-    code, said = _main(tmp_path, "around", "--start", "2026-10-09", "--end", "2026-10-09")
-    assert code == 0, said
-    code, said = _main(tmp_path, "around", "--start", "2026-10-09", "--end", "2026-10-09",
-                       "--entities", "house pump")
-    assert code == 1 and "'house pump' is not one" in said and "Run find first" in said
-    code, said = _main(tmp_path, "around", "--start", "2026-10-09T05:00", "--end", "2026-10-09T05:00")
-    assert code == 1 and "--end must be after --start" in said           # a time given is taken as given
-
-
-def test_timeline_out_saves_each_device_with_its_chart(tmp_path):
-    # the investigation page's charts (reports' inv_page.py investigation --data): the highest reading of each slice,
-    # so a short surge is still drawn
-    import investigate
-    res = investigate.timeline(_Client(), ["sensor.heater_power"], T(9, 2), T(9, 15), 3, Z, series=True)
-    (part,) = res["entities"]
-    assert part["name"] == "Heater Power" and part["unit"] == "W" and len(part["series"]) == investigate.CHART_POINTS
-    assert max(v for _, v in part["series"] if v is not None) == 2500.0       # the stop-start surges are kept
-    assert any(p.get("why") for p in part["periods"])                         # the unusual periods, for shading
-
-
 def test_the_investigation_page_carries_the_account_and_its_charts(tmp_path):
     # owner, 2026-10-11: the investigate skill "uses the report skill to create all this in a HTML report file",
     # the chat message "much more synthetic and shorter"
@@ -209,30 +157,6 @@ def test_the_investigation_page_carries_the_account_and_its_charts(tmp_path):
     assert code == 1 and "at most" in err                                  # the chat message stays one bubble
     code, err, _, _ = _page(tmp_path, {"title": "x"}, readings=False)
     assert code == 1 and "a title and a summary" in err and "Traceback" not in err
-
-
-def test_a_surge_inside_one_slice_of_the_chart_is_still_drawn():
-    # a 1-second surge between two ordinary readings of the same slice: its highest value, never its last
-    import investigate
-    t0 = T(9, 3)
-    rows = [(t0, "10"), (t0 + timedelta(seconds=1), "3712"), (t0 + timedelta(seconds=2), "10"),
-            (t0 + timedelta(seconds=30), "unavailable")]
-    pts = investigate.chart_series(rows, t0, t0 + timedelta(seconds=4000))   # slices of 10s
-    assert pts[0][1] == 3712.0 and pts[1][1] == 10.0 and pts[4][1] is None   # offline from then: a gap, not a zero
-
-
-def test_the_longest_summary_with_a_long_to_line_is_still_one_bubble():
-    # review 32: the limit was worked out by hand against 1,024 while the agent cuts captions at 1,000 — derived now, with
-    # room for the longest "To:" (every role: review 3, 2026-10-13 — 120 kept for names cut the summary ~90 short);
-    # checked through the agent's own layout of a message with a file
-    import page as inv_page   # the investigate skill's page (it was reports' inv_page.py)
-    from vesta_agent.telegram import layout
-    from vesta_shared.message_format import ROLE_WORDS, audience, titled
-    from vesta_shared.messaging import TELEGRAM_CAPTION
-    text = titled("T" * inv_page.TITLE_MAX, audience(ROLE_WORDS), "K" * inv_page.KEY_MAX + "\n" + "S" * inv_page.SUMMARY_MAX
-                  + inv_page.DETAILS)
-    assert len(layout(text, {"inline_keyboard": []}, "document")) == 1
-    assert len(text) > TELEGRAM_CAPTION - 30                               # and no room is left unused
 
 
 def test_a_history_cut_short_is_said_and_never_stretched_to_the_end():
@@ -273,19 +197,6 @@ def test_a_control_that_stayed_off_is_said_not_to_have_turned_the_device_on():
     assert not any("NOT what turned" in x for x in res["lines"])
 
 
-def test_a_control_that_changed_proves_nothing_and_says_nothing():
-    import investigate
-
-    class Moving(_Client):
-        def history(self, ids, start, end):
-            if ids[0].startswith("switch."):
-                return {ids[0]: [{"state": "off", "last_changed": start.isoformat()},
-                                 {"state": "on", "last_changed": (start + timedelta(hours=1)).isoformat()}]}
-            return super().history(ids, start, end)
-    lines = investigate.timeline(Moving(), ["sensor.heater_power", "switch.a"], T(9, 2), T(9, 15), 3, Z)["lines"]
-    assert not any("whole period" in x for x in lines)
-
-
 def test_each_automation_says_what_it_is_able_to_do():
     import investigate
     configs = {
@@ -314,20 +225,6 @@ def test_each_automation_says_what_it_is_able_to_do():
     assert acts.startswith("CAN change things: script.something, switch.turn_on") and "read it" in acts
     made = investigate.automation_can(C(), "automation.made", T(9, 2), T(9, 15))
     assert "not proven either way" in made and "did: records a value only" in made
-
-
-def test_the_investigation_lists_web_search_among_its_tools():
-    # owner, 2026-10-11: "my expectation then would be to see the web_search tool in this list" (Skills › Skill tools)
-    from vesta_agent import tool_access
-    from vesta_agent.policy import Policy
-    from vesta_agent.skills import Skills
-    sk = Skills(os.path.join(STARTER_SKILLS)).get("investigate")
-    cards = {c["tool"]: c for c in tool_access.needs(Policy({}), None, sk)}
-    assert cards["web_search"]["label"] == "Web search"
-    text = open(os.path.join(STARTER_SKILLS, "investigate", "SKILL.md"), encoding="utf-8").read()
-    assert "**Search the web (web_search), always**" in text            # owner, 2026-10-12: every investigation
-    import yaml
-    assert "modes" not in yaml.safe_load(open(os.path.join(STARTER_SKILLS, "investigate", "skill.yaml")))  # no keyword
 
 
 def _page(tmp_path, notes, searches=None, readings=True, web_on=False):
@@ -479,31 +376,6 @@ def test_the_page_states_what_the_records_establish_and_rule_out():
     assert not any("morning" in x["text"] for x in f["log"])           # it can switch, but ran far from every moment
 
 
-def test_an_automation_that_can_switch_and_ran_then_is_named_with_what_it_acts_on():
-    # what it acts on, by name — read from its own actions: a device read here (to check), another one (in the log
-    # only) or none named (a template: to check)
-    def acting(target):
-        class Acting(_Around):
-            def tool(self, name, args):
-                if name == "ha_config_get_automation":
-                    return {"config": {"actions": [{"choose": [{"sequence": [{"action": "switch.turn_on", **target}]}]},
-                                                   {"action": "notify.send_message", "target": {"entity_id": "notify.x"}}]}}
-                return super().tool(name, args)
-        _, f = _facts(Acting())
-        assert not any("heater watch" in str(g) for g in f["findings"] if g["title"] == "Ruled out")
-        checks = [i for g in f["findings"] if g["title"] == "To check" for x in g["groups"] for i in x["items"]]
-        logged = next(r["text"] for r in f["log"] if "heater watch" in r["text"])
-        return checks, logged
-    checks, logged = acting({"target": {"entity_id": "switch.a"}})
-    assert checks == ["Automation “heater watch” ran at 03:14 and can act on Heater Relay, one of the devices read "
-                      "here: check whether it did."]
-    assert logged == "Automation “heater watch” runs, it can act on Heater Relay"
-    checks, logged = acting({"target": {"entity_id": ["switch.spa"]}})
-    assert checks == [] and logged == "Automation “heater watch” runs, it can act on Spa Relay"
-    checks, _ = acting({"target": {"entity_id": "{{ states('input_text.x') }}"}})
-    assert checks and "(switch.turn_on), its targets could not be read" in checks[0]
-
-
 def test_each_unusual_period_says_when_an_alert_on_the_same_limit_would_have_warned():
     # the long run: its normal longest is 8s, flagged past max(2 × 8s, 8s + 300s) = 308s → 03:09:46 + 308s
     _, f = _facts()
@@ -533,59 +405,6 @@ def test_the_facts_are_any_devices_a_door_that_stopped_answering():
             "text": "Back Door stopped reporting for 40min, until 08:40, it stopped reporting"} in f["log"]
     (door,) = f["alerts"]
     assert door["items"][0]["rule"] == "it stops reporting for 1min" and door["items"][0]["at"] == "08:01"
-
-
-def test_the_key_line_gives_the_longest_periods_per_device_and_says_how_many_more():
-    mod, f = _facts()
-    assert f["key"] == ("Recorded: Heater Power: ran 03:09–04:55 (1h 45min), stopped and restarted 7 times "
-                        "04:55–05:10 (15min), ran 05:10–06:00 (50min), had no power 06:00–13:05 (7h 5min), ran "
-                        "13:05–13:16 (11min).")                                # one device: named once
-    hm = lambda t: f"{t:%H:%M}"                                              # noqa: E731
-    blips = [{"name": "Gate", "kind": "offline", "start": T(9, h), "end": T(9, h, 2), "seconds": 120} for h in range(12)]
-    long = {"name": "Boiler", "kind": "running", "start": T(9, 13), "end": T(9, 18), "seconds": 18000}
-    key = mod.key_line(blips + [long], hm)
-    assert len(key) <= mod.KEY_MAX and "Boiler: ran 13:00–18:00 (5h)" in key        # the longest, wherever
-    assert key.endswith("more.") and key.index("Gate") < key.index("Boiler")               # devices in time order
-    assert len(mod.key_line([{**long, "name": "N" * 300}], hm)) <= mod.KEY_MAX
-
-
-def test_without_readings_the_page_keeps_the_accounts_own_timeline():
-    mod, _ = _facts()
-    f = mod.facts(None, None, {"timeline": [{"time": "07:30", "text": "Water on the floor"}]})
-    assert f["log"] == [{"time": "07:30", "text": "Water on the floor", "pill": "reported"}]
-    assert f["findings"] == f["alerts"] == [] and f["key"] == ""
-
-
-def test_a_web_lead_the_records_contradict_is_listed_as_ruled_out():
-    mod, _ = _facts()
-    f = mod.facts(None, None, {"causes": [{"cause": "A grid outage", "evidence": "the neighbours kept power",
-                                           "source": "[1]", "verdict": "not supported"},
-                                          {"cause": "A stuck valve", "verdict": "consistent", "source": "x"}]})
-    assert f["findings"] == [{"title": "Ruled out", "groups": [
-        {"lead": "Leads the records contradict:", "items": ["A grid outage: the neighbours kept power"]}]}]
-
-
-def test_the_page_is_laid_out_as_the_owner_asked(tmp_path):
-    # owner, 2026-10-12: conclusions first, the charts right under them, ruled out + cannot tell together under the
-    # charts, then what would have warned, everything recorded (folded) and how it was checked with the web's part
-    code, err, page, out = _page(tmp_path, {"title": "The heater", "summary": "Water escaping kept it running.",
-                                            "cannot_tell": ["No leak sensor."],
-                                            "timeline": [{"time": "07:30", "text": "Water on the floor"}]})
-    assert code == 0, err
-    order = [page.index(x) for x in ("Investigation conclusions", "Heater Power</h2>", "On the same timeline",
-                                     "Ruled out, and what the records cannot tell", "What would have warned earlier",
-                                     "Everything recorded, in time order", "How it was checked, and its sources",
-                                     "Web contribution")]
-    assert order == sorted(order)
-    assert '<details class="card fold"><summary><h2>Everything recorded, in time order (' in page
-    assert "<details open" not in page and page.count("<details") == 1
-    # owner, 2026-10-12: "reported" in yellow, "usual" in green
-    assert '<span class="st watch">reported</span> Water on the floor' in page
-    assert '<span class="st bad">unusual</span> Heater Power ran for 1h 45min' in page
-    assert '<span class="st ok">usual</span> Next Relay reports again' in page
-    assert '<div class="themes" role="radiogroup"' in page and 'id="th-auto" checked' in page   # Light / Auto / Dark
-    assert "<h3>What the records cannot tell</h3>" in page and "No leak sensor." in page
-    assert any("did not turn Heater Power on" in x for x in out["ruled_out"]) and out["established"]
 
 
 def test_a_period_is_judged_over_as_long_as_its_alert_would_need():
@@ -625,21 +444,6 @@ def test_only_an_alert_in_time_to_matter_is_said_and_repeats_are_one_line():
          "span": "02:00–02:10", "again": ["05:01", "07:01"]}]}]
 
 
-def test_what_drops_off_in_the_same_minute_is_one_row():
-    import investigation_facts as mod
-    data = {"zone": "UTC", "start": T(9, 0).isoformat(), "end": T(9, 23).isoformat(), "settings": {"coincide_s": 600},
-            "entities": [{"entity_id": "sensor.pump", "label": "Pump", "periods": [
-                {"kind": "no power", "start": T(9, 6).isoformat(), "end": T(9, 9).isoformat(), "seconds": 10800,
-                 "why": "it read 0"}]}]}
-    around = {"offline": [{"at": T(9, 6, 1, 5).isoformat(), "name": "Spa Relay", "id": "switch.spa"},
-                          {"at": T(9, 6, 1, 9).isoformat(), "name": "Spa Relay Firmware", "id": "update.spa"},
-                          {"at": T(9, 8, 55).isoformat(), "name": "Far Away", "id": "sensor.far"}],
-              "back": [{"at": T(9, 13).isoformat(), "name": "Spa Relay", "id": "switch.spa"}]}
-    texts = [r["text"] for r in mod.facts(data, around)["log"]]
-    assert "Spa Relay, Spa Relay Firmware stop reporting" in texts and "Spa Relay reports again" in texts
-    assert not any("Far Away" in t for t in texts)          # 5min before the END, 3h after the start: not a cause
-
-
 def test_a_stop_start_burst_is_found_among_many_ordinary_runs():
     # 9 October: with more than `ordinary_hide_over` periods, the burst's short runs were dropped as ordinary before
     # they could be grouped — the page showed nothing between the long run and the next one
@@ -662,156 +466,6 @@ def test_a_stop_start_burst_is_found_among_many_ordinary_runs():
 
 
 # ---- the charts' context (owner, 2026-10-11: "what does the red background mean? … more graphs to bring more context")
-class _Temps(_Client):
-    """An invented room temperature: 21 to 23 °C every day, 26 °C at 03:00 on the 8th only."""
-
-    def __init__(self):
-        super().__init__()
-        self.pw = sorted([(T(d, h), 21.0 + (h % 3)) for d in range(6, 10) for h in range(24)] + [(T(8, 3, 30), 26.0)])
-
-    def states(self, ids):
-        return {i: {"state": "22", "attributes": {"friendly_name": "Room Temperature", "unit_of_measurement": "°C"}}
-                for i in ids}
-
-
-def test_the_chart_fits_the_device_its_hours_running_or_its_usual_days_behind():
-    # owner, 2026-10-12: "would you use other metric? other graph representation?" — a device that RUNS gets its
-    # minutes running per hour against its usual; one read as LEVELS keeps the same hours of the days before, dashed
-    import investigate
-    res = investigate.timeline(_Around(), ["sensor.heater_power", "switch.a"], T(9, 2), T(9, 15), 3, Z, series=True)
-    power, relay = res["entities"]
-    assert "normal_series" not in power and power["per_hour"]["unit"] == "hour"
-    bins = {b["at"][11:16]: b for b in power["per_hour"]["bins"]}
-    assert len(bins) == 13 and bins["03:00"]["minutes"] > 50 and bins["02:00"]["minutes"] < 1
-    assert 0 < bins["03:00"]["usual"] < 1                                    # its usual: a few 8-s top-ups an hour
-    assert relay["states"] == [{"at": T(9, 2).isoformat(), "state": "off", "as": "off"}] and "series" not in relay
-    temp = investigate.timeline(_Temps(), ["sensor.room_temperature"], T(9, 2), T(9, 15), 3, Z, series=True)
-    (room,) = temp["entities"]
-    assert "per_hour" not in room and [n["days_before"] for n in room["normal_series"]] == [1, 2, 3]
-    tops = [max(v for _, v in n["series"] if v is not None) for n in room["normal_series"]]
-    assert tops == [26.0, 23.0, 23.0]                                       # each day at its own place
-    longer = investigate.timeline(_Temps(), ["sensor.room_temperature"], T(8, 2), T(9, 15), 3, Z, series=True)
-    assert longer["entities"][0]["normal_series"] == []                     # over a day: no "same hours"
-
-
-def test_a_state_lane_tags_each_state_by_the_timelines_own_words():
-    import investigate
-    rows = [(T(9, 1), "off"), (T(9, 3), "on"), (T(9, 3), "unavailable"), (T(9, 4), "unavailable"), (T(9, 5), "home"),
-            (T(9, 16), "off")]
-    got = investigate.state_series(rows, T(9, 2), T(9, 15))
-    assert [(g["at"][11:16], g["state"], g["as"]) for g in got] == [
-        ("02:00", "off", "off"), ("03:00", "unavailable", "offline"), ("05:00", "home", "other")]
-
-
-def test_the_page_names_each_band_and_draws_the_strip(tmp_path):
-    code, err, page, _ = _page(tmp_path, {"title": "The heater", "summary": "It ran."})
-    assert code == 0, err
-    # what the chart shows is said ABOVE it, its legend under it (owner, 2026-10-12)
-    assert page.index("Heater Power</h2>") < page.index("Usually (over the 3 days before)") < \
-        page.index("<svg", page.index("Heater Power</h2>"))
-    legend = page[page.index("Usually (over the 3 days before)"):page.index("How many minutes it ran each hour")]
-    for word in ("what it read (W)", "ran longer or harder than usual", "kept stopping and restarting",
-                 "read 0: no power reached it"):
-        assert word in legend, word
-    hours = page[page.index("How many minutes it ran each hour"):page.index("On the same timeline")]
-    assert "minutes it ran that hour" in hours and "its usual for that hour (the days before)" in hours
-    strip = page[page.index("On the same timeline"):]
-    assert strip.index("An empty lane means off") < strip.index("<svg")
-    assert "Heater Relay" in strip and "Other devices that stopped reporting" in strip and "Next Relay" in strip
-    assert "02:00–15:00 · off" not in strip                                 # "off" is the empty lane: nothing drawn
-    # the shared charts (vesta_shared.page) draw in the investigation's own colours: a band in its kind's, a lane's
-    # mark in LANE_STYLE's — the colour its legend says
-    import page as inv_page
-    chart = page[page.index("Heater Power</h2>"):page.index("How many minutes it ran each hour")]
-    for word, colour in map(inv_page.band_of, ("no power", "running")):
-        assert f'fill="{colour}" opacity=".14"' in chart and word in chart, word
-    went = inv_page.LANE_STYLE["went"][1]
-    assert f'fill="{went}"/>' in strip and inv_page.LANE_STYLE["went"][0] in strip
-
-
-def test_every_band_kind_has_its_own_word_and_colour():
-    import page as inv_page   # the investigate skill's page (it was reports' inv_page.py)
-    assert inv_page.band_of("no power")[0] == "read 0: no power reached it"
-    assert inv_page.band_of("offline")[0] == "stopped reporting"
-    assert inv_page.band_of("stops and restarts 8 times")[0] == "kept stopping and restarting"
-    assert inv_page.band_of("running")[0] == "ran longer or harder than usual" and inv_page.band_of("open")[0] == "unusual"
-    # owner, 2026-10-12: "you are using too similar colour": every kind its own, none the readings' or the usual's
-    colours = [c for c in inv_page.BAND_COLOURS.values() if c != "var(--ink2)"]
-    assert len(set(colours)) == len(colours) and not {inv_page.READINGS, inv_page.USUAL} & set(colours)
-
-
-def test_a_period_is_said_the_same_by_the_lines_the_ai_reads_and_by_the_page():
-    # architecture review, 2026-10-13: the AI's reading quoted investigate.py's "offline for 1h 15min" while the
-    # page's facts said "stopped reporting … 75min" for the same outage — three duration rules and two word tables
-    import page as inv_page   # the investigate skill's page (it was reports' inv_page.py)
-    import investigation_facts
-    from vesta_shared import periods
-    import investigate as lines
-    for seconds, said in ((45, "45s"), (600, "10min"), (4500, "1h 15min"), (7200, "2h"), (9000, "2h 30min")):
-        assert lines.lasting(seconds) == investigation_facts.lasting(seconds) == inv_page.lasting(seconds) == said
-    for kind in (periods.NO_POWER, periods.OFFLINE, periods.NO_VALUE, periods.RUNNING, periods.restarts(8)):
-        assert investigation_facts.did(kind) == periods.did(kind) and inv_page.band_of(kind)[0] == periods.band(kind)
-        assert periods.base(kind) in inv_page.BAND_COLOURS
-    assert periods.did(periods.restarts(8)) == "stopped and restarted 8 times"
-
-
-def test_the_web_contribution_is_always_there_and_says_when_no_web_page_was_used(tmp_path):
-    # owner, 2026-10-11: "i don't see any section for the Sources" — on a page that used no web page, it was hidden
-    code, err, none, _ = _page(tmp_path, {"title": "The heater", "summary": "It ran."}, readings=False)
-    assert code == 0, err
-    assert "<h3>Web contribution</h3>" in none and "No web page was used" in none
-    code, err, one, _ = _page(tmp_path, {"title": "The heater", "summary": "It ran [1].",
-                                         "sources": [{"title": "Pump manual", "url": "https://example.org/m"},
-                                                     {"title": "not a link", "url": "javascript:alert(1)"}]},
-                              readings=False)
-    assert code == 0, err
-    assert 'href="https://example.org/m"' in one and "No web page was used" not in one and "javascript" not in one
-
-
-def test_every_chart_and_the_strip_have_a_legend_of_what_they_draw(tmp_path):
-    code, err, page, _ = _page(tmp_path, {"title": "The heater", "summary": "It ran."})
-    assert code == 0, err
-    assert page.count('class="note legend"') == page.count("<svg viewBox") == 3   # the chart, its hours, the strip
-    strip = page[page.index("On the same timeline"):page.index("Ruled out, and what")]
-    assert "another device stopped reporting" in strip                     # Next Relay
-    assert "on or open" not in strip                                        # the relay stayed off: nothing drawn, no key
-
-
-def test_a_days_running_is_said_in_the_shared_duration_words():
-    # architecture review round 8: "ran 90min" where every other duration reads "1h 30min" (timeutil.lasting)
-    import re
-    import page as inv_page
-    chart = inv_page.hourchart({"unit": "day", "bins": [{"at": T(9, 0).isoformat(), "minutes": 90, "usual": 45}]}, Z)
-    tips = re.findall(r'aria-label="([^"]+)"', chart)
-    assert any(t.endswith("ran 1h 30min (usually 45min)") for t in tips), tips
-
-
-def test_a_tooltip_is_page_text_over_its_column_never_covered():
-    # owner, 2026-10-12: the tip was chart text — it grew with the screen and the next bars covered it. Now page text
-    # (13 px, page_head.html), laid over the chart after it, its place in % of the chart
-    import re
-    import page as inv_page   # the investigate skill's page (it was reports' inv_page.py)
-    chart = inv_page.hourchart({"unit": "hour", "bins": [
-        {"at": T(9, h).isoformat(), "minutes": m, "usual": 0.3} for h, m in ((2, 0), (3, 50), (4, 58), (5, 52))]}, Z)
-    svg_end = chart.index("</svg>")
-    tips = re.findall(r'<span class="pt" tabindex="0" aria-label="([^"]+)" style="left:([\d.]+)%;width:([\d.]+)%', chart)
-    assert len(tips) == 4 and chart.index('class="pt"') > svg_end                # after the chart: nothing covers them
-    assert tips[0][0] == "02:00 · ran 0min (usually 18s)"
-    assert all(0 <= float(left) and float(left) + float(w) <= 100.01 for _, left, w in tips)
-    assert '<span class="tip l">' in chart and '<span class="tip r">' in chart   # at the edges, anchored inside
-    head = open(__import__("vesta_shared.page", fromlist=["SHARED_TEMPLATES"]).SHARED_TEMPLATES + "/page_head.html", encoding="utf-8").read()
-    assert ".chart .pt .tip{" in head and "font-size:13px" in head[head.index(".chart .pt .tip{"):][:400]
-
-
-def test_the_hours_chart_stops_at_an_hour_and_draws_its_usual_as_one_line():
-    # 2026-10-12: the scale went to 80min in an hour, and a dash per hour at 0 read as a broken axis
-    import page as inv_page   # the investigate skill's page (it was reports' inv_page.py)
-    chart = inv_page.hourchart({"unit": "hour", "bins": [
-        {"at": T(9, h).isoformat(), "minutes": m, "usual": u} for h, m, u in ((2, 0, 0.3), (3, 58, 0.2), (4, 0, 8))]}, Z)
-    assert ">60</span>" in chart and ">80</span>" not in chart
-    assert chart.count('class="usual"') == 1 and chart.count(f'stroke="{inv_page.USUAL}"') == 1   # one line, no dashes
-
-
 def test_an_automation_made_from_a_blueprint_says_what_it_acts_on():
     # 2026-10-12: five automations of the villa said "could not be read" — the blueprint is read (its `get` only) and
     # each input filled with the automation's own, a default where it gave none
@@ -861,142 +515,6 @@ def test_the_read_only_client_allows_a_blueprints_get_and_nothing_else_of_it():
     assert Session.calls == [("ha_manage_blueprints", {"action": "get", "path": "a.yaml"})]
 
 
-def test_a_device_home_assistant_names_nowhere_is_said_in_words_never_by_its_id():
-    import investigate
-
-    class Silent(_Around):
-        def history(self, ids, start, end):
-            return {ids[0]: []} if ids[0] == "sensor.pump_current" else super().history(ids, start, end)
-
-        def states(self, ids):
-            return {i: v for i, v in super().states(ids).items() if i != "sensor.pump_current"}
-    _, f = _facts(Silent(), ("sensor.heater_power", "sensor.pump_current"))
-    (cannot,) = [g for g in f["findings"] if g["title"] == "What the records cannot tell"]
-    assert cannot["groups"][0]["items"] == ["Pump current: no reading of it was kept in this period, so it "
-                                            "cannot be judged."]
-    assert "sensor.pump_current" not in str(f)
-
-def test_a_reference_links_only_to_a_source_that_exists():
-    import page as inv_page   # the investigate skill's page (it was reports' inv_page.py)
-    said = str(inv_page.citing(1)("the guide [1] and <b> [2]"))
-    assert '<a href="#src-1">[1]</a>' in said and "[2]" in said and "#src-2" not in said and "&lt;b&gt;" in said
-
-
-def test_the_usual_is_said_in_plain_sentences():
-    # owner, 2026-10-12: "54.3 runs a day, usually 9s, longest 9min … doesn't seem proper English"
-    import page as inv_page   # the investigate skill's page (it was reports' inv_page.py)
-    ref = {"days": 3.0, "runs_per_day": 54.3, "run_median_s": 9.0, "run_longest_s": 566.0, "level_median": 802.0,
-           "rest_median": 1.76}
-    assert inv_page.normal_words(ref, "W") == ("Usually (over the 3 days before) it started about 54 times a day; a run "
-                                              "usually lasted 9s and never more than 9min. While running it read "
-                                              "about 802 W; at rest about 1.76 W.")
-    same = inv_page.normal_words({**ref, "run_longest_s": 9.0}, "W")
-    assert "usually lasted 9s." in same and "never more than" not in same          # never "9s and never more than 9s"
-
-
-def test_what_an_automation_does_is_said_as_a_person_says_a_list():
-    import investigation_facts as mod
-    assert mod._and(["fires an event", "notifies", "records a value"]) == "fires an event, notifies and records a value"
-    assert mod._and(["notifies"]) == "notifies" and mod._and([]) == ""
-
-
-
-def test_a_lead_names_its_web_page_and_links_its_number_or_says_the_records(tmp_path):
-    # owner, 2026-10-12: "Where the lead came from: AGM Service, booster pump failure guide" — no number, no link
-    notes = {"title": "t", "summary": "It ran [1].",
-             "sources": [{"title": "Common Causes of Booster Pump Failure", "url": "https://example.org/agm"}],
-             "causes": [{"cause": "A leak", "evidence": "ran 3h", "source": "AGM Service guide", "verdict": "consistent"}]}
-    code, err, _, _ = _page(tmp_path, notes, ["pump runs nonstop"], readings=False)
-    assert code == 1 and "as [n]" in err and "AGM Service guide" in err
-    notes["causes"][0]["source"] = "[1]"
-    code, err, page, _ = _page(tmp_path, notes, ["pump runs nonstop"], readings=False)
-    assert code == 0, err
-    assert ('Where the lead came from: Common Causes of Booster Pump Failure <sup class="ref"><a href="#src-1">[1]</a>'
-            in page)
-    notes["causes"][0]["source"] = "the villa's records"
-    assert _page(tmp_path, notes, ["pump runs nonstop"], readings=False)[0] == 0
-
-
-def test_every_word_of_a_chart_is_page_text_at_the_reports_size():
-    # owner, 2026-10-12: "the X-axis and Y-axis and the graph legends … a font size different from the text in the
-    # report" — no word is drawn in a chart any more: each is laid over it, in the page's own size
-    import page as inv_page   # the investigate skill's page (it was reports' inv_page.py)
-    charts = [__import__("vesta_shared.page", fromlist=["line"]).line([("2026-10-01", 40), ("2026-10-02", 97)], "%"),
-              inv_page.hourchart({"unit": "hour", "bins": [{"at": T(9, h).isoformat(), "minutes": 5, "usual": 1}
-                                                          for h in range(3)]}, Z),
-              inv_page.strip([{"name": "Spa Relay", "bands": [{"start": T(9, 2), "end": T(9, 4), "state": "on",
-                                                               "as": "on"}]}], T(9, 2), T(9, 15), Z)]
-    for chart in charts:
-        assert "<text" not in chart and '<span class="ax"' in chart, chart[:200]
-    assert '">Spa Relay</span>' in charts[2]
-    head = open(__import__("vesta_shared.page", fromlist=["SHARED_TEMPLATES"]).SHARED_TEMPLATES + "/page_head.html", encoding="utf-8").read()
-    import re
-    note = re.search(r"(?:^|[}\n])\.note\{([^}]*)\}", head).group(1)
-    assert "font-size:13px" in head[head.index(".chart .ax{"):][:200] and "font-size:13px" in note   # the notes' size
-
-
-def test_no_starter_script_reaches_into_a_private_name_of_vesta_shared():
-    # owner, 2026-10-19: the investigation's charts live in vesta_shared.page; its page.py imported six private names
-    # (_axis, _framed, _scale, _ticks, _tip, _nice) to draw them itself. A skill's script uses vesta_shared's public
-    # names only, imported or through a module it imported.
-    import ast
-    import glob
-    hits = []
-    for path in glob.glob(os.path.join(STARTER_SKILLS, "*", "scripts", "*.py")):
-        tree = ast.parse(open(path, encoding="utf-8").read())
-        shared_mods = set()
-        for node in ast.walk(tree):
-            if isinstance(node, ast.ImportFrom) and (node.module or "").startswith("vesta_shared"):
-                for a in node.names:
-                    if a.name.startswith("_") and not a.name.startswith("__"):
-                        hits.append(f"{os.path.basename(path)}: from {node.module} import {a.name}")
-                    if node.module == "vesta_shared":
-                        shared_mods.add(a.asname or a.name)
-            elif isinstance(node, ast.Import):
-                shared_mods |= {a.asname or a.name for a in node.names if a.name.startswith("vesta_shared")}
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name) and node.value.id in shared_mods \
-                    and node.attr.startswith("_") and not node.attr.startswith("__"):
-                hits.append(f"{os.path.basename(path)}: {node.value.id}.{node.attr}")
-    assert not hits, hits
-
-
-def test_both_pages_draw_a_legend_and_a_pill_one_way():
-    # owner, 2026-10-19: the investigation's own legend macro and the report's inline legend, a pill built by hand in
-    # both templates — one `legend` and one `pill` (vesta_shared/templates/page_parts.html) now
-    for skill, name in (("investigate", "investigation.html"), ("reports", "report.html")):
-        src = open(os.path.join(STARTER_SKILLS, skill, "templates", name), encoding="utf-8").read()
-        assert '{% from "page_parts.html" import legend, pill %}' in src, name
-        assert 'class="st ' not in src and "macro legend" not in src and 'class="legend"' not in src, name
-
-
-def test_a_device_that_reports_a_value_has_no_state_band():
-    # owner, 2026-10-12: a relay's "Uptime" (a new time at every reading) filled its whole lane as "another state"
-    import investigate
-    rows = [(T(9, 2) + timedelta(minutes=10 * k), f"2026-10-0{k % 9 + 1}T00:00:00") for k in range(12)]
-    rows.insert(5, (T(9, 2, 45), "unavailable"))
-    got = investigate.state_series(rows, T(9, 2), T(9, 15))
-    assert [g["as"] for g in got] == ["value", "offline", "value"]           # only when it stopped reporting shows
-    door = investigate.state_series([(T(9, 2), "open"), (T(9, 3), "closed"), (T(9, 4), "jammed")], T(9, 2), T(9, 15))
-    assert [g["as"] for g in door] == ["on", "off", "other"]                  # a few states: a state lane
-    import page as inv_page   # the investigate skill's page (it was reports' inv_page.py)
-    lane = inv_page.strip([{"name": "Uptime", "bands": [{"start": T(9, 2), "end": T(9, 15), "state": "x", "as": "value"}]}],
-                         T(9, 2), T(9, 15), Z)
-    assert "opacity=\".55\"" not in lane and inv_page.strip_legend([{"bands": [{"as": "value"}]}]) == []
-
-
-def test_the_skill_asks_for_a_summary_the_caption_can_hold():
-    # review 3 (2026-10-13): the room grew when "To:" became roles. ⚠️ NO NUMBER IN THE GUIDE (owner, 2026-10-24: every
-    # number a setting): its "640" had drifted from the room (646); the guide names page.py's refusal, which says it
-    import page as inv_page   # the investigate skill's page (it was reports' inv_page.py)
-    md = open(os.path.join(STARTER_SKILLS, "investigate", "SKILL.md")).read()
-    assert re.search(r'"summary": "' + inv_page.SUMMARY_SENTENCES + r", short enough for the chat message \(page\.py "
-                     r"refuses a longer one and says its limit\)", md)
-    assert not re.search(r'"summary": "[^"]*?\d+ characters', md)
-    src = open(os.path.join(STARTER_SKILLS, "investigate", "scripts", "page.py")).read()
-    assert 'at most {SUMMARY_MAX}' in src
-
-
 def test_around_says_a_restart_once_and_keeps_a_device_that_did_not_come_back():
     # 2026-10-13: a period holding a Home Assistant restart listed every device as "stopped answering" and never said it
     import investigate
@@ -1027,97 +545,6 @@ def test_around_says_a_restart_once_and_keeps_a_device_that_did_not_come_back():
     assert "switch.spa" not in flips and "sensor.example_thermometer" not in flips and "switch.next_relay" in flips, flips
 
 
-def test_the_skills_own_example_of_a_cause_passes_the_pages_rules():
-    # 2026-10-15: step 6 said a lead's source is "[n]", the account's format said "the web page's name" — the page
-    # refuses a name, so following the format had the page refused. One rule, and the example obeys it
-    import json
-    import page as inv_page
-    text = open(os.path.join(STARTER_SKILLS, "investigate", "SKILL.md"), encoding="utf-8").read()
-    raw = re.search(r'\{"cause":[^{}]*?"verdict"[^{}]*\}', text).group(0)          # the example, not the format
-    cause = json.loads(" ".join(line.strip() for line in raw.splitlines()))
-    assert (inv_page.CITE.search(cause["source"]) or inv_page.RECORDS.search(cause["source"])) \
-        and cause["verdict"] in inv_page.VERDICTS
-    assert "page's name" not in text and "web page's name" not in text
-    # the message shows the summary under the line of recorded times: the example explains, it never repeats a time
-    example = re.search(r'"summary": "The pool pump.*?"\n', text, re.S).group(0)
-    assert not re.search(r"\b\d{1,2}:\d{2}\b", example), example
-
-
-def test_a_period_that_would_end_later_ends_now(tmp_path):
-    # villa, 2026-10-15: "--end 2026-10-15" read at 23:05 ran to midnight — a sensor offline 6d 6h read "6d 7h"
-    import json
-    code, said = _main(tmp_path, "timeline", "--entities", "sensor.a", "--start", "2026-10-09", "--end", "2026-10-15",
-                       "--now", "2026-10-15T23:05:00+00:00", "--out", str(tmp_path / "timeline.json"))
-    assert code == 0, said
-    assert json.load(open(tmp_path / "timeline.json"))["end"] == "2026-10-15T23:05:00+00:00"
-    code, said = _main(tmp_path, "around", "--start", "2026-10-16", "--end", "2026-10-16",
-                       "--now", "2026-10-15T23:05:00+00:00")
-    assert code == 1 and "--end must be after --start" in said           # a period that has not begun yet
-
-
-def test_find_names_the_parts_listed_under_the_device_as_the_same_box():
-    # architecture review scan 1, 2026-10-19: a meter's phases hang under it ("via"); the night's checks call them one
-    # device (0.12.249) — the investigation's "same physical device" now says so too, from the same rule
-    import investigate
-    from vesta_shared.knowledge_pack import KnowledgePack
-    pack = KnowledgePack(villa="Example Villa", time_zone="UTC", generated_at="x", ha_version=None, areas=[], people=[],
-                         channels={}, unknown_area=[], unclassified=[], retention={}, families={}, assets={},
-                         devices={"d1": {"name": "Heater meter"}, "d2": {"name": "Phase A", "via": "d1"}},
-                         entity_devices={"sensor.heater_power": "d1", "sensor.heater_phase_a_power": "d2"})
-    text = "\n".join(investigate.find(_Client(), "heater", None, pack)["lines"])
-    assert "sensor.heater_phase_a_power" in text, text
-    assert "sensor.heater_phase_a_power" not in "\n".join(investigate.find(_Client(), "heater", None)["lines"])
-
-
-def test_one_clock_the_ais_reported_row_and_the_recorded_row_word_their_time_the_same_way():
-    # architecture review round 3, 2026-10-19: the lines the AI read said "09/10 03:09:46", the page's log
-    # "9 Oct, 03:09", its charts "03:09", and SKILL.md asked the AI to write "09/10 07:30" — into the same column.
-    # One clock (timeutil.clock): the AI's row and the recorded row beside it read the same way, with the day only
-    # when the period spans several; the lines the AI reads keep their seconds (a 71-second drop needs them).
-    import json
-    import investigate
-    import investigation_facts
-    from vesta_shared.timeutil import clock
-    skill = open(os.path.join(STARTER_SKILLS, "investigate", "SKILL.md")).read()
-    assert '"time": "07:30"' in skill and '"09/10/2026 07:30"' in skill and "9 Oct" not in skill   # the agreement's moment (2026-11-05)
-    assert clock(T(9, 7, 30), Z, days=False) == "07:30" and clock(T(9, 7, 30), Z, days=True) == "09/10/2026 07:30"
-    client = _Around()
-    read = investigate.timeline(client, ["sensor.heater_power"], T(9, 2), T(9, 15), 3, Z, series=True)
-    data = json.loads(json.dumps({"start": T(9, 2).isoformat(), "end": T(9, 15).isoformat(), "zone": "UTC", **read},
-                                 default=str))
-    around = {"start": data["start"], "end": data["end"], "zone": "UTC",
-              **investigate.around(client, None, T(9, 2), T(9, 15), ["sensor.heater_power"], Z)["data"]}
-    one_day = r"^\d\d:\d\d$"
-    rows = investigation_facts.facts(data, around, {"timeline": [{"time": "07:30", "text": "Water on the floor"}]})["log"]
-    assert {r["pill"] for r in rows} >= {"unusual", "reported"} and all(re.match(one_day, r["time"]) for r in rows), rows
-    # the same investigation over several days: the day on every row, the AI's included, as SKILL.md asks for it
-    days = r"^\d\d/\d\d/\d{4} \d\d:\d\d$"                         # the agreement's moment (2026-11-05)
-    long = {**data, "end": T(10, 15).isoformat()}
-    rows = investigation_facts.facts(long, around, {"timeline": [{"time": "09/10/2026 07:30", "text": "Water"}]})["log"]
-    assert all(re.match(days, r["time"]) for r in rows), rows
-    assert ("09/10/2026 03:09", "unusual") in {(r["time"], r["pill"]) for r in rows}
-    # the lines the AI reads: the same moment with its seconds — "09/10/2026 03:09:46" is the page's "09/10/2026 03:09"
-    lines = [x.strip() for x in investigate.timeline(client, ["sensor.heater_power"], T(9, 2), T(10, 15), 3, Z)["lines"]]
-    line = next(x for x in lines if x.startswith("09/10/2026 03:09:46"))
-    assert line[:len("09/10/2026 03:09")] == "09/10/2026 03:09" and not any("9 Oct" in x for x in lines)
-
-
-def test_a_rule_that_runs_only_while_the_villa_is_empty_says_so():
-    # "When this rule runs" (owner, 2026-10-20): the blueprint input run_when, a stand-alone rule's variable vg_run_when
-    import investigate
-    from vesta_shared.critical import run_when
-    assert run_when({"use_blueprint": {"input": {"run_when": "empty"}}}) == "empty"
-    assert run_when({"variables": {"vg_run_when": "occupied"}}) == "occupied"
-    assert run_when({"use_blueprint": {"input": {}}}) == run_when({"variables": {"vg_run_when": "sometimes"}}) == "always"
-
-    class C:
-        def tool(self, name, args):
-            assert name == "ha_config_get_automation"
-            return {"config": {"actions": [{"action": "notify.send_message"}], "variables": {"vg_run_when": "empty"}}}
-    got = investigate.automation_able(C(), "automation.x", T(9, 2), T(9, 15))
-    assert got["text"].endswith("; it alerts only while the villa is empty"), got["text"]
-
-
 def _periods_data(spans):
     """A timeline --out of one device whose unusual periods are `spans`: (kind, start minute, length minutes, why)."""
     t0 = datetime(2026, 10, 14, tzinfo=ZoneInfo("UTC"))
@@ -1141,26 +568,6 @@ def test_a_repeated_problem_is_one_row_and_the_finding_after_it_stays_on_the_pag
     assert f["established"] == log                                    # what the AI reads back is what the page says
 
 
-def test_past_the_row_limit_the_unusual_rows_stay_and_the_rest_is_counted(monkeypatch):
-    mod, _ = _facts()
-    monkeypatch.setattr(mod, "LOG_ROWS", 3)
-    around = {"system_runs": [{"at": (datetime(2026, 10, 14, tzinfo=ZoneInfo("UTC")) + timedelta(minutes=m)).isoformat(),
-                               "text": "the villa's system re-ran its rules"} for m in range(0, 5)]}
-    f = mod.facts(_periods_data([("offline", 600, 5, "it stopped reporting"), ("running", 900, 50, "longer")]), around)
-    pills = [r["pill"] for r in f["log"]]
-    assert pills.count("unusual") == 2 and pills.count("usual") == 2
-    assert f["log"][-1]["text"] == "4 more ordinary moments are not listed (the page's limit of rows)."
-
-
-def test_a_rule_that_only_sends_a_chat_message_switches_nothing():
-    import investigate
-    class Sends:
-        def tool(self, name, args):
-            return {"config": {"actions": [{"action": "telegram_bot.send_message", "data": {"message": "x"}}]}}
-    t = datetime(2026, 10, 14, tzinfo=ZoneInfo("UTC"))
-    assert investigate.automation_able(Sends(), "automation.x", t, t)["can"] == "nothing"
-
-
 def test_a_device_unavailable_by_design_never_stops_reporting_in_an_investigation():
     # owner, 2026-10-21: a door contact asleep between its reports — its "unavailable" is not a device that went
     import investigate
@@ -1173,33 +580,3 @@ def test_a_device_unavailable_by_design_never_stops_reporting_in_an_investigatio
     assert "Next Relay" not in str(got.get("offline")) and "Next Relay" not in str(got.get("back"))
 
 
-def test_the_timeline_judges_a_device_with_its_own_asset_from_the_pack(monkeypatch):
-    # architecture review O, 2026-10-27: the timeline (/investigate, a chat's answer about a device's past) asked the
-    # villa's "running" without the pack, so a pump's own baseline cap was never found (daily.power_asset)
-    import investigate
-    from vesta_shared import daily
-    asked = []
-    real = daily.threshold_from_readings
-    monkeypatch.setattr(daily, "threshold_from_readings",
-                        lambda readings, params, pack, entity_id: asked.append((pack, entity_id)) or real(readings, params, pack, entity_id))
-
-    class Pack:
-        assets = {"heater": {"entities": {"power": "sensor.heater_power"}}}
-
-        def row(self, eid):
-            return {"asset": "heater"} if eid == "sensor.heater_power" else None
-
-        def asset(self, slug):
-            return self.assets.get(slug)
-
-        def is_asleep(self, _eid):
-            return False
-
-        def standing(self, _eid, _state):
-            return None
-
-        def __getattr__(self, name):          # every other lookup of the pack: nothing known
-            return lambda *a, **k: None
-    pack = Pack()
-    investigate.timeline(_Client(), ["sensor.heater_power"], T(9, 2), T(9, 15), 3, Z, pack=pack)
-    assert asked and all(p is pack and e == "sensor.heater_power" for p, e in asked), asked

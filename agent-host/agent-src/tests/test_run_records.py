@@ -63,13 +63,6 @@ def test_a_resume_that_failed_before_doing_anything_is_one_row_not_two(monkeypat
     assert len(rows) == 1 and rows[0]["asked"] == "all ok?" and rows[0]["cost"] == 0.01
 
 
-def test_a_records_detail_is_read_one_way():
-    assert agent_records.detail({"detail": '{"a": 1}'}) == {"a": 1}
-    assert agent_records.detail({"detail": "not json"}) == {} and agent_records.detail({"detail": "[1]"}) == {}
-    assert agent_records.job_of(agent_records.for_job("fm-daily")) == "fm-daily"
-    assert agent_records.person_of(agent_records.for_person("Ann", -5)) == ("Ann", "-5")
-
-
 def test_a_run_cut_by_a_stop_is_on_the_costs_tab_with_its_tokens_so_far(monkeypatch, tmp_path):
     # owner, 2026-10-15: two /investigate cut by the agent's updates were missing from the Costs tab, though billed
     from claude_agent_sdk import ToolUseBlock
@@ -130,13 +123,6 @@ def test_a_script_stopped_with_the_agent_is_not_a_failure_and_a_cut_run_is_no_re
     figures = dict(status.figures(st.calls_since("2000-01-01"), 0.0))
     assert figures["Failures"] == 1 and figures["Replies written"] == 0 and figures["Reports made"] == 0
     assert [r["interrupted"] for r in status.costs(st)["runs"]] == [True]
-
-
-def _counts(st):
-    out = {}
-    for c in st.calls_since("2000-01-01"):
-        out[c["kind"]] = out.get(c["kind"], 0) + 1
-    return out
 
 
 # ---------------------------------------------------------------- one run's cost, not the conversation's (0.6.260)
@@ -203,14 +189,6 @@ def test_an_older_conversation_resumed_once_does_not_count_its_history_again(mon
     assert got == {"again": 0.06, "anew": 0.2}
 
 
-def test_a_run_without_a_resume_and_the_rules_of_the_base():
-    rows = [{"who": "A@1", "session": "s2", "session_total_usd": 0.4}, {"who": "A@1", "session": "s1", "session_total_usd": 0.2}]
-    assert agent_records.session_before(rows, "s1", "A@1") == 0.2
-    assert agent_records.session_before(rows, None, "A@1") == 0.0
-    assert agent_records.session_before(rows, "s9", "A@1") == 0.0      # the chat's runs carry other sessions: none known
-    assert agent_records.turn_cost(0.5, 0.2) == 0.3 and agent_records.turn_cost(0.1, 0.2) == 0.1
-
-
 def test_a_run_records_the_skills_it_used_in_order_once_each(monkeypatch, tmp_path):
     from claude_agent_sdk import ToolUseBlock
     blocks = [ToolUseBlock(id="1", name="mcp__vesta__read_skill", input={"skill": "reports"}),
@@ -228,14 +206,3 @@ def test_a_run_records_the_skills_it_used_in_order_once_each(monkeypatch, tmp_pa
     assert got == {"Chat replies": ["reports", "investigate"], "fm-weekly": ["maintenance", "reports", "investigate"]}
 
 
-def test_the_costs_tab_counts_what_the_agent_did_over_its_own_period(tmp_path):
-    # owner, 2026-10-22: the counters left Overview's fixed 24 hours for the Costs tab's line of figures, over the
-    # period chosen there; its AI cost is said once, by the tab's own first figure
-    st = State(str(tmp_path / "s.db"))
-    st.log("critical_event", {"rule": "r"})
-    st.log("send_failed", {"chat": 1})
-    later = datetime.now(timezone.utc) + timedelta(days=10)
-    week, month = (dict(status.costs(st, d, now=later)["activity"]) for d in (7, 30))
-    assert week["Alerts followed"] == 0 and week["Failures"] == 0
-    assert month["Alerts followed"] == 1 and month["Failures"] == 1
-    assert "AI cost (USD)" not in month

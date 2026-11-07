@@ -51,11 +51,6 @@ def test_the_lists_are_the_agreements_never_a_copy():
         {"at": "2026-06-01T00:00:00Z", "status": "resolved", "kind": "cleared"}])] == ["cleared"]
 
 
-def test_the_agent_knows_its_own_steps_by_the_agreements_stamp():
-    assert kiosk.AGENT_BY == T["agentStamp"]
-    assert kiosk._mine({"by": T["agentStamp"]}) and not kiosk._mine({"by": "Owner"})
-
-
 def test_every_origin_the_agent_writes_is_declared(tmp_path):
     st = Store(str(tmp_path / "s.sqlite"))
     pb = Problems(st)

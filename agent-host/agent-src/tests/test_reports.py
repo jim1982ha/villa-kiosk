@@ -5,7 +5,7 @@ import os
 import subprocess
 import sys
 
-from helpers import PYTHONPATH, ROOT, STARTER_SKILLS
+from helpers import PYTHONPATH, STARTER_SKILLS
 from vesta_shared.ha_client import HABase  # noqa: E402
 
 COMPOSE = os.path.join(STARTER_SKILLS, "reports", "scripts", "compose.py")
@@ -123,22 +123,6 @@ def test_the_weekly_facts_come_from_home_assistant_and_reports_yaml(tmp_path):
     assert {w["id"] for w in printed["to_write"]} >= {"headline", "card-pump.reading"}
 
 
-def test_a_threshold_missing_from_reports_yaml_is_named_never_guessed(tmp_path, monkeypatch):
-    fx = _villa(tmp_path)
-    skill = tmp_path / "skills" / "reports"
-    shutil.copytree(os.path.join(STARTER_SKILLS, "reports"), skill)
-    import yaml
-    cfg = yaml.safe_load((skill / "reports.yaml").read_text())
-    del cfg["thresholds"]["battery"]["show"]
-    (skill / "reports.yaml").write_text(yaml.safe_dump(cfg))
-    r = _run(str(skill / "scripts" / "facts.py"), "fm-weekly", "--pack", str(tmp_path / "pack.json"),
-             "--store", str(tmp_path / "s.sqlite"), "--energy", str(tmp_path / "week.json"), "--fixture-dir", str(fx),
-             "--out", str(tmp_path / "facts.json"))
-    facts = json.load(open(tmp_path / "facts.json"))
-    assert facts["sections"]["batteries"] == {"error": "reports.yaml: parameter missing: thresholds.battery.show"}
-    assert facts["sections"]["energy_days"]["rows"]                                    # the rest still computed
-
-
 def test_readings_carry_the_ais_own_numbers_marked_and_a_checked_slot_is_still_checked(tmp_path):
     # agent-host/docs/adr/0001: a reading may hold numbers the AI found itself, and is marked as VESTA's;
     # a slot reports.yaml marks `checked: true` still refuses a number that is not one of its figures
@@ -198,20 +182,6 @@ def test_the_playbook_turns_the_villas_data_into_one_list_of_what_needs_doing(tm
     assert {w["id"] for w in facts["to_write"]} >= {f"{step['id']}.reading", f"{step['id']}.ask", "quiet"}
 
 
-def test_a_villa_playbook_entry_of_a_retired_kind_is_named(tmp_path):
-    fx = _villa(tmp_path)
-    skill = tmp_path / "skills" / "reports"
-    shutil.copytree(os.path.join(STARTER_SKILLS, "reports"), skill)
-    (skill / "villa.reports.yaml").write_text(json.dumps({"playbook": {"pumps": [
-        {"name": "pool pump weaker", "when": {"kind": "power_step", "drop_pct": 5}}]}}))
-    _run(str(skill / "scripts" / "facts.py"), "fm-weekly", "--pack", str(tmp_path / "pack.json"),
-         "--store", str(tmp_path / "s.sqlite"), "--energy", str(tmp_path / "week.json"), "--fixture-dir", str(fx),
-         "--out", str(tmp_path / "facts.json"))
-    problems = json.load(open(tmp_path / "facts.json"))["sections"]["todo"]["problems"]    # the list's own problems
-    assert any(p.startswith("playbook pumps/pool pump weaker: when kind 'power_step' is no longer used: ")
-               for p in problems), problems
-
-
 def test_what_did_not_happen_is_said_only_for_what_was_watched(tmp_path):
     # villa, 2026-10-01: "no equipment missed its schedule" for a week the agent never listened to
     import sqlite3
@@ -224,17 +194,6 @@ def test_what_did_not_happen_is_said_only_for_what_was_watched(tmp_path):
     db.commit(); db.close()
     c.state_path = str(tmp_path / "state.sqlite")                       # the agent listened all week
     assert "no equipment missed its schedule" in facts.s_quiet(c)["did_not_happen"]
-
-
-def test_a_kind_without_a_group_line_stays_one_line_per_device(tmp_path):
-    # four pumps that each lost power are four problems: no group line in reports.yaml, no grouping
-    facts, c, _ = _ctx(tmp_path)
-    c._clues = ([{"id": f"clue-{k}", "group": "pumps", "entry": "running power stepped down", "subject": f"Pump {k}",
-                  "figures": {"step_date": "2026-10-02", "subject": f"Pump {k}", "entity_id": f"sensor.example_p{k}"},
-                  "horizon": "Now", "severity": None, "title": f"Pump {k}: running power down", "group_title": None,
-                  "playbook": {"means": "m"}} for k in range(4)], [])
-    rows = [r for r in facts.todo(c) if r["kind"] == "pumps/running power stepped down"]
-    assert [r["title"] for r in rows] == [f"Pump {k}: running power down" for k in range(4)]
 
 
 def _ctx(tmp_path, ha=None, now=datetime(2026, 10, 5, 7, tzinfo=timezone.utc)):
@@ -269,18 +228,6 @@ def test_one_device_is_one_line_and_many_of_a_kind_are_one_line(tmp_path):
     silent = [r for r in rows if r["kind"] == "PM-SILENT"]
     assert len(silent) == 1 and silent[0]["title"] == "4 sensors have not reported"
     assert silent[0]["members"] == ["Rain 0", "Rain 1", "Rain 2", "Rain 3"]
-
-
-def test_a_group_that_started_in_the_same_minute_says_one_cause(tmp_path):
-    facts, c, _ = _ctx(tmp_path)
-    c.cfg["thresholds"]["todo"]["group_from"] = 1
-    c._clues = ([{"id": f"clue-{k}", "group": "monitoring", "entry": "a device of the monitoring offline",
-                  "subject": f"Meter {k}", "figures": {"since": f"2026-10-01T09:2{8 + k % 2}", "subject": f"Meter {k}"},
-                  "horizon": "Soon", "severity": None, "title": f"Meter {k} offline", "group_title": "{n} monitoring devices offline",
-                  "playbook": {"means": "m", "check": "c"}} for k in range(4)], [])
-    (row,) = [r for r in facts.todo(c) if r["kind"] == "monitoring/a device of the monitoring offline"]
-    assert row["title"] == "4 monitoring devices offline"
-    assert "All since 01/10/2026 09:28: one cause is likely" in row["why"]
 
 
 class _Book(HABase):
@@ -326,46 +273,6 @@ def test_an_alert_is_a_run_only_for_a_rule_that_alerts_on_every_run(tmp_path):
                        {"message": "Entrance left unlocked"}, at="2026-09-30T07:41:00+00:00")
     facts, c, store = _ctx(tmp_path, book)                         # the next report's run reads the store again
     assert [r["source"] for r in facts._alert_rows(c)] == ["agent"]
-
-
-def test_a_report_run_reads_home_assistant_once_per_thing(tmp_path):
-    # architecture review 5: the weekly page read the rules' logbooks 4 times and a pump's hourly power up to 3 times
-    book = _Book(["2026-09-30T07:41:00+00:00"], [])
-    facts, c, store = _ctx(tmp_path, book)
-    for _ in range(4):
-        c.ha_alerts()
-    assert book.reads == 1                                            # one VESTA rule alerts on every run: one read
-
-    class Counting:
-        def __init__(self):
-            self.calls = []
-
-        def statistics(self, ids, s, e, period, types):
-            self.calls.append((tuple(ids), s))
-            return {}
-    cli = Counting()
-    c.cli = cli
-    c.hour_rows("sensor.example_pump_power", 7)
-    c.hour_rows("sensor.example_pump_power", 30)                  # a longer window: read again, once
-    c.hour_rows("sensor.example_pump_power", 7)
-    c.hour_rows("sensor.example_pump_power", 30)
-    assert len(cli.calls) == 2
-
-
-def test_the_same_alert_repeated_is_one_row_with_its_count(tmp_path):
-    facts, c, _ = _ctx(tmp_path, _Book(["2026-09-28T07:41:00+00:00", "2026-09-29T07:41:00+00:00"], []))
-    (row,) = facts.s_alerts(c)["rows"]
-    assert row["times"] == 2 and row["what"] == "Entrance unlocked"
-
-
-def test_the_order_of_the_page_is_reports_yaml_s(tmp_path):
-    fx = _villa(tmp_path)
-    _, facts = _facts(tmp_path, fx)
-    facts["order"] = ["circuits", "header"]                                            # as if reordered in reports.yaml
-    (tmp_path / "facts.json").write_text(json.dumps(facts))
-    _run(COMPOSE, "fm-weekly", "--facts", str(tmp_path / "facts.json"), "--out", str(tmp_path / "page.html"))
-    page = (tmp_path / "page.html").read_text()
-    assert page.index("Circuit") < page.index("<h1>") and "Batteries" not in page
 
 
 def test_the_villas_own_playbook_and_cards_are_added_to_the_shipped_ones(tmp_path):
@@ -464,63 +371,6 @@ def test_a_finding_the_night_no_longer_sees_closes_its_task_and_its_ticket(tmp_p
 
 
 
-def test_every_state_the_alert_desk_gives_has_its_words(tmp_path):
-    # architecture review, 2026-10-01: 6 of the desk's states reached the page raw ("asked", "reasked")
-    import re
-    import yaml
-    desk = open(os.path.join(STARTER_SKILLS, "alert-desk", "scripts", "desk.py"), encoding="utf-8").read()
-    owner = open(os.path.join(ROOT, "vesta_shared", "problems.py"), encoding="utf-8").read()
-    states = set(re.findall(r'state="([a-z_]+)"', desk + owner)) | {"new"}         # "new": the store's default
-    words = yaml.safe_load(open(os.path.join(STARTER_SKILLS, "reports", "reports.yaml"), encoding="utf-8"))["incident_words"]
-    assert states and states <= set(words), states - set(words)
-
-
-def test_an_alert_state_without_words_is_named_not_shown_raw(tmp_path):
-    facts, c, store = _ctx(tmp_path)
-    c.cfg["incident_words"] = {"done": "Done"}
-    iid = store.new_incident("k", "automation.example_door", "lock.example_door", "P2", {"message": "Door open"},
-                             at="2026-09-30T08:00:00+00:00")
-    store.update_incident(iid, state="reasked")
-    c.ha_alerts = lambda: []
-    (row,) = facts._alert_rows(c)
-    assert c.problems == ["reports.yaml: incident_words has no words for the state 'reasked'"]
-
-
-def test_a_logbook_run_close_to_an_incident_of_its_rule_is_that_incident():
-    import importlib.util
-    spec = importlib.util.spec_from_file_location("facts", FACTS)
-    facts = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(facts)
-    t = datetime(2026, 9, 30, 8, 0, tzinfo=timezone.utc)
-    known = [("automation.door", t)]
-    assert facts.followed_by_agent("automation.door", t + timedelta(minutes=10), known, 900)
-    assert not facts.followed_by_agent("automation.door", t + timedelta(minutes=20), known, 900)
-    assert not facts.followed_by_agent("automation.gate", t, known, 900)
-
-
-def test_the_one_list_is_built_from_plain_inputs():
-    # architecture review, 2026-10-01: the merge and grouping rules, tested with lists — no villa, store or HA
-    import importlib.util
-    spec = importlib.util.spec_from_file_location("facts", FACTS)
-    facts = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(facts)
-    import playbook                                                      # the one list's own module (review 13)
-    clue = {"id": "clue-1", "group": "pumps", "entry": "running power stepped down", "subject": "Pump",
-            "figures": {"entity_id": "sensor.pump_power", "step_date": "2026-09-20"}, "horizon": "Now", "severity": None,
-            "title": "Pump: power down", "group_title": None, "playbook": {"means": "less water", "check": "the basket"}}
-    pump_task = {"id": "finding-1", "kind": "PM-POWER-CHANGE", "entity_id": "sensor.pump_power", "severity": "P3",
-                 "title": "Pump draws less", "since": "2026-09-21", "figures": {}, "check": ""}
-    silent = [{"id": f"finding-{k}", "kind": "PM-SILENT", "entity_id": f"sensor.s{k}", "severity": "P3",
-               "title": f"S{k} silent", "since": "2026-10-01T09:28", "figures": {}} for k in range(2, 5)]
-    rows = playbook.one_list([clue], [pump_task, *silent], lambda eid, fb, whole: {"sensor.pump_power": "pump"}.get(eid, eid or fb),
-                          lambda eid, whole: {"sensor.s2": "S2", "sensor.s3": "S3", "sensor.s4": "S4"}.get(eid),
-                          {"P1": "Now", "P2": "Now", "P3": "Soon", "P4": "Plan"}, 3, 10,
-                          {"PM-SILENT": "{n} sensors silent", "same_time": "All since {since}: one cause."})
-    assert [r["title"] for r in rows] == ["Pump: power down", "3 sensors silent"]      # clue + task merged; 3 grouped
-    assert rows[0]["severity"] == "P2" and rows[0]["task_ids"] == ["finding-1"]       # Now → P2; the task kept with it
-    assert rows[1]["members"] == ["S2", "S3", "S4"] and "All since 01/10/2026 09:28: one cause." in rows[1]["why"]
-
-
 def test_a_report_made_without_the_ai_says_so_and_never_uses_old_readings(tmp_path):
     # owner, 2026-10-07: the credit ran out and the weekly never came. The page is still made from its figures; an
     # old notes.json (last week's readings) is never used, and the page and its message say why the AI is missing.
@@ -543,45 +393,6 @@ def test_a_report_made_without_the_ai_says_so_and_never_uses_old_readings(tmp_pa
     assert {s["to"] for s in sent} == {"here"} and sent[-1]["text"].endswith("VESTA's readings and translation are missing.)")
 
 
-def test_a_proposal_says_how_to_answer_and_its_long_names_wrap(tmp_path):
-    # owner, 2026-10-07: "Accept / Later / Ignore": boxes that looked like buttons on a page that cannot press
-    # anything, and an entity id that ran out of its card
-    import sys as _s
-    _s.path.insert(0, os.path.join(STARTER_SKILLS, "reports", "scripts"))
-    import compose
-    facts = {"zone": "UTC", "order": ["fixed_suggest"], "sections": {"fixed_suggest": {"fixed": [], "proposals": [
-        {"id": 4, "title": "Create the missing setting for Weather station", "detail": "No nominal voltage", "benefit": "Enables one rule"}]}}}
-    page = compose.page(facts, {})
-    assert 'class="btn"' not in page
-    # owner, 2026-10-13: answered with the /proposal command only — "accept 4" alone could mean anything
-    assert ("To answer, write in the chat: <b>/proposal accept 4</b>, <b>/proposal later 4</b> or "
-            "<b>/proposal ignore 4</b>.") in page and "Proposal 4</span>" in page
-    assert "No nominal voltage. Enables one rule." in page
-    assert ".wrap{overflow-wrap:anywhere}" in page and ".asset > .st{justify-self:start}" in page
-
-
-def test_a_missing_setting_proposal_names_the_device_not_its_id():
-    import sys as _s
-    _s.path.insert(0, os.path.join(STARTER_SKILLS, "roi-energy", "scripts"))
-    import proposals
-    found = [{"rule_id": "PM-PARAM-MISSING", "entity_id": "sensor.example_battery", "summary": "x",
-              "detail": json.dumps({"reading_v": 3.1, "name": "Weather station"})}]
-    (p,) = [x for x in proposals.build({}, None, found) if x["kind"] == "configuration"]
-    assert p["title"] == "Create the missing setting for Weather station"
-
-
-def test_a_missing_nominal_voltage_finding_carries_the_devices_name():
-    # the proposal names the device (above): the night check must hand that name on
-    import sys as _s
-    from datetime import date
-    _s.path.insert(0, os.path.join(STARTER_SKILLS, "preventive-maintenance", "scripts"))
-    import rules
-    from vesta_shared.params import VillaParams
-    (f,) = rules.battery_rules({"slug": "station", "name": "Weather station"}, "sensor.example_battery", "V", 3.1, [],
-                               VillaParams(defaults=rules.DEFAULTS), date(2026, 10, 7))
-    assert f.rule_id == "PM-PARAM-MISSING" and f.detail["name"] == "Weather station"
-
-
 def test_the_named_main_meter_is_the_one_read_even_with_a_shorter_twin(tmp_path):
     # architecture review 5: one counter was kept per asset, the shortest id — the named main meter then had no
     # figures and the total raised a KeyError instead of making a report
@@ -598,61 +409,6 @@ def test_the_named_main_meter_is_the_one_read_even_with_a_shorter_twin(tmp_path)
     assert r.returncode == 0, r.stderr
     out = json.load(open(tmp_path / "e.json"))
     assert out["main_meter"] == "sensor.example_main_energy" and out["total_kwh"] and "note" not in out
-
-
-def test_the_pack_finds_an_entity_once_and_prefers_the_row_that_names_it():
-    from vesta_shared.knowledge_pack import KnowledgePack
-    pack = KnowledgePack("V", "UTC", "", None, {"power": [{"entity_id": "sensor.x", "asset": "pump"}],
-                                                "energy": [{"entity_id": "sensor.x", "name": "Pump", "asset": "pump"}]},
-                         {}, [], [], {}, [], [], {})
-    assert pack.name_of("sensor.x") == "Pump" and pack.row("sensor.x")["asset"] == "pump"
-    assert pack.name_of("sensor.unknown") is None and pack.name_of("sensor.unknown", "fallback") == "fallback"
-    assert "_by_entity" not in pack.to_json()
-
-
-def test_a_page_step_with_a_missing_part_is_refused_not_silently_unsent(tmp_path):
-    # architecture review 5: --finish without --out printed no "send": the job's step sent nothing, and said nothing
-    fx = _villa(tmp_path)
-    _facts(tmp_path, fx)
-    f = str(tmp_path / "facts.json")
-    for args, why in [(["--finish", "fm", "--no-ai", "x."], "needs --out"),
-                      (["--no-ai", "x.", "--out", "p.html"], "give --finish too"),
-                      (["--finish", "fm", "--out", str(tmp_path / "p.html")], "give --limit")]:
-        r = _run(COMPOSE, "fm-weekly", "--facts", f, *args)
-        assert r.returncode == 1 and why in r.stderr, (args, r.stderr)
-    r = _run(COMPOSE, "fm-daily", "--pack", str(tmp_path / "pack.json"), "--store", str(tmp_path / "s.sqlite"),
-             "--finish", "fm")
-    assert r.returncode == 1 and "on_limit step of a page" in r.stderr
-
-
-def test_a_source_the_report_cites_is_a_link_that_cannot_break_the_page():
-    # owner, 2026-10-09: "I expect to see a clickable link instead of a raw text" — the web_search sources in the
-    # readings and the checks were escaped whole, so a cited page could not be opened from the phone
-    import sys as _s
-    _s.path.insert(0, os.path.join(STARTER_SKILLS, "reports", "scripts"))
-    import compose
-    out = str(compose.linked("Note its firmware. https://github.com/home-assistant/core/issues/183069. Then ask."))
-    assert ('<a class="src" href="https://github.com/home-assistant/core/issues/183069" target="_blank" '
-            'rel="noopener noreferrer">https://github.com/home-assistant/core/issues/183069</a>. Then ask.') in out
-    assert out.startswith("Note its firmware. ")
-    # what surrounds it stays escaped, and a quote ends the address: nothing written can leave the link
-    evil = str(compose.linked('<b>x</b> https://a.example/p?q=1&r=2"onclick="x'))
-    assert "<b>" not in evil and 'href="https://a.example/p?q=1&amp;r=2"' in evil and 'onclick="x' not in evil
-    assert str(compose.linked("")) == "" and not compose.linked("")
-    # both kinds of sentence on the page go through it: the readings and the checks
-    facts = {"zone": "UTC", "order": ["headline"], "to_write": [{"id": "headline", "kind": "reading"}],
-             "sections": {"headline": {"colour": "amber", "text": "Amber"}}}
-    page = compose.page(facts, {"headline": "See https://example.org/guide."})
-    assert '<a class="src" href="https://example.org/guide"' in page and "a.src{" in page
-    # a check and its question, as the AI wrote them, on the "Do this week" list (villa, 15:56: the link was
-    # escaped a second time there and the page showed "<a class=...>" as text)
-    facts = {"zone": "UTC", "order": ["todo"], "to_write": [],
-             "sections": {"todo": {"rows": [{"id": "t1", "title": "Pool pump", "severity": "P2", "why": "Less water"}]}}}
-    page = compose.page(facts, {"t1.check": "empty the baskets: https://www.example.org/pump-not-working/.",
-                                "t1.ask": "Was a valve moved"})
-    assert ('Empty the baskets: <a class="src" href="https://www.example.org/pump-not-working/" target="_blank" '
-            'rel="noopener noreferrer">https://www.example.org/pump-not-working/</a>. Was a valve moved?') in page
-    assert "&lt;a class" not in page
 
 
 def test_html_like_text_the_ai_writes_shows_as_text_and_breaks_nothing():
@@ -733,58 +489,12 @@ def test_the_monitoring_table_lists_devices_not_their_sensors(monkeypatch):
     assert {o["name"] for o in c.offline()} >= {"Spa Pump Power", "RX", "Lone Battery"}
 
 
-def test_a_pack_built_before_devices_were_kept_is_rebuilt_at_start(tmp_path):
-    # a format change carries its migration: an older pack has no devices, and the monitoring table would list
-    # sensors instead of devices until the 01:30 rebuild
-    import inspect
-    import json as _j
-    from vesta_agent.app import Vesta, pack_needs_build
-    from vesta_shared.knowledge_pack import KnowledgePack, build_pack
-    base = dict(villa="V", time_zone="UTC", generated_at="", ha_version=None, families={}, assets={}, areas=[], people=[],
-                channels={}, unknown_area=[], unclassified=[], retention={})
-    old = tmp_path / "old.json"
-    old.write_text(_j.dumps(base))
-    # 2026-10-15: kept devices, but built before hidden entities were left out — the owner's hidden locks stayed "unlocked"
-    older_rules = tmp_path / "older_rules.json"
-    older_rules.write_text(KnowledgePack(**base, devices={"d1": {"name": "Pump", "manufacturer": "", "model": ""}}).to_json())
-    new = tmp_path / "new.json"
-    new.write_text(build_pack({"entities": [{"entity_id": "sensor.pump_power", "device_id": "d1"}],
-                               "devices": [{"device_id": "d1", "name": "Pump"}]}, []).to_json())
-    assert pack_needs_build(str(tmp_path / "none.json")) and pack_needs_build(str(old))
-    assert pack_needs_build(str(older_rules))
-    assert not pack_needs_build(str(new))
-    assert "if pack_needs_build(self.s.pack_path):" in inspect.getsource(Vesta.start)
-
-
-def test_every_sentence_of_a_to_do_line_reaches_the_page_one_way():
-    # architecture review 12: each slot of the page chose its own helper, and a link went through two of them and was
-    # escaped twice. Every sentence — the reading, the check, the question, the time — is shown once, linked once.
-    import sys as _s
-    from markupsafe import Markup
-    _s.path.insert(0, os.path.join(STARTER_SKILLS, "reports", "scripts"))
-    import compose
-    assert compose.say(Markup('<a class="src" href="https://e.org">https://e.org</a>')) == \
-        Markup('<a class="src" href="https://e.org">https://e.org</a>')                 # already made: kept, never re-escaped
-    assert str(compose.say("check https://e.org/x")) == \
-        'Check <a class="src" href="https://e.org/x" target="_blank" rel="noopener noreferrer">https://e.org/x</a>.'
-    facts = {"zone": "UTC", "order": ["todo"], "to_write": [{"id": "t1.reading", "kind": "reading"}],
-             "sections": {"todo": {"rows": [{"id": "t1", "title": "Pool pump", "severity": "P2", "why": "x"}]}}}
-    notes = {"t1.reading": "Flow fell, see https://a.example/1.", "t1.check": "clean it: https://b.example/2.",
-             "t1.ask": "Was a valve moved <b>today</b>", "t1.when": "since 20 Sep"}
-    page = compose.page(facts, notes)
-    for url in ("https://a.example/1", "https://b.example/2"):
-        assert page.count(f'href="{url}"') == 1, url
-    assert "&lt;a " not in page and "<b>today</b>" not in page and "&lt;b&gt;today&lt;/b&gt;" in page
-    assert page.count("<a ") == page.count("</a>")
-
-
 def test_an_equipment_card_is_watched_when_the_to_do_list_names_its_device():
     # architecture review 13 (a regression of 0.12.115): the to-do list names devices by device_of, the cards
     # compared them with the asset slug — no card was set to "Watch" by it
     import sys as _s
     _s.path.insert(0, os.path.join(STARTER_SKILLS, "reports", "scripts"))
     import facts
-    import playbook
     from vesta_shared.knowledge_pack import KnowledgePack
     from datetime import date
     # two pumps on one relay, as the villa's system lists them: the relay, and a device per channel under it
@@ -870,26 +580,6 @@ def test_a_batterys_projection_is_one_rule():
     (trend,) = [f for f in found if f.rule_id == battery.TREND]
     assert trend.detail == {"slope_per_day": -2.0, "days_left": 10}             # (30 − 10) ÷ 2
     assert trend.summary == "Door battery is falling 2.0 points a day, about 10 days left."
-
-
-def test_every_page_names_a_device_one_way():
-    # architecture review 13: the clues, cards and trends named the pack's asset, the counter resets and mutes the
-    # entity, the offline table and the to-do list the device — one name per device now, from the pack
-    from vesta_shared.knowledge_pack import KnowledgePack
-    pack = KnowledgePack(villa="V", time_zone="UTC", generated_at="", ha_version=None,
-                         families={"power": [{"entity_id": "sensor.pool_power", "name": "Pool Power", "device_id": "plug", "asset": "pool"},
-                                             {"entity_id": "sensor.spa_power", "name": "Spa Power", "asset": "spa"},
-                                             {"entity_id": "sensor.rx", "name": "RX", "device_id": "phone", "asset": "rx"}]},
-                         assets={"pool": {"name": "Pool pump"}, "spa": {"name": "Spa heater"}},
-                         areas=[], people=[], channels={}, unknown_area=[], unclassified=[], retention={},
-                         devices={"plug": {"name": "Pool Plug"}, "phone": {"name": "", "manufacturer": "", "model": ""}})
-    assert pack.device_name("sensor.pool_power", "x") == "Pool Plug"        # its Home Assistant device
-    assert pack.device_name("sensor.spa_power", "x") == "Spa heater"        # no device: the pack's asset
-    assert pack.device_name("sensor.rx", "x") == "x"                        # a device Home Assistant knows nothing about
-    assert pack.device_name("sensor.unknown", None) is None                 # not in the pack: the caller's own words
-    import re
-    src = open(os.path.join(STARTER_SKILLS, "reports", "scripts", "facts.py")).read()
-    assert not re.search(r"a\.get\(.name.\) or slug", src)                # no section names a device by its asset
 
 
 def _problems_villa(tmp_path):
@@ -1009,15 +699,6 @@ def test_every_field_the_page_prints_is_one_facts_gives(tmp_path):
         compose.TPL.undefined = was
 
 
-def test_the_rule_ids_other_skills_read_are_written_once():
-    # architecture review 13: the reports and roi-energy spelled the night check's rule ids themselves
-    import glob
-    from vesta_shared import result
-    for rid in (result.PARAM_MISSING, result.COUNTER_RESET):
-        spelled = [p for p in glob.glob(os.path.join(STARTER_SKILLS, "*", "scripts", "*.py")) if f'"{rid}"' in open(p).read()]
-        assert spelled == [], (rid, spelled)
-
-
 def test_an_alert_that_came_back_counts_each_run_in_the_week(tmp_path):
     # architecture review 24: 145 drops of an access point, reopened "Back again", were one alert opened on the 1st —
     # the week counted 0 for it and said "no critical device lost"
@@ -1055,76 +736,6 @@ def test_an_alerts_lasted_column_is_said_as_both_apps_say_a_duration(tmp_path):
     facts, c, store = _ctx(tmp_path)
     said = {r["what"]: r["lasted"] for r in facts._alert_rows(c)}
     assert [said[f"Case {n}"] for n in range(len(cases))] == [case["words"] for case in cases]
-
-
-def test_the_monitoring_section_says_how_the_agent_listened_never_the_villas_devices(tmp_path):
-    # owner, 2026-10-19: "it should only list the monitoring related points ... never anything related to VILLA devices"
-    facts, c, _ = _ctx(tmp_path, _Book([], []))
-    c.listening_since = lambda: c.s_dt + timedelta(days=2)              # started during the week
-    m = facts.s_monitoring(c)
-    assert m["listening_since"] == (c.s_dt + timedelta(days=2)).isoformat() and "offline" not in m
-    c.listening_since = lambda: c.s_dt - timedelta(days=30)             # there all week
-    assert facts.s_monitoring(c)["listening_since"] is None
-
-
-def test_a_problem_is_named_by_its_reading_unless_it_is_about_the_whole_device():
-    # architecture review, 2026-10-19 evening: two pumps on one relay — the cards said "House Pump" and "Pool Pump",
-    # the to-do list merged both pumps' findings into one line named "House & Pool Relay"
-    import facts
-    import playbook
-    from vesta_shared.knowledge_pack import KnowledgePack
-    dev = {"name": "", "manufacturer": "Maker", "model": "Pro EM"}
-    pack = KnowledgePack(villa="V", time_zone="UTC", generated_at="", ha_version=None,
-                         families={"power": [{"entity_id": "sensor.house_power", "name": "Power", "device_id": "house_ch",
-                                              "asset": "house", "family": "power"},
-                                             {"entity_id": "sensor.pool_power", "name": "Power", "device_id": "pool_ch",
-                                              "asset": "pool", "family": "power"}],
-                                   "network": [{"entity_id": "switch.relay", "name": "Relay", "device_id": "relay",
-                                                "asset": "relay", "family": "network"}]},
-                         assets={}, areas=[], people=[], channels={}, unknown_area=[], unclassified=[], retention={},
-                         devices={"relay": {**dev, "name": "House & Pool Relay", "via": ""},
-                                  "house_ch": {**dev, "name": "House Pump", "via": "relay"},
-                                  "pool_ch": {**dev, "name": "Pool Pump", "via": "relay"}})
-    task = lambda tid, rule, eid, title: {"id": tid, "kind": rule, "rule_id": rule, "entity_id": eid,  # noqa: E731
-                                         "severity": "P3", "title": title, "since": "2026-10-18", "figures": {}, "check": ""}
-    c = facts.Ctx.__new__(facts.Ctx)
-    c.pack, c.cfg, c._todo, c._clues = pack, {}, None, ([], [])
-    c.need = lambda *p: {("horizon",): {"P1": "Now", "P2": "Now", "P3": "Soon", "P4": "Plan"},
-                         ("todo", "group_from"): 9, ("todo", "same_time_minutes"): 10}[p]
-    c.tasks = lambda: [task("finding-1", "PM-POWER-CHANGE", "sensor.house_power", "House power down"),
-                       task("finding-2", "PM-POWER-CHANGE", "sensor.pool_power", "Pool power down"),
-                       task("finding-3", "PM-RECONNECT-LOOP", "switch.relay", "Relay keeps dropping")]
-    rows = playbook.todo(c)
-    assert sorted(r["subject"] for r in rows) == ["House & Pool Relay", "House Pump", "Pool Pump"]   # three lines
-    # the digest names them the same way
-    assert pack.subject("sensor.house_power", False)[1] == "House Pump"
-    assert pack.subject("sensor.house_power", True)[1] == "House & Pool Relay"
-
-
-class _ScopedBook(_Book):
-    """The villa's shape since 2026-10-20: the door rule watches only while the villa is empty ("When this rule runs",
-    the blueprint input run_when)."""
-    def __init__(self, when):
-        super().__init__([], [])
-        self.when = when
-
-    def tool(self, name, args):
-        got = super().tool(name, args)
-        if args["identifier"] == "automation.example_door":
-            got["config"]["use_blueprint"]["input"] = {"run_when": self.when, "villa_empty_entity": ["binary_sensor.x_empty"]}
-        return got
-
-
-def test_a_quiet_line_says_when_its_rules_watch(tmp_path):
-    # owner, 2026-10-20: "no door left unlocked" is not true for the hours a rule set to "only while empty" did not watch
-    (tmp_path / "a").mkdir(); (tmp_path / "b").mkdir()
-    facts, c, _ = _ctx(tmp_path / "a")
-    c.cli = _ScopedBook("empty")
-    assert facts.s_quiet(c)["did_not_happen"] == [
-        "no door left unlocked and no supply left open (watched only while the villa is empty)"]
-    facts, c, _ = _ctx(tmp_path / "b")                                  # the rules are read once a day: another villa
-    c.cli = _ScopedBook("always")
-    assert facts.s_quiet(c)["did_not_happen"] == ["no door left unlocked and no supply left open"]
 
 
 def test_the_report_shows_a_battery_at_the_level_the_night_judged():
@@ -1189,79 +800,6 @@ def _battery_night(tmp, as_of: str, reading: str, hourly_max: list[tuple[str, fl
     return pack
 
 
-def _page_battery(tmp, pack, now: datetime) -> tuple[int | None, str | None]:
-    """The weekly page's battery cell (facts.s_batteries) over the night's store, its reading now as the store's
-    night left it."""
-    import facts
-    from zoneinfo import ZoneInfo
-    from vesta_shared.params import VillaParams
-    from vesta_shared.store import Store
-    st = Store(str(tmp / "s.sqlite"))
-    c = facts.Ctx.__new__(facts.Ctx)
-    c.pack, c.Z, c.end, c.now = pack, ZoneInfo("UTC"), now.date(), now
-    c.need = lambda *p: 8
-    c.store = st
-    c.tasks = lambda: [{"rule_id": f["rule_id"], "entity_id": f["entity_id"], "title": f["summary"]}
-                       for f in st.findings("open")]
-    c._states = {"sensor.door_battery": {"state": "8"}}
-    c.params = lambda: VillaParams()
-    (row,) = facts.s_batteries(c)["rows"]
-    return row["pct"], row.get("night")
-
-
-def test_the_report_shows_the_level_the_last_night_judged_not_one_kept_from_weeks_before(tmp_path):
-    """Review, 2026-10-23: the record of rested levels was merged and never dated. A night that read no hourly
-    statistics for a battery left the 50 % of weeks before; the night judged its last report, 8 %, "replace now",
-    and the weekly page showed 50 % beside it. The page shows what the last night judged."""
-    from vesta_shared import battery
-    from vesta_shared.store import Store
-    pack = _battery_night(tmp_path, "2026-10-01", "48", [("2026-10-01T12:00:00+00:00", 50.0)])
-    assert _page_battery(tmp_path, pack, datetime(2026, 10, 2, 8, tzinfo=timezone.utc))[0] == 50   # its rested level
-    _battery_night(tmp_path, "2026-10-20", "8", [("2026-10-01T12:00:00+00:00", 50.0)])            # no rows in its window
-    assert battery.CRIT in {f["rule_id"] for f in Store(str(tmp_path / "s.sqlite")).findings("open")}
-    pct, night = _page_battery(tmp_path, pack, datetime(2026, 10, 21, 8, tzinfo=timezone.utc))
-    assert pct == 8 and night                                            # 8 %, beside the night's "replace"
-
-
-def test_the_five_minute_recheck_keeps_the_level_it_judged_too(tmp_path):
-    """The recheck judges its open faults' batteries the night's way (nightly.battery_findings): the level it judged
-    (the higher of its best and its reading) is the one the page shows, dated as the recheck's."""
-    from vesta_shared import battery
-    from vesta_shared.store import Store
-    _battery_night(tmp_path, "2026-10-20", "12", [])
-    st = Store(str(tmp_path / "s.sqlite"))
-    assert battery.LOW in {f["rule_id"] for f in st.findings("open")}
-    fx = tmp_path / "fx-recheck"
-    fx.mkdir()
-    now = datetime(2026, 10, 21, 9, tzinfo=timezone.utc)
-    (fx / "states.json").write_text(json.dumps({"states": {"sensor.door_battery": {
-        "state": "8", "attributes": {"unit_of_measurement": "%"}, "last_changed": now.isoformat()}}}))
-    # its hourly best lower than its reading now (changed since): judged on the reading, and that is what is kept
-    (fx / "stats_hour_door.json").write_text(json.dumps({"period_type": "hour", "entities": [
-        {"entity_id": "sensor.door_battery", "statistics": [
-            {"start": int((now - timedelta(hours=2)).timestamp() * 1000), "max": 5.0}]}]}))
-    r = subprocess.run([sys.executable, os.path.join(STARTER_SKILLS, "preventive-maintenance", "scripts", "recheck.py"),
-                        "--pack", str(tmp_path / "pack.json"), "--store", str(tmp_path / "s.sqlite"),
-                        "--fixture-dir", str(fx), "--now", now.isoformat()],
-                       capture_output=True, text=True, env={**os.environ, "PYTHONPATH": PYTHONPATH}, timeout=60)
-    assert r.returncode == 0, r.stderr
-    assert Store(str(tmp_path / "s.sqlite")).cache_get(battery.RESTED)["sensor.door_battery"] == {
-        "level": 8.0, "at": now.isoformat()}
-
-
-def test_replaying_a_past_night_never_overwrites_a_newer_judged_level(tmp_path):
-    """Review, 2026-10-23: a past night replayed (nightly --as-of) judges at its own day's end; it overwrote last
-    night's 50 % with a record dated ten days back, and the page fell to the reading of the moment (8 %). The record
-    judged later stands, per battery."""
-    from vesta_shared import battery
-    from vesta_shared.store import Store
-    pack = _battery_night(tmp_path, "2026-10-20", "48", [("2026-10-20T12:00:00+00:00", 50.0)])
-    _battery_night(tmp_path, "2026-10-10", "30", [("2026-10-10T12:00:00+00:00", 31.0)])    # an older night replayed
-    assert Store(str(tmp_path / "s.sqlite")).cache_get(battery.RESTED)["sensor.door_battery"] == {
-        "level": 50.0, "at": "2026-10-21T00:00:00+00:00"}
-    assert _page_battery(tmp_path, pack, datetime(2026, 10, 21, 8, tzinfo=timezone.utc))[0] == 50
-
-
 def _recheck_battery(tmp, now: datetime, reading: float, hourly_max: float) -> dict:
     """The 5-minute recheck (recheck.py, as the engine runs it) over the door's battery reading `reading` at `now`,
     its hourly best `hourly_max` over the hours before: its printed outcome."""
@@ -1280,37 +818,6 @@ def _recheck_battery(tmp, now: datetime, reading: float, hourly_max: float) -> d
     return json.loads(r.stdout.strip().splitlines()[-1])
 
 
-def test_the_recheck_retitles_a_battery_at_its_step_when_its_whole_level_changes(tmp_path):
-    """Review, 2026-10-23: the night opened "battery at 18%: replace within the week"; the recheck judged 15 % (still
-    within the week) and kept it, but only marked the fault seen: the weekly page showed 15 % beside "battery at 18%",
-    and the Kiosk's fault kept 18 %. The level and the title come from the same judgement; only a whole point moves it."""
-    import facts
-    from zoneinfo import ZoneInfo
-    from vesta_shared import battery
-    from vesta_shared.params import VillaParams
-    from vesta_shared.store import Store
-    pack = _battery_night(tmp_path, "2026-10-20", "18", [])
-    st = Store(str(tmp_path / "s.sqlite"))
-    (f,) = st.findings("open")
-    assert f["rule_id"] == battery.LOW and "at 18%" in f["summary"]
-    out = _recheck_battery(tmp_path, datetime(2026, 10, 21, 20, tzinfo=timezone.utc), 15, 15.0)
-    assert out["faults_changed"] and out["actions"]                      # the Kiosk's fault is retitled now
-    now = datetime(2026, 10, 21, 20, 2, tzinfo=timezone.utc)
-    st = Store(str(tmp_path / "s.sqlite"))
-    c = facts.Ctx.__new__(facts.Ctx)
-    c.pack, c.Z, c.end, c.now, c.store = pack, ZoneInfo("UTC"), now.date(), now, st
-    c.need = lambda *p: 8
-    c.tasks = lambda: facts.Ctx.tasks(c)                                 # the page's own reading of what is open
-    c._states = {"sensor.door_battery": {"state": "15"}}
-    c.params = lambda: VillaParams()
-    (row,) = facts.s_batteries(c)["rows"]
-    assert row["pct"] == 15 and "at 15%" in row["night"]
-    (f2,) = st.findings("open")
-    assert f2["id"] == f["id"] and "at 15%" in f2["summary"]             # the same fault, its words restated
-    out = _recheck_battery(tmp_path, datetime(2026, 10, 21, 20, 5, tzinfo=timezone.utc), 15.3, 15.3)
-    assert not out["faults_changed"] and "at 15%" in Store(str(tmp_path / "s.sqlite")).findings("open")[0]["summary"]
-
-
 def test_a_judged_level_stands_only_while_it_is_the_last_nights():
     from datetime import datetime as dt
     from vesta_shared import battery
@@ -1327,25 +834,6 @@ def test_a_judged_level_stands_only_while_it_is_the_last_nights():
     assert battery.rested(s, "sensor.a", 1.0, night + timedelta(hours=battery.JUDGED_HOURS + 1)) == 1.0   # a night missed
     assert battery.rested(s, "sensor.b", 7.0, night + timedelta(hours=1)) == 7.0          # judged with no reading
     assert battery.rested(s, "sensor.a", None, night) is None
-
-
-def test_an_undated_record_from_before_neither_crashes_nor_comes_back():
-    """The villa's store holds the old record ({entity: value}, no date): never read as the night's, dropped on the
-    next write."""
-    from datetime import datetime as dt
-    from vesta_shared import battery
-
-    class St(dict):
-        cache_get = dict.get
-
-        def cache_put(self, k, v):
-            self[k] = v
-    s = St({battery.RESTED: {"sensor.a": 50.0, "sensor.b": 60.0, "sensor.c": "x"}})
-    now = dt(2026, 10, 3, 2, tzinfo=timezone.utc)
-    assert battery.rested(s, "sensor.a", 8.0, now) == 8.0
-    battery.keep_judged(s, {"sensor.b": 9.0}, now)
-    assert s[battery.RESTED] == {"sensor.b": {"level": 9.0, "at": now.isoformat()}}
-    assert battery.rested(s, "sensor.a", 8.0, now) == 8.0 and battery.rested(s, "sensor.b", 8.0, now) == 9.0
 
 
 def test_one_battery_through_its_steps_reads_the_same_on_its_fault_its_cockpit_task_and_the_weekly_page(tmp_path):

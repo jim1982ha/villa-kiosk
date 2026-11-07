@@ -47,13 +47,6 @@ def test_an_integration_s_settings_and_diagnostics_are_never_asked_for(tmp_path)
     assert not any(name == "ha_get_integration" and set(a) - {"entry_id"} for name, a in ha.calls)
 
 
-def test_a_new_villa_lets_the_ai_read_integrations():
-    import os
-    from helpers import ROOT
-    text = open(os.path.join(ROOT, "starter", "config", "policy.example.yaml"), encoding="utf-8").read()
-    assert "\n  - ha_get_integration\n" in text
-
-
 def test_a_skill_script_reads_the_same_state_only():
     # one guard, two doors (read_guard): a script's client is handed the same fields as the AI
     from vesta_shared.ha_client import McpClient

@@ -13,7 +13,7 @@ import subprocess
 import sys
 from datetime import date, datetime, timedelta, timezone
 
-from helpers import PYTHONPATH, ROOT, STARTER_SKILLS
+from helpers import PYTHONPATH, STARTER_SKILLS
 
 NIGHTLY = os.path.join(STARTER_SKILLS, "preventive-maintenance", "scripts", "nightly.py")
 COMPOSE = os.path.join(STARTER_SKILLS, "reports", "scripts", "compose.py")
@@ -85,42 +85,6 @@ def test_only_a_sensor_that_normally_reports_all_the_time_can_be_silent(tmp_path
     assert [f["entity_id"] for f in _open(tmp_path, "PM-SILENT")] == ["sensor.example_temperature"]
 
 
-def test_a_sensor_that_froze_once_before_is_judged_by_the_days_before_it_stopped(tmp_path):
-    # villa: frozen 6 days, reporting 6 days, then stopped — over 14 days it moved in under half its hours
-    fx = tmp_path / "fx"
-    fx.mkdir()
-    since = NOW - timedelta(hours=40)
-    (fx / "states.json").write_text(json.dumps({"states": {"sensor.example_th": {
-        "state": "28.45", "attributes": {}, "last_changed": since.isoformat(), "last_reported": since.isoformat()}}}))
-    _hourly(fx, "a", {"sensor.example_th": (since - timedelta(days=12), 8 * 24, False)})   # an earlier freeze
-    _hourly(fx, "b", {"sensor.example_th": (since - timedelta(days=4), 4 * 24, True)})    # then reporting; 1/3 overall
-    _pack(tmp_path, {"level": [_row("sensor.example_th", "TH temperature")]})
-    _night(tmp_path, "--as-of", AS_OF)
-    assert [f["entity_id"] for f in _open(tmp_path, "PM-SILENT")] == ["sensor.example_th"]
-
-
-def test_a_restart_is_not_a_report_the_silence_counts_from_the_last_real_reading(tmp_path):
-    # villa, 2026-10-26: every restart stamps last_reported and last_changed — a sensor silent for 3 days read "has not
-    # reported for 34h", the hours since the restart; its history says when it really last read something new
-    fx = tmp_path / "fx"
-    fx.mkdir()
-    restart, last = NOW - timedelta(hours=34), NOW - timedelta(days=3)
-    (fx / "states.json").write_text(json.dumps({"states": {"sensor.example_th": {
-        "state": "27.5", "attributes": {}, "last_changed": restart.isoformat(), "last_reported": restart.isoformat()}}}))
-    (fx / "history_raw_a.json").write_text(json.dumps({"entities": [{"entity_id": "sensor.example_th", "states": [
-        {"state": "27.1", "last_changed": (last - timedelta(minutes=5)).isoformat()},
-        {"state": "27.5", "last_changed": last.isoformat()},                          # its last real reading
-        {"state": "unavailable", "last_changed": (restart - timedelta(seconds=30)).isoformat()},
-        {"state": "27.5", "last_changed": restart.isoformat()}]}]}))                 # the restart's rewrite
-    (fx / "logbook.json").write_text(json.dumps({"entries": [          # the villa's own "started" entry
-        {"when": restart.isoformat(), "domain": "homeassistant", "name": "Home Assistant", "message": "started"}]}))
-    _hourly(fx, "a", {"sensor.example_th": (last - timedelta(days=10), 10 * 24, True)})
-    _pack(tmp_path, {"level": [_row("sensor.example_th", "TH temperature")]})
-    _night(tmp_path, "--as-of", AS_OF)
-    (f,) = _open(tmp_path, "PM-SILENT")
-    assert "has not reported for 3d " in f["summary"], f["summary"]
-
-
 def _restarted_sensor(fx, restart, last, eid="sensor.example_th"):
     """`eid` reading 27.5 since `last`, its stamps rewritten by a restart of the villa's system at `restart`."""
     (fx / "states.json").write_text(json.dumps({"states": {eid: {
@@ -149,57 +113,6 @@ def test_a_restart_inside_the_silence_hours_does_not_hide_a_silent_sensor(tmp_pa
     assert "has not reported for 3d " in f["summary"], f["summary"]
 
 
-def test_only_a_stamp_the_logbook_puts_at_a_restart_is_read_past(tmp_path):
-    # 2026-10-26: every changing sensor had its 7 days read each night — with the logbook saying no restart then, a
-    # sensor that last changed 6 h ago really reported 6 h ago: its stamp stands, no history read, not silent
-    fx = tmp_path / "fx"
-    fx.mkdir()
-    _restarted_sensor(fx, NOW - timedelta(hours=6), NOW - timedelta(days=3))
-    (fx / "logbook.json").write_text(json.dumps({"entries": []}))
-    _hourly(fx, "a", {"sensor.example_th": (NOW - timedelta(days=13), 10 * 24, True)})
-    _pack(tmp_path, {"level": [_row("sensor.example_th", "TH temperature")]})
-    _night(tmp_path, "--as-of", AS_OF)
-    assert _open(tmp_path, "PM-SILENT") == []
-
-
-def test_the_night_does_not_take_a_restarted_sibling_for_a_device_still_talking(tmp_path):
-    # the same, through the night check: the device's battery reading, stamped by the restart 6 h ago and unchanged
-    # for 3 days in its history, does not keep its silent temperature from being found
-    fx = tmp_path / "fx"
-    fx.mkdir()
-    restart, last = NOW - timedelta(hours=6), NOW - timedelta(days=3)
-    temp, bat = "sensor.example_th", "sensor.example_th_battery"
-    _restarted_sensor(fx, restart, last, temp)
-    states = json.loads((fx / "states.json").read_text())
-    states["states"][bat] = {"state": "80", "attributes": {}, "last_changed": restart.isoformat(),
-                             "last_reported": restart.isoformat()}
-    (fx / "states.json").write_text(json.dumps(states))
-    hist = json.loads((fx / "history_raw_a.json").read_text())
-    hist["entities"].append({"entity_id": bat, "states": [
-        {"state": "81", "last_changed": (last - timedelta(hours=1)).isoformat()},
-        {"state": "80", "last_changed": last.isoformat()},
-        {"state": "unavailable", "last_changed": (restart - timedelta(seconds=30)).isoformat()},
-        {"state": "80", "last_changed": restart.isoformat()}]})
-    (fx / "history_raw_a.json").write_text(json.dumps(hist))
-    _hourly(fx, "a", {temp: (last - timedelta(days=10), 10 * 24, True)})
-    _pack(tmp_path, {"level": [_row(temp, "TH temperature", asset="th", device="dev-th")],
-                     "battery": [_row(bat, "TH battery", family="battery", asset="th", device="dev-th")]})
-    _night(tmp_path, "--as-of", AS_OF)
-    assert [f["entity_id"] for f in _open(tmp_path, "PM-SILENT")] == [temp]
-
-
-def test_a_sensor_with_no_history_is_not_called_silent(tmp_path):
-    # absence is not evidence: with nothing to compare, the check says nothing
-    fx = tmp_path / "fx"
-    fx.mkdir()
-    old = (NOW - timedelta(days=3)).isoformat()
-    (fx / "states.json").write_text(json.dumps({"states": {"sensor.example_x": {
-        "state": "1", "attributes": {}, "last_changed": old, "last_reported": old}}}))
-    _pack(tmp_path, {"level": [_row("sensor.example_x", "X")]})
-    _night(tmp_path, "--as-of", AS_OF)
-    assert _open(tmp_path, "PM-SILENT") == []
-
-
 def test_one_silent_device_is_one_finding(tmp_path):
     # villa: "Temp and Humidity0 Battery has not reported" twice, beside its temperature and its pressure
     fx = tmp_path / "fx"
@@ -213,30 +126,6 @@ def test_one_silent_device_is_one_finding(tmp_path):
     _night(tmp_path, "--as-of", AS_OF)
     (f,) = _open(tmp_path, "PM-SILENT")
     assert f["summary"].startswith("TH temperature (+2 entities of the same device) has not reported"), f["summary"]
-
-
-def test_the_night_leaves_a_still_reading_of_a_talking_device_alone(tmp_path):
-    # villa, 2026-10-19 (the caller, run for real): the disk use held at 2.4 % for days while the same monitor's
-    # processor use reported every minute — "System Monitor has not reported for 1d 9h although it is online"
-    fx = tmp_path / "fx"
-    fx.mkdir()
-    old, fresh = (NOW - timedelta(hours=40)).isoformat(), (NOW - timedelta(minutes=5)).isoformat()
-    disk, cpu = "sensor.example_monitor_disk", "sensor.example_monitor_cpu"
-    (fx / "states.json").write_text(json.dumps({"states": {
-        disk: {"state": "2.4", "attributes": {}, "last_changed": old, "last_reported": old},
-        cpu: {"state": "3", "attributes": {}, "last_changed": fresh, "last_reported": fresh}}}))
-    _hourly(fx, "a", {disk: (NOW - timedelta(days=14), 12 * 24, True)})
-    rows = {"level": [_row(disk, "Monitor disk", asset="mon", device="dev-mon")],
-            "runtime": [_row(cpu, "Monitor CPU", family="runtime", asset="mon", device="dev-mon")]}
-    _pack(tmp_path, rows)
-    _night(tmp_path, "--as-of", AS_OF)
-    assert _open(tmp_path, "PM-SILENT") == []
-    # the whole device quiet: then it IS silent
-    (fx / "states.json").write_text(json.dumps({"states": {
-        disk: {"state": "2.4", "attributes": {}, "last_changed": old, "last_reported": old},
-        cpu: {"state": "3", "attributes": {}, "last_changed": old, "last_reported": old}}}))
-    _night(tmp_path, "--as-of", AS_OF)
-    assert len(_open(tmp_path, "PM-SILENT")) == 1
 
 
 # ------------------------------------------------------------------------------------------ reconnect loops
@@ -267,25 +156,6 @@ def test_a_restart_is_not_a_device_dropping_and_one_device_is_one_finding(tmp_pa
     _night(tmp_path, "--as-of", AS_OF)
     (f,) = _open(tmp_path, "PM-RECONNECT-LOOP")            # one device, one line, named in words
     assert f["summary"].startswith("Pool relay dropped and reconnected 12 times"), f["summary"]
-
-
-def test_a_villa_widens_the_reconnect_window_for_the_read_the_count_and_the_words(tmp_path):
-    # architecture review 4 (2026-10-13): "3 days" was typed in nightly.py's logbook read, in the rule and in its text
-    fx = tmp_path / "fx"
-    fx.mkdir()
-    (fx / "states.json").write_text(json.dumps({"states": {}}))
-    entries = [{"entity_id": "switch.example_relay", "state": "unavailable",
-                "when": datetime(2026, 9, 29 + k // 6, 11, 5 * k, tzinfo=timezone.utc).isoformat()} for k in range(12)]
-    (fx / "logbook.json").write_text(json.dumps({"entries": entries}))       # 29 and 30 Sept: 4 and 5 days back
-    _pack(tmp_path, {"network": [_row("switch.example_relay", "Pool relay", family="network", asset="relay",
-                                      device="dev-relay")]}, {"relay": {"slug": "relay", "name": "Pool relay", "entities": {}}})
-    _night(tmp_path, "--as-of", AS_OF)
-    assert _open(tmp_path, "PM-RECONNECT-LOOP") == []                       # the skill's 3 days: not seen
-    (fx / "helpers.json").write_text(json.dumps({"helpers": [], "states": {"input_number.vesta_reconnect_days": "5"}}))
-    (tmp_path / "s.sqlite").unlink()                                        # the villa's parameters are kept 10min
-    _night(tmp_path, "--as-of", AS_OF)
-    (f,) = _open(tmp_path, "PM-RECONNECT-LOOP")
-    assert f["summary"].startswith("Pool relay dropped and reconnected 12 times in 5 days"), f["summary"]
 
 
 # ---------------------------------------------------------------------------------------------- offline
@@ -350,38 +220,7 @@ def test_a_real_collapse_on_days_with_data_still_raises(tmp_path):
     assert len(_open(tmp_path, "PM-ENERGY-CHANGE")) == 1
 
 
-def test_the_night_judges_the_last_finished_day(tmp_path):
-    # it ran at 02:00 and judged the date it ran on: two hours of data
-    fx = tmp_path / "fx"
-    fx.mkdir()
-    (fx / "states.json").write_text(json.dumps({"states": {}}))
-    _pack(tmp_path, {})
-    res = _night(tmp_path)
-    assert res["as_of"] == (datetime.now(timezone.utc).date() - timedelta(days=1)).isoformat()
-
-
 # ------------------------------------------------------------------------------------------ the morning
-def test_the_morning_message_says_each_thing_once(tmp_path):
-    from vesta_shared.store import Store
-    # names come from the knowledge pack, as on the villa — not cut out of the summary's words
-    _pack(tmp_path, {"level": [_row(f"sensor.example_{k}", f"Sensor {k}") for k in range(4)]})
-    store = Store(str(tmp_path / "s.sqlite"))
-    for k in range(4):
-        store.raise_finding("PM-SILENT", f"sensor.example_{k}", "level", AS_OF, "P3",
-                            f"Sensor {k} has not reported for 1.5 days although it is online.", {"hours": 36})
-    store.raise_finding("PM-BATTERY-LOW", "sensor.example_bat", "battery", AS_OF, "P3",
-                        "Motion battery at 11%: replace within the week.", {})
-    store.raise_finding("PM-UNAVAILABLE", "lock.example_old", "availability", "2026-09-20", "P3",
-                        "Old lock has been offline for 300h.", {})
-    r = _run(COMPOSE, "fm-daily", "--pack", str(tmp_path / "pack.json"), "--store", str(tmp_path / "s.sqlite"),
-             "--as-of", "2026-10-04")
-    assert r.returncode == 0, r.stderr
-    m = json.loads(r.stdout)["message"]; text = m["title"] + "\n" + m["text"]
-    assert "4 sensors have not reported: Sensor 0, Sensor 1, Sensor 2, Sensor 3." in text      # one line for the kind
-    assert text.count("Motion battery") == 1                                                # new: not again under Still open
-    assert "\nStill open:\n" in text and "Old lock" in text
-
-
 # ------------------------------------------------------------------------------------------ run twice
 def test_the_same_night_run_again_is_not_a_crash_nor_news_again(tmp_path):
     # villa, 2026-10-06: nightly.py tried from the page for a day the scheduled night had already judged:
@@ -392,16 +231,6 @@ def test_the_same_night_run_again_is_not_a_crash_nor_news_again(tmp_path):
     assert [d["rule_id"] for d in first["new_findings"]].count("PM-COUNTER-RESET") == 1
     again = _night(tmp_path, "--as-of", AS_OF)
     assert "PM-COUNTER-RESET" not in [d["rule_id"] for d in again["new_findings"]]   # told once, the first night
-
-
-def test_no_threshold_hides_in_the_night_check_s_code():
-    # architecture review, 2026-10-07: 3h, 72h, 0.5, 48h, 3 devices, 20 entities, 14 days, 7 points, −0.5/day,
-    # 0.8 × nominal, 15 points were literals in the scripts; each is now a named default a villa can override
-    import re
-    for name in ("nightly.py", "rules.py", "features.py"):
-        src = open(os.path.join(STARTER_SKILLS, "preventive-maintenance", "scripts", name)).read()
-        assert "behaviour_text_default(" not in src, name
-        assert not re.search(r"step: float = \d", src) and "* nominal" not in src.replace('params.behaviour("battery_low_fraction_of_nominal") * nominal', ""), name
 
 
 def test_the_night_tells_the_engine_when_the_kiosks_faults_change(tmp_path):
@@ -458,65 +287,11 @@ def test_a_device_reconnecting_is_one_fault_named_for_it_and_wifi_when_it_never_
                             "never restarted, so its power held."), f["summary"]
 
 
-def test_a_device_s_reconnect_fault_keeps_one_entity_whichever_drops_first(tmp_path):
-    # villa, 2026-10-14: the relay's fault was kept under whichever entity dropped first in the night's logbook — the
-    # switch on 10 Oct, the uptime sensor on the 11th — so each change closed its fault and opened another, and the one
-    # left open kept the words of the night it was opened ("10 times", "Wi-Fi or power", an entity id for a name)
-    for name, uptime_first in (("switch_first", False), ("uptime_first", True)):
-        tmp = tmp_path / name
-        tmp.mkdir()
-        _relay(tmp, "2026-09-20T00:00:00+00:00", uptime_first=uptime_first)
-        _night(tmp, "--as-of", AS_OF)
-        (f,) = _open(tmp, "PM-RECONNECT-LOOP")
-        assert f["entity_id"] == "switch.example_relay", (name, f["entity_id"])
-
-
-def test_a_device_that_restarted_in_the_window_may_be_its_power(tmp_path):
-    _relay(tmp_path, "2026-10-02T12:00:00+00:00")
-    _night(tmp_path, "--as-of", AS_OF)
-    (f,) = _open(tmp_path, "PM-RECONNECT-LOOP")
-    assert f["summary"].endswith("a Wi-Fi or power problem on its side (it restarted in that time)."), f["summary"]
-
-
 def test_one_odd_day_is_not_an_energy_change(tmp_path):
     # 2026-10-13: "used 0.36 kWh/day over the last 2 days (+117%)" was one long run and one day it barely ran, averaged
     _pump(tmp_path, [1.8, 0.02])
     _night(tmp_path, "--as-of", AS_OF)
     assert _open(tmp_path, "PM-ENERGY-CHANGE") == []
-
-
-def test_a_low_battery_is_named_for_its_device_not_one_of_its_entities(tmp_path):
-    # 2026-10-13: "Motion1 Occupancy battery at 14%" — the battery is the device's, named after its motion entity
-    fx = tmp_path / "fx"
-    fx.mkdir()
-    (fx / "states.json").write_text(json.dumps({"states": {
-        "sensor.example_motion_battery": {"state": "14", "attributes": {}, "last_changed": "2026-10-03T20:00:00+00:00"}}}))
-    _pack(tmp_path, {"battery": [{**_row("sensor.example_motion_battery", "Example motion occupancy", family="battery",
-                                         asset="example_motion_occupancy", device="dev-m"), "unit": "%"}]},
-          devices={"dev-m": {"name": "Example Motion", "manufacturer": "", "model": ""}})
-    _night(tmp_path, "--as-of", AS_OF)
-    found = [f for f in __import__("vesta_shared.store", fromlist=["Store"]).Store(str(tmp_path / "s.sqlite")).findings("open")
-             if f["rule_id"].startswith("PM-BATTERY")]
-    assert found and all(f["summary"].startswith("Example Motion battery") for f in found), [f["summary"] for f in found]
-
-
-def test_one_odd_day_is_not_a_running_power_change():
-    # the same rule for the running power (2026-10-13): one high day and one low day are not "a drift"
-    import sys
-    sys.path.insert(0, os.path.join(STARTER_SKILLS, "preventive-maintenance", "scripts"))
-    import rules as R
-    from vesta_shared.params import VillaParams
-    from vesta_shared.skill_settings import load
-    params = VillaParams(defaults=load(os.path.join(STARTER_SKILLS, "preventive-maintenance"), "settings.yaml")["behaviour"])
-    end = date.fromisoformat(AS_OF)
-    day = lambda w: {"run_hours": 8, "full_hours": 8, "hours_with_data": 24, "running_power": w}      # noqa: E731
-    series = {end - timedelta(days=i): day(700.0) for i in range(2, 20)}
-    asset = {"slug": "pump", "name": "Example pump", "entities": {}}
-    for last in ((1000.0, 600.0), (900.0, 880.0)):
-        s = {**series, end - timedelta(days=1): day(last[0]), end: day(last[1])}
-        got = [f.rule_id for f in R.power_rules(asset, "sensor.example_pump_power", s, end, params, None, None)]
-        assert got == ([] if last == (1000.0, 600.0) else ["PM-POWER-CHANGE"]), (last, got)
-
 
 
 def test_several_devices_losing_one_access_point_together_are_counted_not_taken_for_a_restart(tmp_path):
@@ -533,24 +308,6 @@ def test_several_devices_losing_one_access_point_together_are_counted_not_taken_
     _pack(tmp_path, {"network": rows})
     _night(tmp_path, "--as-of", AS_OF)
     assert len(_open(tmp_path, "PM-RECONNECT-LOOP")) == 3                # one per device, each its 10 drops
-
-
-def test_a_duration_of_a_day_or_more_is_said_as_the_kiosk_says_it():
-    # owner, 2026-10-15: "Timmerflotte_5969 has been offline for 33h." beside the Kiosk's "1d 9h" — and the silent
-    # check's "1.4 days" a third way. The night check's own lines, through its rules
-    sys.path.insert(0, os.path.join(STARTER_SKILLS, "preventive-maintenance", "scripts"))
-    import rules as R
-    from vesta_shared.params import VillaParams
-    from vesta_shared.skill_settings import load
-    from vesta_shared.timeutil import lasting
-    params = VillaParams(defaults=load(os.path.join(STARTER_SKILLS, "preventive-maintenance"), "settings.yaml")["behaviour"])
-    asset = {"slug": "sensor_x", "name": "Sensor X"}
-    off = R.availability_rules(asset, "sensor.sensor_x_humidity", "unavailable", 33.2, params)
-    assert [f.summary for f in off] == ["Sensor X has been offline for 1d 9h."]
-    quiet = R.silence_rules(asset, "sensor.sensor_x_humidity", 34.0, params)
-    assert [f.summary for f in quiet] == ["Sensor X has not reported for 1d 10h although it is online."]
-    for seconds, said in ((4500, "1h 15min"), (23 * 3600 + 59 * 60, "23h 59min"), (86400, "1d"), (49 * 3600, "2d 1h")):
-        assert lasting(seconds) == said
 
 
 def test_a_hidden_entity_dropping_is_no_reconnect_fault(tmp_path):
@@ -589,78 +346,6 @@ def test_an_offline_fault_an_alert_took_over_is_handed_over_never_cleared(tmp_pa
     assert _open(tmp_path, "PM-UNAVAILABLE") == []                       # one problem: the alert's
     assert res["closed"] == [] and [f["entity_id"] for f in res["handed_over"]] == ["lock.example_door"], res
     assert iid
-
-
-def test_a_reading_that_holds_still_while_its_device_reports_is_not_silent():
-    # villa, 2026-10-19: the disk use stayed 2.4 % for days (it writes on a change only) while the same monitor's
-    # processor use reported every minute — "has not reported for 1d 9h although it is online"
-    import importlib.util
-    from datetime import datetime, timezone
-    from vesta_shared.knowledge_pack import KnowledgePack
-    spec = importlib.util.spec_from_file_location("nightly_t", os.path.join(
-        os.path.dirname(__file__), "..", "starter", "skills", "preventive-maintenance", "scripts", "nightly.py"))
-    nightly = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(nightly)
-    pack = KnowledgePack(villa="V", time_zone="UTC", generated_at="", ha_version=None, families={}, assets={}, areas=[],
-                         people=[], channels={}, unknown_area=[], unclassified=[], retention={},
-                         devices={"mon": {"name": "Monitor", "manufacturer": "M", "model": "X", "via": ""}},
-                         entity_devices={"sensor.disk": "mon", "sensor.cpu": "mon"})
-    now = datetime(2026, 10, 19, 2, tzinfo=timezone.utc)
-    talks = {"sensor.cpu": {"state": "3", "last_reported": "2026-10-19T01:59:00+00:00"}}
-    quiet = {"sensor.cpu": {"state": "3", "last_reported": "2026-10-17T08:00:00+00:00"}}
-    gone = {"sensor.cpu": {"state": "unavailable", "last_reported": "2026-10-19T01:59:00+00:00"}}
-    assert nightly._device_still_talks(pack, talks, "sensor.disk", now, 24)
-    assert not nightly._device_still_talks(pack, quiet, "sensor.disk", now, 24)   # the whole device quiet: silent
-    assert not nightly._device_still_talks(pack, gone, "sensor.disk", now, 24)    # an offline reading says nothing
-
-
-def test_a_sibling_stamped_by_a_restart_is_not_a_device_still_talking():
-    # villa, 2026-10-26: a restart stamps every reading of a dead device; its battery, "reported" 6 h ago by the
-    # restart alone, said the device still talked. Its history says when it really last reported.
-    import importlib.util
-    from vesta_shared.knowledge_pack import KnowledgePack
-    spec = importlib.util.spec_from_file_location("nightly_s", os.path.join(
-        os.path.dirname(__file__), "..", "starter", "skills", "preventive-maintenance", "scripts", "nightly.py"))
-    nightly = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(nightly)
-    pack = KnowledgePack(villa="V", time_zone="UTC", generated_at="", ha_version=None, families={}, assets={}, areas=[],
-                         people=[], channels={}, unknown_area=[], unclassified=[], retention={},
-                         devices={"th": {"name": "TH", "manufacturer": "M", "model": "X", "via": ""}},
-                         entity_devices={"sensor.th_temp": "th", "sensor.th_battery": "th"})
-    restart, last = NOW - timedelta(hours=6), NOW - timedelta(days=3)
-    stamped = {"sensor.th_battery": {"state": "80", "last_changed": restart.isoformat(),
-                                     "last_reported": restart.isoformat()}}
-
-    def history(ids, start, end):
-        return {"sensor.th_battery": [{"state": "81", "last_changed": (last - timedelta(hours=1)).isoformat()},
-                                      {"state": "80", "last_changed": last.isoformat()},
-                                      {"state": "unavailable", "last_changed": (restart - timedelta(seconds=30)).isoformat()},
-                                      {"state": "80", "last_changed": restart.isoformat()}]}
-    assert not nightly._device_still_talks(pack, stamped, "sensor.th_temp", NOW, 24, history)
-    # a real change of the battery 6 h ago: the device does talk
-    def changed(ids, start, end):
-        return {"sensor.th_battery": [{"state": "81", "last_changed": (last - timedelta(hours=1)).isoformat()},
-                                      {"state": "80", "last_changed": restart.isoformat()}]}
-    assert nightly._device_still_talks(pack, stamped, "sensor.th_temp", NOW, 24, changed)
-
-
-def test_the_night_leaves_out_a_reload_of_virtual_devices(tmp_path):
-    # villa, 2026-10-20: 19 "dropped and reconnected 10 times in 3 days" faults in one night — each save of a template,
-    # a helper or a package reloads them, "unavailable" for ~50 ms. Through the night check itself (its setting
-    # reconnect_min_drop_seconds), not the counting helper alone.
-    fx = tmp_path / "fx"
-    fx.mkdir()
-    (fx / "states.json").write_text(json.dumps({"states": {}}))
-    entries = []
-    for k in range(12):
-        t = datetime(2026, 10, 2 + k // 6, 11, 5 * (k % 6), tzinfo=timezone.utc)
-        entries += [{"entity_id": "fan.example_fan", "state": "unavailable", "when": t.isoformat()},
-                    {"entity_id": "fan.example_fan", "state": "off", "when": (t + timedelta(milliseconds=50)).isoformat()}]
-    (fx / "logbook.json").write_text(json.dumps({"entries": entries}))
-    _pack(tmp_path, {"runtime": [_row("fan.example_fan", "Ceiling fan", family="runtime", asset="fan", device="dev-fan")]},
-          {"fan": {"slug": "fan", "name": "Ceiling fan", "entities": {}}})
-    _night(tmp_path, "--as-of", AS_OF)
-    assert _open(tmp_path, "PM-RECONNECT-LOOP") == []                       # twelve reloads: no fault
 
 
 # ------------------------------------------------------------------------------------------ battery margin

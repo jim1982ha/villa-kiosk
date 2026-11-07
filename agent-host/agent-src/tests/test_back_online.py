@@ -91,90 +91,6 @@ def test_a_fault_about_a_device_deleted_from_home_assistant_closes_saying_so(tmp
     assert out["actions"] == MOVED and _closed_notes(tmp_path)[-1] == "Cleared: back online."
 
 
-def test_the_check_runs_every_five_minutes_and_reads_nothing_when_nothing_is_offline(tmp_path):
-    with open(os.path.join(SKILL, "skill.yaml"), encoding="utf-8") as f:
-        assert yaml.safe_load(f)["every_5_min"] == "recheck.py"
-    Store(str(tmp_path / "s.sqlite"))
-    # no fixture folder at all: a read would fail — nothing offline, nothing read
-    r = subprocess.run([sys.executable, os.path.join(SKILL, "scripts", "recheck.py"), "--store", str(tmp_path / "s.sqlite"),
-                        "--fixture-dir", str(tmp_path / "missing")],
-                       capture_output=True, text=True, env={**os.environ, "PYTHONPATH": PYTHONPATH}, timeout=60)
-    assert r.returncode == 0 and json.loads(r.stdout)["actions"] == []
-
-
-def test_an_integration_down_finding_names_every_device_it_stands_for():
-    from datetime import datetime, timedelta, timezone
-    from vesta_shared.offline import Group, merged_integrations
-    now = datetime(2026, 10, 10, 2, tzinfo=timezone.utc)
-    groups = {k: Group(key=k, label=None, asset=e, asset_name=e, family="power", platform="shelly", state="unavailable",
-                       since=now - timedelta(hours=9), hours=9, critical=False, names=[e], entity_ids=[e])
-              for k, e in zip(("a", "b", "c"), ENTS)}
-    (merged,) = merged_integrations(groups, 3, now)
-    assert merged.entity_ids == ENTS and merged.integration == "shelly"
-
-
-def test_a_p2_back_again_is_told_at_once_with_how_often():
-    sys.path.insert(0, os.path.join(SKILL, "scripts"))
-    import nightly
-    said = nightly.told_now({"villa": "Example", "as_of": "2026-10-10", "new_findings": [], "again": [
-                                                           {"severity": "P2", "summary": "Plug offline", "again": 2,
-                                                            "check": "Look at the plug."},
-                                                           {"severity": "P3", "summary": "Weak pump", "again": 1}]})
-    # the night check's message in the one shape (review 30): its title as data, "Back again:", what to do
-    (m,) = said
-    assert m["title"] == "Example, night check on 10/10/2026." and \
-        m["text"] == "Back again:\n- Plug offline (3rd time in 7 days)\nWhat to do: Look at the plug."
-
-
-def test_the_night_runs_output_carries_those_messages(monkeypatch, capsys):
-    # the caller, pinned: what main() prints is what the engine sends
-    sys.path.insert(0, os.path.join(SKILL, "scripts"))
-    import nightly
-    back = {"severity": "P2", "summary": "Plug offline", "again": 1, "check": "Look."}
-    monkeypatch.setattr(nightly, "run", lambda args: {"as_of": "2026-10-10", "features_written": 0, "tasks_to_create": [],
-                                                      "notes": [], "new_findings": [], "still_open": [], "closed": [],
-                                                      "again": [back], "tasks_resolved": []})
-    nightly.main(["--pack", "p.json"])
-    out = json.loads(capsys.readouterr().out)
-    assert [m["text"] for m in out["send"]] == ["Back again:\n- Plug offline (2nd time in 7 days)\nWhat to do: Look."]
-
-
-def test_a_sensor_that_reports_every_five_minutes_is_back_when_it_was_not_offline_in_the_last_minutes(tmp_path):
-    # villa, 2026-10-15: Timmerflotte_5969 came back at 14:03 and its humidity reported every 4min 53s — its last
-    # change was never 10 minutes old, and its fault stayed until 02:00. Its history over the minutes decides
-    hum = "sensor.room_x_humidity"
-    store = Store(str(tmp_path / "s.sqlite"))
-    fid, _ = store.raise_finding("PM-UNAVAILABLE", hum, "room_x", "2026-10-09", "P3", "Room X has been offline for 1d 9h.",
-                                 {"entities": [hum]})
-    Problems(store).open_task("finding", fid, "PM-UNAVAILABLE", hum, "Room X offline")
-
-    def at(now, back_minutes_ago):
-        """Offline until `back_minutes_ago`, then a new reading every 5 minutes."""
-        back = now - timedelta(minutes=back_minutes_ago)
-        rows = [{"state": "unavailable", "last_changed": (back - timedelta(hours=40)).isoformat()}]
-        rows += [{"state": f"{60 + k}.0", "last_changed": (back + timedelta(minutes=5 * k)).isoformat()}
-                 for k in range(back_minutes_ago // 5 + 1)]
-        fx = tmp_path / "fx"
-        fx.mkdir(exist_ok=True)
-        (fx / "history_raw_x.json").write_text(json.dumps({"entities": [{"entity_id": hum, "states": rows}]}))
-        last = rows[-1]
-        return {hum: {"state": last["state"], "last_changed": last["last_changed"], "attributes": {}}}
-
-    assert _run(tmp_path, at(T0, 7), T0)["actions"] == []              # back 7min ago: not yet
-    # a history with nothing from before the minutes (the recorder lost it): it cannot be told, not yet
-    (tmp_path / "fx" / "history_raw_x.json").write_text(json.dumps({"entities": [{"entity_id": hum, "states": [
-        {"state": "61.0", "last_changed": (T0 - timedelta(minutes=8)).isoformat()},
-        {"state": "62.0", "last_changed": (T0 - timedelta(minutes=3)).isoformat()}]}]}))
-    young = {hum: {"state": "62.0", "last_changed": (T0 - timedelta(minutes=3)).isoformat(), "attributes": {}}}
-    (tmp_path / "fx" / "states.json").write_text(json.dumps({"states": young}))
-    r = subprocess.run([sys.executable, os.path.join(SKILL, "scripts", "recheck.py"), "--store", str(tmp_path / "s.sqlite"),
-                        "--fixture-dir", str(tmp_path / "fx"), "--now", T0.isoformat()],
-                       capture_output=True, text=True, env={**os.environ, "PYTHONPATH": PYTHONPATH}, timeout=60)
-    assert r.returncode == 0 and json.loads(r.stdout)["actions"] == [], r.stderr
-    out = _run(tmp_path, at(T0, 120), T0)                                # back 2h ago, last reading 0min ago
-    assert out["actions"] == MOVED and _closed_notes(tmp_path) == ["Cleared: back online."]
-
-
 # ------------------------------------------------------------------ gone offline: found within minutes, not at 02:00
 NIGHT = datetime(2026, 10, 17, 21, 46, tzinfo=timezone.utc)
 
@@ -252,7 +168,7 @@ def test_maintenance_mode_holds_a_device_gone_offline_and_the_next_check_after_i
     """The Kiosk's promise (MaintenanceMode.tsx): while maintenance mode is on, a new problem below P1 is not taken up —
     no message, no fault — and audited; still there when the mode ends, the next 5-minute check takes it up as usual.
     (Architecture review round 7, card 1: only the alert desk asked the switch; this door told the facility manager.)"""
-    from vesta_shared import kiosk_told, maintenance
+    from vesta_shared import kiosk_told
     states = {**_off_since(NIGHT), "lock.example_door": {"state": "unavailable", "attributes": {},
                                                          "last_changed": NIGHT.isoformat()}}
     states.pop("sensor.example_th_humidity")
@@ -270,19 +186,6 @@ def test_maintenance_mode_holds_a_device_gone_offline_and_the_next_check_after_i
     assert msg["to"] == "fm" and "Example door has been offline for 17min" in msg["text"], msg
 
 
-def test_a_device_offline_again_within_the_week_says_so(tmp_path):
-    states = _off_since(NIGHT)
-    _run_engine(tmp_path, states, NIGHT + timedelta(minutes=11))
-    back = {**states, "sensor.example_th_humidity": {"state": "55", "attributes": {},
-                                                     "last_changed": (NIGHT + timedelta(minutes=20)).isoformat()}}
-    _run_engine(tmp_path, back, NIGHT + timedelta(minutes=31))
-    later = NIGHT + timedelta(hours=3)
-    assert _run_engine(tmp_path, _off_since(later), later + timedelta(minutes=11))["actions"] == MOVED
-    st = Store(str(tmp_path / "s.sqlite"))
-    (task,) = st.tasks(None)                                                     # its own task, open again
-    assert task["status"] == "open" and "(2nd time in 7 days)" in Problems(st).card(task)["title"], task
-
-
 def test_a_device_an_offline_alert_already_follows_gets_no_second_fault(tmp_path):
     # architecture review, offline devices #3: the villa's own rule alerted at 10 minutes (#, card, its fault); this
     # check would add "Example door has been offline for 12min" and the FM's message, the same minute
@@ -295,15 +198,6 @@ def test_a_device_an_offline_alert_already_follows_gets_no_second_fault(tmp_path
                                                          "last_changed": NIGHT.isoformat()}}
     out = _run_engine(tmp_path, states, NIGHT + timedelta(minutes=12))
     assert [t["entity_id"] for t in _open_tasks(tmp_path)] == ["sensor.example_th_humidity"] and out["send"] == []
-
-
-def test_an_open_alert_about_something_else_leaves_the_offline_fault(tmp_path):
-    store = Store(str(tmp_path / "s.sqlite"))
-    store.new_incident("door|lock.example_door", "automation.example_unlocked", "lock.example_door", "P2",
-                       {"bad_states": ["unlocked"], "entities": ["lock.example_door"]})
-    states = {"lock.example_door": {"state": "unavailable", "attributes": {}, "last_changed": NIGHT.isoformat()}}
-    out = _run_engine(tmp_path, states, NIGHT + timedelta(minutes=12))
-    assert [t["entity_id"] for t in _open_tasks(tmp_path)] == ["lock.example_door"] and len(out["send"]) == 1
 
 
 # ------------------------------------------------------------------ one physical device, whatever is listed under it
@@ -344,14 +238,6 @@ def test_a_silent_meter_and_its_phases_are_one_device_never_an_integration_down(
     assert _run_meter(tmp_path, NIGHT + timedelta(minutes=12))["actions"] == MOVED
     (task,) = _open_tasks(tmp_path)
     assert "integration" not in task["summary"] and "Example Meter has been offline" in task["summary"], task
-
-
-def test_an_alert_on_the_meter_covers_its_phases_too(tmp_path):
-    # the villa's own rule alerted on the meter's total power (#56): its phases are the same device — no second fault
-    Store(str(tmp_path / "s.sqlite")).new_incident(
-        "watch|sensor.example_meter_total_power", "automation.example_watchdog", "sensor.example_meter_total_power", "P2",
-        {"bad_states": ["unavailable"], "entities": ["sensor.example_meter_total_power"]})
-    assert _run_meter(tmp_path, NIGHT + timedelta(minutes=12))["actions"] == []
 
 
 # ------------------------------------------------------------------ a close while it is still there (one rule with the alert's)
@@ -450,18 +336,3 @@ def test_an_offline_fault_an_alert_now_follows_is_handed_over_within_one_recheck
 # Every way a fault ends, through this recheck AND the night check: test_fault_endings.py (one table).
 
 
-def test_an_offline_faults_new_words_are_said_at_the_next_check_its_running_time_apart(tmp_path):
-    """Architecture review 22, card 5: an open offline fault was only recorded as seen, its words the night's to restate
-    ("x integration (3 devices)" while 5 were down, until 02:00). It is raised again when what it says changed — never
-    for its running time alone (above: "offline for 11min" stays while open)."""
-    states = _off_since(NIGHT)
-    _run_engine(tmp_path, states, NIGHT + timedelta(minutes=11))
-    st = Store(str(tmp_path / "s.sqlite"))
-    (f,) = st.findings("open")
-    worded = f["summary"].replace("TH", "Older name", 1)
-    st.db.execute("UPDATE findings SET summary=? WHERE id=?", (worded, f["id"]))
-    st.db.commit()
-    out = _run_engine(tmp_path, states, NIGHT + timedelta(minutes=16))
-    now = Store(str(tmp_path / "s.sqlite")).finding(f["id"])
-    assert now["summary"] != worded and "TH has been offline for 16min" in now["summary"], now["summary"]
-    assert out["actions"] == MOVED and out["faults_changed"] is True

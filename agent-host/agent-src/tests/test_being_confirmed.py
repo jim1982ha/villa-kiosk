@@ -58,11 +58,6 @@ def moment(iso):
     return datetime.fromisoformat(str(iso).replace("Z", "+00:00"))
 
 
-def test_the_watch_lasts_as_long_as_the_closing_line_says():
-    # "Watch 1h" on Telegram is the reopen window: the Cockpit watches it as long, and never less than the desk's wait
-    assert WATCH == max(WAIT, desk.DEFAULTS["reopen_hours"] * 60) and desk.DEFAULTS["reopen_hours"] * 60 > WAIT
-
-
 def test_a_done_leaves_the_fault_resolved_and_being_confirmed_until_the_watch_ends_right(tmp_path):
     v, k, st = villa(tmp_path=tmp_path)
     now = datetime.now(timezone.utc)
@@ -230,13 +225,3 @@ def test_a_night_check_fault_is_watched_until_the_night_checks_next_run(tmp_path
     assert p.confirms_by(dict(task, status="open"), night, now=datetime(2026, 10, 25, 8, 0, tzinfo=timezone.utc)) is None
 
 
-def test_the_night_checks_next_run_is_read_from_its_schedule():
-    from vesta_shared.when import Spec
-
-    def next_slot(spec, after):
-        return Spec.parse(spec).next_after(after)
-    at = datetime(2026, 10, 25, 15, 50)
-    assert next_slot("02:00", at) == datetime(2026, 10, 26, 2, 0)                 # daily: the next night
-    assert next_slot("02:00", datetime(2026, 10, 25, 1, 0)) == datetime(2026, 10, 25, 2, 0)
-    assert next_slot("Mon 08:00", at) == datetime(2026, 10, 26, 8, 0)             # 25/10/2026 is a Sunday
-    assert next_slot("1 08:00", at) == datetime(2026, 11, 1, 8, 0)

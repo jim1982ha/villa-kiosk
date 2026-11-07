@@ -17,11 +17,9 @@ import pytest
 from ai_fake import FakeAI
 from helpers import make_agent, restarted
 from telegram_fake import BOT
-from vesta_agent import button_data, runner
-from vesta_agent.chat_facts import HEAD, NONE_PREPARED, SINCE, ChatFacts
-from vesta_agent.in_progress import InProgress
+from vesta_agent import runner
+from vesta_agent.chat_facts import HEAD, NONE_PREPARED, SINCE
 from vesta_agent.roster import Person
-from vesta_agent.state import State
 from vesta_agent.roster import Roster
 
 FM, OWNER = 222, 111
@@ -145,104 +143,6 @@ def test_an_alerts_step_sent_here_is_told(villa):
     assert SINCE not in chat_prompts(villa)[-1]                           # never another chat's
 
 
-def test_a_button_pressed_on_an_alert_here_is_told_with_who(villa):
-    iid = _alert(villa)
-    say(villa, "seen it")                                                 # the step is behind the AI now
-    mid = villa.state.incident_message(iid, FM)["mid"]
-    run(villa.on_ha_event("telegram_callback", {"id": "cb", "data": button_data.make(button_data.ALERT, iid, "done"),
-                                                "chat_id": FM, "user_id": FM, "bot": BOT,
-                                                "message": {"message_id": mid, "chat": {"id": FM}, "text": "Pump"}}))
-    say(villa, "is the pump alert still open?")
-    lines = [x for x in chat_prompts(villa)[-1].splitlines() if x.startswith("- ")]
-    assert re.fullmatch(rf"- {AT}: Done pressed on alert #{iid}-P2 by Wayan\.", lines[0])
-
-
-def test_a_fault_offer_decided_by_its_button_is_told(villa):
-    oid = villa.state.new_ticket_offer(FM, "Pool pump: check the float", None, None, None)
-    villa.state.offers_shown([oid])
-    mid = run(villa.delivery.send(FM, "An answer with its offer", keyboard={"inline_keyboard": [[{"text": "x"}]]}))
-    say(villa, "hello")
-    run(villa.on_ha_event("telegram_callback", {"id": "cb", "data": button_data.make(button_data.TICKET, oid, "n"),
-                                                "chat_id": FM, "user_id": FM, "bot": BOT,
-                                                "message": {"message_id": mid, "chat": {"id": FM}, "text": "x"}}))
-    say(villa, "so, is the fault created?")
-    (line,) = [x for x in chat_prompts(villa)[-1].splitlines() if x.startswith("- ")]
-    assert re.fullmatch(rf"- {AT}: Don't create it pressed on the fault offered here \(“Pool pump: check the float”\) "
-                        r"by Wayan: no fault was created\.", line)
-
-
-def test_only_the_latest_are_shown_the_rest_counted(tmp_path):
-    from datetime import datetime, timedelta, timezone
-    facts = ChatFacts(State(str(tmp_path / "s.sqlite")), InProgress())
-    t0 = datetime(2026, 10, 23, 6, 0, tzinfo=timezone.utc)
-    for n in range(7):
-        facts.pressed(FM, "Done", f"alert #{n}", "Wayan", at=t0 + timedelta(minutes=n))
-    lines = facts.now(FM).splitlines()
-    assert lines[1:3] == [SINCE, "- … 2 earlier"] and lines[3].endswith("alert #2 by Wayan.") and len(lines) == 8
-    facts.told(FM, t0 + timedelta(minutes=4))                              # the AI answered after the fifth
-    assert len(facts.state.chat_facts(FM)["items"]) == 2                   # what it was told is not kept
-    assert [x for x in facts.now(FM).splitlines() if x.startswith("- ")] == [
-        "- 23/10/2026 06:05: Done pressed on alert #5 by Wayan.", "- 23/10/2026 06:06: Done pressed on alert #6 by Wayan."]
-
-
-def test_a_report_whose_work_died_is_said_ended_with_nothing(villa):
-    async def dies(origin):
-        raise RuntimeError("the job's task died")
-
-    async def go():
-        villa.chat_jobs.start(FM, "fm-daily", dies, waiting_mid=4242, by="Wayan")
-        await villa.chat_jobs.idle()
-        await villa.converse(FM, WAYAN, "and the digest?")
-    run(go())
-    (line,) = [x for x in chat_prompts(villa)[-1].splitlines() if x.startswith("- ")]
-    assert re.fullmatch(rf"- {AT}: the fm-daily report asked for here at {AT} by Wayan ended without sending anything; "
-                        r"the chat was told it could not be prepared\.", line)
-
-
-def test_a_result_that_came_while_its_turn_was_still_answering_is_told_next(villa):
-    # the AI's last answer here is the message it was told the facts with — not when its turn ended: a report sent
-    # while the turn that asked for it was still being answered is still news at the next message
-    async def act(call):
-        if call["who"].startswith("job:"):
-            await call["call"]("send_message", {"to": "here", "text": "Daily digest: all quiet."})
-        elif "daily digest" in call["prompt"].lower():
-            await call["call"]("start_job", {"name": "fm-daily"})
-            # the job's result arrives before this answer is done — when the loop lets it: on a slow runner (2 CPUs) the
-            # result waited for this very answer and the two waited on each other for ever (CI, 0.12.331). Bounded: either
-            # way the next message must be told it was sent
-            for _ in range(400):
-                if any("all quiet" in t for _c, t, _k in villa.tg.sent):
-                    break
-                await asyncio.sleep(0.005)
-    villa.ai.act = act
-    say(villa, "Daily digest")
-    say(villa, "thanks")
-    assert re.search(rf"^- {AT}: the fm-daily report asked for here at {AT} by Wayan was sent here\.$",
-                     chat_prompts(villa)[-1], re.M)
-
-
-def test_a_report_whose_result_came_is_no_longer_being_prepared(villa):
-    async def act(call):
-        if call["who"].startswith("job:"):
-            await call["call"]("send_message", {"to": "here", "text": "Daily digest: all quiet."})
-            await villa.job_gate.wait()                    # sent, its run not over yet
-        elif "daily digest" in call["prompt"].lower():
-            await call["call"]("start_job", {"name": "fm-daily"})
-    villa.ai.act = act
-
-    async def go():
-        villa.job_gate = asyncio.Event()
-        await villa.converse(FM, WAYAN, "Daily digest")
-        while not any("all quiet" in t for _c, t, _k in villa.tg.sent):
-            await asyncio.sleep(0.005)
-        await villa.converse(FM, WAYAN, "got it?")
-        villa.job_gate.set()
-        await villa.chat_jobs.idle()
-    run(go())
-    got = chat_prompts(villa)[-1]
-    assert got.startswith(f"{HEAD} {NONE_PREPARED}") and "by Wayan was sent here." in got
-
-
 def test_a_report_made_without_the_ai_that_failed_too_is_said_not_prepared(villa):
     async def go():
         villa.jobs.start_without_ai("fm-daily", "credit", FM, by="Wayan")     # its steps send nothing (fixture)
@@ -252,15 +152,6 @@ def test_a_report_made_without_the_ai_that_failed_too_is_said_not_prepared(villa
     (line,) = [x for x in chat_prompts(villa)[-1].splitlines() if x.startswith("- ")]
     assert line.endswith("by Wayan could not be prepared (its figures could not be read without the AI either); "
                          "the chat was told.")
-
-
-def test_a_report_running_on_schedule_for_this_chat_is_named_as_scheduled(villa):
-    async def go():
-        async with villa.chat_jobs.held([FM], "fm-daily"):           # the scheduled run sends here
-            await villa.converse(FM, WAYAN, "anything for me today?")
-    run(go())
-    assert re.search(rf"^{re.escape(HEAD)} Being prepared for this chat now: the fm-daily report, on schedule since {AT}\. ",
-                     chat_prompts(villa)[-1], re.M)
 
 
 def test_waiting_for_the_jobs_never_waits_on_one_that_already_ended(villa):

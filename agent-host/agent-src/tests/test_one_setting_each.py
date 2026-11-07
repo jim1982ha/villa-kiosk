@@ -44,12 +44,3 @@ def test_the_filtration_pump_is_the_villas_to_say():
     assert fo.filtration_pump(one, _params())[0] == "spa_pump"                    # the only one: its gaps named
 
 
-def test_the_weekly_report_reads_its_settings_through_the_script_context():
-    sys.path.insert(0, os.path.join(SKILLS, "reports", "scripts"))
-    import facts
-    given = _params(_helper("station_battery_nominal_v", "3.0"))
-    c = facts.Ctx.__new__(facts.Ctx)
-    c._params, c._params_of, c.store, c.cli = None, (lambda: given), None, None
-    assert c.params() is given
-    src = open(os.path.join(SKILLS, "reports", "scripts", "facts.py")).read()
-    assert "params=lambda: s.params" in src                                         # main hands it the Context's

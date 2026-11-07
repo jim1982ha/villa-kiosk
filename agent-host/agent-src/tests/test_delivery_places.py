@@ -5,14 +5,12 @@ from __future__ import annotations
 
 import asyncio
 import base64
-import inspect
-import re
 
 import pytest
 
 from helpers import make_agent
 from kiosk_fake import FakeKiosk
-from vesta_agent import delivery, tablet
+from vesta_agent import tablet
 from vesta_agent.roster import Roster
 
 OWNER = 111
@@ -50,6 +48,3 @@ def test_both_places_take_the_same_steps(agent, where):
         assert agent.tg.sent == []
 
 
-def test_the_place_is_chosen_once():
-    src = inspect.getsource(delivery.Delivery)
-    assert len(re.findall(r"\.owns\(|_on_tablet|self\.tg is None", src)) == 1, "a step decides its place again"

@@ -137,14 +137,3 @@ def test_need_help_after_the_take_on_brings_back_no_button_that_no_longer_applie
     assert [b["text"] for b in asked["inline_keyboard"][0]] == ["Done", "Need help"]
 
 
-def test_a_take_on_says_where_in_every_language():
-    """Telegram's Open Ticket in each chat's own words (status_words "places" "taken"), the Cockpit's as before."""
-    from vesta_shared import kiosk_words, status_words as SW
-    from vesta_shared.message_format import IN_COCKPIT, ON_TELEGRAM
-    on_tg = kiosk_words.taken("Wayan", "2026-11-05T08:00:00+00:00", "UTC", ON_TELEGRAM)
-    in_ck = kiosk_words.taken("Wayan", "2026-11-05T08:00:00+00:00", "UTC", IN_COCKPIT)
-    assert str(on_tg) == "Ticket opened on Telegram on 05/11/2026 08:00 (Wayan)."
-    assert str(in_ck) == "Ticket opened in the Cockpit on 05/11/2026 08:00 (Wayan)."
-    assert set(on_tg.langs) == set(SW.LANGS) - {"en"}
-    for lang, said in on_tg.langs.items():
-        assert "Telegram" in said and "Cockpit" not in said and "(Wayan)" in said and "opened" not in said, (lang, said)

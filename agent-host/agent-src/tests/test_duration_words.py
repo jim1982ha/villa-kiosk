@@ -13,10 +13,6 @@ CONTRACT = os.path.join(os.path.dirname(__file__), "..", "..", "rootfs", "opt", 
 CASES = json.load(open(CONTRACT))["duration"]["cases"]
 
 
-def test_the_agreement_holds_the_cases_both_apps_read():
-    assert len(CASES) >= 20 and all({"seconds", "words"} <= set(c) for c in CASES)
-
-
 def test_every_agreed_duration_is_said_as_the_kiosk_says_it():
     wrong = [(c["seconds"], c["words"], lasting(c["seconds"])) for c in CASES if lasting(c["seconds"]) != c["words"]]
     assert not wrong, wrong

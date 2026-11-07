@@ -2,7 +2,7 @@
 # Runs the built image the way the Supervisor does and checks what a person
 # would see in the app's log. Used locally and by CI after each image push.
 #
-# ⚠️ THE IMAGE, NOT THE SOURCE. test_host.py proves the programs; this proves
+# ⚠️ THE IMAGE, NOT THE SOURCE. The agent's tests prove the programs; this proves
 # the s6 wiring around them — that init-vesta runs before the slot, that a
 # failed validation really stops the container, and that nothing in the whole
 # log (s6's own lines included) carries a secret.

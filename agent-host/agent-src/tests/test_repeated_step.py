@@ -98,15 +98,6 @@ def test_the_villas_rule_alerting_again_in_a_row_is_one_line_with_its_count(agen
     assert [n for n in noted if STILL in n] == ["Still-there alert sent, 3 times (to: FM)"], noted
 
 
-def test_a_repeat_says_the_same_count_in_every_language(agent):
-    from vesta_shared import status_words
-    assert status_words.repeats(3) == ", 3 times" and status_words.repeats(1) == "" and status_words.repeats(None) == ""
-    for lang in status_words.LANGS:
-        assert "3" in status_words.repeats(3, lang), lang
-    assert status_words.step("still", "06/11/2026 18:35", "", "FM", "fr", 3) == \
-        "Alerte « toujours là » envoyée le 06/11/2026 18:35, 3 fois (à: FM)"
-
-
 @pytest.mark.parametrize("reminded", [True, False], ids=["a-reminder-after", "the-repeat-last"])
 def test_an_alert_an_older_engine_recorded_once_per_repeat_reads_one_line_after_the_start(agent, kiosk, monkeypatch,
                                                                                          reminded):

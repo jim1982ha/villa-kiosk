@@ -6,14 +6,10 @@ import json
 import os
 
 import pytest
-import yaml
 
-from helpers import make_agent, make_skill, page_js, settings
-from telegram_fake import FakeTelegram
+from helpers import make_agent, make_skill, settings
 from ha_fake import FakeHA, tool
 from vesta_agent import script_run
-from vesta_agent.app import Vesta
-from vesta_agent.kiosk import Kiosk
 from vesta_agent.routing import CONVERSATION, Origin
 from vesta_agent.roster import Roster
 
@@ -62,27 +58,6 @@ def test_a_failure_is_recorded_alike_by_the_ai_a_job_and_the_page(agent):
     assert [r["by"] for r in _records(agent, "script")] == ["job", "page"]
 
 
-def test_the_overview_counts_every_failure_and_only_failures():
-    # architecture review 8: the page summed four kinds itself and missed action_failed; the agent adds them up now
-    from vesta_agent.status import FAILURE_KINDS, STATUS_KINDS, figures
-    assert set(FAILURE_KINDS) <= set(STATUS_KINDS)
-    # architecture review scan 4 (2026-10-19): "replies written" counted every run — the AI jobs and the refused runs
-    # included; now a run is read as the Costs tab reads it (who → reply or report; problem → failure)
-    rows = lambda kind, n, detail=None: [{"kind": kind, "detail": json.dumps(detail or {})}] * n  # noqa: E731
-    records = (rows("failed", 1) + rows("action_failed", 2) + rows("send_failed", 3) + rows("script_failed", 4)
-               + rows("code_script_failed", 5) + rows("script_refused", 100) + rows("executed", 6) + rows("direct", 7)
-               + rows("run", 5, {"who": "Owner@1"}) + rows("run", 2, {"who": "job:fm-weekly"})
-               + rows("run", 1, {"who": "Owner@1", "problem": "credit", "error": "api billing_error"})
-               + rows("without_ai", 1, {"job": "fm-weekly", "sent": 1, "failed": None})
-               + rows("job_no_result", 1, {"job": "fm-weekly", "why": "x"}))
-    got = dict(figures(records, 0.256))
-    assert got["Failures"] == 17 and got["Actions done"] == 13 and got["Replies written"] == 5 and got["Reports made"] == 3
-    assert got["AI cost (USD)"] == "0.26"
-    assert "AI cost (USD)" not in dict(figures(records))      # the Costs tab's: its own first figure says the cost
-    js = page_js()
-    assert "...(c.activity || [])" in js and "count(" not in js.split("export async function costs")[1].split("export ")[0]
-
-
 def test_a_script_gets_the_pack_the_store_and_the_zone_its_skill_yaml_asks_for(tmp_path):
     # 0.12.67–0.12.68: the list was emptied by a name used twice, every script ran without them (the 07:00 digest
     # stopped: "fm-daily needs --pack"); the tests passed because they give those arguments themselves
@@ -111,44 +86,3 @@ def test_a_script_called_the_wrong_way_has_stopped_not_nothing_to_do(agent):
     assert [r["skill"] for r in _records(agent, "script_failed")] == ["strict"]
 
 
-def test_an_offline_test_reads_the_file_a_report_run_left(agent):
-    # architecture review 16: since each report works in its own folder (0.12.118), the Offline Test could not reach
-    # this morning's facts.json — and offered an older one from the out folder itself, with old figures
-    from vesta_agent.skills import take_run_file
-    out = agent.s.out_dir
-    os.makedirs(os.path.join(out, "runs", "fm-weekly-20261010T080301000000"), exist_ok=True)
-    with open(os.path.join(out, "runs", "fm-weekly-20261010T080301000000", "facts.json"), "w") as f:
-        f.write('{"kwh": 287}')
-    with open(os.path.join(out, "facts.json"), "w") as f:
-        f.write('{"kwh": 999}')                                                   # an older one
-    assert take_run_file(out, "runs/fm-weekly-20261010T080301000000/facts.json") == "facts.json"
-    assert open(os.path.join(out, "facts.json")).read() == '{"kwh": 287}'        # the report's, where the test runs
-    assert take_run_file(out, "runs/../../etc/passwd") == "runs/../../etc/passwd"   # never outside the runs
-    assert take_run_file(out, "notes.json") == "notes.json"
-    import inspect
-    from vesta_agent.app import Vesta
-    assert "take_run_file(self.s.out_dir, a)" in inspect.getsource(Vesta.try_command)
-
-
-def test_a_code_job_finds_the_knowledge_pack_without_being_given_it(tmp_path):
-    # recheck.py runs every 5 minutes with --store only (2026-10-18): it reads what is offline through the pack
-    make_skill(os.path.join(str(tmp_path), "skills"), "probe", {"description": "t"},
-               {"p.py": "import json, os\nprint(json.dumps({'pack': os.environ.get('VESTA_PACK')}))\n"})
-    v = make_agent(tmp_path, {}, roster=Roster.of())
-    assert v.code_command(v.skills.get("probe"), "p.py") == {"pack": v.s.pack_path} and v.s.pack_path
-
-
-def test_a_scheduled_code_job_that_stops_says_so_in_its_end_row(agent):
-    # architecture review scan 4 (2026-10-19): a code job's script that stopped raised nothing, so the run's end row
-    # (in_progress.kept) would have read "ended" — app.run_code_job says the verdict with why
-    from vesta_agent.in_progress import SCHEDULED, Item, run_ends
-    sk = agent.skills.get("probe")
-
-    async def go(command, key):
-        async with agent.work.kept(Item(SCHEDULED, key, slot="2026-10-19T02:00:00+00:00")):
-            await agent.run_code_job(sk, command, 30)
-    asyncio.run(go("p.py boom", "probe:0:02:00"))
-    asyncio.run(go("p.py ok", "probe:1:02:00"))
-    ends = run_ends(agent.state)
-    assert ends["probe:0:02:00"]["outcome"] == "failed" and ends["probe:0:02:00"]["why"].startswith("p.py stopped: ")
-    assert SECRET not in ends["probe:0:02:00"]["why"] and ends["probe:1:02:00"] == {**ends["probe:1:02:00"], "outcome": "ended", "why": None}

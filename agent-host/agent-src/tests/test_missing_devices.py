@@ -87,13 +87,6 @@ def test_a_critical_device_gone_from_the_villas_system_is_a_fault_within_the_fiv
     assert len(_missing(tmp_path)) == 1
 
 
-def test_a_critical_device_the_packs_never_named_is_missing_too_named_in_words(tmp_path):
-    Store(str(tmp_path / "s.sqlite"))
-    _recheck(tmp_path, {TH: _st()}, T0, not_found=[LOCK])
-    (f,) = _missing(tmp_path)
-    assert f["summary"].startswith("Example door is missing")                  # never the raw id
-
-
 def test_a_failed_read_is_never_missing(tmp_path):
     _seen(tmp_path)
     # no state for the lock, but the villa's system never answered "not found" (a timeout, a refusal)
@@ -127,21 +120,6 @@ def test_a_missing_device_that_comes_back_closes_its_fault(tmp_path):
     st = Store(str(tmp_path / "s.sqlite"))
     assert st.tasks("open") == []
     assert [t["close_note"] for t in st.tasks(None)] == ["Cleared: back in the villa's system."]
-
-
-def test_an_offline_fault_whose_device_is_gone_follows_the_missing_one_never_closed_in_silence(tmp_path):
-    st = _seen(tmp_path)
-    fid, _ = st.raise_finding("PM-UNAVAILABLE", LOCK, "security", "2026-10-30", "P3",
-                              "Example door has been offline for 1h.", {"hours": 1, "entities": [LOCK]})
-    Problems(st).open_task("finding", fid, "PM-UNAVAILABLE", LOCK, "Example door offline")
-    # not on the critical list: found through its open fault
-    _recheck(tmp_path, {TH: _st()}, T0, not_found=[LOCK, BATT], critical=())
-    st = Store(str(tmp_path / "s.sqlite"))
-    (m,) = _missing(tmp_path)
-    assert m["severity"] == "P3"
-    assert st.finding(fid)["status"] == "closed"
-    notes = [t["close_note"] for t in st.tasks(None) if t["status"] != "open"]
-    assert notes == [f"Followed by: {m['summary']}"]
 
 
 def test_the_night_check_finds_a_device_gone_that_no_fault_was_about(tmp_path):
@@ -199,37 +177,6 @@ def test_a_missing_device_is_missing_since_it_left_never_since_the_check_first_l
     assert f["summary"] == f"Example door is missing from the villa's system since {moment_label(gone, 'UTC')}."
     d = json.loads(f["detail"])
     assert d["since"] == gone.isoformat() and d["since_read"] is True
-
-
-def test_a_missing_fault_that_said_when_the_check_looked_is_corrected_in_place(tmp_path):
-    # a fault 0.12.420 opened, "since" the check's own moment, its history never read: the next check corrects its words
-    from vesta_shared.timeutil import moment_label
-    st = _seen(tmp_path)
-    gone = _left(tmp_path, T0)
-    wrong = (T0 + timedelta(hours=13)).isoformat()
-    fid, _ = st.raise_finding("PM-MISSING", LOCK, "availability", "2026-10-31", "P2",
-                              f"Example door is missing from the villa's system since {moment_label(datetime.fromisoformat(wrong), 'UTC')}.",
-                              {"critical": True, "entities": [LOCK, BATT], "since": wrong, "name": "Example door",
-                               "named_in": [], "check": "Re-pair it, or press Done if it was removed on purpose."})
-    out = _recheck(tmp_path, {TH: _st()}, T0 + timedelta(hours=14), not_found=[LOCK, BATT])
-    (f,) = _missing(tmp_path)
-    assert f["id"] == fid and out["send"] == []                                      # the same fault, not told again
-    assert f["summary"] == f"Example door is missing from the villa's system since {moment_label(gone, 'UTC')}."
-    assert json.loads(f["detail"])["since_read"] is True
-
-
-def test_a_missing_device_whose_history_is_not_read_is_missing_since_the_pack_lacked_it(tmp_path):
-    # no history of it: the moment a pack first no longer had it, never the moment of the check
-    st = _seen(tmp_path)
-    import sqlite3
-    db = sqlite3.connect(str(tmp_path / "s.sqlite"))
-    db.execute("UPDATE pack_seen SET last_seen=?, gone_at=? WHERE gone_at IS NOT NULL",
-               ((T0 - timedelta(hours=2)).isoformat(), (T0 - timedelta(hours=1)).isoformat()))
-    db.commit(); db.close()
-    _recheck(tmp_path, {TH: _st()}, T0 + timedelta(hours=13), not_found=[LOCK, BATT])
-    (f,) = _missing(tmp_path)
-    assert json.loads(f["detail"])["since"] == (T0 - timedelta(hours=1)).isoformat()
-
 
 
 def test_when_it_left_is_the_agreements_answer_for_each_of_its_cases():

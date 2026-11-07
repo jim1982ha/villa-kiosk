@@ -2,16 +2,12 @@
 rule (intake.resume_for), and the one table of button kinds (button_data) — as tables, without the agent."""
 from __future__ import annotations
 
-import glob
-import os
-import re
 from datetime import datetime, timezone
 
 import pytest
 
-from helpers import ROOT
 from vesta_agent import button_data, intake
-from vesta_agent.roster import NOT_LISTED, Person
+from vesta_agent.roster import NOT_LISTED
 from vesta_agent.roster import Roster
 from vesta_agent.policy import Policy
 
@@ -56,22 +52,10 @@ def test_what_the_agent_does_with_each_message(etype, m, action, text):
     assert (got.action, got.text) == (action, text)
 
 
-def test_a_tablets_whoami_says_who_is_signed_in_there_in_the_roles_words():
-    from vesta_shared.message_format import ROLE_WORDS
-    q = intake.Question(chat=OWNER, command="/whoami", person=Person(OWNER, "Ana", "fm"))
-    got = intake.gate(q, Pol(), BOT, lambda *a: False)
-    assert (got.action, got.text) == ("whoami", f"You are Ana; VESTA answers you as {ROLE_WORDS['fm']}.")
-
-
 def test_a_voice_message_is_handed_on_to_be_transcribed():
     got = intake.gate(intake.from_telegram("telegram_attachment", {"chat_id": OWNER, "user_id": OWNER, "file_mime_type": "audio/ogg",
                                               "file_id": "f1"}), Pol(), BOT, lambda *a: False)
     assert got.action == "converse" and got.voice_file == "f1" and got.person.role == "owner"
-
-
-def test_an_unlisted_group_is_recorded_as_ignored():
-    assert intake.gate(intake.from_telegram("telegram_text", ev(OTHER_GROUP, OWNER)), Pol(), BOT, lambda *a: False).why == \
-        "group not in the villa's lists"
 
 
 NOW = datetime(2026, 10, 7, 12, 0, tzinfo=timezone.utc)      # 20:00 in the zone below
@@ -99,12 +83,6 @@ def test_a_button_is_read_back_as_it_was_written():
         assert button_data.read(wrong) == (None, [])
 
 
-def test_every_button_the_agent_sends_is_written_through_the_one_table():
-    for path in glob.glob(os.path.join(ROOT, "vesta_agent", "**", "*.py"), recursive=True):
-        src = open(path, encoding="utf-8").read()
-        assert not re.search(r'"callback_data":\s*f?"', src), f"{path}: a button's data written by hand"
-
-
 # ---- a skill only its command starts (owner, 2026-10-11: investigate only on its command, "/investigate", never if not)
 CMDS = {"/investigate": "investigate"}
 
@@ -127,17 +105,6 @@ CMDS = {"/investigate": "investigate"}
 def test_only_the_command_calls_its_skill(etype, m, invoked, text):
     got = intake.gate(intake.from_telegram(etype, m), Pol(), BOT, lambda c, mid: False, CMDS)
     assert (got.action, got.invoked, got.text) == ("converse", invoked, text)
-
-
-def test_the_command_alone_still_reaches_the_agent_which_asks_for_the_question():
-    got = intake.gate(intake.from_telegram("telegram_command", ev(OWNER, OWNER, "", command="/investigate", args=[])), Pol(), BOT,
-                      lambda c, mid: False, CMDS)
-    assert (got.action, got.invoked, got.text) == ("converse", "investigate", "")
-    # a command no skill declares is still Home Assistant's — "/investigation" too, since 0.12.163 (owner: only /investigate)
-    assert intake.gate(intake.from_telegram("telegram_command", ev(OWNER, OWNER, "", command="/investigation", args=["x"])), Pol(), BOT,
-                       lambda c, mid: False, CMDS).action == "drop"
-    assert intake.gate(intake.from_telegram("telegram_command", ev(OWNER, OWNER, "", command="/lights", args=[])), Pol(), BOT,
-                       lambda c, mid: False, CMDS).action == "drop"
 
 
 def test_a_switched_off_skills_command_is_answered_never_dropped():

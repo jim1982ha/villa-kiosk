@@ -5,13 +5,11 @@ at full price instead of reading it from the prompt cache (about a tenth of the 
 message (runner.with_time)."""
 from __future__ import annotations
 
-import inspect
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from helpers import make_agent
 from vesta_agent import app as app_module
-from vesta_agent import runner
 
 
 def test_the_instructions_are_the_same_at_any_minute(tmp_path, monkeypatch):
@@ -24,9 +22,3 @@ def test_the_instructions_are_the_same_at_any_minute(tmp_path, monkeypatch):
     assert "08:01" not in first and "head each message" in first
 
 
-def test_each_message_carries_the_villa_time():
-    s = type("S", (), {"timezone": "Asia/Makassar"})()
-    now = datetime(2026, 10, 9, 14, 32, tzinfo=ZoneInfo("Asia/Makassar"))
-    assert runner.with_time(s, "Is the pool OK?", now) == "[Villa time: Friday 09 October 2026, 14:32]\nIs the pool OK?"
-    # every run sends its message through it: chats, Continue and AI jobs all call runner.run
-    assert "client.query(message(with_time(settings, prompt), image))" in inspect.getsource(runner.run)

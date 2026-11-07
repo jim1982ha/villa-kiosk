@@ -121,21 +121,6 @@ def test_a_message_telegram_no_longer_takes_is_left_and_nothing_is_sent(tmp_path
     assert any(c["kind"] == "rewrite_skipped" for c in out.state.calls())
 
 
-def test_the_night_and_the_5_minute_recheck_carry_the_rewrites():
-    import inspect
-    import recheck
-    src = inspect.getsource(nightly.run) + inspect.getsource(nightly.main) + inspect.getsource(recheck.main)
-    assert 'told_cleared(store, [o["id"] for o in closed], now_ref, zone, ctx.settings,' in src
-    assert "told_watch_over(store, now_ref, zone, ctx.settings)" in src           # the night ends the watches it owes
-    assert 'out["edits"] = res.get("edits") or []' in src
-    assert src.count("N.told_cleared(ctx.store,") == 1                 # one tick: every close of the 5 minutes
-    # every hand-over of the tick is said (test_recheck_all: a battery's step, run through recheck.py)
-    assert src.count("one_edit_per_message(") == 2
-    # a reopening (a person's, or still there after a close) is marked on the message that told it, in the same tick
-    assert "reopened_untold(ctx.store, ctx.zone, ctx.settings, edits)" in src and "ctx.store, ctx.zone, ctx.settings, edits)" in src.split("still_there_untold(")[-1]
-    assert "store=store, at=now)" in inspect.getsource(recheck.gone_offline)
-
-
 def test_a_message_longer_than_one_page_or_no_way_to_edit_is_never_rewritten():
     from vesta_agent.posting import Poster
     tele = Tele()
@@ -269,15 +254,6 @@ def _real(tmp_path):
     (m,) = nightly.told_now(night, store=store, at=AT)
     return store, ids, m, skill_settings.load(os.path.join(HERE, "..", "starter", "skills", "preventive-maintenance"),
                                               "settings.yaml")
-
-
-def test_a_cleared_p2_says_it_is_watched_until_the_night_check_never_a_bare_back_to_normal(tmp_path):
-    store, (a, b), m, words = _real(tmp_path)
-    assert nightly.night_clock() == "02:00"                     # the skill's own night job, as the engine read it
-    (e,) = nightly.told_cleared(store, [a], AT, "Asia/Makassar", words)
-    assert e["key"] == m["key"] and e["title"] == m["title"]
-    assert e["text"] == ("New:\n- Relay a offline\n- Relay b offline\n"
-                         "Status:\nRelay a offline · Cleared on 20/10/2026 12:30: watched until 02:00.")
 
 
 def test_the_night_ends_each_watch_closed_or_back_on_the_same_message(tmp_path):

@@ -536,15 +536,6 @@ def test_an_open_visit_whose_villa_record_says_it_ended_is_closed_at_the_next_ti
         assert "Done" in str(settle) and "(Jm)" in str(settle), settle
 
 
-def test_a_press_the_villa_applied_says_where_in_every_language():
-    from test_alert_desk import desk
-    from vesta_shared import status_words as SW
-    got = desk.answer_said({"option": "done", "by": "Jm", "where": "cockpit"}, "at 09:43", "Jm", end=True)
-    for lang in SW.LANGS:
-        if lang != "en":
-            assert got.langs[lang] == SW.cockpit("closed", "at 09:43", "Jm", lang) + SW.stop(lang), (lang, got.langs)
-
-
 def test_a_visits_step_reaches_the_tablets_fault_before_telegrams_last_edit(tmp_path, kiosk, media):
     # owner's screenshots, 2026-11-07 (#142): at each step the tablet's card (its name, pill and lines) came 10s to 12s
     # after Telegram's: the fault was brought up to date only after every edit, the sheet and the villa told

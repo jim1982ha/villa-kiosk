@@ -12,7 +12,6 @@ import re
 from helpers import body, make_agent, restarted
 from vesta_shared.messaging import SIREN_TITLE
 from telegram_fake import BOT
-from vesta_agent import button_data
 from vesta_agent.roster import Roster
 
 JM, FABIEN, GROUP = 111, 222, -100333
@@ -259,7 +258,6 @@ def test_a_scheduled_run_cut_by_a_stop_runs_again_in_its_window(tmp_path):
 
 def test_a_report_whose_result_came_is_never_said_stopped(tmp_path):
     # architecture review 22: a stop after the report arrived said "stopped by a restart: ask again" under it
-    from vesta_agent.routing import JOB, Origin
     v = _villa(tmp_path)
 
     async def sends_then_hangs(origin):

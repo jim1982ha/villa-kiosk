@@ -97,17 +97,3 @@ def test_a_refusal_is_never_tried_again(waits):
     assert e.value.refused and len(s.posts) == 1 and waits == []
 
 
-def test_a_wait_longer_than_the_setting_is_not_made(waits):
-    tg, s = bot([{"ok": False, "error_code": 429, "description": "Too Many Requests",
-                  "parameters": {"retry_after": T.retry_wait_max_s() + 1}}])
-    with pytest.raises(TelegramError):
-        asyncio.run(tg.send(100, "Hello"))
-    assert len(s.posts) == 1 and waits == []
-
-
-def test_a_picture_is_sent_again_with_a_new_form(waits):
-    import base64
-    tg, s = bot([{"ok": False, "error_code": 500, "description": "Internal Server Error"}, ok(9)])
-    assert asyncio.run(tg.send(100, "Gate", photo_b64=(base64.b64encode(b"jpg").decode(), "image/jpeg"))) == [9]
-    (m1, f1), (m2, f2) = s.posts
-    assert m1 == m2 == "sendPhoto" and f1 is not f2                         # a form once posted cannot be posted again

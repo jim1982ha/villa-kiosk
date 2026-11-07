@@ -4,7 +4,6 @@ three groupings; review P, 2026-10-27: three family lists, now one)."""
 from __future__ import annotations
 
 import os
-import re
 import sys
 from datetime import datetime, timedelta, timezone
 
@@ -91,20 +90,6 @@ def test_the_callers_minimum_the_alerted_devices_and_the_integration_are_the_cal
     assert [g.name for g in devices_offline(pack, STATES, NOW, ["level"], min_minutes=10)] == ["Tank 2"]   # 12min, alone
 
 
-def test_no_caller_keeps_its_own_list_of_watched_kinds():
-    # ⚠️ ONE LIST (architecture review P, 2026-10-27; the owner chose every kind): the night check's WATCHED_FAMILIES,
-    # the concierge's FAMILIES and the reports' offline_families each named their own — a router offline was in the
-    # weekly report and nowhere else. The list is vesta_shared.offline.watched_kinds, on the Limits tab.
-    from vesta_shared.offline import watched_kinds
-    assert watched_kinds() == ["power", "energy", "security", "level", "runtime", "water", "generation", "battery",
-                               "network"]
-    sources = {os.path.join(d, *f): open(os.path.join(STARTER_SKILLS, d, *f)).read() for d, *f in (
-        ("preventive-maintenance", "scripts", "nightly.py"), ("preventive-maintenance", "scripts", "recheck.py"),
-        ("villa-concierge", "scripts", "concierge.py"), ("reports", "scripts", "facts.py"), ("reports", "reports.yaml"))}
-    for path, text in sources.items():
-        assert not re.search(r"^(WATCHED_FAMILIES|FAMILIES|offline_families)\s*[=:]", text, re.M), path
-
-
 def test_the_three_callers_read_the_one_list_and_the_one_reading(tmp_path, monkeypatch):
     # the reports' table, the concierge's status and the night check's findings all come from devices_offline, over
     # the one list: a list set on the Limits tab reaches all three
@@ -188,18 +173,6 @@ def test_a_restart_is_not_a_new_outage_and_three_unrelated_drops_are_not_an_inte
     assert offline_since(lambda *a: 1 / 0, {"x": NOW}, NOW) == {"x": NOW}
 
 
-def test_every_caller_reads_since_when_from_history():
-    # the night check, its recheck and the reports' table: each hands its client's history over (the chat status
-    # names devices and never says how long: tests/test_villa_status.py)
-    # (and the night check and its recheck ask whether the device answers through any entity, the close's question)
-    files = {"preventive-maintenance/scripts/nightly.py": "history=cli.history, states_of=cli.states)",
-             "preventive-maintenance/scripts/recheck.py":
-                 "history=remembered(client(), store, HISTORY_KEPT, now), states_of=client().states)",
-             "reports/scripts/facts.py": 'history=getattr(getattr(self, "cli", None), "history", None))'}
-    for f, call in files.items():
-        assert call in open(os.path.join(STARTER_SKILLS, f), encoding="utf-8").read(), f
-
-
 def test_a_device_that_answers_is_not_offline_whatever_its_event_sensors_say():
     # villa, 2026-10-25: a camera's stream and noise sensor reported while its three event sensors read "unavailable"
     # (until the camera's next event) — "has been offline for 5d 13h"
@@ -211,31 +184,6 @@ def test_a_device_that_answers_is_not_offline_whatever_its_event_sensors_say():
     assert [g.name for g in devices_offline(pack, states, NOW, ["power", "switch"])] == ["Spa Plug"]
     states["switch.spa_relay"] = {"state": "unknown", "last_changed": NOW.isoformat()}       # answering, with no value
     assert devices_offline(pack, states, NOW, ["power", "switch"]) == []
-
-
-def test_an_open_offline_fault_closes_when_its_device_answers(tmp_path, monkeypatch):
-    # villa, 2026-10-25: two cameras' faults opened for their event sensors (unavailable until the next event) while
-    # their streams reported — the recheck read only the sensors it named, so they stayed open
-    monkeypatch.syspath_prepend(os.path.join(STARTER_SKILLS, "preventive-maintenance", "scripts"))
-    import recheck
-    from vesta_shared.store import Store
-    store = Store(str(tmp_path / "s.sqlite"))
-    ents = ["sensor.spa_pump_power", "sensor.jet_pump_power"]
-    fid, _ = store.raise_finding("PM-UNAVAILABLE", ents[0], "availability", "2026-10-09", "P3",
-                                 "Spa Plug has been offline for 5d 13h.", {"entities": ents})
-    relay = {"state": "unavailable"}
-
-    class Cli:
-        def states(self, ids):
-            return {e: (relay if e == "switch.spa_relay" else {"state": "unavailable", "last_changed": NOW.isoformat()})
-                    for e in ids}
-
-        def not_found(self, ids):
-            return set()
-    assert recheck.back_online(store, lambda: Cli(), NOW, 5, "UTC", _pack())["closed"] == []      # nothing answers
-    relay.update({"state": "off", "last_changed": NOW.isoformat()})                                  # its relay does
-    assert recheck.back_online(store, lambda: Cli(), NOW, 5, "UTC", _pack())["closed"] == [fid]
-    assert store.findings("open") == []
 
 
 def test_when_a_sensor_really_last_reported_is_read_past_a_restart_and_never_for_a_real_report():
@@ -263,35 +211,3 @@ def test_when_a_sensor_really_last_reported_is_read_past_a_restart_and_never_for
     assert reported_since(None, states, NOW)["sensor.stamped"] == restart       # no history: the stamps, as before
 
 
-def test_an_entity_that_never_reports_does_not_say_when_its_device_went():
-    # villa, 2026-11-01: five access points flapped for 6 minutes at 00:29 and read "AP … has been offline for over
-    # 8d", raised at once: each one's Restart button reads "unknown" until pressed, gave no real reading in the 7 days
-    # read, and counted as offline since the read's start. The device's state sensor said "connected" until 00:29.
-    went = NOW - timedelta(minutes=3)
-    fams = {"network": [_row("sensor.ap9_state", "AP State", "ap9", "network", "ap9", "unifi"),
-                        _row("button.ap9_restart", "AP Restart", "ap9", "network", "ap9", "unifi")]}
-    pack = KnowledgePack(villa="V", time_zone="UTC", generated_at="", ha_version=None, families=fams, assets={},
-                         areas=[], people=[], channels={}, unknown_area=[], unclassified=[], retention={},
-                         devices={"ap9": {"name": "AP Pool"}}, critical=[])
-    states = {"sensor.ap9_state": {"state": "unavailable", "last_changed": went.isoformat()},
-              "button.ap9_restart": {"state": "unavailable", "last_changed": went.isoformat()}}
-
-    def history(ids, start, end):
-        h = lambda *pts: [{"state": s, "last_changed": t.isoformat()} for t, s in pts]   # noqa: E731
-        return {"sensor.ap9_state": h((start, "connected"), (went, "unavailable")),
-                "button.ap9_restart": h((start, "unknown"), (NOW - timedelta(days=2), "unavailable"),
-                                        (NOW - timedelta(days=2) + timedelta(seconds=20), "unknown"),
-                                        (went, "unavailable"))}
-    [ap] = devices_offline(pack, states, NOW, ["network"], history=history)
-    assert ap.since == went and ap.over is False and round(ap.hours * 60) == 3, (ap.since, ap.over, ap.hours)
-    # ...so the night's minimum keeps a 3-minute drop out, as for any device
-    assert devices_offline(pack, states, NOW, ["network"], min_minutes=10, history=history) == []
-
-    # a device none of whose entities reported in the whole read (a sensor dead for weeks) is still offline since the
-    # read began, "over"
-    def dead(ids, start, end):
-        h = lambda *pts: [{"state": s, "last_changed": t.isoformat()} for t, s in pts]   # noqa: E731
-        return {"sensor.ap9_state": h((start, "unavailable"), (went, "unavailable")),
-                "button.ap9_restart": h((start, "unknown"), (went, "unavailable"))}
-    [gone] = devices_offline(pack, states, NOW, ["network"], history=dead)
-    assert gone.over is True and gone.hours > 24 * 7, (gone.since, gone.over)

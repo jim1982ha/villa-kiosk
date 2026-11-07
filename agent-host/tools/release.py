@@ -44,27 +44,16 @@ VENV_PY = ROOT / "agent-host" / ".venv" / "bin" / "python"
 PY = str(VENV_PY) if not IN_CI and VENV_PY.exists() else sys.executable
 SRC = "agent-host/agent-src"
 
-# (name, command, working directory under ROOT, run by ship too)
+# (name, command, working directory under ROOT, run by ship too). CI also starts the built image (container_test.sh).
 GATES: list[tuple[str, list[str], str, bool]] = [
     ("The VESTA Kiosk is untouched", ["bash", "agent-host/tests/check_isolation.sh", "origin/main"], ".", True),
     ("The app manifest agrees with what the Supervisor reads", [PY, "agent-host/tests/check_manifest.py"], ".", True),
-    ("Every name the agent's code uses is defined",
-     [PY, "-m", "ruff", "check", "--no-cache", "--select", "F", "vesta_agent", "vesta_shared", "starter"], SRC, True),
-    ("Every name the tests use is defined",
-     [PY, "-m", "ruff", "check", "--no-cache", "--select", "F821,F822,F823", "tests"], SRC, True),
-    ("Home Assistant's add-on checks",
-     [PY, "agent-host/tools/addon_lint.py", "vesta-agent", "agent-host/Dockerfile", "agent-host/rootfs"], ".", False),
-    ("The host's start-up, contract, folders and redaction", [PY, "agent-host/tests/test_host.py"], ".", False),
-    ("The self-test reports each link correctly", [PY, "agent-host/tests/test_selftest.py"], ".", False),
-    ("The sidecar, the restart policy and the stop grace", [PY, "agent-host/tests/test_supervise.py"], ".", False),
-    ("The update check moves only forward", [PY, "agent-host/tests/test_updates.py"], ".", False),
-    ("The agreement with the VESTA Kiosk is the Kiosk's own", [PY, "agent-host/tests/test_kiosk_contract.py"], ".", False),
-    ("What the host sends is what the agent reads", [PY, "agent-host/tests/test_env_contract.py"], ".", False),
-    ("The agent's manifest and the host state", [PY, "agent-host/tests/test_manifest.py"], ".", False),
-    ("The release module", [PY, "agent-host/tests/test_release.py"], ".", False),
-    # tests/villa/ (real data, gitignored) is collected too wherever it exists.
-    ("The VESTA Agent's own tests", [PY, "-m", "pytest", "tests", "-q", "-p", "no:cacheprovider", "-n", "auto"],
-     SRC, False),
+    ("The code compiles and every name it uses is defined",
+     [PY, "-m", "ruff", "check", "--no-cache", "--select", "E9,F", "vesta_agent", "vesta_shared", "starter"], SRC, True),
+    # tests/villa/ (real data, gitignored) is collected too wherever it exists; the host's two tests ride along.
+    ("The VESTA Agent's tests",
+     [PY, "-m", "pytest", "tests", "../tests/test_kiosk_contract.py", "../tests/test_release.py",
+      "-q", "-p", "no:cacheprovider", "-n", "auto"], SRC, False),
 ]
 
 

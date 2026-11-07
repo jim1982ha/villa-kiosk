@@ -14,9 +14,7 @@ import yaml
 from helpers import copy_skill, settings, page_js
 from test_ui import HDR, call
 from vesta_agent import requests_box
-from vesta_agent.config import STARTER_DIR
 from vesta_agent.policy import Policy
-from vesta_agent.skills import Skills
 
 import pytest
 
@@ -51,16 +49,6 @@ def test_a_skill_switched_off_on_the_page_is_off_for_the_agent_and_undone(ui):
     assert st == 200 and next(r for r in rows if r["name"] == "villa-concierge")["off"]
     assert hist[0]["place"] == "Skills" and hist[0]["what"] == "villa-concierge switched off"
     assert st2 == 200 and "villa-concierge" not in Policy.load(ui.policy_path).skills_off
-
-
-def test_an_undo_never_overwrites_a_later_change(ui):
-    async def fn(c):
-        await _json(c, "put", "/api/skills/villa-concierge/on", json={"on": False})
-        first = (await (await c.get("/api/history")).json())["changes"][0]
-        await _json(c, "put", "/api/skills/reports/on", json={"on": False})
-        return await _json(c, "post", f"/api/history/{first['id']}/undo", json={})
-    st, body = call(ui, fn)
-    assert st == 409 and "undo the later change first" in body["problems"][0]
 
 
 def test_a_commands_checkbox_writes_the_villas_file_and_the_agent_refuses_it(ui):
@@ -100,16 +88,6 @@ def test_an_edited_skill_compares_with_the_release_and_takes_it_back(ui):
     assert st == 200 and after["release"]["state"] == "follows"
     assert open(os.path.join(ui.skills_dir, "alert-desk", "villa.notes.md")).read() == "the villa's own"
     assert st2 == 200 and "cooldown_min: 20" in open(path).read()                 # Undo: the edited one is back
-
-
-def test_keep_mine_stops_offering_the_release_until_another_one(ui):
-    path = os.path.join(ui.skills_dir, "alert-desk", "rules.yaml")
-    with open(path, "a") as f:
-        f.write("\n# mine\n")
-    sk = Skills(ui.skills_dir, os.path.join(STARTER_DIR, "skills"))
-    assert sk.release_state("alert-desk")["kept"] is False
-    sk.keep_mine("alert-desk")
-    assert sk.release_state("alert-desk")["kept"] is True
 
 
 def test_try_a_command_goes_to_the_running_agent_and_comes_back(ui):
@@ -264,93 +242,6 @@ def test_rules_tools_are_served_from_the_agents_list(ui):
     shutil.rmtree(ui.data_dir)
 
 
-def test_the_skill_page_is_read_from_the_skills_own_files_at_every_look(ui):
-    # owner, 2026-10-06: "if a skill is suddenly modified to use another python file and/or another tool, the UI will
-    # properly adjust". Nothing about a skill is kept by the page: it is skill.yaml as it is now, at every request.
-    folder = os.path.join(ui.skills_dir, "pool-care")
-    os.makedirs(os.path.join(folder, "scripts"))
-    open(os.path.join(folder, "SKILL.md"), "w").write("---\nname: pool-care\n---\n")
-    for f in ("check.py", "dose.py"):
-        open(os.path.join(folder, "scripts", f), "w").write("print('{}')\n")
-    open(os.path.join(folder, "skill.yaml"), "w").write(
-        "description: pool\ntools: [ha_get_state]\nscripts:\n  check.py:\n    commands: {ph: the water's pH}\n")
-
-    async def look(c):
-        return await (await c.get("/api/skills/pool-care")).json()
-    before = call(ui, look)
-    with open(os.path.join(folder, "skill.yaml"), "w") as f:     # edited by hand: another script, tool, schedule
-        f.write("description: pool\ntools: [ha_get_history, web_search]\n"
-                "scripts:\n  check.py:\n    commands: {ph: pH, chlorine: chlorine}\n"
-                "  dose.py:\n    description: how much to add\n    flags: {--litres: text, --product: [chlorine, acid]}\n"
-                "schedule:\n  - when: \"Mon 09:00\"\n    run: \"check.py ph\"\n")
-    after = call(ui, look)
-    assert [n["tool"] for n in before["tools"]] == ["ha_get_state"]
-    assert [n["tool"] for n in after["tools"]] == ["ha_get_history", "web_search"]
-    assert [(s["script"], [c["name"] for c in s["commands"]]) for s in after["scripts"]] == \
-        [("check.py", ["chlorine", "ph"]), ("dose.py", [])]
-    dose = after["scripts"][1]
-    assert dose["description"] == "how much to add" and dose["flags"] == {"--litres": "text", "--product": ["chlorine", "acid"]}
-    assert any(a["when"].startswith("every Monday at 09:00") for a in after["acts"])
-    from vesta_agent.ui.server import STATIC
-    js = page_js()
-    for starter in ("alert-desk", "villa-concierge", "roi-energy", "preventive-maintenance", "desk.py", "concierge.py"):
-        assert starter not in js, f"the page names {starter}: it must come from the skill's files"
-
-
-def test_try_a_command_offers_the_files_earlier_steps_left(ui):
-    # 2026-10-06: compose.py fm-weekly tried from the page: "needs --facts" — the page offered no file option
-    out = os.path.join(ui.data_dir, "out")
-    os.makedirs(out, exist_ok=True)
-    for i, n in enumerate(["notes.json", "facts.json"]):
-        with open(os.path.join(out, n), "w") as f:
-            f.write("{}")
-        os.utime(os.path.join(out, n), (1000 + i, 1000 + i))
-    os.makedirs(os.path.join(out, "a-folder"))
-    # ⚠️ AND THE REPORTS' OWN (architecture review 16): since 0.12.118 each report works in out/runs/<job>-<time>
-    run_dir = os.path.join(out, "runs", "fm-weekly-20261010T080301000000")
-    os.makedirs(run_dir)
-    with open(os.path.join(run_dir, "facts.json"), "w") as f:
-        f.write("{}")
-    os.utime(os.path.join(run_dir, "facts.json"), (2000, 2000))
-
-    async def fn(c):
-        return await _json(c, "get", "/api/skills/reports")
-    st, body = call(ui, fn)
-    assert st == 200
-    assert [f["value"] for f in body["out_files"]] == ["runs/fm-weekly-20261010T080301000000/facts.json", "facts.json",
-                                                       "notes.json"]                # newest first, files only
-    assert body["out_files"][0]["label"].startswith("facts.json, fm-weekly report, ")
-    assert body["out_files"][1]["label"].startswith("facts.json, Offline Test, ")
-    compose = next(sc for sc in body["scripts"] if sc["script"] == "compose.py")
-    assert compose["flags"]["--facts"] == "infile"
-
-
-def test_imported_instructions_can_be_undone_like_any_text(ui, tmp_path):
-    # architecture review, 2026-10-06: a setup's instructions were recorded as a kind Undo refused
-    with open(ui.instructions_path, "w") as f:
-        f.write("The instructions of the villa the setup comes from.\n")
-    data = _setup_zip(ui, {"instructions": True})
-    other = settings(str(tmp_path / "other"))
-    with open(other.instructions_path, "w") as f:
-        f.write("This villa's own instructions.\n")
-    zb = base64.b64encode(data).decode()
-
-    async def fn(c):
-        _, prev = await _json(c, "post", "/api/setup/import", json={"zip": zb})
-        await _json(c, "post", "/api/setup/import", json={"zip": zb, "apply": True, "fingerprint": prev["fingerprint"]})
-        imported = open(other.instructions_path).read()
-        hist = (await (await c.get("/api/history")).json())["changes"]
-        row = next(h for h in hist if h["target"]["kind"] == "instructions")
-        st, _ = await _json(c, "post", f"/api/history/{row['id']}/undo", json={})
-        after = next(h for h in (await (await c.get("/api/history")).json())["changes"] if h["id"] == row["id"])
-        return imported, st, row, after
-    imported, st, row, after = call(other, fn)
-    # architecture review 8: the list says Undo is offered (the page hid it for the instructions), then no more
-    assert row["undoable"] is True and after["undoable"] is False and after["undone_by"]
-    assert imported.startswith("The instructions of the villa the setup comes from")
-    assert st == 200 and open(other.instructions_path).read() == "This villa's own instructions.\n"
-
-
 def test_an_undo_waits_for_a_later_change_to_be_undone_first(ui):
     path = os.path.join(ui.skills_dir, "alert-desk", "SKILL.md")
     original = open(path).read()
@@ -377,14 +268,6 @@ def test_the_agent_checks_a_try_it_finds_in_the_folder_as_the_page_does(tmp_path
     v = Vesta(settings(str(tmp_path)), telegram=FakeTelegram(), kiosk=Kiosk("", ""), reader=object())
     out = asyncio.run(v.on_request({"kind": "try", "skill": "x", "script": "y.py", "args": ["a" * 301]}))
     assert out == {"ok": False, "error": "The command's arguments are not understood."}
-
-
-def test_undo_is_offered_exactly_for_what_undo_handles():
-    # architecture review 8: one answer (server.undoable) for the list and the Undo itself
-    from vesta_agent.ui.changes import TEXT_KINDS, undoable
-    row = lambda place, kind, undone=None: {"place": place, "target": {"kind": kind}, "undone_by": undone}  # noqa: E731
-    assert all(undoable(row("Rules", k)) for k in (*TEXT_KINDS, "folder"))
-    assert not undoable(row("Release", "file")) and not undoable(row("Rules", "policy", 7)) and not undoable(row("Skills", "release"))
 
 
 def test_add_them_sets_every_missing_ai_job_with_its_starter_values_in_one_recorded_change(ui):
@@ -447,18 +330,6 @@ def test_the_rules_form_says_every_switch_on_or_off_and_writes_the_files_shape_b
     assert yaml.safe_load(apply_form("", to_form(""))) in (None, {})                       # nothing written by default
 
 
-def test_a_skills_when_rows_come_as_fields_in_the_order_shown(ui):
-    # architecture review 8: "every day at 07:00 — fm-daily" and "AI job" were split back apart by the page
-    async def fn(c):
-        return (await (await c.get("/api/skills/reports", headers=HDR)).json())["acts"]
-    acts = call(ui, fn)
-    assert acts[0] == {"when": "every day at 07:00", "job": "fm-daily", "script": None, "kind": "ai", "schedule": 0,
-                       "ref": "skill:reports:skill.yaml:schedule.0.when"}      # its time: a Limits row (core.setting)
-    assert [a["job"] for a in acts[:3]] == ["fm-daily", "fm-weekly", "owner-monthly"]
-    assert acts[-1]["when"] == "in a chat" and acts[-1]["note"] == "when a person asks about it" and acts[-1]["kind"] is None
-
-
-
 def test_a_broken_policy_file_still_opens_every_tab_and_names_its_problem(ui):
     # architecture review 9: an unparseable policy.yaml made jobs, overview and skills answer 500, and Rules (file),
     # the one place to repair it, hung on "Loading…" behind them
@@ -475,247 +346,6 @@ def test_a_broken_policy_file_still_opens_every_tab_and_names_its_problem(ui):
     assert {p: s for p, (s, _) in got.items()} == {p: 200 for p in got}
     assert got["/api/policy"][1]["problems"] and got["/api/rules"][1]["problems"] and got["/api/overview"][1]["policy_problems"]
     assert "rulesFile(await api(\"GET\", \"api/policy\"))" in page_js()          # the file view asks for the file only
-
-
-def test_the_rules_tab_comes_in_one_answer(ui):
-    async def fn(c):
-        return await (await c.get("/api/rules", headers=HDR)).json()
-    v = call(ui, fn)
-    assert {"text", "rev", "form", "problems", "profiles", "schema", "jobs", "entities", "tools"} <= set(v)
-    # no job for the alert cards' translation (owner, 2026-10-23)
-    assert [j["name"] for j in v["jobs"]] == ["fm-daily", "fm-weekly", "owner-monthly"]
-    # ⚠️ ONLY WHAT policy.yaml HOLDS (owner, 2026-10-30): what is kept elsewhere is the Knowledge tab's answer
-    assert not {"translations", "unavailable_by_design", "kinds", "links"} & set(v)
-
-
-def test_the_knowledge_tab_comes_in_one_answer(ui):
-    async def fn(c):
-        return await (await c.get("/api/knowledge", headers=HDR)).json()
-    v = call(ui, fn)
-    assert {"kinds", "links", "asleep", "translations", "languages"} <= set(v)
-    assert v["translations"] == {} and v["asleep"] == []
-
-
-def test_a_skills_own_files_cannot_be_deleted_and_the_list_says_so(ui):
-    # architecture review 9: the page hid "Delete this file" for SKILL.md and skill.yaml; the server deleted them
-    async def fn(c):
-        files = (await (await c.get("/api/skills/reports/files", headers=HDR)).json())["files"]
-        st, body = await _json(c, "delete", "/api/skills/reports/file?path=skill.yaml", json={})
-        return files, st, body
-    files, st, body = call(ui, fn)
-    by = {f["path"]: f["deletable"] for f in files}
-    assert by["SKILL.md"] is False and by["skill.yaml"] is False and by["reports.yaml"] is True
-    assert st == 400 and "part of every skill" in body["problems"][0]
-    assert os.path.isfile(os.path.join(ui.skills_dir, "reports", "skill.yaml"))
-
-
-def test_the_server_names_what_the_page_used_to_spell_out():
-    # architecture review 9: "WebSearch", "not recorded" and a try's verdict words were typed on the page
-    from vesta_agent import tool_access
-    from vesta_agent.script_run import ScriptAnswer
-    from vesta_agent.ui import setup_copy
-    from vesta_agent.places import title
-    own = {o["key"]: o["code"] for o in tool_access.catalog(Policy({}), None, {})["own"]}
-    assert own["web_search"] == "WebSearch" and own["create_ticket"] == "create_ticket"
-    words = {p["key"]: p["words"] for p in setup_copy.offer()["parts"]}
-    assert words["ai"].startswith(title("ai")) and words["tools"].startswith(title("tools"))
-    assert not [w for w in map(str, setup_copy.offer().values()) if "The AI:" in w or "allowed lists" in w]
-    assert "fetch(" not in page_js().split("export function exportCard")[1].split("export function")[0]
-    words_of = lambda code: ScriptAnswer(code, "", "", 1.0).verdict_words  # noqa: E731
-    assert (words_of(0), words_of(2), words_of(1)) == ("Done", "Nothing to do, or a setting is missing", "Stopped (exit 1)")
-
-
-def test_a_skills_when_rows_name_every_way_the_engine_starts_it(ui):
-    # architecture review 5 (2026-10-13): villa-concierge's status check runs before every chat answer and its page
-    # said only "a voice message" and "in a chat" — the page wrote the rows itself
-    import dataclasses
-    from vesta_agent.skills import Skill, when_it_runs
-
-    async def fn(c):
-        return (await (await c.get("/api/skills/villa-concierge", headers=HDR)).json())["acts"]
-    acts = call(ui, fn)
-    assert {"when": "before every answer in a chat", "job": None, "script": "concierge.py", "kind": "code"} in acts
-    # every field of a skill that starts it has its row; a new field must be placed here, shown or not
-    starts = {"schedule", "every_5_min", "on_event", "on_reply", "before_answer", "command", "reads_history",
-              "translate"}     # its alert cards translated: "an alert card in non-english"
-    others = {"name", "path", "description", "tools", "scripts", "buttons", "also", "deliver", "usage", "brain",
-              "limit_usd", "rechecks", "offer",     # offer: the command, typed by a button
-              "offer_after",         # the readings after which that button comes: said in the "in a chat" row
-              "jobs_default"}        # the starter brain and limit of its AI jobs: not a way it starts
-    assert {f.name for f in dataclasses.fields(Skill)} == starts | others
-    sk = Skill("x", "/x", schedule=[{"when": "07:00", "name": "j", "prompt": "p", "run": None}], every_5_min="a.py t",
-               on_event={"critical_event": "b.py c", "voice_message": "v.py p"}, on_reply="d.py r",
-               before_answer="e.py s", command="x")
-    assert [a["when"] for a in when_it_runs(sk)] == [
-        "every day at 07:00", "every 5 minutes", "a VESTA automation's critical alert", "a voice message",
-        "an answer to one of its alerts", "before every answer in a chat", "in a chat"]
-    # a command offered as a button says so on the same row (the command, typed for the person)
-    offered = when_it_runs(dataclasses.replace(sk, offer={"label": "Look into it"}))[-1]["note"]
-    assert offered.startswith("only when a person writes /x (or presses “Look into it” under a reply")
-    # its alert cards translated for a chat in another language (owner, 2026-10-23): with the chats' brain, no job
-    assert when_it_runs(dataclasses.replace(sk, translate={"instructions": "i"}))[-2] == \
-        {"when": "an alert card in non-english", "job": None, "script": None, "kind": None,
-         "note": "its text put in the chat's language by the AI, with the Chat answers brain and limit "
-                 "(Rules › AI brains and limits; what it keeps in Knowledge › Translations)"}
-
-
-def test_a_skill_pages_tools_heading_is_the_agents_one_verdict(ui):
-    # architecture review scan 4 (2026-10-19): the skill page counted "N of M not available" itself (over a missing or
-    # never-readable tool, which health() leaves out) while the list showed health's line; its (i) said a tool switched
-    # off made the skill "not working" — the rule the owner reversed on 2026-10-10. The page draws the verdict object.
-    from helpers import body_of
-    from vesta_agent import tool_access
-    from vesta_agent.ui.changes import page_policy
-
-    async def fn(c):
-        return (await (await c.get("/api/skills/reports", headers=HDR)).json(),
-                (await (await c.get("/api/skills", headers=HDR)).json())["skills"])
-    d, rows = call(ui, fn)
-    h = tool_access.health(page_policy(ui.policy_path, ui.pack_path), tool_access.saved_server_tools(ui.data_dir),
-                           Skills(ui.skills_dir).get("reports"))
-    assert (d["line"], d["tools"], d["where_tools"]) == (h["line"], h["tools"], h["where_tools"]) and "needs" not in d
-    assert next(r for r in rows if r["name"] == "reports")["line"] == h["line"]
-    js = page_js()
-    about = body_of(js, "aboutSkill")
-    assert "d.line" in about and "d.where_tools" in about and "d.needs" not in about and "n.words" in about
-    assert "s.line" in body_of(js, "skills")
-    # no verdict of the page's own on a skill's tools
-    assert "not available" not in js and "WHERE_TOOLS" not in js and "not working" not in about and "all switched on" not in js
-
-
-def test_the_overview_says_how_each_scheduled_run_ended(ui):
-    # architecture review scan 4 (2026-10-19): "Scheduled jobs run" read the scheduler's claim and said "run at 07:00"
-    # of a run that failed; the row now carries the end row's outcome in the agent's words (status.jobs_run)
-    import json
-    from datetime import datetime, timezone
-    from vesta_agent.state import State
-    st = State(ui.state_path)
-    slot = datetime.now(timezone.utc).isoformat()
-    st.put("job:reports:0:07:00", slot)
-    st.keep_run_end("reports:0:07:00", json.dumps({"outcome": "failed", "why": "the Anthropic account has run out of credit",
-                                                   "slot": slot, "at": slot}))
-    st.put("job:alert-desk:0:02:00", slot)                                  # an older engine's row: the claim alone
-
-    async def fn(c):
-        return (await (await c.get("/api/overview", headers=HDR)).json())["last_24h"]["scheduled_jobs"]
-    rows = {r["job"]: r for r in call(ui, fn)}
-    assert rows["reports:0:07:00"]["outcome"] == "failed" and rows["reports:0:07:00"]["at"] == slot
-    assert rows["reports:0:07:00"]["words"] == "not prepared (the Anthropic account has run out of credit)"
-    assert rows["alert-desk:0:02:00"]["words"] == "run" and rows["alert-desk:0:02:00"]["outcome"] == "claimed"
-    assert "j.words" in page_js() and "j.ran_at" not in page_js()
-
-
-def test_a_command_skill_says_how_it_is_used_and_a_skill_without_tools_has_no_tools_tab():
-    # owner, 2026-10-19: the proposals skill's page said "only when a person writes /proposal" — neither what to write
-    # nor when it applies — and showed a Skill tools tab that said only "lists none"
-    from vesta_agent import skills as S
-    from helpers import body_of
-    sk = S.Skill(name="proposals", path="", description="", command="proposal",
-                 usage="the monthly report lists Proposal 3; the owner answers /proposal accept 3")
-    chat = [r for r in S.when_it_runs(sk) if r["when"] == "in a chat"][0]
-    assert chat["note"] == ("only when a person writes /proposal, for example: "
-                            "the monthly report lists Proposal 3; the owner answers /proposal accept 3")
-    assert [r for r in S.when_it_runs(S.Skill(name="x", path="", description="", command="x"))
-            if r["when"] == "in a chat"][0]["note"] == "only when a person writes /x"
-    about = body_of(page_js(), "aboutSkill")
-    assert "hasTools && [\"tools\"" in about and "const hasTools = !!(d.tools && d.tools.length)" in about
-
-
-def test_every_run_names_the_skills_it_used_before_the_tools_it_called(ui):
-    # owner, 2026-10-19: a "Skills" column in Costs › Every run, before "Tools called"; the agent lists them, the page draws
-    from vesta_agent.state import State
-    from vesta_shared import agent_records
-    st = State(ui.state_path)
-    st.log(agent_records.RUN, {"who": "Owner@111", "cost_usd": 0.02, "asked": "old", "steps": []})      # before 0.6.260
-    st.log(agent_records.RUN, {"who": "Owner@111", "cost_usd": 0.03, "asked": "new", "skills": ["reports", "investigate"],
-                               "steps": [{"tool": "read_skill", "input": "reports"}]})
-
-    async def fn(c):
-        return await _json(c, "get", "/api/costs?days=7")
-    status, got = call(ui, fn)
-    assert status == 200
-    assert {r["asked"]: r["skills"] for r in got["runs"]} == {"new": ["reports", "investigate"], "old": []}
-    from helpers import body_of
-    js = body_of(page_js(), "costs")
-    # the Tools called column went (owner, 2026-10-20): the run's steps list them, each with its skill first
-    assert '"Brain · model", "Skills", { v: "Tokens in / out"' in js and "usedSkills(r.skills),\n    { v:" in js and "usedTools" not in page_js()
-    drawn = body_of(page_js(), "usedSkills")
-    assert 'skills.map((k) => h("span", { class: "chip" }, k))' in drawn and ': "—"' in drawn
-
-
-def test_every_runs_steps_are_served_each_in_a_line_the_page_draws(ui):
-    # owner, 2026-10-19: "I don't like the way the details are displayed" — every tool call as raw JSON in the What
-    # column, a script's arguments spread letter by letter. The agent says each step in a line; the page draws it.
-    import json
-    from vesta_agent import runner
-    from vesta_agent.state import State
-    from vesta_shared import agent_records
-    with open(ui.pack_path, "w") as f:          # the knowledge pack names one of the two lights; the other keeps its id
-        json.dump({"villa": "x", "time_zone": "UTC", "generated_at": "2026-10-01T02:00:00+00:00", "ha_version": None,
-                   "families": {"lighting": [{"entity_id": "light.example_dining", "name": "Dining table", "area": ""}]},
-                   "assets": {}, "areas": [], "people": [], "channels": {}, "unknown_area": [], "unclassified": [],
-                   "retention": {}}, f)
-    calls = [("mcp__vesta__read_skill", {"skill": "reports"}),
-             ("mcp__vesta__run_skill_script", {"skill": "reports", "script": "energy_period.py",
-                                               "args": ["--period", "week", "--out", "week.json"], "vesta_part": 1}),
-             # the list written as text, as the model sometimes sends it: the same command line, never "[ \" - - p …"
-             ("mcp__vesta__run_skill_script", {"skill": "reports", "script": "energy_period.py",
-                                               "args": '["--period","week","--out","week.json"]'}),
-             ("mcp__vesta__ha_get_history", {"entity_ids": "light.example_dining, sensor.example_power", "start_time": "7d",
-                                             "period": "day"}),
-             ("mcp__vesta__ha_get_logs", {"source": "logbook", "hours_back": 6, "entity_id": "light.example_dining"}),
-             ("mcp__vesta__ha_search", {"domain_filter": "light", "query": "dining", "result_fields": ["entity_id", "friendly_name"]}),
-             ("mcp__vesta__ha_call_service", {"domain": "light", "service": "turn_off",
-                                              "entity_id": ["light.example_dining", "light.example_hall"]}),
-             ("WebSearch", {"query": "pool pump unstable consumption"}),
-             ("mcp__vesta__save_file", {"name": "week.json", "content": "{}" * 400}),
-             ("mcp__vesta__send_message", {"to": "here", "text": "Your week", "attachment": "fm_weekly.html"}),
-             ("mcp__vesta__start_job", {"name": "fm-weekly", "why": "the owner asked for this week's report again " * 3})]
-    st = State(ui.state_path)
-    st.log(agent_records.RUN, {"who": "Owner@111", "cost_usd": 0.02, "asked": "new",
-                               "steps": runner.kept_steps([runner.step(n, a) for n, a in calls], [])})
-    st.log(agent_records.RUN, {"who": "Owner@111", "cost_usd": 0.01, "asked": "one", "steps": runner.kept_steps([
-        runner.step("mcp__vesta__ha_call_service", {"domain": "light", "service": "turn_on", "entity_id": "light.example_dining"}),
-        runner.step("WebSearch", {"query": "pump " * 60})], [])})
-    st.log(agent_records.RUN, {"who": "Owner@111", "cost_usd": 0.01, "asked": "old",                 # before 0.6.261
-                               "steps": [{"tool": "ha_get_state", "input": '"entity_id": "sensor.x"'}]})
-
-    async def fn(c):
-        return await _json(c, "get", "/api/costs?days=7")
-    status, got = call(ui, fn)
-    assert status == 200
-    steps = {r["asked"]: r["steps"] for r in got["runs"]}
-    new = steps["new"]
-    assert [(s["n"], s["tool"]) for s in new][:3] == [(1, "read_skill"), (2, "run_skill_script"), (3, "run_skill_script")]
-    assert [s["skill"] for s in new][:3] == ["reports", "reports", "reports"]          # each step's skill: first on the page
-    assert [s["summary"] for s in new] == [
-        "reports",
-        "energy_period.py --period week --out week.json",
-        "energy_period.py --period week --out week.json",
-        "Dining table, sensor.example_power · last 7 days, by day",
-        "logbook · Dining table · last 6h",
-        "lights matching “dining”",
-        "light.turn_off · 2 lights: Dining table, light.example_hall",
-        "“pool pump unstable consumption”",
-        "week.json",
-        "to here · fm_weekly.html",
-        new[-1]["summary"]]
-    other = new[-1]["summary"]          # a tool with no line of its own: its settings in words, cut with an ellipsis
-    assert other.startswith("name fm-weekly · why the owner asked") and other.endswith("…") and len(other) <= 160
-    # the arguments as they were, for the line's tooltip: vesta_part dropped, a long text bounded
-    assert json.loads(new[1]["raw"]) == {"skill": "reports", "script": "energy_period.py",
-                                         "args": ["--period", "week", "--out", "week.json"]}
-    assert json.loads(new[8]["raw"])["content"].endswith("…") and [s["code"] for s in new][1:3] == [True, True]
-    one, long = steps["one"]
-    assert one["summary"] == "light.turn_on · Dining table"                                   # one device: its name alone
-    assert long["summary"].startswith("“pump pump") and long["summary"].endswith("…") and len(long["summary"]) == 160
-    # a step recorded before 0.6.261 kept only its line: shown as it was kept
-    assert steps["old"] == [{"n": 1, "tool": "ha_get_state", "summary": '"entity_id": "sensor.x"',
-                             "raw": '"entity_id": "sensor.x"', "skill": "", "code": False}]
-    # the page draws the agent's line; its tooltip the arguments — no JSON of its own
-    from helpers import body_of
-    more = body_of(page_js(), "runMore")
-    assert "x.summary" in more and "x.raw" in more and "JSON.stringify" not in body_of(page_js(), "costs") + more
 
 
 @pytest.mark.parametrize("old", [

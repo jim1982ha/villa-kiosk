@@ -75,21 +75,6 @@ def test_only_the_owner_answers_and_a_number_that_is_no_proposal_changes_nothing
     assert all(p["status"] == "open" for p in store.proposals(None))
 
 
-def test_accept_3_typed_alone_is_no_answer(tmp_path, monkeypatch):
-    # the skill runs only on its command: without it, the AI may not run its script
-    from ai_fake import FakeAI
-    v, store, gate = _villa(tmp_path)
-    said = []
-
-    async def act(call):
-        said.append(await call["call"]("run_skill_script", {"skill": "proposals", "script": "answer.py", "args": [
-            "answer", "--number", str(gate), "--choice", "accept"]}))
-    FakeAI("ok", act=act).install(monkeypatch)
-    run(v.converse(OWNER, v.policy().roster.person(OWNER), f"accept {gate}"))
-    assert said[0].get("is_error") and "/proposal" in said[0]["content"][0]["text"]
-    assert all(p["status"] == "open" for p in store.proposals(None))
-
-
 def test_the_pages_test_checks_an_answer_and_records_nothing(tmp_path):
     # owner, 2026-10-13: Offline Test of answer.py said "Only the owner answers proposals" to the owner — and had it
     # passed, the answer would have been recorded on the live villa

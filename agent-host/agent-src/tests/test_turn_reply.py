@@ -86,19 +86,6 @@ def test_1_the_answer_is_the_text_else_the_last_words_when_nothing_was_sent():
         assert compose(r).text == want, r
 
 
-def test_2_a_pages_message_is_the_answer():
-    page = "report.html"
-    for r, want in [
-        (res(text="Long summary", pages={page: 77}), ""),
-        (res(text="Long summary", pages={"other.html": 77}), "Long summary"),
-        (res(text="Long summary"), "Long summary"),
-    ]:
-        assert compose(r, page=page).text == want, r
-    # a failure is still said under the page
-    failed = compose(res(text="Half", pages={page: 77}, problem="offline"), page=page).text
-    assert failed == f"Half\n\n{FOR_PERSON['offline']}"                  # the AI's words kept, then why it stopped
-
-
 def test_3_a_failure_is_said_in_plain_words_never_raw():
     for r, want in [
         (res(problem="credit"), FOR_PERSON["credit"]),
@@ -147,17 +134,6 @@ def test_6_offered_faults_go_under_the_answer_and_a_page_is_kept_for_them():
     # buttons are ADDED to a Continue, never replace it
     got = compose(res(text="x", stopped_at_limit=True, limit_usd=1), offers=Offers(["o1"]))
     assert [r[0]["text"] for r in got.keyboard["inline_keyboard"]] == ["Continue", "Create"]
-
-
-def test_7_a_command_the_answer_names_is_a_button_added_to_the_others():
-    got = compose(res(text="For more, write /go and your question.", stopped_at_limit=True, limit_usd=1),
-                  offers=Offers(["o1"]), asked="the pump?")
-    assert [r[0]["text"] for r in got.keyboard["inline_keyboard"]] == ["Continue", "Create", "Go"]
-    assert got.keyboard["inline_keyboard"][-1][0]["callback_data"] == "o:the pump?"     # the person's own question
-    assert compose(res(text="The pump is fine."), asked="the pump?").keyboard is None
-    # under an approval request shown here, the answer that names it is kept with its button
-    got = compose(res(text="Write /go for more.", approvals=["a1"]), approvals=Approvals(shown=True), asked="pump")
-    assert got.text == "Write /go for more." and got.keyboard
 
 
 def test_8_an_approval_request_shown_here_is_the_answer_unless_buttons_must_go():

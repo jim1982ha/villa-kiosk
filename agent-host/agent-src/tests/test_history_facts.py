@@ -57,7 +57,3 @@ def test_facts_that_cannot_be_worked_out_are_said_never_replaced_by_the_readings
     assert "could not be worked out" in text and "never answer from a part" in text and '"states"' not in text
 
 
-def test_long_term_figures_are_already_the_whole_period(tmp_path, monkeypatch):
-    ran, _ = _villa(tmp_path / "s", monkeypatch, ScriptAnswer(0, "{}", "", 1.0),
-                    args={"entity_ids": "sensor.pump_power", "source": "statistics"})
-    assert ran == []

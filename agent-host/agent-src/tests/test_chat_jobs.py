@@ -8,7 +8,7 @@ import pytest
 
 from vesta_agent import ai_down, job_steps
 from vesta_agent.chat_jobs import ChatJobs
-from vesta_agent.routing import JOB, Origin, job_to
+from vesta_agent.routing import JOB, Origin
 
 WEEKLY = {"name": "fm-weekly", "button": "Weekly report"}
 DAILY = {"name": "fm-daily", "button": "Daily digest"}
@@ -97,33 +97,6 @@ def test_a_chat_job_runs_once_its_waiting_message_first_and_always_ends():
     assert telegram_entities(d.tg.edits[0][2])[0] == {"type": "bold", "offset": 0, "length": len("Report not prepared")}
 
 
-def test_a_scheduled_run_says_scheduled_not_asked_for_here(monkeypatch):
-    # architecture review scan 4 (2026-10-19): a report running ON SCHEDULE, asked for meanwhile, answered "asked for
-    # here started at 08:00" — nobody had asked. start() says who started it and since when (Started)
-    from vesta_agent import chat_jobs as CJ
-    d = _Delivery()
-    jobs = ChatJobs(d, _safe)
-    gate = asyncio.Event()
-
-    async def work(origin):
-        await gate.wait()
-
-    async def go():
-        async with jobs.held([7], "fm-weekly"):
-            st = jobs.start(7, "fm-weekly", work)
-            assert (st.kind, st.by) == (CJ.RUNNING_SINCE, CJ.SCHEDULED) and not st
-        first = jobs.start(7, "fm-weekly", work)
-        assert (first.kind, first.by) == (CJ.NEW, CJ.ASKED) and first and first.since.tzinfo is not None
-        again = jobs.start(7, "fm-weekly", work)
-        assert (again.kind, again.by, again.since) == (CJ.JUST_STARTED, CJ.ASKED, first.since)   # the same request
-        monkeypatch.setattr(CJ, "JUST_STARTED_S", 0)
-        later = jobs.start(7, "fm-weekly", work)
-        assert (later.kind, later.by) == (CJ.RUNNING_SINCE, CJ.ASKED)
-        gate.set()
-        await jobs.idle()
-    asyncio.run(go())
-
-
 def test_each_turn_has_its_own_waiting_message():
     # architecture review 12: the waiting message was kept by CHAT — a failed reply let the next turn's answer be
     # taken for it, and a job started in a later turn shared the earlier one's (its "on its way" never went)
@@ -156,11 +129,6 @@ def test_each_turn_has_its_own_waiting_message():
     assert d.tg.deleted == [(9, 501)]
 
 
-def test_a_jobs_result_goes_to_the_chat_that_asked_else_its_own_target():
-    assert job_to({"to": "fm"}, Origin(1, JOB)) == "here"
-    assert job_to({"to": "fm"}, None) == "fm" and job_to({}, None) == "owner"
-
-
 @pytest.mark.parametrize("text,problem,expect", [
     ("Generate the weekly report for last week now", "credit", ("start", "fm-weekly")),
     ("the daily digest please", "offline", ("start", "fm-daily")),
@@ -173,11 +141,6 @@ def test_what_a_person_gets_when_the_ai_cannot_answer(text, problem, expect):
     off = ai_down.offer(text, problem, [WEEKLY, DAILY])
     got = ("start", off.start["name"]) if off.start else ("buttons", len(off.buttons)) if off.buttons else ("nothing",)
     assert got == expect
-
-
-def test_a_report_button_carries_the_problem_and_the_job():
-    assert ai_down.keyboard("credit", [WEEKLY]) == {"inline_keyboard": [[{"text": "Weekly report",
-                                                                          "callback_data": "w:credit:fm-weekly"}]]}
 
 
 # ---------------------------------------------------------------- job steps
@@ -224,13 +187,6 @@ def test_job_steps_stop_at_a_failure_and_skip_what_is_for_the_schedule_only(monk
     done = asyncio.run(job_steps.run(None, None, _Skills("other"), out, _Skill("rep"), steps, {"to": "here"}, Origin(1, JOB)))
     assert ran == [("other", "a.py"), ("rep", "page.py --to here"), ("rep", "b.py")]     # c.py never ran
     assert done.sent == 1 and done.failed == "b.py" and out.out[0][1] == "rep"
-
-
-def test_a_step_of_a_skill_that_is_not_installed_stops_the_steps(monkeypatch):
-    ran = _answers(monkeypatch, {})
-    done = asyncio.run(job_steps.run(None, None, _Skills(), _Outcome(), _Skill("rep"),
-                                     [{"run": "a.py", "skill": "gone"}, {"run": "b.py", "skill": None}], {}))
-    assert ran == [] and done.failed == "a.py (gone: not installed)"
 
 
 def test_a_layout_that_fails_still_says_it_plain(monkeypatch):

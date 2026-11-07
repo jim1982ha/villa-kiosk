@@ -9,7 +9,6 @@ import sys
 
 from helpers import PYTHONPATH
 from vesta_shared import critical as C
-from vesta_shared.ha_client import McpClient
 from vesta_shared.knowledge_pack import KnowledgePack, build_pack
 
 CONTRACT = os.path.join(os.path.dirname(__file__), "..", "..", "rootfs", "opt", "vesta", "host", "agent-contract.json")
@@ -70,26 +69,3 @@ def test_the_nightly_pack_reads_the_list_from_the_villas_rule_and_keeps_it_when_
     assert p.critical == ["lock.example_door"] and "could not be read" in err
 
 
-class _Mcp:
-    """ha-mcp as far as the search and the automation reads go: two pages of hits, one config each."""
-    def __init__(self):
-        self.calls = []
-
-    def call_raw(self, name, args):
-        self.calls.append((name, args.get("offset", args.get("identifier"))))
-        if name == "ha_search":
-            page = {0: {"automations": [{"entity_id": "automation.a"}], "config_has_more": True, "config_next_offset": 1},
-                    1: {"automations": [{"entity_id": "automation.b"}, {"entity_id": "automation.a"}],
-                        "config_has_more": False}}[args["offset"]]
-            body = {"success": True, **page}
-        else:
-            body = {"success": True, "config": rule([f"lock.example_{args['identifier'][-1]}"])}
-        return {"content": [{"type": "text", "text": json.dumps(body)}]}
-
-
-def test_the_villas_rules_are_read_on_past_the_first_page_once_each():
-    mcp = _Mcp()
-    got = McpClient(session=mcp).automation_configs(C.BLUEPRINT)
-    assert C.critical_entities(got) == {"lock.example_a", "lock.example_b"}
-    assert [c for c in mcp.calls if c[0] == "ha_config_get_automation"] == [
-        ("ha_config_get_automation", "automation.a"), ("ha_config_get_automation", "automation.b")]

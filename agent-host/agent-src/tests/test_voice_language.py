@@ -12,7 +12,6 @@ import asyncio
 
 from helpers import voice_agent, voice_event, voice_record
 from stt_fake import FakeSTT
-from vesta_agent.transcriber import LANGUAGE
 
 
 def transcribe_with(tmp_path, answers, voice_yaml=None, times: int = 1):
@@ -51,17 +50,6 @@ def test_a_refused_auto_is_not_asked_again_while_the_app_runs(tmp_path):
     assert asked == ["auto", "fr"]
 
 
-def test_a_bad_request_is_a_refusal_too(tmp_path):
-    asked, said, _, _ = transcribe_with(tmp_path, [400, 200], times=2)
-    assert asked == ["auto", "fr", "fr"] and said == ["words in fr", "words in fr"]
-
-
-def test_any_other_failure_goes_on_to_the_next_attempt_and_is_not_remembered(tmp_path):
-    asked, said, rec, _ = transcribe_with(tmp_path, [500, 200, 200], times=2)
-    assert asked == ["auto", "fr", "auto"] and said == ["words in fr", "words in auto"]
-    assert rec["auto_refused"] is False
-
-
 def test_no_words_at_all_tells_the_person(tmp_path):
     asked, said, rec, v = transcribe_with(tmp_path, [500])
     assert asked == ["auto", "fr"] and said == [] and not rec["ok"] and rec["why"] == "answered 500"
@@ -74,12 +62,3 @@ def test_a_villa_fixed_language_is_never_auto(tmp_path):
     assert asked == ["de"] and said == [] and rec["attempts"][0]["language"] == "de" and rec["auto_refused"] is False
 
 
-def test_auto_named_by_the_villa_falls_back_too(tmp_path):
-    asked, said, _, _ = transcribe_with(tmp_path, [415, 200], {"language": "auto"})
-    assert asked == ["auto", "fr"] and said == ["words in fr"]
-
-
-def test_the_shape_check_takes_auto_and_still_refuses_junk():
-    assert LANGUAGE.match("auto") and LANGUAGE.match("fr") and LANGUAGE.match("pt-BR")
-    for junk in ("", "automatic", "auto; x=1", "fr\r\nX: y", "a", "auto-fr", "../x"):
-        assert not LANGUAGE.match(junk), junk

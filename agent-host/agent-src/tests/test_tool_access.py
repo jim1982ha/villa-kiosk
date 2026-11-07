@@ -9,13 +9,10 @@ import os
 import pytest
 import yaml
 
-from helpers import copy_skill, make_agent, settings
+from helpers import make_agent
 from ai_fake import FakeAI
 from ha_fake import FakeHA
-from telegram_fake import FakeTelegram
 from vesta_agent import runner, tool_access
-from vesta_agent.app import Vesta
-from vesta_agent.kiosk import Kiosk
 from vesta_agent.policy import Policy, problems
 from vesta_agent.roster import Person
 from vesta_agent.routing import CONVERSATION, Origin

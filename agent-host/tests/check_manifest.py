@@ -59,7 +59,7 @@ if not 10 <= int(cfg.get("timeout", 10)) <= 300:
 
 # SPEC H3/H4: no local-only privileges, nothing listens. The EFFECTIVE value is
 # what the Supervisor grants: absent is false (Home Assistant's add-on linter
-# refuses the key written out at its default — agent-host/tools/addon_lint.py),
+# refuses the key written out at its default),
 # and anything that grants it fails here.
 for key in ("homeassistant_api", "hassio_api"):
     if cfg.get(key, False) is not False:

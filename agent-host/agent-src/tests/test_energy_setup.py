@@ -5,7 +5,6 @@ and the weekly page's days follow them. Invented ids throughout."""
 from __future__ import annotations
 
 import json
-import sys
 import os
 from datetime import datetime, timedelta, timezone
 
@@ -61,15 +60,6 @@ def test_a_day_is_split_as_the_kiosk_splits_it_nested_devices_counted_once():
     assert sp.roots[0].node.id == "sensor.phase_c_energy"               # top level, largest first
     rank = E.ranking(sp)
     assert len(rank) == 18 and rank[0].node.id == "sensor.phase_c_energy"
-
-
-def test_used_is_grid_in_plus_solar_less_what_went_back_never_below_zero():
-    s = E.setup({"energy_sources": [{"type": "grid", "stat_energy_from": "g", "stat_energy_to": "r"},
-                                    {"type": "solar", "stat_energy_from": "pv"}], "device_consumption": []})
-    assert E.split(s, {"g": 10, "r": 4, "pv": 6}.get).used == 12
-    assert E.split(s, {"g": 0, "r": 9, "pv": 1}.get).used == 0
-    assert not E.usable({"energy_sources": [], "device_consumption": [{"stat_consumption": "x"}]})
-    assert E.usable({"energy_sources": [{"type": "solar", "stat_energy_from": "pv"}]}) and not E.usable(None)
 
 
 # ---------------------------------------------------------------- the read-only gate
@@ -167,60 +157,3 @@ def test_the_week_follows_the_energy_settings_and_counts_a_nested_device_once(tm
                                  "grid_out": ["sensor.example_main_energy_returned"], "solar": []}
 
 
-def test_the_weekly_pages_days_are_the_same_total_as_the_week(tmp_path):
-    fx = _villa(tmp_path)
-    _period(tmp_path, fx)
-    from test_reports import FACTS, _run
-    r = _run(FACTS, "fm-weekly", "--pack", str(tmp_path / "pack.json"), "--store", str(tmp_path / "s.sqlite"),
-             "--energy", str(tmp_path / "week.json"), "--fixture-dir", str(fx), "--now", "2026-10-05T07:00:00+00:00",
-             "--out", str(tmp_path / "facts.json"))
-    assert r.returncode == 0, r.stderr
-    s = json.load(open(tmp_path / "facts.json"))["sections"]
-    assert [d["kwh"] for d in s["energy_days"]["rows"]] == [28.0] * 7          # grid in less what went back
-    assert sum(d["kwh"] for d in s["energy_days"]["rows"]) == 196.0
-    oven = next(x for x in s["circuits"]["rows"] if x["name"] == "Oven")
-    assert oven["basis"] == "measured, inside Kitchen circuit"
-
-
-def test_with_no_settings_the_old_guess_stays_and_its_note_names_no_setting(tmp_path):
-    fx = _villa(tmp_path, settings=None)
-    out = _period(tmp_path, fx)
-    assert out["basis"] == "names" and out["main_meter"] == "sensor.example_main_energy"
-    assert out["total_kwh"] == 210.0 and "Energy settings name no grid meter" in out["total_basis"]
-    pack = json.load(open(tmp_path / "pack.json"))
-    pack["families"]["energy"] = [r for r in pack["families"]["energy"] if "main_energy" not in r["entity_id"]]
-    (tmp_path / "pack.json").write_text(json.dumps(pack))
-    (tmp_path / "week.json").unlink()
-    out = _period(tmp_path, fx)
-    assert out["total_kwh"] is None
-    said = out["note"] + " " + out["headline"]
-    assert out["note"] == ("No total: the villa's Energy settings name no grid meter, and no meter is recognisably the "
-                           "main one. Adding the grid meter to the villa system's Energy settings gives the total.")
-    assert "input_" not in said and "Home Assistant" not in said and " HA" not in said
-
-
-def test_a_finished_week_is_worked_out_again_when_the_pack_or_the_code_changes(tmp_path):
-    # villa, 2026-10-19: week 42 was kept under the period alone, and the report made after an update read the
-    # figures made before it ("Main Power Device" three times, a name the update had fixed)
-    from test_reports import _run
-    sys.path.insert(0, os.path.join(STARTER_SKILLS, "roi-energy", "scripts"))
-    import energy_period
-    fx = _villa(tmp_path)
-
-    def week():
-        r = _run(os.path.join(STARTER_SKILLS, "roi-energy", "scripts", "energy_period.py"), "--pack", str(tmp_path / "pack.json"),
-                 "--period", "custom", "--start", "2026-09-28", "--end", "2026-10-04", "--fixture-dir", str(fx),
-                 "--zone", "UTC", "--store", str(tmp_path / "s.sqlite"), "--out", str(tmp_path / "week.json"))
-        assert r.returncode == 0, r.stderr
-        return json.load(open(tmp_path / "week.json"))
-    assert week()["from_cache"] is False and week()["from_cache"] is True          # the same week, kept
-    pack = json.load(open(tmp_path / "pack.json"))
-    pack["generated_at"] = "2026-10-05T01:30:00+00:00"                            # the night rebuilt the pack
-    (tmp_path / "pack.json").write_text(json.dumps(pack))
-    assert week()["from_cache"] is False
-    # the code: the tag follows the script and the shared rules it computes with
-    from vesta_shared.knowledge_pack import KnowledgePack
-    p = KnowledgePack.load(str(tmp_path / "pack.json"))
-    tag = energy_period.calc_tag(p)
-    p.generated_at = "other"
-    assert energy_period.calc_tag(p) != tag

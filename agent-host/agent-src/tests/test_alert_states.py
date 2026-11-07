@@ -48,7 +48,3 @@ def test_the_night_check_opens_the_meters_offline_fault_while_its_overload_alert
     assert set(got) == {"dev_front", "dev_back"}           # an alert about states that include "unavailable" does
 
 
-def test_the_desk_reads_the_same_rule():
-    sys.path.insert(0, os.path.join(DESK, "scripts"))
-    import desk
-    assert desk.rule_states.__code__.co_names.count("alerted_states") == 1

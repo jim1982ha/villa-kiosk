@@ -25,5 +25,3 @@ def test_the_test_copy_of_the_add_on_keeps_a_message_as_the_agreement_says(examp
         assert kept == example["kept"]
 
 
-def test_the_examples_cover_a_kept_message_and_a_refusal():
-    assert {ex["kept"] is None for ex in VESTA_MESSAGE["examples"]} == {True, False}

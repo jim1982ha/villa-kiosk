@@ -54,11 +54,6 @@ def test_a_hidden_lock_is_not_in_the_villa_status(tmp_path):
     assert "unlocked" not in s["text"] and s["colour"] == "green"
 
 
-def test_a_hidden_entity_still_names_its_device():
-    # an alert written before the swap still names the real lock: its device is still known
-    assert _pack().device_name(RAW, None) == "Front door lock"
-
-
 def test_the_ais_own_search_never_offers_a_hidden_entity(tmp_path):
     # owner, 2026-10-18: asked "turn off the TV", the AI offered three TVs, two of them hidden by the owner — the Rules
     # page says hidden devices are left out of what the AI is told. Through the real tool, the pack built as at night

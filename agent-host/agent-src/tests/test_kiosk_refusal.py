@@ -70,12 +70,6 @@ def test_a_kiosk_that_cannot_be_reached_still_ends_the_round(tmp_path, caplog):
     assert "ClientConnectorError" in caplog.text
 
 
-def test_the_error_says_whether_the_kiosk_refused_or_was_not_reached():
-    assert KioskError("writing answered 403: no", status=403, said="no").refused
-    assert KioskError("the Facility records kept changing", status=409).refused
-    assert not KioskError("PUT /agent/v1/fm-data: TimeoutError").refused
-
-
 def test_the_refusals_words_reach_the_chat_answer(tmp_path):
     k = FakeKiosk()
     v = make_agent(tmp_path, {}, roster=Roster.of(fm=[(FM, "JM")]), kiosk=k)

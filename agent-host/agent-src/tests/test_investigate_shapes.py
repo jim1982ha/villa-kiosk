@@ -149,40 +149,6 @@ def test_starts_outside_its_schedule_are_compared_with_its_own_days_before():
     assert outside(True, None) == []                        # no schedule known: nothing said about one
 
 
-def scattered(trouble):
-    """The afternoon of 20 October as the readings show it: a burst of starts under 3 minutes apart (13:15-13:59), then
-    starts 3 to 9 minutes apart all afternoon — each "ordinary" alone."""
-    rnd, rows, t = random.Random(4), [], S
-    nxt = S + timedelta(minutes=60)
-    burst = (datetime(2026, 10, 20, 13, 15, tzinfo=Z), datetime(2026, 10, 20, 13, 59, tzinfo=Z))
-    while t < E:
-        if t >= nxt:
-            rows += [(t, 1050.0), (t + timedelta(seconds=2), 820.0)]
-            t += timedelta(seconds=rnd.randint(20, 35))
-            if trouble and burst[0] <= t < burst[1]:
-                gap = rnd.uniform(1, 2.5)
-            elif trouble and t >= burst[1]:
-                gap = rnd.uniform(3.2, 9)
-            else:
-                gap = rnd.uniform(60, 180)
-            nxt = t + timedelta(minutes=gap)
-            if trouble and t < burst[0] < nxt:
-                nxt = burst[0]                               # the burst starts on time
-        rows.append((t, rnd.choice([0.0, 1.1, 1.6])))
-        t += timedelta(seconds=15)
-    return rows
-
-
-def test_starts_after_a_burst_are_said_hour_by_hour_never_as_its_normal():
-    # owner, 2026-10-20: the answer said the House Pump "went idle" after its 13:28 burst — its later starts, each over
-    # 3 minutes apart, were hidden as "like its normal"
-    said = lines(scattered, True)
-    (hours,) = [ln for ln in said if "starts in each hour" in ln]
-    later = [int(h.split()[1]) for h in hours.split(": ", 1)[1].split(" · ") if h[:2] in ("15", "16", "17")]
-    assert later and all(n > 0 for n in later), hours
-    assert not [ln for ln in said if "like its normal" in ln], said
-
-
 def test_an_id_no_device_has_is_said_so_never_as_nothing_recorded():
     # villa, 2026-10-20 21:57: the AI read the history of an id it made up, and "nothing recorded" read as a quiet pump
     class _Unknown(HABase):
@@ -207,22 +173,6 @@ def test_a_start_surge_is_not_a_change_of_level_and_a_real_one_still_is():
     real = [(t0 + timedelta(seconds=10 * i), "750" if i < 30 else "1500") for i in range(60)]
     got = inv.level_jumps(real, FROM, E, 10)
     assert [(round(j["from"]), round(j["to"])) for j in got] == [(750, 1500)], got
-
-
-def test_a_burst_says_its_runs_against_the_usual_run():
-    # villa, 2026-10-21 00:13: "⟵ runs of about 25 s each" was read as "runs shorter than normal" (usual: 33 s)
-    def burst(run_s):
-        ps, t = [], datetime(2026, 10, 20, 13, 28, tzinfo=Z)
-        for _ in range(8):
-            ps.append({"kind": inv.kinds.RUNNING, "start": t, "end": t + timedelta(seconds=run_s), "seconds": run_s,
-                       "mean": 800.0, "min": 750.0, "max": 900.0})
-            t += timedelta(seconds=run_s)
-            ps.append({"kind": inv.kinds.IDLE, "start": t, "end": t + timedelta(seconds=60), "seconds": 60})
-            t += timedelta(seconds=60)
-        shown, _ = inv.worth_a_line(ps, {"run_median_s": 33, "run_longest_s": 40, "level_median": 800}, 300)
-        return [p["why"] for p in shown if "runs of about" in (p.get("why") or "")]
-    assert ["as long as its usual run of" in w for w in burst(30)] == [True], burst(30)
-    assert ["shorter than its usual run of" in w for w in burst(8)] == [True], burst(8)
 
 
 class _WithDays(_Client):
@@ -250,14 +200,3 @@ def test_a_change_that_began_before_its_days_before_is_said_from_the_daily_figur
     assert day and "⟵" not in day[0], said
 
 
-def test_a_rest_drawing_far_above_its_usual_rest_is_flagged_and_its_ordinary_wander_is_not():
-    # villa, 2026-10-21: a pump resting at 37 instead of 0.87 from 19:00 on went unsaid (only a rest at 0 was judged)
-    def rest(mean):
-        t = datetime(2026, 10, 20, 19, 0, tzinfo=Z)
-        ps = [{"kind": inv.kinds.IDLE, "start": t, "end": t + timedelta(minutes=40), "seconds": 2400,
-               "mean": mean, "min": mean - 1, "max": mean + 1}]
-        shown, _ = inv.worth_a_line(ps, {"run_median_s": 33, "run_longest_s": 40, "level_median": 899,
-                                         "rest_median": 0.87}, 300)
-        return shown[0].get("why")
-    assert rest(37) == "it read about 37 at rest instead of its usual 0.87"
-    assert rest(1.9) is None

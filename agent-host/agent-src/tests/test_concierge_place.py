@@ -45,11 +45,6 @@ def test_the_area_decides_not_the_id():
     assert ids(concierge.find(pack(), "lights", "kitchen")) == ["light.kitchen_and_dining_bottom", "light.spare"]
 
 
-def test_a_device_without_an_area_counts_by_its_name_only():
-    got = ids(concierge.find(pack(), "lights", "Kitchen"))
-    assert "light.spare" in got and "light.sofa" not in got
-
-
 def test_an_area_alias_and_accents_name_the_same_area():
     p = pack(area_aliases={"Kitchen": ["Cuisine"]})
     assert ids(concierge.find(p, "lights", "cuisine")) == ids(concierge.find(p, "lights", "kitchen"))

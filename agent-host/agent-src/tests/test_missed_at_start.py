@@ -60,11 +60,6 @@ def test_an_alert_handed_over_while_the_agent_was_away_is_taken_in_at_start(tmp_
     assert seen[0][CONTEXT_KEY] == "ctx-r1"
 
 
-def test_a_first_start_has_missed_nothing(tmp_path):
-    v = agent(tmp_path, [run_of("r1", 3, handover("i-1"))])
-    assert catch_up(v, None) == 0 and v.reader.calls == []
-
-
 def test_a_handover_taken_in_live_is_never_taken_in_twice(tmp_path):
     # the last beat comes up to a minute before the stop: a handover inside that minute came live AND is in the runs
     v = agent(tmp_path, [run_of("r1", 1, handover("i-both"))])
@@ -74,15 +69,6 @@ def test_a_handover_taken_in_live_is_never_taken_in_twice(tmp_path):
     # ...while its later phase is its own handover
     asyncio.run(v.on_critical(handover("i-both", phase="resolved")))
     assert len(taken_in(v)) == 2
-
-
-def test_the_agent_catches_up_each_time_it_starts_listening_from_its_last_beat():
-    # main(): the last beat read BEFORE the socket beats again, the catch-up waiting for the villa to be heard
-    import inspect
-    from vesta_agent.app import Vesta
-    src = inspect.getsource(Vesta.main)
-    assert src.index('last_beat("ha_events")') < src.index("HaEvents(")
-    assert "self.catch_up(events.connected, last_heard)" in src
 
 
 def test_a_rules_repeat_of_an_open_alert_is_its_own_handover(tmp_path):

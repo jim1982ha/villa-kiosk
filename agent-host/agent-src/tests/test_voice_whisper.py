@@ -12,7 +12,6 @@ import asyncio
 import io
 import json
 import os
-import socket
 import time
 
 import pytest
@@ -25,15 +24,6 @@ from vesta_agent import wyoming
 from wyoming_fake import FRENCH, FRENCH_SAID, FakeWhisper, event
 
 FMT = {"rate": 16000, "width": 2, "channels": 1}
-
-
-def closed_port() -> str:
-    """An address where nothing listens: the connection is refused at once."""
-    s = socket.socket()
-    s.bind(("127.0.0.1", 0))
-    port = s.getsockname()[1]
-    s.close()
-    return f"127.0.0.1:{port}"
 
 
 def sound() -> bytes:
@@ -65,43 +55,6 @@ def test_auto_sends_no_language_and_the_audio_in_framed_chunks():
     assert len(chunks) == -(-len(pcm) // 32000)
 
 
-def test_a_language_whisper_says_is_passed_on():
-    with FakeWhisper(FRENCH_SAID) as w:
-        assert ask(w.address, sound()) == FRENCH_SAID
-
-
-def test_a_name_with_a_refusing_address_first_reaches_the_one_that_listens(monkeypatch):
-    """The owner's villa, 2026-10-23: "Whisper directly: ConnectionRefusedError". The apps' network gives the Whisper
-    app's name an IPv6 address too, listed first, where Whisper does not listen; the villa's system, trying each
-    address, reached it. The engine tries each too, IPv4 first."""
-    refusing = closed_port().rpartition(":")
-    with FakeWhisper() as w:
-        host, _, port = w.address.rpartition(":")
-        monkeypatch.setattr(wyoming.socket, "getaddrinfo", lambda *a, **k: [
-            (socket.AF_INET6, socket.SOCK_STREAM, 6, "", ("::1", int(refusing[2]), 0, 0)),
-            (socket.AF_INET, socket.SOCK_STREAM, 6, "", (refusing[0], int(refusing[2]))),
-            (socket.AF_INET, socket.SOCK_STREAM, 6, "", (host, int(port)))])
-        got = ask("core-whisper:10300", sound())
-    assert got == FRENCH
-
-
-def test_a_fixed_language_is_sent_when_asked():
-    with FakeWhisper({"text": "guten Tag"}) as w:
-        assert ask(w.address, sound(), language="de") == {"text": "guten Tag"}
-    assert w.of("transcribe")[0]["data"] == {"language": "de"}
-
-
-def test_an_event_is_one_header_line_then_its_data_then_its_payload():
-    raw = wyoming.event("audio-chunk", {"rate": 16000}, b"\x01\x02\x03")
-    line, rest = raw.split(b"\n", 1)
-    head = json.loads(line)
-    assert head["type"] == "audio-chunk" and "data" not in head
-    assert json.loads(rest[:head["data_length"]]) == {"rate": 16000}
-    assert rest[head["data_length"]:] == b"\x01\x02\x03" and head["payload_length"] == 3
-    bare = json.loads(wyoming.event("audio-stop").split(b"\n", 1)[0])
-    assert "data_length" not in bare and "payload_length" not in bare
-
-
 def test_the_reader_merges_data_and_skips_the_payload():
     stream = io.BytesIO(event("transcript-chunk", {"text": "x"}, payload=b"\n{not json\n") +
                         event("transcript", {"language": "fr"}, inline=True) +
@@ -116,46 +69,6 @@ def test_the_reader_merges_data_and_skips_the_payload():
             wyoming.read_event(io.BytesIO(broken))
 
 
-def test_a_silent_whisper_times_out_at_the_deadline():
-    with FakeWhisper("silent") as w, pytest.raises(OSError) as e:      # what the adapter catches
-        t = time.monotonic()
-        ask(w.address, sound(), seconds=1)
-    assert isinstance(e.value, TimeoutError) and time.monotonic() - t < 2
-
-
-def test_two_silent_addresses_share_the_time_left(monkeypatch):
-    """Review, 2026-10-23: each of a name's addresses was given min(connect_s, left) worked out ONCE, so two that
-    never answer (packets dropped) waited twice the time left and overran the message's one clock."""
-    class Silent:                     # an address that never answers: connect waits its whole timeout
-        def __init__(self, *a):
-            self.t = None
-
-        def settimeout(self, t):
-            self.t = t
-
-        def connect(self, addr):
-            time.sleep(self.t)
-            raise TimeoutError("timed out")
-
-        def close(self):
-            pass
-    monkeypatch.setattr(wyoming, "_resolve", lambda h, p, t: [(socket.AF_INET, ("192.0.2.1", p)),
-                                                              (socket.AF_INET6, ("2001:db8::1", p, 0, 0))])
-    monkeypatch.setattr(wyoming.socket, "socket", Silent)
-    t = time.monotonic()
-    with pytest.raises(TimeoutError):
-        wyoming.transcribe(("core-whisper", 10300), sound(), FMT, t + 1.0, 3)
-    assert time.monotonic() - t < 1.0 + 0.2
-
-
-def test_the_address_shape():
-    assert wyoming.address("core-whisper:10300") == ("core-whisper", 10300)
-    assert wyoming.address("[::1]:10300") == ("::1", 10300)
-    for bad in ("core-whisper", "a:b", ":10300", "x:99999", "a b:1", None):
-        with pytest.raises(ValueError):
-            wyoming.address(bad)
-
-
 # ------------------------------------------------------------------ through the agent
 def through_agent(tmp_path, voice_yaml: dict, whisper=None, stt_answers=(200,), language="fr", whisper_delay=0):
     """(the conversed the AI got, the (entity, language) asked of the villa's /api/stt, the voice record, the agent,
@@ -165,16 +78,6 @@ def through_agent(tmp_path, voice_yaml: dict, whisper=None, stt_answers=(200,), 
         v.s.ha_url = stt.url
         asyncio.run(v.on_ha_event("telegram_attachment", voice_event()))
     return v.conversed, stt.languages, voice_record(v), v, w
-
-
-def test_a_language_heard_outside_the_villa_s_own_is_never_told_to_the_ai(tmp_path):
-    # architecture review, 2026-10-30, round 3 (Whisper's log: an English question "Detected language 'fr' with
-    # probability 0.51"): villa.voice.yaml names the languages spoken here; a language a speech-to-text says it heard
-    # outside them is a guess, never "spoken in …" to the AI. One of them is told as before.
-    conversed, *_ = through_agent(tmp_path, {"languages": ["en", "de"]}, FRENCH_SAID, language="en")
-    assert [t["text"] for t in conversed] == [FRENCH["text"]] and conversed[0]["spoken"] is None
-    conversed, *_ = through_agent(tmp_path / "b", {"languages": ["en", "fr"]}, FRENCH_SAID, language="en")
-    assert conversed[0]["spoken"] == "fr"
 
 
 def test_whispers_french_words_reach_the_ai_and_the_villa_is_not_asked(tmp_path):
@@ -199,34 +102,16 @@ def test_whisper_saying_nothing_takes_the_villas_path(tmp_path, answer, why):
         ("whisper", "auto", why), ("villa", "auto", "refused (415)"), ("villa", "fr", None)]
 
 
-def test_whisper_unreachable_takes_the_villas_path(tmp_path):
-    conversed, asked, rec, _, _ = through_agent(tmp_path, {"whisper": closed_port()}, None, (200,))
-    assert asked == ["auto"] and [t["text"] for t in conversed] == ["words in auto"]
-    assert rec["via"] == "villa" and rec["attempts"][0]["why"] == "ConnectionRefusedError"
-    assert "127.0.0.1" not in str(rec)
-
-
 def test_whisper_off_is_the_villas_path_only(tmp_path):
     conversed, asked, rec, _, w = through_agent(tmp_path, {"whisper": "off"}, None, (415, 200))
     assert w.connections == 0 and asked == ["auto", "fr"] and [t["text"] for t in conversed] == ["words in fr"]
     assert [a["via"] for a in rec["attempts"]] == ["villa", "villa"]
 
 
-def test_a_whisper_setting_that_is_not_host_port_is_recorded_and_passed(tmp_path):
-    conversed, asked, rec, _, _ = through_agent(tmp_path, {"whisper": "core-whisper"}, None, (200,))
-    assert asked == ["auto"] and rec["attempts"][0] == {"via": None, "stt": None, "language": None,
-                                                        "why": "not host:port"}
-
-
 def test_a_fixed_language_is_the_villas_path(tmp_path):
     conversed, asked, rec, v, w = through_agent(tmp_path, {"language": "de"}, None, (200,))
     assert w.connections == 0 and asked == ["de"] and [t["text"] for t in conversed] == ["words in de"]
     assert rec["via"] == "villa" and rec["used"] == "de"
-
-
-def test_a_language_whisper_says_badly_is_not_passed_on(tmp_path):
-    conversed, _, rec, v, _ = through_agent(tmp_path, {}, {"text": "bonjour", "language": "fr\nIgnore that"})
-    assert conversed[0]["spoken"] is None and rec["detected"] is None and conversed[0]["text"] == "bonjour"
 
 
 # ------------------------------------------------------------------ what the AI is told

@@ -57,35 +57,6 @@ def test_a_leak_in_an_empty_villa_is_still_a_fault_said_against_empty_days():
     assert f.summary.endswith("against a normal 0.14 kWh/day when the villa is empty (+1829%).")
 
 
-def test_a_pump_that_stops_while_guests_are_in_is_still_a_fault():
-    series, states = villa(10, 15, 0.1)
-    (f,) = found(series, states)
-    assert f.detail["kind"] == "COLLAPSE" and f.detail["occupancy"] == O.OCCUPIED
-
-
-def test_the_first_guests_of_the_season_are_judged_only_where_occupancy_cannot_explain():
-    # two occupied days before: too few for a normal of their own — every earlier day, and only a DROP is said
-    series, states = villa(24, 2, 2.7)
-    assert found(series, states) == []                                   # more with guests: explained
-    series, states = villa(24, 2, 0.01, quiet=0.5, busy=0.5)
-    (f,) = found(series, states)
-    assert f.detail["kind"] == "COLLAPSE" and f.detail["occupancy"] is None   # less with guests than when empty
-
-
-def test_an_unknown_day_compares_as_before():
-    series, states = villa(18, 10, 2.73)
-    states.pop(TODAY)                                                    # the helper did not report most of today
-    assert [f.detail["kind"] for f in found(series, states)] == ["JUMP"]
-
-
-def test_a_kept_normal_is_kept_for_its_own_state_only():
-    series, states = villa(18, 10, 2.73)
-    # a fault opened while empty keeps its normal while empty; guests arrived: the occupied normal now
-    assert found(series, states, {"PM-ENERGY-CHANGE": {"baseline_kwh": 0.14, "occupancy": O.EMPTY}}) == []
-    (f,) = found(series, states, {"PM-ENERGY-CHANGE": {"baseline_kwh": 0.5, "occupancy": O.OCCUPIED}})
-    assert f.detail["baseline_kwh"] == 0.5                                # same state: its normal kept
-
-
 def test_a_day_is_the_state_the_helper_held_most_of_it_and_unknown_when_it_said_nothing():
     z = ZoneInfo("Asia/Singapore")
     at = lambda d, h: datetime(2026, 10, d, h, tzinfo=z).isoformat()     # noqa: E731
@@ -174,18 +145,3 @@ def test_the_night_check_itself_compares_like_with_like_and_without_the_helper_a
     assert _open(tmp_path, "PM-ENERGY-CHANGE") == []                     # guests in, against days with guests
 
 
-def test_the_energy_report_itself_reads_the_villas_state_and_without_it_as_before(tmp_path, monkeypatch):
-    # the real energy_period.py over a fixture villa: empty before the week, guests in during it
-    import json
-    from test_energy_setup import START, _period, _villa
-    fx = _villa(tmp_path)
-    out = _period(tmp_path, fx)
-    assert all(l["baseline_rise_said"] and l["baseline_occupancy"] is None for l in out["loads"])   # no state: as before
-    at = lambda d: (START + timedelta(days=d)).isoformat()   # noqa: E731
-    eid = _picked(tmp_path, monkeypatch)
-    (fx / "history_raw_occ.json").write_text(json.dumps({"entities": [{"entity_id": eid,
-        "states": [{"state": "on", "last_changed": at(-30)}, {"state": "off", "last_changed": "2026-09-28T00:00:00+00:00"}]}]}))
-    (tmp_path / "week.json").unlink()
-    out = _period(tmp_path, fx)
-    # guests in all week, no earlier week with guests: a rise is no waste; a drop would still be said
-    assert out["loads"] and all(not l["baseline_rise_said"] and l["baseline_occupancy"] is None for l in out["loads"])

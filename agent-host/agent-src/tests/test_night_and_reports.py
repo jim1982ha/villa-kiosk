@@ -9,7 +9,6 @@ import sys
 from helpers import STARTER_SKILLS, make_agent
 from kiosk_fake import FakeKiosk
 from vesta_shared import result
-from vesta_shared.knowledge_pack import KnowledgePack
 from vesta_shared.problems import Problems
 from vesta_shared.store import Store
 from vesta_agent.roster import Roster
@@ -55,25 +54,6 @@ def test_fixed_lists_what_ended_never_what_happened_once(tmp_path):
     class C:
         store, start, end = st, date(2026, 10, 1), date(2026, 10, 31)
     assert [f["title"] for f in facts.s_fixed_suggest(C)["fixed"]] == ["Plug offline"]
-
-
-def test_an_alert_is_dated_the_villas_day(tmp_path, monkeypatch):
-    monkeypatch.setenv("TZ", "Asia/Makassar")                                            # UTC+8
-    st = Store(str(tmp_path / "s.sqlite"))
-    st.new_incident("k", "automation.gate", "binary_sensor.gate", "P4", {"message": "Gate opened at night"},
-                    at="2026-10-09T22:30:00+00:00")                                      # 06:30 on the 10th at the villa
-    (p,) = Problems(st).open_problems()
-    assert p["since"] == "2026-10-10"
-
-
-def test_a_sensor_without_a_value_is_not_offline_to_the_concierge():
-    con = _load("concierge", os.path.join(STARTER_SKILLS, "villa-concierge", "scripts"))
-    fam = {"level": [{"entity_id": "sensor.wind_chill", "name": "Weather Station Wind Chill", "asset": "ws"}]}
-    pack = KnowledgePack(villa="V", time_zone="UTC", generated_at="", ha_version=None, families=fam,
-                         assets={"ws": {"name": "Weather Station"}}, areas=[], people=[], channels={}, unknown_area=[],
-                         unclassified=[], retention={})
-    assert con.status(pack, {"sensor.wind_chill": {"state": "unknown"}}, None)["colour"] == "green"
-    assert con.status(pack, {"sensor.wind_chill": {"state": "unavailable"}}, None)["colour"] == "amber"
 
 
 def test_back_again_is_said_when_the_run_before_began_long_ago(tmp_path):

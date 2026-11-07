@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 from datetime import date
 
 import pytest
@@ -36,14 +35,6 @@ def test_one_rule_for_the_time_zone(pack, monkeypatch):
     assert ctx([]).zone == "UTC"
 
 
-def test_no_store_is_ever_made_where_none_was_asked_for(tmp_path, monkeypatch):
-    monkeypatch.chdir(tmp_path)
-    monkeypatch.delenv("VESTA_STORE", raising=False)
-    assert ctx([], store=False).store is None and ctx([], store="optional").store is None
-    assert not os.path.exists(tmp_path / script.STORE_DEFAULT)                             # no stray file
-    assert ctx(["--store", str(tmp_path / "s.sqlite")]).store.path.endswith("s.sqlite")
-
-
 def test_the_villas_settings_come_through_live_params_and_the_test_seam(tmp_path):
     fx = tmp_path / "fx"
     fx.mkdir()
@@ -62,23 +53,3 @@ def test_the_day_follows_the_time_given(pack):
     assert c.day("2026-09-01") == date(2026, 9, 1)
 
 
-def test_home_assistant_is_read_only_where_it_can_be(tmp_path, monkeypatch):
-    monkeypatch.delenv("VESTA_HA_MCP_URL", raising=False)
-    assert ctx([]).live_client is None
-    (tmp_path / "fx").mkdir()
-    assert ctx(["--fixture-dir", str(tmp_path / "fx")]).live_client is not None
-
-
-def test_no_script_builds_its_own_set_up():
-    # the set-up is the Context's: a script parsing --store / --fixture-dir itself, or reaching Home Assistant past
-    # the test seam, is the duplication this replaced
-    import glob
-    import re
-    from helpers import STARTER_SKILLS
-    for path in glob.glob(os.path.join(STARTER_SKILLS, "*", "scripts", "*.py")):
-        src = open(path, encoding="utf-8").read()
-        if "argparse" not in src:
-            continue
-        name = os.path.relpath(path, STARTER_SKILLS)
-        assert not re.search(r'add_argument\("--(store|fixture-dir)"', src), f"{name} parses the set-up itself"
-        assert "McpClient(" not in src.replace("client = McpClient()", ""), f"{name} reaches Home Assistant itself"

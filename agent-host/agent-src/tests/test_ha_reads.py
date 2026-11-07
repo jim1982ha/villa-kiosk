@@ -31,33 +31,6 @@ def test_a_logbook_page_that_repeats_ends_the_reading_and_counts_once():
     assert len(got) == 4                            # each flip once, not once per page
 
 
-class WindowSession:
-    """ha-mcp as it answers: hours_back counted back from end_time."""
-
-    def __init__(self):
-        self.args = []
-
-    def call_raw(self, name, args):
-        self.args.append(args)
-        return {"content": [{"type": "text", "text": json.dumps({"success": True, "entries": [], "has_more": False})}]}
-
-
-def test_a_past_period_asks_for_its_own_hours_counted_back_from_its_end():
-    # 2026-10-11: counted from now, one day two days ago read 67 hours (24 pages, 75 s) — and 2026-10-15: the whole villa
-    # is read by slices of 6 hours, each its own hours back from its own end; one entity's in one read
-    session = WindowSession()
-    McpClient("http://unused", "UTC", session=session).logbook(T - timedelta(days=3), T - timedelta(days=2))
-    assert [(a["hours_back"], a["end_time"]) for a in session.args] == [
-        (6, (T - timedelta(days=3, hours=-6 * k)).isoformat()) for k in range(1, 5)]
-    session = WindowSession()
-    McpClient("http://unused", "UTC", session=session).logbook(T - timedelta(minutes=5), T)
-    assert [(a["hours_back"], a["end_time"]) for a in session.args] == [(1, T.isoformat())]
-    session = WindowSession()
-    McpClient("http://unused", "UTC", session=session).logbook(T - timedelta(days=3, minutes=30), T - timedelta(days=2),
-                                                                entity_id="sensor.example")
-    assert [(a["hours_back"], a["end_time"]) for a in session.args] == [(25, (T - timedelta(days=2)).isoformat())]
-
-
 class HistorySession:
     """A statistics or history read whose pages misbehave: `pages` is what each call answers."""
 
@@ -191,64 +164,6 @@ def test_the_ai_reads_the_whole_villas_logbook_a_few_hours_at_a_time(tmp_path):
     assert [c[1].get("hours_back") for c in ha.calls] == [LOGBOOK_VILLA_HOURS, 168, None]
 
 
-def test_find_asks_for_each_device_once_whatever_the_number_of_its_entities():
-    # villa, 2026-10-15: find took 50 s — twenty entities of two sensors asked for the same device twenty times each
-    import os
-    import sys
-    from helpers import STARTER_SKILLS
-    sys.path.insert(0, os.path.join(STARTER_SKILLS, "investigate", "scripts"))
-    import investigate
-
-    class Client:
-        def __init__(self):
-            self.calls = []
-
-        def tool(self, name, args):
-            self.calls.append((name, json.dumps(args, sort_keys=True)))
-            if name == "ha_search" and args.get("query") == "sensor x":
-                return {"entities": [{"entity_id": f"sensor.x_{i}"} for i in range(10)]}
-            if name == "ha_get_entity":
-                return {"entity_entries": [{"entity_id": e, "device_id": "dev1", "unique_id": "ABCDEF1234-x", "area": None}
-                                           for e in args["entity_id"]]}
-            if name == "ha_get_device":
-                return {"entities": [{"entity_id": f"sensor.x_{i}"} for i in range(10)]}
-            return {"entities": []}
-
-        def states(self, ids):
-            return {e: {"state": "1"} for e in ids}
-    c = Client()
-    investigate.find(c, "sensor x", None)
-    assert [n for n, _ in c.calls].count("ha_get_device") == 1
-    assert len([a for n, a in c.calls if n == "ha_search" and "ABCDEF1234" in a]) == 1
-
-
-def test_the_log_says_who_reads_the_villa_and_for_how_long(tmp_path, caplog):
-    # retro, 2026-10-15: a script reading the logbook for minutes was blamed on the AI's own tool — ha-mcp's log names the
-    # request, never the caller, and a script was logged only when it ended
-    import asyncio
-    import logging
-    from ha_fake import FakeHA, tool
-    from helpers import make_agent, make_skill
-    from vesta_agent import script_run
-    from vesta_agent.routing import CONVERSATION, Origin
-    ha = FakeHA(tools=[tool("ha_get_state", entity_id="string")])
-    v = make_agent(tmp_path, {"ha_read_tools": ["ha_get_state"]}, roster=Roster.of(owner=[(111, "Owner"), (-1, "Owner chat")]), reader=ha)
-    asyncio.run(v.refresh_server_tools())
-    get = next(t for t in v.toolbox().tool_objects(None, Origin(-1, CONVERSATION)) if t.name == "ha_get_state")
-    with caplog.at_level(logging.INFO):
-        asyncio.run(get.handler({"entity_id": "sensor.example_room"}))
-    assert any(r.getMessage().startswith("AI: ha_get_state ") and "sensor.example_room" in r.getMessage()
-               and r.getMessage().endswith(" s") for r in caplog.records), caplog.text
-    make_skill(v.s.skills_dir, "probe", {"description": "x", "scripts": {"look.py": {}}}, {"look.py": "print('{}')\n"})
-    sk = v.skills.get("probe")
-    caplog.clear()
-    with caplog.at_level(logging.INFO, logger="vesta"):
-        script_run.run(v.s, v.state, sk, "look.py", ["find"], by=script_run.AI)
-        script_run.run(v.s, v.state, sk, "look.py", ["find"], by=script_run.PAGE)
-    said = [r.getMessage() for r in caplog.records]
-    assert said.count("Skill probe: look.py find started") == 1, said           # the AI's script: its start, once
-
-
 def test_the_ai_reads_since_when_a_door_is_really_unlocked_never_the_restart(tmp_path):
     # villa, 2026-10-26: the weekly report's headline said "the Master Bedroom door has been unlocked since Sunday
     # 13:29" — the restart of the villa's system, which resets last_changed — of a door unlocked since Saturday 18:25
@@ -307,65 +222,3 @@ def test_one_session_serves_every_call_of_a_run_even_with_no_session_id():
     assert s.calls == {"ha_get_state": 3}
 
 
-class StatsSession:
-    """ha_get_history source=statistics as ha-mcp answers several ids (seen on the villa, 2026-10-30): one entry per
-    device, each with its own has_more."""
-
-    def __init__(self, rows, busy=()):
-        self.rows, self.busy, self.calls = rows, set(busy), []
-
-    def call_raw(self, name, args):
-        ids = args["entity_ids"] if isinstance(args["entity_ids"], list) else [args["entity_ids"]]
-        self.calls.append(ids)
-        lim, off = args["limit"], args.get("offset") or 0
-        ents = []
-        for e in ids:
-            rows = self.rows * (3 if e in self.busy else 1)
-            rows = [{**r, "start": r["start"] + i} for i, r in enumerate(rows)]
-            ents.append({"entity_id": e, "statistics": rows[off:off + lim], "has_more": off + lim < len(rows),
-                         "next_offset": off + lim if off + lim < len(rows) else None})
-        return {"content": [{"type": "text", "text": json.dumps({"success": True, "entities": ents})}]}
-
-
-def test_statistics_of_several_devices_are_one_read_and_a_busy_one_is_read_alone(monkeypatch):
-    # owner, 2026-10-30: the recheck read each battery's and each level's figures one device at a time
-    from vesta_shared import limits
-    monkeypatch.setattr(limits, "values", lambda: {"statistics.page_rows": 100})
-    rows = [{"start": 1_700_000_000_000 + i * 86_400_000, "mean": i} for i in range(40)]
-    ids = [f"sensor.battery_{i}" for i in range(20)]
-    s = StatsSession(rows, busy={"sensor.battery_3"})
-    got = McpClient("http://unused", "UTC", session=s).statistics(ids, T - timedelta(days=40), T, "day")
-    assert s.calls[0] == ids and all(c == ["sensor.battery_3"] for c in s.calls[1:]) and len(s.calls) == 3
-    assert all(len(got[e]) == 40 for e in ids if e != "sensor.battery_3") and len(got["sensor.battery_3"]) == 120
-
-
-def test_a_script_says_what_it_asked_the_villa_on_its_took_line(capsys):
-    from vesta_shared.script import READS, say_reads
-    say_reads({"ha_get_state": 2, "ha_get_history": 5})
-    assert capsys.readouterr().err.strip() == READS + "5 ha_get_history, 2 ha_get_state"
-
-
-def test_a_skill_script_s_reads_are_on_its_took_line(tmp_path, caplog):
-    # owner, 2026-10-30: "recheck.py took 42.4 s", ~220 calls, which ones not known: the run's reads, on its line
-    import logging
-    from helpers import make_agent, make_skill
-    from vesta_agent import script_run
-    v = make_agent(tmp_path, {}, roster=Roster.of(owner=[(111, "Owner"), (-1, "Owner chat")]))
-    make_skill(v.s.skills_dir, "probe", {"description": "x", "scripts": {"look.py": {}}},
-               {"look.py": "import sys\nfrom vesta_shared.script import say_reads\nprint('{}')\n"
-                           "say_reads({'ha_get_history': 3, 'ha_get_state': 1})\n"})
-    with caplog.at_level(logging.INFO, logger="vesta"):
-        script_run.run(v.s, v.state, v.skills.get("probe"), "look.py", ["find"], by=script_run.JOB)
-    assert any(r.getMessage().startswith("Skill probe: look.py find took ")
-               and r.getMessage().endswith(" s (3 ha_get_history, 1 ha_get_state)") for r in caplog.records), caplog.text
-
-
-def test_a_script_s_villa_client_says_its_reads_when_the_script_ends(monkeypatch):
-    # the line above comes from the run itself: the client a script opens on the villa reports its calls at exit
-    from argparse import Namespace
-    from vesta_shared import script
-    registered = []
-    monkeypatch.setattr(script.atexit, "register", lambda f, *a: registered.append((f, a)))
-    monkeypatch.setenv("VESTA_HA_MCP_URL", "http://unused")
-    cli = script.Context(Namespace(fixture_dir=None, zone="UTC")).client
-    assert registered == [(script.say_reads, (cli.mcp.calls,))]

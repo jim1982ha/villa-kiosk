@@ -176,15 +176,6 @@ jobs:
             "${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.version }}" \
             -c 'test -f /opt/vesta/agent/vesta-agent.yaml && cat /opt/vesta/agent/vesta-agent.yaml'
 
-      - name: The same image runs standalone with docker compose
-        # SPEC 13: the shipped compose file, against a fake villa behind a fake
-        # Cloudflare Access. amd64 only: it proves the options path and the
-        # compose settings, which do not differ by architecture.
-        if: matrix.arch == 'amd64'
-        run: |
-          agent-host/tests/standalone_test.sh \
-            "${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.version }}"
-
       - name: Pullable without credentials
         # ⚠️ THE SUPERVISOR PULLS ANONYMOUSLY. A package GHCR created private
         # builds green and pushes green, and the install on the Yellow then

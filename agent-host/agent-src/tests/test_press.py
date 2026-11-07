@@ -4,7 +4,6 @@ second reading, never a Telegram callback dressed up field by field."""
 from __future__ import annotations
 
 import os
-import re
 
 from vesta_agent import press
 
@@ -24,12 +23,3 @@ def test_a_telegram_callback_is_read_once_into_a_press():
     assert (plain.mid, plain.words, plain.rows, plain.caption, plain.name) == (7, "Hello", [], False, None)
 
 
-def test_no_handler_reads_telegrams_wording_of_a_press():
-    readers = []
-    for f in sorted(os.listdir(os.path.join(ROOT, "vesta_agent"))):
-        if f.endswith(".py") and f != "press.py":
-            text = open(os.path.join(ROOT, "vesta_agent", f), encoding="utf-8").read()
-            # a press's raw callback or message, or a pressed message's own buttons read off Telegram's shape
-            if re.search(r'\bp\.(q|msg)\b|msg\.get\("reply_markup"\)|\(q or \{\}\)\.get\("message"\)', text):
-                readers.append(f)
-    assert readers == [], readers

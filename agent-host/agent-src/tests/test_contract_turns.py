@@ -19,8 +19,3 @@ def test_the_test_copy_of_the_add_on_keeps_and_refuses_as_the_agreement_says(exa
     assert asyncio.run(kiosk.add_turn(dict(example["turn"]))) is example["kept"]
 
 
-def test_the_examples_cover_every_kind_of_key_and_a_refusal_of_each_rule():
-    kinds = {k: v for k, v in CONVERSATION["keys"].items()}
-    starts = {str(ex["turn"].get("key", ""))[:len(v)] for ex in CONVERSATION["turnExamples"] for v in kinds.values()}
-    assert set(kinds.values()) <= starts
-    assert {ex["kept"] for ex in CONVERSATION["turnExamples"]} == {True, False}

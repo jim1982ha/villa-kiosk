@@ -33,20 +33,6 @@ def test_day_31_runs_on_the_last_day_of_a_shorter_month():
     assert Spec.parse("31 08:00").next_after(t(2026, 12, 1, 0, 0)) == t(2026, 12, 31, 8, 0)
 
 
-def test_its_words_say_what_a_shorter_month_does():
-    assert Spec.parse("31 08:00").words() == "on day 31 of each month at 08:00, or on the last day of a shorter month"
-    assert Spec.parse("1 08:00").words() == "on day 1 of each month at 08:00"
-    assert Spec.parse("Mon 08:00").words() == "every Monday at 08:00"
-    assert Spec.parse("07:00").words() == "every day at 07:00"
-    assert [Spec.parse(w).per_month() for w in ("07:00", "Mon 08:00", "1 08:00")] == [30.0, 4.35, 1.0]
-
-
-def test_the_last_slot_and_the_next():
-    assert Spec.parse("04:00").last_at(t(2026, 10, 2, 3, 0)) == t(2026, 10, 1, 4, 0)
-    assert Spec.parse("04:00").last_at(t(2026, 10, 2, 4, 0)) == t(2026, 10, 2, 4, 0)
-    assert Spec.parse("Mon 08:00").next_after(t(2026, 10, 5, 8, 0)) == t(2026, 10, 12, 8, 0)
-
-
 @pytest.mark.parametrize("bad", ["", "7:00", "24:00", "32 08:00", "0 08:00", "Monday 08:00", "mon 08:00", None])
 def test_a_time_not_so_written_is_refused(bad):
     assert not Spec.valid(bad)

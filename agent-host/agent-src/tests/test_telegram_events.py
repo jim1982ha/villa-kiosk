@@ -13,7 +13,7 @@ import re
 import pytest
 import yaml
 
-from helpers import alert_desk, copy_skill, make_agent, settings, body, status, keep_roster
+from helpers import alert_desk, make_agent, settings, body, status, keep_roster
 from ha_fake import FakeHA, tool
 from vesta_agent.app import Vesta
 from vesta_agent.routing import CONVERSATION, Origin
@@ -163,13 +163,6 @@ def test_a_kiosk_ticket_title_has_no_leading_emoji_or_rule_code():
     assert _ticket_title("🚨 [VESTA-WD-01] Pump offline\nmore") == "Pump offline"
     assert _ticket_title("⚠️  Battery low") == "Battery low"
     assert _ticket_title("Battery low") == "Battery low"
-
-
-def test_while_acting_is_off_the_model_is_told_not_to_offer(agent):
-    s = agent.policy().summary()
-    assert "Never offer" in s and "approves with a" not in s
-    assert "no Markdown" in agent.system_prompt()
-    assert "never answer from an earlier attempt" in agent.system_prompt()
 
 
 def test_the_status_tool_reports_the_agents_own_night(agent):

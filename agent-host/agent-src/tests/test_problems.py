@@ -108,22 +108,6 @@ def test_an_old_task_is_given_the_source_of_its_rule_and_device_once(tmp_path):
     assert pb.source_gone(old_finding) and not pb.source_gone(nothing)
 
 
-def test_the_store_owns_its_sql_and_an_incidents_states_have_one_spelling():
-    # architecture review, 2026-10-07: nightly.py, problems.py and the night's tidy wrote SQL on the store's tables;
-    # the desk spelt each incident state by hand and problems.py had its own "answered or cleared"
-    import glob
-    import os
-    import re
-    from helpers import ROOT, STARTER_SKILLS
-    files = glob.glob(os.path.join(STARTER_SKILLS, "*", "scripts", "*.py")) + \
-        [f for f in glob.glob(os.path.join(ROOT, "vesta_shared", "*.py")) if not f.endswith("store.py")] + \
-        [os.path.join(ROOT, "vesta_agent", "housekeeping.py")]
-    for f in files:
-        src = open(f, encoding="utf-8").read()
-        assert not re.search(r"\.db\.execute\(\s*[\"'](SELECT|UPDATE|DELETE|INSERT)", src), f
-        assert not re.search(r"update_incident\([^)]*state=[\"']", src), f
-
-
 def test_what_to_do_is_the_sources_words_now_and_the_tasks_only_for_a_record_from_before(pb):
     # architecture review, 2026-10-19: the task froze the check at its opening; the night rewrites a finding's check
     # (a pump's draw lower, then higher) and the alert desk carries its route's — the fault's note follows them

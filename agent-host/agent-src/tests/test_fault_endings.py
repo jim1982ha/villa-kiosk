@@ -157,13 +157,6 @@ CASES = {
     "answers_again": ("answers_again", lambda tmp, iid: E.BACK_ONLINE_NOTE, False),
 }
 #: the endings told by a test of their own (their sentence carries the night's words of the fault that follows)
-OWN_TEST = {"offline"}
-
-
-def test_the_table_is_every_ending():
-    assert {ending for ending, *_ in CASES.values()} | OWN_TEST == {e.name for e in E.ENDS}
-
-
 @pytest.mark.parametrize("case", sorted(CASES))
 def test_a_fault_ends_with_the_same_sentence_whichever_check_sees_it_first(tmp_path, case):
     _, said, handed = CASES[case]

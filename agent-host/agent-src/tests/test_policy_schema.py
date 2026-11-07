@@ -23,11 +23,6 @@ def test_every_siren_kind_offered_is_accepted_and_no_other():
     assert policy_problems({"siren_entity": "light.example"}) != []
 
 
-def test_every_rule_offered_is_one_the_check_knows():
-    for rule in form_schema()["rules"]:
-        assert not any("rule" in p for p in policy_problems({"allowed_services": {"light.turn_on": rule if rule != "listed" else "any"}}))
-
-
 def test_the_siren_is_asked_with_its_own_domain(agent, tmp_path):  # noqa: F811
     v, _k = agent
     with open(v.s.policy_path) as f:

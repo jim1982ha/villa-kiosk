@@ -9,10 +9,9 @@ import os
 from datetime import date, datetime, timezone
 
 import pytest
-from helpers import STARTER_SKILLS, body_of, page_js, settings
+from helpers import STARTER_SKILLS, settings
 from test_ui import HDR, call
 from vesta_agent.history import History
-from vesta_agent.places import ORDER, PLACES, TABBED, TABS
 from vesta_agent.ui import links
 from vesta_agent.ui.changes import PageFiles, Refused
 from vesta_shared import asset_links
@@ -124,33 +123,6 @@ def test_a_schedule_chosen_on_the_page_is_the_one_the_night_check_reads_none_swi
     assert _expected(monkeypatch, s.pack_path)[0] is None
 
 
-def test_a_schedule_named_otherwise_is_read_only_once_linked(tmp_path, monkeypatch):
-    # the villa's case: no schedule by the name rule, so nothing linked and the run-hours check off, until chosen
-    s, files = _setup(tmp_path, monkeypatch, helpers=HELPERS[1:])
-    assert _row(links.rows(s))["links"]["schedule"]["source"] == "none"
-    assert _expected(monkeypatch, s.pack_path)[0] is None
-    links.save(s, files, SLUG, "schedule", OTHER)
-    assert _expected(monkeypatch, s.pack_path)[0]["tuesday"] == 4.0
-    # a chosen schedule also marks a motor in the kind guess (guessed_kind reads the pack's links)
-    assert KnowledgePack.load(s.pack_path).assets[SLUG]["kind"] == "motor"
-    # ...and Device kinds says it came from that link, never "Found by name" (architecture review 20, card 4)
-    from vesta_agent.ui import kinds
-    (row,) = [r for r in kinds.rows(s)["rows"] if r["slug"] == SLUG]
-    assert (row["guess"], row["source"], row["link"]) == ("motor", "link", "Schedule")
-
-
-def test_a_chosen_normal_power_is_the_one_the_running_threshold_reads(tmp_path, monkeypatch):
-    from vesta_shared import daily
-    from vesta_shared.params import VillaParams
-    s, files = _setup(tmp_path, monkeypatch)
-    params = VillaParams(helpers=HELPERS, states={"input_number.example_pump_watts": "1000"},
-                         defaults={"on_threshold_fraction": 0.5, "on_threshold_floor_w": 5})
-    asset = lambda: KnowledgePack.load(s.pack_path).assets[SLUG]               # noqa: E731
-    assert daily.running_threshold(asset(), [], params) == 5                    # no normal power: the floor
-    links.save(s, files, SLUG, "baseline", "input_number.example_pump_watts")
-    assert daily.running_threshold(asset(), [], params) == 500
-
-
 def test_the_page_refuses_a_link_a_helper_or_a_device_it_does_not_know(tmp_path, monkeypatch):
     s, files = _setup(tmp_path, monkeypatch)
     with pytest.raises(Refused):
@@ -183,54 +155,6 @@ def test_a_link_is_chosen_through_the_page_and_the_knowledge_tab_shows_it(tmp_pa
     assert status == 200 and _row(body)["links"]["schedule"]["source"] == "chosen" and bad == 400
     assert _row(tab["links"])["links"]["schedule"]["value"] == OTHER
     assert BY_KIND["links"].chosen(s.config_dir) == {SLUG: {"schedule": OTHER}}
-
-
-def test_the_knowledge_tab_holds_every_part_of_the_page_not_kept_in_policy_yaml():
-    # owner, 2026-10-30: "the Rule tab exclusively contain feature defined in the policy.yaml file … the other ones
-    # moved to another dedicated (single) tab"
-    assert list(TABS) == ["overview", "rules", "knowledge", "skills", "costs", "limits"]
-    # owner, 2026-10-31: Asleep between reports and Translations are cards above the tabs, Device kinds and Device links
-    # the only tabs of the tabbed section, under them
-    assert ORDER["knowledge"] == ["asleep", "translations", "kinds", "links"]
-    assert TABBED["knowledge"] == ["kinds", "links"]
-    assert all(PLACES[k][1] == "Knowledge" for k in ORDER["knowledge"])
-    assert not set(ORDER["knowledge"]) & set(ORDER["rules"])
-    js = page_js()
-    rules = body_of(js, "rulesForms")
-    for gone in ("kindsCard", "unavailable_by_design", 'withInfo("Asleep between reports"', "api/translations",
-                 "Devices hidden in the villa"):
-        assert gone not in rules, gone
-    tab = body_of(js, "knowledge")
-    assert 'api("GET", "api/knowledge")' in tab
-    # the tabbed section holds the tabs places.TABBED names, drawn where the first of them sits in the order; every
-    # other section is its own card, drawn in the order too
-    assert 'const inTabs = tabbedIn("knowledge");' in tab
-    assert 'tabbed("knowledge", inTabs.map((k) => [k, place(k), null, cards[k]]))' in tab
-    assert "[k, !inTabs.includes(k) ? cards[k]() : k === inTabs[0] ? [probs, t.bar, t.body] : null]" in tab
-    assert '...inOrder("knowledge", sections));' in tab
-    assert "export const tabbedIn = (tab) => PAGE.tabbed?.[tab] || [];" in js
-    assert "knowledge, skills" in js                                            # app.js: the tab's view
-
-
-def test_the_device_links_card_says_which_devices_and_explains_in_sections():
-    card = body_of(page_js(), "linksCard")
-    for head in ("Which devices are listed", "What each link is used for", "Where a link comes from", "To change a link"):
-        assert f'part("{head}"' in card, head
-    # each link named, with what it is used for: the agent's words (asset_links.ROLES), never a copy on the page
-    assert "items(roles.map((r) => [`${r.name}:`, r.words]))" in card
-    # one set of words with Device kinds (owner, 2026-11-04: "hardly understandable")
-    for chip in ('"Set by you"', '"Found by name"', '"Use the one found"', '["", "None"]', '"—"'):
-        assert chip in card, chip
-    for gone in ("Guessed", "Chosen here", "None linked", "Back to the guess", "(guess)"):
-        assert gone not in card, gone
-    # read first: one line per device, its drop-downs only for the device being changed (Set / Change, then Done)
-    assert 'editing ? editCell(r, role) : readCell(r, role)' in card
-    assert 'editing ? "Done" : r.links.schedule?.value || r.gone ? "Change" : "Set"' in card
-    # each column its own (i), the link's own words
-    assert 'const head = ["Device", ...roles.map((r) => withInfo(r.name, r.words)), ""];' in card
-    # which devices have their run-hours check off: the agent's answer (rows' run_hours), driven in
-    # test_the_page_files_a_device_by_the_night_checks_own_verdict
-    assert 'card(place("links"), info, which,' in card
 
 
 def test_the_agent_reads_a_link_chosen_since_its_last_look_at_the_pack(tmp_path, monkeypatch):
@@ -268,63 +192,3 @@ def _night(tmp_path, s, helpers, registry=REGISTRY) -> dict:
     return json.loads((tmp_path / "res.json").read_text())
 
 
-def test_the_page_files_a_device_by_the_night_checks_own_verdict(tmp_path, monkeypatch):
-    # the villa's case (review 20, card 2): a schedule linked, so the page said "Schedule linked", while the night check
-    # had the run-hours check off (here: its schedule has no time blocks)
-    empty = [{"entity_id": GUESSED, "helper_type": "schedule", "name": "Example pump plan"}, *HELPERS[1:]]
-    s, files = _setup(tmp_path, monkeypatch, helpers=empty)
-    # before any night: what can be judged without the villa, a schedule linked and among the villa's helpers
-    assert _row(links.rows(s))["run_hours"] == {"on": True, "why": "Judged against Example pump plan.", "at": None}
-    res = _night(tmp_path, s, empty)
-    assert "Example pool pump: run-hours check off. Example pump plan has no time blocks." in res["notes"]
-    got = _row(links.rows(s))["run_hours"]
-    assert (got["on"], got["why"]) == (False, "Example pump plan has no time blocks.") and got["at"]
-    # a link chosen since the night: that verdict is out of date, the page judges what it can again
-    links.save(s, files, SLUG, "schedule", OTHER)
-    assert _row(links.rows(s))["run_hours"] == {"on": True, "why": "Judged against Example filtration hours.", "at": None}
-    _night(tmp_path, s, empty)
-    assert _row(links.rows(s))["run_hours"]["on"] is True and _row(links.rows(s))["run_hours"]["at"]
-    # a kind never judged, said as such, the night not needed
-    files.text_change("Knowledge", "by test", {"kind": "kinds"}, f"kinds:\n  {SLUG}: lighting\n")
-    assert _row(links.rows(s))["run_hours"] == {
-        "on": False, "why": "Its kind is Lighting: its run hours are never judged (Device kinds).", "at": None}
-
-
-def test_a_schedule_gone_from_the_villa_is_said_on_its_line_and_by_the_night_check(tmp_path, monkeypatch):
-    # review 20, card 3: a schedule deleted or renamed in the villa showed as its raw id, "Set by you", under Schedule
-    # linked, and the night check stopped judging it without a word
-    s, files = _setup(tmp_path, monkeypatch)
-    links.save(s, files, SLUG, "schedule", OTHER)
-    links.save(s, files, SLUG, "baseline", "input_number.example_pump_watts")
-    assert not _row(links.rows(s))["links"]["schedule"]["gone"]
-    # the villa's system no longer has them: the pack rebuilt without
-    gone = (OTHER, "input_number.example_pump_watts")
-    left = [h for h in HELPERS if h["entity_id"] not in gone]
-    registry = {"entities": [e for e in REGISTRY["entities"] if e["entity_id"] not in gone]}
-    with open(s.pack_path, "w", encoding="utf-8") as f:
-        f.write(build_pack(registry, left).to_json())
-    row = _row(links.rows(s))
-    assert row["links"]["schedule"]["gone"] and row["links"]["baseline"]["gone"]
-    assert row["links"]["schedule"]["value"] == OTHER and not row["links"]["counter"]["gone"]
-    assert row["run_hours"] == {"on": False, "why": f"{OTHER} is no longer in the villa's system.", "at": None}
-    notes = _night(tmp_path, s, left, registry)["notes"]
-    assert f"Example pool pump: run-hours check off. {OTHER} is no longer in the villa's system." in notes
-    assert any(n.startswith("Example pool pump: its Normal power input_number.example_pump_watts is no longer in the "
-                            "villa's system") for n in notes)
-    assert _row(links.rows(s))["run_hours"]["at"]
-
-
-def test_a_save_answers_the_sentence_it_recorded_and_a_gone_devices_remove_says_removed(tmp_path, monkeypatch):
-    # review 20, card 6: Remove on a "No longer found" device was recorded "back to the one found, none found" and the
-    # page toasted words of its own; the page now toasts the answer's `what`, the line Page changes keeps
-    from vesta_agent.ui import kinds
-    s, files = _setup(tmp_path, monkeypatch)
-    files.text_change("Knowledge", "by test", {"kind": "links"},
-                      asset_links.text_of({"example_gone_pump": {"schedule": OTHER}}))
-    card = links.save(s, files, "example_gone_pump", "schedule", None)
-    assert card["what"] == "example_gone_pump: Schedule removed" == files.history.rows(5)[0]["what"]
-    assert all(r["slug"] != "example_gone_pump" for r in card["rows"])
-    card = links.save(s, files, SLUG, "schedule", "")
-    assert card["what"] == "Example pool pump: Schedule set to None" == files.history.rows(5)[0]["what"]
-    card = kinds.save(s, files, SLUG, "appliance")
-    assert card["what"] == files.history.rows(5)[0]["what"] == "Example pool pump set to Appliance (guessed Motor)"

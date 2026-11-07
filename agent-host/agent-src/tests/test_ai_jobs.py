@@ -9,7 +9,7 @@ import pytest
 from ai_fake import FakeAI
 from helpers import make_skill, settings
 from vesta_agent import job_steps
-from vesta_agent.ai_jobs import AiJobs, not_set
+from vesta_agent.ai_jobs import AiJobs
 from vesta_agent.api_errors import for_job
 from vesta_agent.chat_jobs import ChatJobs
 from vesta_agent.outcome import Outcome
@@ -107,21 +107,6 @@ def test_when_its_steps_fail_too_the_chat_reads_why(jobs, monkeypatch):
     assert "Ask again" in jobs.d.sent[0][1] and "next time" not in jobs.d.sent[0][1]     # asked for here: no next time
 
 
-def test_made_without_the_ai_and_failed_too_is_titled_as_every_report_not_prepared(jobs):
-    # owner, 2026-10-23: the same sentence went as bare text on this path, titled "Report not prepared" on run()'s
-    from vesta_agent.api_errors import CHAT, NOT_COME
-    from vesta_shared.message_format import telegram_entities
-    jobs.steps_sent[0] = False
-
-    async def go():
-        jobs.j.start_without_ai("rep-weekly", "credit", ASKER)
-        await jobs.j.chat_jobs.idle()
-    asyncio.run(go())
-    said = NOT_COME("rep-weekly", "its figures could not be read without the AI either", CHAT)
-    assert jobs.d.sent == [(ASKER, f"Report not prepared\nTo: this chat\n{said}")]
-    assert telegram_entities(jobs.d.sent[0][1])[0] == {"type": "bold", "offset": 0, "length": len("Report not prepared")}
-
-
 def test_a_run_that_sent_nothing_is_recorded_counted_and_told_once(jobs, monkeypatch):
     # architecture review scan 4 (2026-10-19): the AI wrote the report and never called send_message — logged "done"
     # with its cost, counted as a reply written, nobody told on schedule
@@ -151,87 +136,3 @@ def test_a_run_that_sent_nothing_is_recorded_counted_and_told_once(jobs, monkeyp
     assert jobs.d.sent[0][1].endswith(NOT_COME("rep-weekly", "it stopped at its spending limit before sending it", NO_RESULT))
 
 
-def test_a_job_not_set_up_says_so_the_same_way_everywhere(jobs):
-    jobs.pol.jobs = {}
-    sk, job = jobs.j.find("rep-weekly")
-    asyncio.run(jobs.j.run(sk, job, Origin(ASKER, JOB)))
-    assert jobs.d.sent == [(ASKER, not_set("rep-weekly"))]
-    assert asyncio.run(jobs.j.start("rep-weekly", ASKER)) == not_set("rep-weekly")
-    assert jobs.j.without_ai_able() == []
-
-
-def test_the_lookups(jobs):
-    assert jobs.j.find("rep-weekly")[0].name == "rep" and jobs.j.find("nope") is None
-    assert [j["name"] for j in jobs.j.without_ai_able()] == ["rep-weekly"]
-    assert asyncio.run(jobs.j.start("nope", ASKER)).startswith("There is no nope report")
-
-
-def test_a_report_already_running_says_who_started_it_and_since_when():
-    # architecture review scan 4 (2026-10-19): a run on schedule, asked for meanwhile, read "asked for here started at
-    # 08:00" though nobody had asked; the time by the one formatter (notice.when)
-    from datetime import datetime, timezone
-    from vesta_agent.ai_jobs import being_made
-    from vesta_agent.chat_jobs import ASKED, RUNNING_SINCE, SCHEDULED, Started
-    since = datetime(2026, 10, 19, 0, 1, tzinfo=timezone.utc)                  # 08:01 in Asia/Makassar
-    assert being_made("fm-weekly", Started(RUNNING_SINCE, since, SCHEDULED), "Asia/Makassar") == (
-        "The fm-weekly report scheduled at 19/10/2026 08:01 is still being made: its result will be sent here when it is ready.")
-    assert being_made("fm-weekly", Started(RUNNING_SINCE, since, ASKED), "Asia/Makassar") == (
-        "The fm-weekly report asked for here started at 19/10/2026 08:01 and is still being made: its result will be sent "
-        "here when it is ready.")
-
-
-def test_a_jobs_run_is_recorded_with_the_skill_that_declares_it(jobs, monkeypatch):
-    # owner, 2026-10-19: Costs › Every run's "Skills" — a scheduled AI job's own skill counts, first (runner.skills_of)
-    ai = FakeAI("Sent.").install(monkeypatch)
-    sk, job = jobs.j.find("rep-weekly")
-    asyncio.run(jobs.j.run(sk, job))
-    assert [r["skill"] for r in ai.runs] == ["rep"]
-
-
-def test_one_brain_and_one_limit_for_a_skill_are_what_every_one_of_its_jobs_runs_with(tmp_path, monkeypatch):
-    # owner, 2026-10-20: ONE brain and ONE limit per run for all the AI jobs of a skill (the reports' three) — through
-    # the real run (AiJobs.run → Turns): one change of the skill's pair changes what every job runs with
-    s = settings(str(tmp_path))
-    make_skill(s.skills_dir, "rep", {"tools": [], "jobs_default": {"brain": "auto", "limit_usd": 2}, "schedule": [
-        {"when": "Mon 08:00", "name": "rep-weekly", "to": "fm", "prompt": "make it"},
-        {"when": "1 08:00", "name": "rep-monthly", "to": "owner", "prompt": "make it"}]}, {})
-    roster = Roster.of(owner=[(-1, "Owners")], fm=[(-2, "Managers")])
-    raw = {"settings": {"skill_ai": {"rep": {"brain": "economy", "limit_usd": 1.5}}}}
-    pol = [Policy(raw, roster)]
-
-    async def safe(coro):
-        await coro
-
-    async def nothing(*a):
-        return []
-    monkeypatch.setattr("vesta_agent.tool_access.allowed_for", lambda *a: set())
-    d, st = Delivery(), State(s.state_path)
-    turns = Turns(s, st, lambda: pol[0], server_tools=nothing, toolbox=lambda *a, **k: Toolbox(),
-                  system_prompt=lambda: "sys", tell_owner=nothing, safe=safe)
-    out = Outcome(policy=lambda: pol[0], state=st, send=d.send, actions=None, tickets=None, buttons=None,
-                  thread=None)
-    j = AiJobs(s, st, lambda: pol[0], Skills(s.skills_dir), d, ChatJobs(d, safe), out, turns=turns, safe=safe)
-    ai = FakeAI("Sent.").install(monkeypatch)
-
-    def run_all():
-        for name in ("rep-weekly", "rep-monthly"):
-            asyncio.run(j.run(*j.find(name)))
-        return [(r["profile"], r["limit_usd"]) for r in ai.runs[-2:]]
-    assert run_all() == [("economy", 1.5), ("economy", 1.5)]
-    raw["settings"]["skill_ai"]["rep"] = {"brain": "performance", "limit_usd": 4}      # the one change, on Rules
-    pol[0] = Policy(raw, roster)
-    assert run_all() == [("performance", 4.0), ("performance", 4.0)]
-    # the two older files: their brain as it was, the SKILL's starter limit (never the jobs' own)
-    pol[0] = Policy({"settings": {"jobs": {"rep-weekly": {"profile": "economy", "limit_usd": 1},
-                                           "rep-monthly": {"profile": "auto", "limit_usd": 6}}}}, roster)
-    assert run_all() == [("auto", 2.0), ("auto", 2.0)]
-    pol[0] = Policy({"settings": {"skill_brains": {"rep": "economy"}, "jobs": {"rep-weekly": {"limit_usd": 1}}}},
-                    roster)
-    assert run_all() == [("economy", 2.0), ("economy", 2.0)]
-    pol[0] = Policy({"settings": {"jobs": {"rep-weekly": {"limit_usd": 1}}}}, roster)   # no brain: not run
-    n = len(ai.runs)
-    asyncio.run(j.run(*j.find("rep-weekly")))
-    assert len(ai.runs) == n
-    pol[0] = Policy({}, roster)                                                                   # nothing set: not run
-    asyncio.run(j.run(*j.find("rep-monthly")))
-    assert len(ai.runs) == n

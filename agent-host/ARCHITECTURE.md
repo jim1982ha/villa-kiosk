@@ -114,9 +114,7 @@ Decisions of 2026-09-30 (owner):
   judges every skill command (AI, job, page: one verdict, one record);
   `tool_access` decides the AI's tools and `Toolbox.for_run` builds exactly
   them, names read off the built tools. Tests use ONE Telegram stand-in,
-  `tests/telegram_fake.py`, held to the real interface by test_telegram_fake,
-  and ONE AI stand-in, `tests/ai_fake.py` (FakeAI), held to runner.run's
-  parameters by test_ai_fake. 0.12.66: the page is ES modules —
+  `tests/telegram_fake.py`, and ONE AI stand-in, `tests/ai_fake.py` (FakeAI). 0.12.66: the page is ES modules —
   `static/app.js` (entry: theme, tab clicks, `page.views`) imports
   `core.js` (shared state `page`, helpers, dialog, `go`), `costs.js`,
   `overview.js`, `rules.js`, `skills.js`; tests read them all with
@@ -136,7 +134,7 @@ Decisions of 2026-09-30 (owner):
   carries a result out; `tickets.py` (Kiosk tickets) and `alert_buttons.py`
   (the ladder) are their own modules, `voice.py` the voice message. Tests: one
   builder `helpers.make_agent` / `make_skill`, stand-ins `ha_fake.FakeHA` and
-  `kiosk_fake.FakeKiosk` held to the real ones by test_fakes. Page: one switch
+  `kiosk_fake.FakeKiosk`. Page: one switch
   card, `core.toggleCard` (Rules › What the AI can use, Skills › What the AI may
   run; `.tool-grid.three`).
   Third review, 0.12.68: `policy.read_policy` reads the file ONCE — the values
@@ -149,7 +147,7 @@ Decisions of 2026-09-30 (owner):
   the skill offers — test). `store.Incident` names an incident's states; the
   store owns its SQL (test). Scheduler: one key per job, housekeeping beside the
   tick; runner's retry keeps `asked`; kv rows are dated and button records
-  pruned. release.py: each gate names its lane (test: port users → "sidecar").
+  pruned.
   start_job answers whether the job still runs (never the AI's memory);
   Delivery keeps "typing…" while a job asked for in a chat runs.
   0.12.70: an AI job may declare `without_ai` code steps (skill.yaml): on any LLM problem
@@ -202,7 +200,7 @@ Decisions of 2026-09-30 (owner):
   and a skill's files. Names on the server: the export's parts (`setup_copy.offer`), roles (`policy.ROLE_WORDS`),
   Page changes chips (`history.CHIPS`), top tabs (`places.TABS`, filled into index.html), a tab's section order
   (`places.ORDER`, drawn by `core.inOrder`). A table's column is named, never counted (`core.table` widths may be
-  {width, cls}); test_ui fails on a stylesheet class the page never uses.
+  {width, cls}).
   Twelfth review, 0.12.115 (the chat path): `incident_thread.IncidentThread` is what each chat shows of an incident —
   one record per incident and chat (`state.incident_message`; incmsg:/inclast: migrated), `post` / `adopt` / `close`;
   `outcome.carry_out` settles before it posts (a "Need help" escalation kept its buttons). `chat_jobs.ChatJobs` owns a

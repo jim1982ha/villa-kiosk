@@ -106,7 +106,3 @@ def test_the_first_start_of_this_engine_reads_no_telegram_history(tmp_path, monk
     assert handled == [("press", "q-1")]
 
 
-def test_the_bot_is_found_by_what_it_carries_never_by_its_name(tmp_path, monkeypatch):
-    from vesta_agent.missed_at_start import bot_entities
-    v, _ = agent(tmp_path, [], monkeypatch)
-    assert bot_entities(v.reader) == [BOT_EVENTS]

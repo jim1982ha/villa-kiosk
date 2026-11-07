@@ -8,9 +8,9 @@ records every request so a test can assert on calls that did NOT happen.
 
 ⚠️ FAKE_REQUIRE_CF=1 MAKES IT CLOUDFLARE ACCESS: any request without the
 service-token headers gets 403 — what a remote deployment meets in front of
-the villa (PLAN 7). The standalone compose test runs it that way.
+the villa (PLAN 7).
 
-Imported by test_selftest.py; run on its own by the standalone compose test:
+Run by container_test.sh:
     python3 fake_remote.py 8080
 """
 from __future__ import annotations
@@ -24,8 +24,7 @@ from pathlib import Path
 # The agreement with the Kiosk (vesta_host.kiosk_contract — a copy of the
 # Kiosk's own file): this stand-in answers with ITS version, instead of a
 # picture of the Kiosk typed here.
-# From the source tree (the unit tests) or from the image (standalone_test.sh
-# runs this file in the image with only tests/ mounted: /opt/vesta/host).
+# From the source tree, or from the image (/opt/vesta/host).
 for _where in (Path(__file__).resolve().parent.parent / "rootfs" / "opt" / "vesta" / "host", Path("/opt/vesta/host")):
     if (_where / "vesta_host" / "kiosk_contract.py").exists():
         sys.path.insert(0, str(_where))

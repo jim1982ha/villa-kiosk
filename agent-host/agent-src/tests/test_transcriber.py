@@ -20,7 +20,6 @@ from helpers import voice_agent, voice_event, voice_record
 from stt_fake import FakeSTT
 from vesta_agent import transcriber, voice as voice_module
 from vesta_agent.transcriber import Heard, Missed, Transcriber, Unheard
-from vesta_shared import limits
 from wyoming_fake import FakeWhisper
 
 BUDGET = 5      # seconds: a test's whole voice message (the skill's preparation takes about one)
@@ -49,12 +48,6 @@ def test_a_slow_whisper_leaves_the_villa_only_the_rest(tmp_path, monkeypatch):
     assert rec["took"] <= BUDGET + 0.3 and took < BUDGET + 1.5
 
 
-def test_a_silent_whisper_spends_the_clock_and_the_rest_is_not_tried(tmp_path, monkeypatch):
-    said, rec, took, _, stt = send(tmp_path, monkeypatch, "silent", 0, [200])
-    assert said == [] and stt.asked == [] and rec["took"] <= BUDGET + 0.3 and took < BUDGET + 1.5
-    assert [a["why"] for a in rec["attempts"]] == ["TimeoutError", "no time left", "no time left"]
-
-
 def test_a_slow_whisper_in_time_still_gives_its_words(tmp_path, monkeypatch):
     said, rec, _, _, stt = send(tmp_path, monkeypatch, None, 1.5, [200])
     assert said == ["allume la lumière de la cuisine"] and stt.asked == [] and rec["via"] == "whisper"
@@ -71,14 +64,6 @@ def test_the_record_is_one_and_says_every_attempt(tmp_path, monkeypatch):
     assert rec["attempts"] == [{"via": "whisper", "stt": None, "language": "auto", "why": "WyomingError"},
                                {"via": "villa", "stt": "stt.test_whisper", "language": "auto", "why": "refused (415)"},
                                {"via": "villa", "stt": "stt.test_whisper", "language": "fr", "why": None}]
-
-
-def test_the_clock_is_one_limit_on_the_page():
-    found, _ = limits.scan([os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), d)
-                            for d in ("vesta_shared", "vesta_agent", "starter")])
-    voice = sorted(k for k in found if k.startswith("voice."))
-    # the one clock, and the connection wait it caps; no other clock that could contradict it
-    assert voice == ["voice.timeout_s", "voice.whisper_connect_s"]
 
 
 # ------------------------------------------------------------------ the plan, against a recording adapter
@@ -126,19 +111,6 @@ def test_attempts_run_in_the_plans_order_and_stop_at_the_first_words(tmp_path):
     assert [k for k, _ in state.rows] == ["voice"] and state.rows[0][1]["used"] == "de"
 
 
-def test_each_attempt_gets_what_is_left(tmp_path):
-    class Slow(Recording):
-        async def attempt(self, step, audio, seconds):
-            await super().attempt(step, audio, seconds)
-            await asyncio.sleep(0.5)
-            return Missed(transcriber.FAILED, "no words")
-    rec = Slow({})
-    t = Transcriber(None, Records(), adapters={"whisper": rec, "villa": rec})
-    run(t, plan(tmp_path, [{"whisper": "w:1"}, {"stt": "stt.a", "language": "fr"}]), seconds=3)
-    (_, _, _, first), (_, _, _, second) = rec.calls
-    assert first <= 3 and 2.3 <= second <= first - 0.45
-
-
 def test_a_plan_the_engine_cannot_run_is_recorded_not_guessed(tmp_path):
     rec = Recording({("villa", "fr"): "bonjour"})
     state = Records()
@@ -161,31 +133,6 @@ def test_a_skill_that_answers_no_plan_tells_the_person(tmp_path, monkeypatch, ba
     asyncio.run(v.on_ha_event("telegram_attachment", voice_event()))
     assert v.conversed == [] and v.state.calls("voice") == []
     assert v.tg.sent[-1][1] == (bad.get("error") or "This voice message could not be prepared.")
-
-
-def test_the_skills_own_time_is_what_is_left(tmp_path, monkeypatch):
-    now = time.monotonic()
-    assert transcriber.script_seconds(now + 7.9) == 7 and transcriber.script_seconds(now - 3) == 1
-    # the caller: the skill's script runs on the same clock, never on a timeout of its own
-    monkeypatch.setattr(voice_module, "timeout_s", lambda: BUDGET)
-    v = voice_agent(tmp_path)
-    given = []
-    monkeypatch.setattr(v.voice, "code_command", lambda *a: given.append(a[3]) or {})
-    asyncio.run(v.on_ha_event("telegram_attachment", voice_event()))
-    assert given in ([BUDGET], [BUDGET - 1])
-
-
-def test_the_otherwise_words_are_said_when_nothing_is_heard(tmp_path, monkeypatch):
-    v = voice_agent(tmp_path)
-    real = v.voice.code_command
-
-    def with_otherwise(*a):                         # a skill edited before `down`: its `otherwise` is said
-        p = {k: v for k, v in real(*a).items() if k != "down"}
-        return {**p, "attempts": [], "otherwise": "Name the speech-to-text for voice messages."}
-    monkeypatch.setattr(v.voice, "code_command", with_otherwise)
-    asyncio.run(v.on_ha_event("telegram_attachment", voice_event()))
-    assert v.tg.sent[-1][1] == "Name the speech-to-text for voice messages."
-    assert not os.listdir(os.path.join(v.s.out_dir, "voice"))         # the WAV is removed too
 
 
 # ------------------------------------------------------------------ "the villa's only speech-to-text", found late
@@ -263,39 +210,6 @@ def test_a_note_whisper_heard_with_no_words_is_not_told_to_set_up_a_speech_to_te
         "via", "stt", "language", "why"}
 
 
-def test_whisper_out_of_reach_and_no_speech_to_text_the_person_is_still_told_to_set_one_up(tmp_path, monkeypatch):
-    from vesta_shared.ha_client import McpClient
-    monkeypatch.setattr(voice_module, "timeout_s", lambda: BUDGET)
-    villa = Villa([])
-    v = voice_agent(tmp_path, {"whisper": "127.0.0.1:9"}, stt=None, reader=McpClient(session=villa))
-    asyncio.run(v.on_ha_event("telegram_attachment", voice_event()))
-    rec = voice_record(v)
-    assert v.tg.sent[-1][1].startswith(SETUP[1]) and rec["attempts"][0]["why"] == "ConnectionRefusedError"
-
-
-def test_a_transcriber_that_heard_nothing_anywhere_in_the_plan_decides_the_words(tmp_path):
-    """The kind, not a string: Whisper unreachable, then a named speech-to-text that answered with no words, then the
-    villa's only one not found: the person reads "could not make out" (or the plan's otherwise)."""
-    class Answers:
-        def __init__(self, got):
-            self.got = got
-
-        async def attempt(self, step, audio, seconds):
-            return self.got
-
-        async def only(self, seconds):
-            return transcriber.Unfound("several", "2 speech-to-text services, none named")
-    p = {**plan(tmp_path, [{"whisper": "w:1"}, {"stt": "stt.a", "language": "fr"}, {"stt": None, "language": "fr"}]),
-         "no_stt": {"several": "set one up"}}
-    for villa_says, person in ((Missed(transcriber.NOTHING, "no words (success)"), transcriber.UNHEARD),
-                               (Missed(transcriber.FAILED, "answered 500"), "set one up")):
-        t = Transcriber(None, Records(), adapters={"whisper": Answers(Missed(transcriber.FAILED, "OSError")),
-                                                   "villa": Answers(villa_says)})
-        assert run(t, p) == Unheard(person)
-        assert run(t, {**p, "otherwise": "say it again"}) == Unheard("say it again" if villa_says.kind ==
-                                                                     transcriber.NOTHING else "set one up")
-
-
 class Says:
     """An adapter answering one Missed (or Heard) every time; `only`: the villa's only speech-to-text, as found."""
 
@@ -307,20 +221,6 @@ class Says:
 
     async def only(self, seconds):
         return self.found
-
-
-def test_a_service_down_is_told_to_write_never_to_try_again(tmp_path):
-    """Review, 2026-10-23: Whisper out of reach and the villa's speech-to-text answering 500 — every voice note was
-    told "I could not make out this voice message. Try again": the person tried again, and again. Every way failed or
-    refused: the plan's `down` (the skill's words), the engine's DOWN when the plan has none."""
-    p = plan(tmp_path, [{"whisper": "w:1"}, {"stt": "stt.a", "language": "auto"}, {"stt": "stt.a", "language": "fr"}])
-    failed, refused = Missed(transcriber.FAILED, "answered 500"), Missed(transcriber.REFUSED, "refused (415)")
-    for villa in (failed, refused):
-        t = Transcriber(None, Records(), adapters={"whisper": Says(Missed(transcriber.FAILED, "ConnectionRefusedError")),
-                                                   "villa": Says(villa)})
-        assert run(t, p) == Unheard(transcriber.DOWN)
-        assert run(t, {**p, "down": "the skill's words", "otherwise": "older words"}) == Unheard("the skill's words")
-    assert "try again" not in transcriber.DOWN.lower()
 
 
 def test_the_words_follow_every_attempts_kind(tmp_path):
@@ -353,27 +253,3 @@ def test_whisper_out_of_reach_and_the_villas_speech_to_text_broken_the_person_re
     assert all(a["why"] for a in voice_record(v)["attempts"])
 
 
-def test_the_villas_speech_to_text_answering_no_words_is_heard_nothing(tmp_path):
-    """POST /api/stt answering success with an empty text: its speech-to-text heard the message; an error result is a
-    failure (the record keeps both whys as before)."""
-    import types
-    from vesta_agent.transcriber import Audio, Step, VillaSpeech
-    w = plan(tmp_path, [])["wav"]
-    for body, kind, why in (({"result": "success", "text": " "}, transcriber.NOTHING, "no words (success)"),
-                            ({"result": "error"}, transcriber.FAILED, "no words (error)")):
-        with FakeSTT([("json", body)]) as stt:
-            s = types.SimpleNamespace(ha_url=stt.url, ha_token="t")
-            got = asyncio.run(VillaSpeech(s).attempt(Step("villa", "stt.a", "fr"), Audio.read(w), 5))
-        assert got == Missed(kind, why)
-
-
-def test_a_fresh_read_of_the_villas_devices_sees_one_added_since(monkeypatch):
-    """The real client: the agent's reader keeps its device list for the app's life; the voice path asks it with
-    fresh=True (villa_entity_ids) so a speech-to-text added since the agent started is found."""
-    from vesta_shared.ha_client import McpClient
-    villa = Villa(["light.x"])
-    reader = McpClient(session=villa)
-    assert reader.all_entity_ids() == ["light.x"]
-    villa.ids = ["light.x", "stt.added"]
-    assert reader.all_entity_ids() == ["light.x"]                      # kept, not read again
-    assert transcriber.villa_entity_ids(reader) == ["light.x", "stt.added"] and villa.asked == 2

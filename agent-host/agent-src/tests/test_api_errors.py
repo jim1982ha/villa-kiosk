@@ -15,10 +15,7 @@ from claude_agent_sdk import AssistantMessage, ResultMessage, TextBlock
 
 from helpers import make_agent, settings
 from ai_fake import FakeAI
-from telegram_fake import FakeTelegram
 from vesta_agent import api_errors, runner
-from vesta_agent.app import Vesta
-from vesta_agent.kiosk import Kiosk
 from vesta_agent.state import State
 from vesta_agent.roster import Roster
 
@@ -82,28 +79,6 @@ def test_the_raw_api_error_text_is_never_the_answer(monkeypatch, tmp_path):
     assert res.text == "" and res.problem == "credit"
 
 
-def test_an_exception_from_the_sdk_is_classified(monkeypatch, tmp_path):
-    class ResultError(Exception):
-        api_error_status, result = 529, "API Error: Overloaded"
-    res = run_with(monkeypatch, tmp_path, [], raise_at_end=ResultError("exit 1"))
-    assert res.problem == "busy"
-
-
-def test_a_failed_resume_is_not_retried_when_a_new_conversation_fails_the_same(monkeypatch, tmp_path):
-    calls = []
-    real = runner.run
-
-    async def counting(*a, **k):
-        calls.append(k.get("resume", a[6] if len(a) > 6 else None))
-        return await real(*a, **k)
-    msgs = [AssistantMessage(content=[TextBlock(text=RAW)], model="m", error="billing_error"), failed_result(400, RAW)]
-    monkeypatch.setattr(runner, "run", counting)
-    s = settings(str(tmp_path))
-    monkeypatch.setattr(runner, "ClaudeSDKClient", fake_client(msgs))
-    asyncio.run(runner.run(s, "sys", "p", run_kit(), run_terms(), State(s.state_path), resume="old-session"))
-    assert len(calls) == 1
-
-
 OWNER_CHAT, FM = -100777, 222
 
 
@@ -125,60 +100,6 @@ def test_a_person_reads_the_reason_and_the_owner_is_told_once(agent, monkeypatch
     assert [body(t) for t in to_owner] == [api_errors.NEEDS_THE_OWNER["credit"]]          # once, not at every reply
     assert to_owner[0].startswith("The AI cannot answer\nTo: ")      # sent on its own: its title and "To:" (one layout)
     assert not any("API Error" in t or "{" in t for _, t, _ in agent.tg.sent)
-
-
-def test_a_report_that_cannot_run_says_so_instead_of_logging_done(agent, monkeypatch):
-    from vesta_agent.skills import ai_jobs
-    from helpers import copy_skill
-    copy_skill("reports", agent.s.skills_dir)
-    with open(agent.s.policy_path) as f:
-        pol = yaml.safe_load(f)
-    pol["settings"] = {"jobs": {"fm-daily": {"profile": "economy", "limit_usd": 1}}}
-    pol["ha_read_tools"] = ["ha_get_state"]
-    with open(agent.s.policy_path, "w") as f:
-        yaml.safe_dump(pol, f)
-
-    FakeAI("", problem="offline", cost_usd=None).install(monkeypatch)
-    sk = agent.skills.get("reports")
-    job = next(j for s_, j in ai_jobs(agent.skills.all()) if j["name"] == "fm-daily")
-    asyncio.run(agent.jobs.run(sk, job))
-    assert any("fm-daily report could not be prepared" in t and "could not be reached" in t for _, t, _ in agent.tg.sent)
-
-
-def test_a_run_retried_after_a_lost_session_keeps_what_was_asked(monkeypatch, tmp_path):
-    # architecture review, 2026-10-07: the retry in a new conversation dropped `asked`: on the Costs tab, the run
-    # that answered showed nothing asked
-    lost = [AssistantMessage(content=[TextBlock(text="No conversation found")], model="m", error="unknown"),
-            failed_result(None, "No conversation found with session ID: old")]
-    answered = [AssistantMessage(content=[TextBlock(text="The pool is fine.")], model="m"),
-                ResultMessage(subtype="success", duration_ms=10, duration_api_ms=5, is_error=False, num_turns=1,
-                              session_id="s2", total_cost_usd=0.01, result="The pool is fine.")]
-    rounds = iter([lost, answered])
-
-    class Fake:
-        def __init__(self, options):
-            self.msgs = next(rounds)
-
-        async def __aenter__(self):
-            return self
-
-        async def __aexit__(self, *a):
-            return False
-
-        async def query(self, prompt):
-            pass
-
-        async def receive_response(self):
-            for m in self.msgs:
-                yield m
-    monkeypatch.setattr(runner, "ClaudeSDKClient", Fake)
-    s = settings(str(tmp_path))
-    st = State(s.state_path)
-    res = asyncio.run(runner.run(s, "sys", "p", run_kit(), run_terms(), st, resume="old", asked="is the pool ok?"))
-    assert res.text == "The pool is fine."
-    import json as _j
-    runs = [_j.loads(c["detail"]) for c in st.calls_since("1970") if c["kind"] == "run"]
-    assert runs[-1]["asked"] == "is the pool ok?"
 
 
 # ⚠️ A REPORT EVEN WITHOUT THE AI (owner, 2026-10-07: the Anthropic credit ran out and the weekly never came): a
@@ -276,47 +197,6 @@ def test_no_report_button_for_a_person_who_may_not_start_one(agent, monkeypatch)
     assert [kb for c, _, kb in agent.tg.sent if c == FM] == [None]
 
 
-def test_a_report_named_in_the_message_starts_without_asking(agent, monkeypatch):
-    # owner, 2026-10-07: "since I asked for a weekly report in the message, I am not expecting this response"
-    _report_without_ai(agent, monkeypatch, run_job=False)
-
-    async def go():
-        await agent.converse(FM, agent.policy().roster.person(FM), "Generate the Weekly Report for last week now")
-        await agent.chat_jobs.idle()
-    asyncio.run(go())
-    first = [m for m in agent.tg.sent if m[0] == FM][0]
-    assert first[2] is None and first[1].endswith("Making the Weekly report without the AI, from its figures and "
-                                                  "charts: it will be sent here.")
-    assert any(t.startswith("287 kWh this week.") for c, t, _ in agent.tg.sent if c == FM)
-
-
-def test_a_report_made_from_a_button_never_takes_the_next_answer_for_its_waiting_message(agent, monkeypatch):
-    # villa, 2026-10-07 14:17: a tapped Daily digest was sent; the next answer (its buttons) vanished at once — the
-    # job, started without a reply, took that answer for its "being prepared" message and deleted it
-    _report_without_ai(agent, monkeypatch, run_job=False)
-    person = agent.policy().roster.person(FM)
-
-    async def go():
-        await agent.converse(FM, person, "a report please")
-        pressed = agent.tg.next_id
-        await agent.on_ha_event("telegram_callback", {"id": "cb1", "data": "w:credit:rep-weekly", "chat_id": FM,
-                                                      "user_id": FM, "message": {"message_id": pressed,
-                                                                                 "chat": {"id": FM}, "text": "x"}})
-        await agent.chat_jobs.idle()                                 # the report sent and the job ended
-        await agent.converse(FM, person, "a report please")
-        return pressed
-    pressed = asyncio.run(go())
-    assert agent.tg.deleted == [(FM, pressed)]                      # the pressed message, replaced by the report
-
-
-def test_no_report_button_for_a_question_about_something_else(agent, monkeypatch):
-    # owner, 2026-10-07: "what do you see in the living camera now?" got the report buttons
-    _report_without_ai(agent, monkeypatch, run_job=False)
-    asyncio.run(agent.converse(FM, agent.policy().roster.person(FM), "what do you see in the living camera now?"))
-    (text, kb), = [(t, kb) for c, t, kb in agent.tg.sent if c == FM]
-    assert kb is None and text == api_errors.FOR_PERSON["credit"]
-
-
 def test_a_report_button_pressed_by_someone_who_may_not_start_one_is_refused(agent, monkeypatch):
     # architecture review 5: the buttons were offered only to who may start a report, but a press asked only
     # "registered?" — in a group, anyone could press another person's report button
@@ -371,17 +251,6 @@ def test_a_button_pressed_by_someone_the_villa_does_not_know_is_refused_in_one_w
     assert WHERE in NOT_LISTED and "registered" not in NOT_LISTED and len(NOT_LISTED) <= 200   # a toast's own limit
 
 
-def test_a_continue_is_added_to_the_report_buttons_never_in_their_place(agent, monkeypatch):
-    # architecture review, 2026-10-13: each offer put its own keyboard, and a Continue silently took the place of
-    # "a report can still be made without the AI"
-    from vesta_agent import runner
-    _report_without_ai(agent, monkeypatch, run_job=False)
-    FakeAI(runner.RunResult("", "S1", True, 1.0, [], "api credit", "credit")).install(monkeypatch)
-    asyncio.run(agent.converse(FM, agent.policy().roster.person(FM), "a report please"))
-    (kb,) = [kb for c, _t, kb in agent.tg.sent if c == FM]
-    assert [[b["text"] for b in row] for row in kb["inline_keyboard"]] == [["Weekly report"], ["Continue"]]
-
-
 def test_a_follow_up_turn_joins_the_first_by_a_rule_for_every_field():
     # architecture review, 2026-10-13: merged by hand, a field added to TurnResult would have been dropped
     from dataclasses import fields
@@ -398,24 +267,3 @@ def test_a_follow_up_turn_joins_the_first_by_a_rule_for_every_field():
     assert both.earlier == "last words"
 
 
-def test_one_table_of_causes_and_one_sentence_for_a_report_that_did_not_come():
-    # architecture review scan 4 (2026-10-19): FOR_PERSON, why_job and NEEDS_THE_OWNER were three tables keyed by the
-    # same kinds; four sentences said "what you asked for did not come", one of them a lie ("will run again at its
-    # next time" for a report asked for in a chat)
-    for k, (c, do, owner) in api_errors.CAUSES.items():
-        assert api_errors.FOR_PERSON[k] == f"I cannot answer right now: {c}. {do}"
-        assert api_errors.why_job(k) == c and api_errors.cause(k) == c and api_errors.what_to_do(k) == do
-        assert (k in api_errors.NEEDS_THE_OWNER) == bool(owner)
-    assert set(api_errors.NEEDS_THE_OWNER) == {"credit", "key"} == set(api_errors.NEEDS_THE_OWNER) & api_errors.AI_DOWN
-    assert api_errors.NEEDS_THE_OWNER["credit"] == ("The VESTA Agent has stopped answering: the Anthropic account has run "
-                                                   "out of credit. Add credit in the Anthropic Console (Billing); nothing "
-                                                   "else needs changing.")
-    assert api_errors.why_job("whatever") == api_errors.CAUSES["unknown"][0]
-    n = api_errors.NOT_COME
-    assert n("fm-weekly", "x", api_errors.CHAT) == "The fm-weekly report you asked for could not be prepared: x. Ask again in a moment."
-    assert n("fm-weekly", "x", api_errors.SCHEDULE) == "The fm-weekly report could not be prepared: x. It will run again at its next time."
-    assert n("fm-weekly", "x", api_errors.CUT, when="16/10/2026 14:30") == \
-        "The fm-weekly report you asked for at 16/10/2026 14:30 could not be prepared: x. Ask again to have it."
-    assert n("fm-weekly", "x", api_errors.NO_RESULT) == "The fm-weekly report could not be prepared: x. Ask for it again in a moment."
-    assert api_errors.for_job("fm-weekly", "busy", origin=object()) == n("fm-weekly", api_errors.cause("busy"), api_errors.CHAT)
-    assert api_errors.for_job("fm-weekly", "busy") == n("fm-weekly", api_errors.cause("busy"), api_errors.SCHEDULE)

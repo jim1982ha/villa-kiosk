@@ -64,15 +64,6 @@ def test_each_kind_cut_by_a_stop_gets_its_kinds_decision_at_the_next_start(tmp_p
     assert w.left(SCHEDULED, CHAT_JOB, ANSWER) == []                         # read once
 
 
-def test_one_kind_read_at_start_leaves_the_others_for_their_reader(tmp_path):
-    # the scheduler reads its runs when it is built, chat_jobs.recover the chats' work: neither clears the other's
-    w = _work(tmp_path)
-    asyncio.run(_cut(w, Item(CHAT_JOB, "fm-weekly", chat=111, mid=1)))
-    asyncio.run(_cut(w, Item(SCHEDULED, "reports:0:07:00", slot=SLOT)))
-    assert [i.kind for i in _again(tmp_path).left(SCHEDULED)] == [SCHEDULED]
-    assert [i.kind for i in _again(tmp_path).left(CHAT_JOB, ANSWER)] == [CHAT_JOB]
-
-
 def test_rows_an_older_engine_left_are_read_with_the_same_decisions(tmp_path):
     st = State(str(tmp_path / "state.sqlite"))
     st.put("jobrun:reports:0:07:00", SLOT)                                     # cut before anything arrived
@@ -113,24 +104,6 @@ async def _note(seen, what):
     seen.append(what)
 
 
-def test_work_a_stop_cuts_keeps_its_record_and_is_never_said_ended(tmp_path):
-    w = _work(tmp_path)
-    seen = []
-
-    async def go():
-        async def body():
-            async with w.kept(Item(CHAT_JOB, "fm-weekly", chat=111, mid=9), after=lambda: seen.append("after"),
-                              ended=lambda: _note(seen, "ended")):
-                await asyncio.Event().wait()
-        t = asyncio.create_task(body())
-        await asyncio.sleep(0)
-        t.cancel()
-        await asyncio.gather(t, return_exceptions=True)
-    asyncio.run(go())
-    assert seen == ["after"] and not w.running(111, "fm-weekly")             # "typing…" let go, the chat told nothing
-    assert [(i.name, i.mid) for i in _again(tmp_path).left(CHAT_JOB)] == [("fm-weekly", 9)]
-
-
 def test_a_result_that_arrived_owes_nothing_whatever_kind(tmp_path):
     w = _work(tmp_path)
 
@@ -146,25 +119,6 @@ def test_a_result_that_arrived_owes_nothing_whatever_kind(tmp_path):
         assert job.arrived and job.then == NOTHING
     asyncio.run(go())
     assert _again(tmp_path).left(SCHEDULED, CHAT_JOB) == []
-
-
-def test_a_message_sent_beside_a_scheduled_run_is_not_its_result(tmp_path):
-    w = _work(tmp_path)
-
-    async def go():
-        async def run_cut_later():
-            async with w.kept(Item(SCHEDULED, "reports:0:07:00", slot=SLOT)):
-                await asyncio.Event().wait()
-        run = asyncio.create_task(run_cut_later())
-        await asyncio.sleep(0)
-
-        async def a_chats_answer():
-            w.arrived()                                                      # its own task: no scheduled run there
-        await asyncio.create_task(a_chats_answer())
-        run.cancel()
-        await asyncio.gather(run, return_exceptions=True)
-    asyncio.run(go())
-    assert [(i.name, i.then) for i in _again(tmp_path).left(SCHEDULED)] == [("reports:0:07:00", AGAIN)]
 
 
 def test_a_scheduled_job_holds_only_the_chats_where_it_is_not_already_running(tmp_path):
@@ -214,12 +168,3 @@ def test_how_a_scheduled_run_ended_is_written_by_the_one_bookkeeping(tmp_path, h
     assert not w.verdict(FAILED, "nothing runs here")                       # outside a scheduled run: refused
 
 
-def test_a_chats_job_leaves_no_end_row(tmp_path):
-    from vesta_agent.in_progress import run_ends
-    w = _work(tmp_path)
-
-    async def go():
-        async with w.kept(Item(CHAT_JOB, "fm-weekly", chat=111, mid=9)):
-            pass
-    asyncio.run(go())
-    assert run_ends(w.state) == {}

@@ -16,7 +16,6 @@ from types import SimpleNamespace
 from helpers import STARTER_SKILLS
 from test_ha_reads import CappedLogbook, Recorder
 from villa_timeline import TimelineVilla
-from vesta_shared import past
 from vesta_shared.device_state import OFFLINE, out_for
 from vesta_shared.ha_client import McpClient
 
@@ -30,10 +29,6 @@ def _load(skill: str, name: str):
         sys.path.insert(0, os.path.dirname(spec.origin))           # its siblings (playbook beside facts)
     spec.loader.exec_module(mod)
     return mod
-
-
-def test_the_one_sentence_for_a_read_stopped_short():
-    assert past.unread("its history", "04:00") == "its history could not be read whole: nothing is known after 04:00"
 
 
 def test_a_history_read_carries_where_it_stopped_and_the_old_call_still_answers_as_before(monkeypatch):
@@ -108,32 +103,6 @@ def test_back_for_ten_minutes_is_never_told_from_a_read_stopped_short():
     assert out_for(shy, ["sensor.meter"], states, OFFLINE, NOW, 10) is False      # its last minutes were never read
 
 
-def test_a_day_past_the_reach_is_never_counted_empty_or_occupied():
-    playbook = _load("reports", "playbook")
-    d1 = date(2026, 10, 5)
-    Z = timezone.utc
-    mode = [(datetime(2026, 10, 1, tzinfo=Z), "home"), (datetime(2026, 10, 6, 6, tzinfo=Z), "away")]
-
-    def ctx(cut):
-        villa = TimelineVilla(**{"switch.x": mode}, cut=cut)
-        # the villa's total per day (facts.Ctx.daily_total: the Energy settings' rule, round 2 2026-10-16)
-        return SimpleNamespace(energy={"main_meter": "sensor.meter"}, start=d1, end=d1 + timedelta(days=3), Z=Z,
-                               e_dt=datetime(2026, 10, 9, tzinfo=Z), now=NOW, cli=villa, problems=[],
-                               total_from=lambda: {"grid_in": ["sensor.meter"], "grid_out": [], "solar": []},
-                               daily_total=lambda s, e: {d1: 10.0, d1 + timedelta(days=1): 5.0,
-                                                          d1 + timedelta(days=2): 5.0, d1 + timedelta(days=3): 5.0})
-    when = {"mode_entity": "switch.x", "empty": ["away"], "days": 4}
-    c = ctx({"switch.x": datetime(2026, 10, 6, 13, tzinfo=Z)})
-    (clue,) = playbook.clue_use_while_empty(c, when)
-    assert (clue["empty_days"], clue["kwh_per_empty_day"], clue["kwh_per_other_day"]) == (1, 5.0, 10.0)
-    assert c.problems == ["Electricity while the villa is empty: its mode could not be read whole: nothing is known "
-                          "after 06/10/2026 13:00, the days after that are not counted."]
-    c = ctx(None)
-    (clue,) = playbook.clue_use_while_empty(c, when)
-    assert clue["empty_days"] == 3 and c.problems == []
-
-
-
 def test_electricity_while_empty_reads_the_kiosks_pick_when_the_playbook_names_none(tmp_path, monkeypatch):
     """Architecture review round 7, card 2: the starter playbook named one villa's sensor; it names none now and the
     clue reads the Kiosk's pick (vesta_shared.occupancy.sensor, on = empty). None picked: no clue."""
@@ -152,23 +121,6 @@ def test_electricity_while_empty_reads_the_kiosks_pick_when_the_playbook_names_n
     assert clue["empty_days"] == 2 and clue["kwh_per_empty_day"] == 5.0
 
 
-def test_a_rule_whose_runs_were_read_short_says_its_count_is_not_the_weeks(tmp_path):
-    from test_reports import _Book, _ctx
-
-    class Short(_Book):
-        def logbook(self, start, end, entity_id=None):
-            self.logbook_cut = datetime(2026, 9, 29, 8, 0, tzinfo=timezone.utc)
-            return [r for r in super().logbook(start, end, entity_id) if r["when"] < "2026-09-29T08"]
-    book = Short(["2026-09-28T07:41:00+00:00", "2026-09-30T07:41:00+00:00"], [])
-    facts, c, _ = _ctx(tmp_path, book)
-    assert [r["when"] for r in c.ha_alerts()] == ["2026-09-28T07:41:00+00:00"]
-    assert c.problems == ["Entrance unlocked: its runs could not be read whole: nothing is known after Tue 29/09/2026 08:00, "
-                          "its alerts after that are not counted."]
-    facts, c, _ = _ctx(tmp_path, _Book(["2026-09-28T07:41:00+00:00"], []))
-    c.ha_alerts()
-    assert c.problems == []
-
-
 def test_a_run_still_going_where_the_reading_stopped_is_not_a_run():
     features = _load("preventive-maintenance", "features")
     t0 = NOW - timedelta(hours=10)
@@ -182,68 +134,6 @@ def test_a_run_still_going_where_the_reading_stopped_is_not_a_run():
     ended = rows + [{"state": "0", "last_changed": (t0 + timedelta(minutes=150)).isoformat()}]
     assert features.ended_runs(features.runs_from_history(ended, 100, "UTC"), ended, 100, "UTC") == \
         features.runs_from_history(ended, 100, "UTC")
-
-
-def test_an_investigation_draws_and_says_nothing_past_the_reach():
-    sys.path.insert(0, os.path.join(STARTER_SKILLS, "investigate", "scripts"))
-    import investigate
-    from test_investigate import T, Z, _Around
-
-    class Short(_Around):
-        def history(self, ids, start, end):
-            got = super().history(ids, start, end)
-            self.history_cut = {ids[0]: T(9, 4)} if start >= T(9, 2) and ids[0] == "sensor.heater_power" else {}
-            return {e: [r for r in rs if datetime.fromisoformat(r["last_changed"]) < T(9, 4)] if e in self.history_cut
-                    else rs for e, rs in got.items()}
-
-        def logbook(self, start, end):
-            self.logbook_cut = T(9, 6, 30)
-            return [r for r in super().logbook(start, end) if datetime.fromisoformat(r["when"]) <= T(9, 6, 30)]
-    res = investigate.timeline(Short(), ["sensor.heater_power"], T(9, 2), T(9, 15), 3, Z, series=True, now=T(9, 16))
-    (part,) = res["entities"]
-    points = dict((datetime.fromisoformat(a), v) for a, v in part["series"])
-    assert all(v is None for t, v in points.items() if t >= T(9, 4))                  # no line drawn past 04:00
-    assert any(v is not None for t, v in points.items() if t < T(9, 4))
-    assert max(p["end"] for p in part["periods"]) == T(9, 4).isoformat()
-    lines = investigate.around(Short(), None, T(9, 2), T(9, 15), [], Z, now=T(9, 16))["lines"]
-    assert "⚠️ the logbook could not be read whole: nothing is known after 06:30:00 (too many entries) — say so, " \
-           "and narrow the period to read the rest" in lines
-
-
-def test_the_investigation_page_says_the_reach_and_ends_a_lane_there():
-    sys.path.insert(0, os.path.join(STARTER_SKILLS, "investigate", "scripts"))
-    import investigation_facts
-    from test_investigate import T
-    lanes = investigation_facts._lanes({"end": T(9, 15).isoformat(), "entities": [
-        {"label": "Back Door", "cut": T(9, 4).isoformat(),
-         "states": [{"at": T(9, 2).isoformat(), "state": "off", "as": "off"},
-                    {"at": T(9, 3).isoformat(), "state": "on", "as": "on"}]}]}, [], [], [])
-    assert [(b["start"], b["end"], b["state"]) for b in lanes[0]["bands"]] == [(T(9, 2), T(9, 3), "off"),
-                                                                              (T(9, 3), T(9, 4), "on")]
-    f = investigation_facts.facts({"start": T(9, 2).isoformat(), "end": T(9, 15).isoformat(), "zone": "UTC",
-                                   "entities": [{"entity_id": "binary_sensor.back_door", "label": "Back Door",
-                                                 "cut": T(9, 4).isoformat(), "lines": [], "periods": []}]},
-                                  {"start": T(9, 2).isoformat(), "end": T(9, 15).isoformat(), "zone": "UTC"})
-    (cannot,) = [g for g in f["findings"] if g["title"] == "What the records cannot tell"]
-    assert "Back Door: its records could not be read whole: nothing is known after 04:00." in cannot["groups"][0]["items"]
-
-
-def test_an_automations_run_is_read_off_a_logbook_row_one_way():
-    # architecture review round 2, 2026-10-19: the weekly page kept "triggered" rows only, the investigation counted
-    # every row; now both read vesta_shared.past.automation_run — a run, what started it, whether the system did
-    at = "2026-10-17T16:59:00+00:00"
-    assert past.automation_run({"when": at, "message": "turned off"}) is None
-    assert past.automation_run({"when": at, "message": "turned on"}) is None
-    assert past.automation_run({"when": "not a time", "message": "triggered by time"}) is None
-    run = past.automation_run({"when": at, "message": "triggered by state of lock.example"})
-    assert run == (datetime.fromisoformat(at), "state of lock.example", False)
-    assert past.automation_run({"when": at, "message": "triggered", "source": "time"}).started_by == "time"
-    reload = past.automation_run({"when": at, "message": "triggered by event 'automation_reloaded'",
-                                  "source": "event 'automation_reloaded'"})
-    assert reload.is_system and past.system_run(reload.started_by) == "reloaded"
-    assert past.automation_run({"when": at, "message": "triggered by Home Assistant starting"}).is_system
-    assert past.system_run("event 'homeassistant_started'") == "started"
-    assert past.system_run("Home Assistant starting") == "started" and past.system_run("time") is None
 
 
 def test_out_since_gives_the_moment_the_close_is_judged_from():

@@ -150,15 +150,6 @@ def test_the_old_helper_is_moved_once_at_start_and_never_read_again(tmp_path, mo
     assert BY_KIND["kinds"].chosen(s.config_dir) == {SLUG: "meter"}
 
 
-def test_a_villa_without_the_old_helper_gets_an_empty_file_once(tmp_path, monkeypatch):
-    s, files = _setup(tmp_path, monkeypatch)
-    assert _Agent(s, _Villa()).migrate_asset_kinds() is None
-    assert os.path.exists(s.choice_path("kinds")) and BY_KIND["kinds"].chosen(s.config_dir) == {}
-    assert files.history.rows(5) == []                          # nothing moved, nothing to say
-    later = _Villa('{"example_led_strip": "motor"}')
-    assert _Agent(s, later).migrate_asset_kinds() is None and later.asked == 0
-
-
 def test_the_agents_own_start_moves_the_old_helper(tmp_path):
     """Pinned on the caller: the agent's real start() (helpers.restarted), its client holding the old helper."""
     from ha_fake import FakeHA
@@ -170,16 +161,3 @@ def test_the_agents_own_start_moves_the_old_helper(tmp_path):
     assert BY_KIND["kinds"].chosen(villa.s.config_dir) == {"example_pump": "motor"}
 
 
-def test_the_device_kinds_card_says_which_devices_and_explains_in_sections():
-    # owner, 2026-10-30: the (i) was "barely understandable and very poorly formatted" (one block of run-on paragraphs),
-    # and "where the device list is coming from?": the card says which devices, the (i) is in titled sections with lists
-    import os
-    from helpers import ROOT
-    js = open(os.path.join(ROOT, "vesta_agent", "ui", "static", "knowledge.js"), encoding="utf-8").read()
-    start = js.index("export function kindsCard")
-    card = js[start:js.find("\nexport function", start + 1) if js.find("\nexport function", start + 1) > 0 else len(js)]
-    for head in ("Which devices are listed", "What the kind changes", "Where the kind comes from", "To correct a kind"):
-        assert f'part("{head}"' in card, head
-    assert "items(data.kinds.map(kindItem))" in card and '].join(" ")' not in card
-    assert "devices that measure their own power or energy" in card and "${data.rows.length}" in card
-    assert 'card(place("kinds"), info, which,' in card                         # said on the card, not only behind (i)

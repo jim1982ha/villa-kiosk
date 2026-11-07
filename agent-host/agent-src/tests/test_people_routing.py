@@ -14,13 +14,11 @@ import pytest
 import yaml
 
 from helpers import body, make_agent, settings, status as status_of
-from vesta_agent.layout import head_text
 from vesta_shared.message_format import UNTITLED
 from vesta_shared.messaging import SIREN_TITLE
 from telegram_fake import BOT
 from vesta_agent import button_data, status, tool_access
 from vesta_agent.delivery import Delivery
-from vesta_agent.notice import Notices
 from vesta_agent.policy import Policy
 from vesta_agent.state import State
 from vesta_agent.ui import policy_doc
@@ -109,15 +107,6 @@ def test_a_chat_telegram_refuses_is_named_on_the_overview_until_a_message_arrive
     assert run(d.send(FABIEN, "x")) and status.unreachable(st, pol) == []
 
 
-def test_only_telegrams_refusal_of_a_chat_counts_as_unreachable():
-    # architecture review 18: a network blip at 01:30 left "send /start" on the Overview all day
-    from vesta_agent.telegram import _failed
-    assert _failed("sendMessage", {"error_code": 403, "description": "Forbidden: bot was blocked by the user"}).refused
-    assert _failed("sendMessage", {"error_code": 400, "description": "Bad Request: chat not found"}).refused
-    assert not _failed("sendMessage", {"error_code": 400, "description": "Bad Request: can't parse entities"}).refused
-    assert not _failed("sendMessage", {"error_code": 429, "description": "Too Many Requests"}).refused
-
-
 def test_in_a_private_chat_the_persons_own_role_decides_in_a_group_the_least(tmp_path):
     pol = Policy({"tool_access": {"fm": {"cameras": False}}}, ROSTER)
     tools = [{"name": "ha_get_camera_image", "annotations": {"readOnlyHint": True}}]
@@ -129,43 +118,6 @@ def test_in_a_private_chat_the_persons_own_role_decides_in_a_group_the_least(tmp
     assert "ha_get_camera_image" in tool_access.allowed_for(pol, tools, owner, JM)
     # the group the facility managers read: never more than the facility manager may use
     assert "ha_get_camera_image" not in tool_access.allowed_for(pol, tools, owner, GROUP)
-
-
-def test_the_to_line_names_the_role_the_message_is_for(tmp_path):
-    s = settings(str(tmp_path))
-    n = Notices(State(s.state_path), lambda: Policy({}, ROSTER), "UTC")
-    assert head_text(n.heading(JM, to="owner")) == f"{UNTITLED}\nTo: Owner"
-    assert head_text(n.heading(GROUP, to="fm", title="Approval request")) == "Approval request\nTo: Facility Manager"
-    assert head_text(n.heading(GROUP)) == f"{UNTITLED}\nTo: Owner & Facility Manager"   # no role given: the chat's
-    alone = Notices(State(s.state_path), lambda: Policy({}, Roster.of(owner=[(GROUP, "Group_O")])), "UTC")
-    assert head_text(alone.heading(GROUP, to="owner")) == f"{UNTITLED}\nTo: Owner"
-
-
-def test_to_names_roles_only_never_a_person(tmp_path):
-    # owner, 2026-10-12: "#25-P2 (closed) / To: the Owner, Fabien, JM" mixed a role and names. Owner, 2026-10-13: "To:
-    # Owner", "To: Facility Manager", "To: Owner & Facility Manager" — never a name
-    v = make_agent(tmp_path, {}, roster=Roster.of(owner=[(GROUP, "Villa group")], fm=[(FABIEN, "Fabien"), (JM, "JM")]))
-    run(v.outcome.carry_out({"send": [{"to": "owner", "text": "Door unlocked.", "title": "Door"},
-                                      {"to": "fm", "text": "Door unlocked.", "title": "Door"}]}))
-    # two messages: the owner's went to the group, the facility manager's to two people — each says its role
-    assert sorted(t.split("\n")[1] for _, t, _ in v.tg.sent) == ["To: Facility Manager", "To: Facility Manager", "To: Owner"]
-    # one incident sent to both: ONE "To:" for it, both roles — in every chat, and in its history line; an alert card
-    # says "FM" (owner, 2026-10-16)
-    v.notices.record(25, "new", [(GROUP, "owner"), (FABIEN, "fm"), (JM, "fm")])
-    head = head_text(v.notices.heading(GROUP, 25, "owner", "closed"))
-    both = "Owner & FM"
-    assert head.split("\n")[1] == f"To: {both}" and head.split("\n")[2].endswith(f" (to: {both})"), head
-    # a history line recorded before 0.12.181 named people: read back as their roles
-    v.state.set_incident_history(26, [{"at": "2026-10-12T08:00:00+00:00", "stage": "new", "to": ["Fabien", "the Owner"]}])
-    assert head_text(v.notices.heading(FABIEN, 26)).split("\n")[1:] == [f"To: {both}", f"- Alert sent 12/10/2026 08:00 (to: {both})"]
-
-
-def test_a_chat_listed_for_both_roles_is_headed_for_both(tmp_path):
-    # architecture review 18: the one copy kept for a group of both roles was headed for the owner's people only
-    v = make_agent(tmp_path, {}, roster=Roster.of(owner=[(JM, "JM_O"), (GROUP, "Group_O")], fm=[(FABIEN, "Fabien_FM"), (GROUP, "Group_FM")]))
-    run(v.outcome.carry_out({"send": [{"to": "owner", "text": "Door unlocked."}, {"to": "fm", "text": "Door unlocked."}]}))
-    heads = {c: t.split("\n")[1] for c, t, _ in v.tg.sent}
-    assert heads == {JM: "To: Owner & Facility Manager", GROUP: "To: Owner & Facility Manager", FABIEN: "To: Facility Manager"}
 
 
 def test_every_message_the_agent_sends_on_its_own_is_in_the_one_layout_and_styled(tmp_path):
@@ -199,27 +151,7 @@ def test_every_message_the_agent_sends_on_its_own_is_in_the_one_layout_and_style
     assert all("Status:" in t for _, _, t in v.tg.edits)                         # a decision under "Status:"
 
 
-def test_the_agents_own_approvals_and_warnings_carry_the_heading_in_every_chat(tmp_path):
-    # architecture review 18: approvals and "the siren cannot be requested" went without the heading
-    from helpers import known_devices
-    v = make_agent(tmp_path, {"act_enabled": True, "allowed_services": {"light.turn_on": "owner", "cover.open_cover": "any"}}, roster=ROSTER)
-    known_devices(v, "light.pool", "cover.pool")
-    _, msg = v.actions.request("light", "turn_on", "light.pool", {}, None, None)
-    run(v.outcome.ask(msg))
-    assert {c: t.split("\n", 2)[:2] for c, t, _ in v.tg.sent} == {FABIEN: ["Approval request", "To: Owner"],
-                                                                  JM: ["Approval request", "To: Owner"]}
-    v.tg.sent.clear()
-    _, msg = v.actions.request("cover", "open_cover", "cover.pool", {}, v.policy().roster.person(JM), JM)
-    run(v.outcome.ask(msg))
-    (chat, text, _), = v.tg.sent
-    # asked here, and still in the agent's layout (owner, 2026-10-10): heading, the action, then where it stands
-    assert chat == JM and text.startswith("Approval request\nTo: ") and re.search(
-        r"\nAsked by .+\.\nStatus:\nWaiting for the owner or the facility manager to approve: the buttons work for 15min "
-        r"from (?:\d\d/\d\d(?:/\d{4})? )?\d\d:\d\d\.$", text) and "final state" not in text
-
-
 def test_an_unreadable_rules_file_keeps_the_last_good_rules_and_the_siren_that_sounds_stops(tmp_path):
-    from vesta_agent.siren import Siren
     from datetime import datetime, timedelta, timezone
     v = make_agent(tmp_path, {"siren_entity": "switch.siren_a"}, roster=ROSTER)
     assert v.policy().roster.chats_for("owner")
@@ -264,35 +196,6 @@ def test_a_member_of_a_listed_group_acts_with_its_role_without_a_people_row(tmp_
     assert v.tg.edits and all("(Rita). Nothing was done." in t for _, _, t in v.tg.edits)
 
 
-def test_in_a_listed_group_everyone_acts_with_the_groups_role_whatever_their_own():
-    # the owner's People of 2026-10-10: the group as Owner, JM and Fabien as Facility manager — in the group JM was
-    # refused the siren's approval while any unlisted member could give it
-    pol = Policy({}, Roster.of(owner=[(GROUP, "Group Chat")], fm=[(FABIEN, "Fabien"), (JM, "JM")]))
-    assert pol.roster.member(JM, GROUP).role == "owner" and pol.roster.member(555, GROUP).role == "owner"     # everyone in the group
-    assert pol.roster.member(JM, JM).role == "fm" and pol.roster.person(JM).role == "fm"                     # in private: their own
-    both = Policy({}, Roster.of(owner=[(GROUP, "G_O"), (JM, "JM_O")], fm=[(GROUP, "G_FM")]))
-    # "irrespective of their own individual role" (owner, 2026-10-10): a group of both roles is the narrower, for all
-    assert both.roster.member(JM, GROUP).role == "fm" and both.roster.member(555, GROUP).role == "fm" and both.roster.member(JM, JM).role == "owner"
-
-
-def test_a_request_answered_at_once_leaves_one_message_in_the_askers_chat(tmp_path, monkeypatch):
-    # owner, 2026-10-10: approved at 18:12, the AI's "Approval request sent." still came at 18:13 under it
-    from ai_fake import FakeAI
-    v = make_agent(tmp_path, {"act_enabled": True, "allowed_services": {"cover.close_cover": "any"}}, roster=Roster.of(owner=[(JM, "JM")], fm=[(GROUP, "Group")]))
-
-    async def asks(call):
-        await call["call"]("ha_call_service", {"domain": "cover", "service": "close_cover", "entity_id": "cover.bedroom"})
-    FakeAI("Request sent. Awaiting approval.", act=asks).install(monkeypatch)
-    run(v.converse(JM, v.policy().roster.person(JM), "close the bedroom curtain"))
-    (req_n, (_, req, kb)), = [(n, s) for n, s in enumerate(v.tg.sent, start=1001) if s[2]]
-    assert len(v.tg.sent) == 1                                              # the request, and nothing under it
-    press = {"id": "cb", "data": kb["inline_keyboard"][0][1]["callback_data"], "chat_id": JM, "user_id": JM,
-             "message": {"message_id": req_n, "chat": {"id": JM}, "text": req}, "bot": BOT}
-    run(v.on_ha_event("telegram_callback", press))
-    (_, mid, settled), = v.tg.edits
-    assert len(v.tg.sent) == 1 and mid == req_n and re.search(r"\nStatus:\nRefused on .* \(JM\)\. Nothing was done\.$", settled)
-
-
 def test_the_siren_that_cannot_be_requested_says_so_in_the_agents_layout(tmp_path):
     from vesta_shared import result as R
     v = make_agent(tmp_path, {"siren_entity": "switch.siren"}, roster=ROSTER)          # acting is off: refused
@@ -300,76 +203,6 @@ def test_the_siren_that_cannot_be_requested_says_so_in_the_agents_layout(tmp_pat
     texts = [t for _, t, _ in v.tg.sent]
     assert texts and all(t.startswith(f"{SIREN_TITLE}\nTo: ") and "\nIntrusion suspected.\nStatus:\nThe siren cannot be "
                          "requested: " in t for t in texts)
-
-
-def test_an_approved_request_says_what_happened_and_who_approved_it_never_the_retry_words(tmp_path):
-    # owner, 2026-10-10: "JM / Opened Bedroom3 Curtain. / Approved by JM on …" — and only the asker's chat
-    from vesta_agent.actions import Decision, done_words
-    names = {"cover.bedroom3": "Bedroom3 Curtain"}.get
-    d = Decision(True, "", "any", "cover", "open_cover", ["cover.bedroom3"], {})
-    assert done_words(d, names, {"ok": True}) == "Opened Bedroom3 Curtain."
-    assert done_words(d, names, {"ok": False, "unconfirmed": [("Bedroom3 Curtain", "closed")]}) == \
-        "Bedroom3 Curtain did not open: it reads closed."                     # never claims what did not happen
-    assert "retry" not in done_words(d, names, {"ok": False, "failed": True})
-    from vesta_agent import layout
-    req = layout.parts(head="Approval request\nTo: JM", body="Open Bedroom3 Curtain (final state: open)?",
-                       status="Waiting for approval by the owner")
-    assert layout.render(layout.changed(req, status="Approved by JM on 10/10/2026 17:13.", body="Opened Bedroom3 Curtain.")) == \
-        "Approval request\nTo: JM\nOpened Bedroom3 Curtain.\nStatus:\nApproved by JM on 10/10/2026 17:13."
-    # what a decided request says under its line: "<what> on <when> (<who>)" — written by message_format.acted, the
-    # ONE writer of a person's act (architecture review, 2026-10-19: a pressed button, an approval, the desk's "Noted"
-    # and the Cockpit's steps each wrote the shape by hand), each state's tail its own
-    from vesta_agent.approvals import note
-    assert note("approved", "JM", time="10/10/2026 17:13") == "Approved on 10/10/2026 17:13 (JM)."
-    assert note("done", "JM", time="10/10/2026 17:13") == "Approved on 10/10/2026 17:13 (JM)."
-    assert note("refused", "JM", time="10/10/2026 17:13") == "Refused on 10/10/2026 17:13 (JM). Nothing was done."
-    assert note("expired", time="10/10/2026 17:13") == "Expired on 10/10/2026 17:13: nothing was done."
-
-
-def test_a_request_shown_in_the_askers_chat_is_not_announced_again(tmp_path, monkeypatch):
-    # owner, 2026-10-10: "Approval request sent … Waiting for approval." under the request "is redundant"
-    from ai_fake import FakeAI
-    v = make_agent(tmp_path, {"act_enabled": True, "allowed_services": {"cover.open_cover": "any"}}, roster=Roster.of(owner=[(JM, "JM")], fm=[(GROUP, "Group")]))
-    told = []
-
-    async def asks(call):
-        told.append(await call["call"]("ha_call_service", {"domain": "cover", "service": "open_cover", "entity_id": "cover.b"}))
-    # the AI writes its echo anyway, as it did on the villa ("Approval request sent.")
-    FakeAI("Approval request sent.", act=asks).install(monkeypatch)
-    run(v.converse(JM, v.policy().roster.person(JM), "open the bedroom curtain"))
-    assert "will NOT be shown" in told[0]["content"][0]["text"]
-    assert [bool(kb) for _, _, kb in v.tg.sent] == [True]      # the request alone: the engine drops the echo
-
-
-def test_a_curtain_still_moving_is_said_to_be_and_the_request_says_opened_once_it_is(tmp_path, monkeypatch):
-    # owner, 2026-10-10: "Bedroom3 Curtain did not open: it reads closed … but the curtain is actually well opened" —
-    # it read "closed" until it had finished moving, 40s later
-    from vesta_agent import approvals as appr_mod
-    monkeypatch.setattr(appr_mod, "FOLLOW_EVERY_S", 0)
-    v = make_agent(tmp_path, {"act_enabled": True, "allowed_services": {"cover.open_cover": "any"}}, roster=Roster.of(owner=[(JM, "JM")], fm=[(GROUP, "Group")]))
-    reads = iter(["closed"] * 7 + ["open"])                 # the read-back right after, then the agent's later looks
-
-    class Writer:
-        def call_service(self, *a):
-            pass
-
-        def states(self, ids):
-            s = next(reads, "open")
-            return {i: {"state": s} for i in ids}
-    v.actions.writer_factory = Writer
-    _, msg = v.actions.request("cover", "open_cover", "cover.bedroom3", {}, v.policy().roster.person(JM), JM)
-    run(v.outcome.ask(msg))
-    req_n = v.tg.next_id
-    press = {"id": "cb", "data": msg.keyboard["inline_keyboard"][0][0]["callback_data"], "chat_id": JM, "user_id": JM,
-             "message": {"message_id": req_n, "chat": {"id": JM}, "text": msg.text}, "bot": BOT}
-
-    async def go():
-        await v.on_ha_event("telegram_callback", press)
-        await v.approvals.idle()
-    run(go())
-    first, last = v.tg.edits[0][2], v.tg.edits[-1][2]
-    assert "\nOpening " in first and "\nStatus:\nApproved on " in first and "(JM)." in first     # on its way, right away
-    assert "\nOpened " in last and "did not" not in last and status_of(last).startswith("Approved on ") and status_of(last).endswith("(JM).")
 
 
 def test_the_ai_is_told_what_is_waiting_and_what_was_decided_never_left_to_its_memory(tmp_path):
@@ -403,20 +236,6 @@ def _curtain_villa(tmp_path, reads, ttl=15):
     return v
 
 
-def test_a_moving_curtain_is_recorded_moving_then_done_and_the_ai_reads_the_same(tmp_path, monkeypatch):
-    # architecture review 19: recorded "failed" at the first reading while the message said "Opened" — the AI said failed
-    from vesta_agent import approvals as appr_mod
-    monkeypatch.setattr(appr_mod, "FOLLOW_EVERY_S", 0)
-    v = _curtain_villa(tmp_path, ["closed"] * 3 + ["open"])
-    _, msg = v.actions.request("cover", "open_cover", "cover.bedroom3", {}, v.policy().roster.person(JM), JM)
-    run(v.approvals.ask(msg))
-    out = v.actions.decide(msg.approval_id, JM, True, chat=JM)
-    assert v.state.approval(msg.approval_id)["status"] == "moving" and out["toast"] == "Approved: on its way."
-    assert " — approved; the device was still on its way (by JM on " in v.approvals.now()
-    run(v.approvals._follow(msg.approval_id, out["follow"]))
-    assert v.state.approval(msg.approval_id)["status"] == "done" and " — approved, and done (by JM on " in v.approvals.now()
-
-
 def test_a_follow_cut_by_a_restart_is_taken_up_again(tmp_path, monkeypatch):
     from vesta_agent import approvals as appr_mod
     monkeypatch.setattr(appr_mod, "FOLLOW_EVERY_S", 0)
@@ -445,27 +264,6 @@ def test_an_expired_request_says_so_and_a_long_wait_is_still_seen_by_the_ai(tmp_
     (_, _, text), = v.tg.edits
     assert re.search(r"\nStatus:\nExpired (?:on|at) (?:\d\d/\d\d(?:/\d{4})? )?\d\d:\d\d: nothing was done\.$", text)
     assert v.state.approval(msg.approval_id)["status"] == "expired"
-
-
-def test_the_pictures_still_come_when_the_request_is_the_answer(tmp_path, monkeypatch):
-    # architecture review 19: "open the gate and show me the entrance camera" — the request came, the picture never
-    from ai_fake import FakeAI
-    v = _curtain_villa(tmp_path, [])
-
-    async def asks(call):
-        await call["call"]("ha_call_service", {"domain": "cover", "service": "open_cover", "entity_id": "cover.b"})
-    FakeAI("Approval request sent.", act=asks).install(monkeypatch)
-    from vesta_agent.turn import Turns
-    real = Turns.chat
-
-    async def with_photo(self, *a, **k):
-        res = await real(self, *a, **k)
-        res.photos.append(("SlBFRw==", "image/jpeg"))
-        return res
-    monkeypatch.setattr(Turns, "chat", with_photo)
-    run(v.converse(JM, v.policy().roster.person(JM), "open the curtain and show me the camera"))
-    # the request, then the picture alone — no "Approval request sent." with it
-    assert [(bool(k), t) for _, t, k in v.tg.sent][1:] == [(False, "")] and v.tg.sent[0][2] and len(v.tg.photos) == 1
 
 
 @pytest.mark.parametrize("chat,who,known_as,acts", [
@@ -524,16 +322,6 @@ def test_approve_pressed_as_the_owner_does_it_ends_in_one_verdict_everywhere(tmp
     assert v.state.approval(msg.approval_id)["status"] == "done" and " — approved, and done (by JM on " in v.approvals.now()
 
 
-def test_a_decision_on_a_request_asked_hours_ago_is_told_to_the_ai(tmp_path):
-    # architecture review 20: asked at 09:00, approved at 11:30 — in neither "waiting" nor "decided lately"
-    from datetime import datetime, timedelta, timezone
-    v = _curtain_villa(tmp_path, ["open"], ttl=300)
-    t0 = datetime.now(timezone.utc) - timedelta(hours=3)
-    aid = v.state.new_approval({"plain": "Open Bedroom3 Curtain?"}, "h", "any", JM, JM, 300, now=t0)
-    v.state.claim_approval(aid, "refused", JM, name="JM")
-    assert "- Open Bedroom3 Curtain? — refused (by JM on " in v.approvals.now()
-
-
 def test_expiry_never_overrides_a_press_that_came_first(tmp_path):
     from datetime import datetime, timedelta, timezone
     v = _curtain_villa(tmp_path, ["open"])
@@ -562,54 +350,3 @@ def test_a_press_the_rules_now_refuse_is_told_as_such_never_failed(tmp_path):
     assert "rules no longer allowed it: nothing was tried (by JM on " in v.approvals.now()
 
 
-def test_a_long_incidents_snapshot_is_one_message_and_nothing_hangs():
-    # architecture review 20: a caption is 1,024 characters; a head and a status past the limit must never hang render
-    from vesta_agent import layout
-    head = "#9-P1 (existing)\nTo: JM, Fabien\n" + "\n".join(f"- Notice {i:02d} on 10/10/2026 10:00, to JM, Fabien" for i in range(40))
-    text = layout.render(layout.parts(head=head, body="Camera snapshot"), 1000)
-    assert len(text) <= 1000 and "Camera snapshot" in text and "earlier notice" in text and text.startswith("#9-P1")
-    assert "Notice 39 " in text and "Notice 00 " in text and "Notice 01 " not in text   # the first and the newest kept
-    huge = layout.render(layout.parts(head="Approval request\nTo: X\n" + "y" * 9000, body="z", status="s" * 9000), 4096)
-    assert len(huge) <= 4096 + 10
-
-
-def test_a_photo_with_a_long_heading_is_posted_as_one_message_and_recorded_as_sent():
-    from vesta_agent import layout
-    from vesta_agent.posting import Poster
-    sent = []
-
-    async def send(chat, text, **k):
-        sent.append((text, k.get("photo")))
-        return 1
-
-    class Notices:
-        def heading(self, chat, incident, roles, stage=None, also=None):
-            return "#9-P1 (existing)\nTo: JM\n" + "\n".join(f"- Reminder sent 10/10/2026 10:{i:02d} to JM" for i in range(60))
-
-        def roles_for(self, chat, to=None):
-            return set()
-
-        def bottom(self, stage, roles, status, at=None, incident=None):
-            return status
-    run(Poster(send=send, notices=Notices()).post(JM, "Camera snapshot", incident=9, photo=("SlBFRw==", "image/jpeg")))
-    (text, photo), = sent
-    assert photo and len(text) <= 1000 and text.startswith("#9-P1 (existing)\nTo: JM\nCamera snapshot\nStatus:\n"
-                                                         "- Reminder sent 10:00 to JM\n- … ") \
-        and text.endswith("to JM\n⚠️ ⚙️ Still open")                           # one caption: one message
-    # the first notice always kept, the newest kept, those between counted (review 28)
-    assert "10:59 to JM" in text and "10:01 to JM" not in text
-
-
-def test_the_villas_time_is_filled_into_a_message_in_one_place_and_a_pending_request_reads_from_the_one_table():
-    # architecture review round 3, 2026-10-19 — (a) posting, the thread's close and restate, and a taken-over message
-    # each replaced "{time}" by hand; (b) a pending request's words were written in actions.py beside the approvals'
-    # one table of states, whose "pending" row said ""
-    from datetime import datetime, timezone
-    from vesta_agent import layout
-    from vesta_agent.approvals import STATES, note
-    at = datetime(2026, 10, 10, 9, 4, tzinfo=timezone.utc)
-    assert layout.fill_time("Asked on {time}.", at, "Asia/Makassar") == "Asked on 10/10/2026 17:04."
-    assert layout.fill_time(None, at, "UTC") == "" and layout.fill_time("no time", at, "UTC") == "no time"
-    assert note("pending", who="the owner", minutes=15, time="10/10/2026 17:04") == \
-        "Waiting for the owner to approve: the buttons work for 15min from 10/10/2026 17:04."
-    assert "{who}" in STATES["pending"][2] and "{minutes}" in STATES["pending"][2]

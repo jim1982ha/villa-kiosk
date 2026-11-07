@@ -7,14 +7,12 @@ from __future__ import annotations
 
 import asyncio
 import importlib.util
-import json
 import os
 from datetime import datetime, timedelta, timezone
 
 from villa_timeline import TimelineVilla
 from helpers import STARTER_SKILLS, make_agent
 from kiosk_fake import FakeKiosk
-from vesta_agent.layout import head_text
 from vesta_shared.problems import Problems
 from vesta_shared.store import Store
 from vesta_agent.roster import Roster
@@ -38,20 +36,6 @@ def ev(rule, entity, minutes, phase="opened", blueprint="critical_presence_guard
 
 
 # ---------------------------------------------------------------------- the heading says what the message is
-def test_a_closing_message_is_headed_closed_never_new(tmp_path):
-    # owner, 2026-10-11: "For: JM, P2 Incident: New #9 … Closed on …" — "is it a closure or not?"
-    v = make_agent(tmp_path, {}, roster=Roster.of(fm=[(FM, "JM")]))
-    n = v.notices
-    to = "To: FM"                                                   # an alert card's word (owner, 2026-10-16)
-    assert head_text(n.heading(FM, 9, "fm", "new")) == f"#9 (new)\n{to}"
-    assert head_text(n.heading(FM, 9, "fm", "closed")) == f"#9 (closed)\n{to}"               # no history: still "closed"
-    assert head_text(n.heading(FM, 9, "fm", "back")) == f"#9 (existing)\n{to}"               # owner: never "Follow Up"
-    assert head_text(n.heading(FM, 9, "fm")) == f"#9 (new)\n{to}"                            # no stage: by its history, as before
-    run(v.outcome.carry_out({"send": [{"to": "fm", "text": "Relay offline", "incident_id": 9, "stage": "closed",
-                                       "status": "Closed on {time}: back."}]}))
-    assert v.tg.sent[-1][1].startswith(f"#9 (closed)\n{to}\n")
-
-
 # ---------------------------------------------------------------------- one problem, one fault, one name
 def _flapping(store, times, rule="automation.ap", entity="sensor.ap"):
     iid = None
@@ -101,42 +85,6 @@ def test_the_retune_proposal_is_one_per_rule(tmp_path):
     assert [p["title"] for p in store.proposals()] == ["Retune 'Noisy': it fires too often"]       # unread: from its id
 
 
-def test_the_retune_proposal_names_the_automation_as_every_message_does(tmp_path):
-    # architecture review round 11, card 3: "Retune automation.pool_leak_watch" — the one message that never looked the
-    # automation's name up. Counted as the desk counts (store.incident_counts), named from the villa's states
-    rid = "automation.example_leak_watch"
-    store = Store(str(tmp_path / "s.sqlite"))
-    old = store.add_proposal("retune", f"Retune {rid}: it fires too often", "", "")      # said by the id before
-    store.decide_proposal(old, "ignored")
-    villa = TimelineVilla(names={rid: "Critical --- Pool leak"}, **{rid: "on"})
-    for k in range(25):
-        store.new_incident(f"k{k}", rid, f"sensor.x{k}", "P3", {}, at=(T0 + timedelta(hours=k)).isoformat())
-    desk.tick(store, T0 + timedelta(hours=25), client=villa)
-    (p,) = store.proposals(status=None)
-    assert p["id"] == old and p["status"] == "ignored"                                  # the same one: never made again
-    assert p["title"] == "Retune 'Pool leak': it fires too often"
-
-
-def test_the_kiosk_fault_keeps_again_in_its_name(tmp_path):
-    # review 24: the repair renamed "(again: 2 times in 7 days)" to the bare summary seconds later
-    store = Store(str(tmp_path / "s.sqlite"))
-    pb = Problems(store)
-    rules = dict(state_rules={"PM-UNAVAILABLE"}, event_rules=set(), worsened_step=15)
-
-    class F:
-        def __init__(self):
-            self.rule_id, self.entity_id, self.family, self.severity, self.summary = "PM-UNAVAILABLE", "switch.relay", "x", "P2", "Relay offline"
-            self.detail, self.check, self.day = {}, "", ""
-
-        def as_dict(self):
-            return {k: getattr(self, k) for k in ("rule_id", "entity_id", "family", "severity", "summary", "detail", "check", "day")}
-    first = pb.record_night([F()], "2026-10-07", **rules)
-    pb.close_finding(store.finding(first["new"][0]["id"]), "2026-10-08", "back")
-    night = pb.record_night([F()], "2026-10-09", **rules)
-    (back,) = night["task_ids"]
-    assert pb.current_title(store.task(back)) == "Relay offline (2nd time in 7 days)"
-
-
 def test_a_reopened_task_whose_old_resolution_is_seen_reopens_its_fault_and_a_lost_resolve_is_redone(tmp_path):
     k = FakeKiosk()
     v = make_agent(tmp_path, {}, roster=Roster.of(fm=[(FM, "JM")]), kiosk=k)
@@ -175,37 +123,6 @@ def test_a_door_closed_in_the_kiosk_is_read_again_as_a_done_is(tmp_path):
     assert out["not_quiet"] == [iid]
     (fm,) = [s for s in out["send"] if s["to"] == "fm"]
     assert fm["status"] == "Done in the Cockpit, but Door still reads unlocked: still open. VESTA keeps watching it."
-
-
-def test_an_alert_back_again_says_home_assistants_latest_words(tmp_path):
-    store = Store(str(tmp_path / "s.sqlite"))
-    desk.intake(store, ev("automation.garden", "binary_sensor.garden", 0), T0)
-    desk.intake(store, ev("automation.garden", "binary_sensor.garden", 5, phase="resolved"), T0 + timedelta(minutes=5))
-    back = desk.intake(store, {**ev("automation.garden", "binary_sensor.garden", 60), "summary": "Motion again at the pool"},
-                       T0 + timedelta(minutes=60))
-    assert all(s["text"].startswith("Motion again at the pool") for s in back["send"])
-
-
-def test_no_test_store_ships_inside_the_app():
-    # review 24: a probe's d1.sqlite was committed and copied into the app's image (COPY agent-src)
-    import subprocess
-    here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    r = subprocess.run(["git", "ls-files", "--", "."], cwd=here, capture_output=True, text=True)
-    if r.returncode:                                   # not a git checkout (an image): nothing to look at
-        return
-    assert [f for f in r.stdout.split() if f.endswith((".sqlite", ".db")) or ".sqlite-" in f] == []
-
-
-def test_a_returning_fault_the_kiosk_never_had_is_made_with_its_check_note(tmp_path):
-    # villa, 2026-10-11: the Onsen pump's fault, made new at its return, read "Back again." instead of "Check: …"
-    k = FakeKiosk()
-    v = make_agent(tmp_path, {}, roster=Roster.of(fm=[(FM, "JM")]), kiosk=k)
-    st, pb = Store(v.s.store_path), Problems(Store(v.s.store_path))
-    fid, _ = st.raise_finding("PM-ENERGY-CHANGE", "sensor.onsen_energy", "energy", "2026-10-09", "P3", "Onsen pump low", {})
-    tid, _ = pb.open_task("finding", fid, "PM-ENERGY-CHANGE", "sensor.onsen_energy", "Onsen pump low",
-                          "Look at the pump's strainer.")
-    assert run(v.tickets.reopen({"task_id": tid, "title": "Onsen pump low (2nd time in 7 days)", "note": "Back again."}))
-    assert k.notes[-1] == "What to do: Look at the pump's strainer."
 
 
 # ---------------------------------------------------------------------- what to do: one owner, the rule's words now

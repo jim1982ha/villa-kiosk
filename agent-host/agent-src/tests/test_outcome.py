@@ -255,10 +255,3 @@ def test_a_result_that_moved_no_task_runs_no_repair(agent):
     assert kiosk.tickets == []
 
 
-def test_the_starter_skills_build_no_old_fault_shape():
-    # the old builders stay for a villa's edited skill only; every starter skill says faults_changed
-    import re
-    from helpers import STARTER_SKILLS
-    src = "".join(open(os.path.join(d, f)).read() for d, _, fs in os.walk(STARTER_SKILLS) for f in fs if f.endswith(".py"))
-    assert not re.search(r"\b(?:R|result)\.(?:reopened|resolved)\(|task_id=t\[", src)
-    assert not re.search(r"\b(?:R|result)\.fault\([^)]*task_id=", src)

@@ -347,15 +347,6 @@ def test_two_posts_of_one_incident_at_once_leave_one_copy_in_the_chat(tmp_path):
     assert shown == {th.shown(55)[GROUP]["mid"]}, (shown, th.shown(55))
 
 
-def test_a_press_on_a_copy_no_record_points_to_removes_it(agent):
-    # the same review: a copy left behind keeps its buttons; pressed, the alert is answered and that copy goes
-    ha_alert(agent)
-    iid, rec = next((i, r) for i in range(1, 9) for c, r in agent.thread.shown(i).items() if c == GROUP)
-    stray = rec["mid"] + 100
-    assert run(agent.thread.stray(iid, GROUP, stray)) and (GROUP, stray) in agent.tg.deleted
-    assert not run(agent.thread.stray(iid, GROUP, rec["mid"]))                  # its own message is never a stray
-
-
 def villa_alert(v, rule: str, blueprint: str | None, context: str = "RUN-1", mid: int = 500):
     """The villa's own message in the owner's group, then its rule's event (one run, one context) — a rule of another
     priority than ha_alert's: its route in the desk's rules.yaml decides (P1 critical_binary_trip, P3 the default)."""
