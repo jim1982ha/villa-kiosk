@@ -1,3 +1,8 @@
+## 2.496.752
+
+What you will see:
+- Nothing changes on the tablet; releases are simpler and faster.
+
 ## 2.496.751
 
 What you will see:
