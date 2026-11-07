@@ -4125,7 +4125,7 @@ def _photo_label(raw) -> str:
 
 def _announcement_photo_sources(event) -> list:
     """The announcement's photos as real files inside the villa's media folder, in its order (its main photo first, the
-    strongest signal's: "One visit, one story", owner 2026-11-06): [{path, label, at}], each file once, at most the
+    strongest signal's: "One visit, one story", owner 2026-11-06): [{path, label, at, strongest?}], each file once, at most the
     agreement's count (vestaMessage.limits.photos); one that is not such a file is left out (_media_photo). `at` is empty
     when the event says no time: the announcement's own then (_record_announcement)."""
     data = event.get("data") if isinstance(event, dict) else None
@@ -4140,7 +4140,9 @@ def _announcement_photo_sources(event) -> list:
         seen.add(path)
         at = one.get("at")
         out.append({"path": path, "label": _photo_label(one.get("label")),
-                    "at": at if isinstance(at, str) and _iso_epoch(at) is not None else ""})
+                    "at": at if isinstance(at, str) and _iso_epoch(at) is not None else "",
+                    # the visit's strongest step's photo (the VESTA Agent flags it): the tablet draws it larger
+                    **({"strongest": True} if one.get("strongest") is True else {})})
     # (the agreement unreadable: its one photo still, never none: a ring reaches the tablet without the Agent's file)
     return out[:max(1, int(VESTA_MESSAGE_LIMITS.get("photos") or 0))]
 
@@ -4151,7 +4153,8 @@ def _copy_announcement_photos(sources: list) -> list:
     out = []
     for one in sources:
         if name := _copy_announcement_photo(one["path"]):
-            out.append({"id": name, "label": one["label"], "at": one["at"]})
+            out.append({"id": name, "label": one["label"], "at": one["at"],
+                        **({"strongest": True} if one.get("strongest") else {})})
     return out
 
 

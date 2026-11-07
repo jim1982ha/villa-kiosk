@@ -397,6 +397,11 @@ async def main() -> None:
     limit = proxy.VESTA_MESSAGE_LIMITS["photos"]
     ck(f"  ...at most the agreement's {limit}, the first ones", [p["label"] for p in proxy._announcement_photo_sources(
         kev("<b>V</b>", photos=many))] == [f"C{i}" for i in range(limit)])
+    flagged = proxy._announcement_photo_sources(kev("<b>V</b>", photos=[{**shot("door", "Main door", "2026-11-06T18:35:41+00:00"),
+        "strongest": True}, {**shot("lock", "Entrance lock", "2026-11-06T18:35:40+00:00"), "strongest": "yes"}]))
+    kept = proxy._copy_announcement_photos(flagged)
+    ck("  ...the strongest step's photo keeps its flag (`strongest: true` only) from the event to the kept record",
+       [p.get("strongest") for p in flagged] == [True, None] and [p.get("strongest") for p in kept] == [True, None], kept)
     # ⚠️ formats outlive their writer: a record an older Kiosk kept with its single `photo` (before 2.496.731)
     legacy_id = "e" * 32 + ".jpg"
     (DATA / proxy.ANNOUNCEMENT_PHOTO_DIR / legacy_id).write_bytes(proxy._JPEG_MAGIC + b"kept before")

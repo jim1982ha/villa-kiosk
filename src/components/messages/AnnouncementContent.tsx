@@ -14,7 +14,7 @@ import { roleCan } from "@/auth/permissions";
 import { useConfirmDialog, type Question } from "@/hooks/useConfirmDialog";
 import { useAnnouncementPress } from "@/messages/AnnouncementsContext";
 import { useConversation } from "@/messages/ConversationContext";
-import { announcementPhotoUrl, offeredButtons, photoCaption, pressedRow, type Announcement, type AnnouncementButton,
+import { announcementPhotoUrl, offeredButtons, photoCaption, photoOrder, pressedRow, type Announcement, type AnnouncementButton,
   type AnnouncementPhoto, type Pressable } from "@/messages/announcements";
 import PhotoLightbox from "@/components/fm/PhotoLightbox";
 import type { PressState } from "@/messages/presses";
@@ -27,17 +27,20 @@ import type { PressState } from "@/messages/presses";
  * notification's photos (supervisor-proxy.py _current_photo_names), so a page that read them while current drew empty
  * frames once they were not. `lead`: the main photo as large as the place allows, the others in a row under it (the
  * full screen). The same row on every screen: the notice, the full screen, the Inbox's card, an issue's, VESTA's
- * conversation. Pure: a check draws it.
+ * conversation. The visit's strongest step's photo (flagged by the VESTA Agent) leads the row, drawn about twice a tile's
+ * size (owner, 2026-11-07), the others after it in time order; the notice keeps its small tiles (08-shared.css).
+ * Pure: a check draws it.
  */
 export function PhotoRow({ photos, lead = false }: { photos: readonly AnnouncementPhoto[]; lead?: boolean }) {
   const [refused, setRefused] = useState<ReadonlySet<string>>(() => new Set());
   const [viewing, setViewing] = useState<number | null>(null);
-  const shown = photos.filter((p) => !refused.has(p.id));
+  // the strongest step's photo first and larger, the others in time order (photoOrder); none flagged: as recorded
+  const { photos: shown, big } = photoOrder(photos.filter((p) => !refused.has(p.id)));
   if (shown.length === 0) return null;
   const tile = (p: AnnouncementPhoto, i: number) => {
     const caption = photoCaption(p);
     return (
-      <figure key={p.id} className="photo-tile">
+      <figure key={p.id} className={`photo-tile${big && i === 0 && !lead ? " photo-tile-strongest" : ""}`}>
         <button type="button" className="photo-tile-open"
           aria-label={`View photo ${i + 1} of ${shown.length}${caption ? `, ${caption}` : ""}`}
           onClick={(e) => { e.stopPropagation(); setViewing(i); }}>

@@ -103,10 +103,13 @@
 .photo-tile:only-child { width: auto; max-width: min(320px, 100%); }
 .photo-tile:only-child .photo-tile-open { height: auto; }
 .photo-tile:only-child .photo-tile-open img { height: auto; max-height: 320px; object-fit: contain; }
+/* the visit's strongest step's photo (owner, 2026-11-07): twice a tile, the others wrapping after it; never wider than
+   the card on a phone */
+.photo-tile-strongest { --tile-w: 248px; max-width: 100%; }
 .photo-tile figcaption { font-size: var(--text-2xs); color: var(--text-secondary); text-align: center; overflow-wrap: anywhere; }
 /* in a notice: centred over the words (owner, 2026-10-29), smaller; one photo alone as it was (240px by 160px) */
 .vesta-notice .photo-row { justify-content: center; margin-bottom: 6px; }
-.vesta-notice .photo-tile { --tile-w: 88px; }
+.vesta-notice .photo-tile, .vesta-notice .photo-tile-strongest { --tile-w: 88px; }
 .vesta-notice .photo-tile:only-child { max-width: min(240px, 100%); }
 .vesta-notice .photo-tile:only-child .photo-tile-open img { max-height: 160px; object-fit: cover; }
 /* the buttons a ring offers (the doorbell's Unlock), under its words; they wrap on a narrow phone */

@@ -77,8 +77,20 @@ export interface Announcement {
 }
 
 /** One photo of an announcement: the add-on's id, the camera that took it (empty when the villa named none),
- *  when it was taken (ISO). */
-export interface AnnouncementPhoto { id: string; label: string; at: string }
+ *  when it was taken (ISO), and whether it is the visit's strongest step's (the VESTA Agent flags it: drawn larger). */
+export interface AnnouncementPhoto { id: string; label: string; at: string; strongest?: boolean }
+
+/** A photo row's order and its larger first tile (owner, 2026-11-07): the photo flagged strongest first and drawn
+ *  larger, the others after it in time order; none flagged (an older card, the villa's own, one photo alone): the
+ *  record's order, every tile alike. Pure: tests/oracles/announcements.mjs. */
+export function photoOrder(photos: readonly AnnouncementPhoto[]): { photos: AnnouncementPhoto[]; big: boolean } {
+  const top = photos.findIndex((p) => p.strongest === true);
+  if (top < 0 || photos.length < 2) return { photos: [...photos], big: false };
+  const rest = photos.filter((_, i) => i !== top)
+    .map((p, i) => ({ p, i })).sort((a, b) => (a.p.at && b.p.at ? a.p.at.localeCompare(b.p.at) : 0) || a.i - b.i)
+    .map(({ p }) => p);
+  return { photos: [photos[top], ...rest], big: true };
+}
 
 /** One photo's words under it: its camera and its time ("Parking · 18:34"), the time alone when no camera is named.
  *  The same under a thumbnail and in the full-size view. Pure: tests/oracles/announcements.mjs. */
@@ -303,7 +315,8 @@ const photosOf = (r: Record<string, unknown>): AnnouncementPhoto[] => (Array.isA
   .flatMap((p): AnnouncementPhoto[] => {
     const o = p && typeof p === "object" ? (p as Record<string, unknown>) : {};
     return typeof o.id === "string" && PHOTO_ID.test(o.id)
-      ? [{ id: o.id, label: typeof o.label === "string" ? o.label.trim() : "", at: typeof o.at === "string" ? o.at : "" }] : [];
+      ? [{ id: o.id, label: typeof o.label === "string" ? o.label.trim() : "", at: typeof o.at === "string" ? o.at : "",
+          ...(o.strongest === true ? { strongest: true } : {}) }] : [];
   });
 
 const strings = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string" && x !== "") : []);
