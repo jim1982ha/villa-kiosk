@@ -1,3 +1,9 @@
+## 0.12.484
+
+- A maintenance fault judged on a whole day (a pump's daily energy or run time, a tank's highest level) no longer says
+  "next check within 5min" on the tablet: its verdict can only change once the next day has finished, so its card now
+  says the nightly check's time ("next check 02:00").
+
 ## 0.12.483
 
 - Nothing changes in what VESTA does; releases are simpler and faster.
