@@ -96,9 +96,9 @@ const WALK_MIN_MEASURE_DIST = 0.5;
  */
 export const GROUP_OVERLAP_ALLOW_WIDTHS = 0;
 /*
- * ── ZERO SINCE 2.413.0: rules/decided.md#badges-group-only-when-they-touch ──
+ * ── ZERO SINCE 2.413.0: rules/RULES.md#badges-group-only-when-they-touch ──
  * An overlap the `?debug=place` check reports is a failure all the same
- * (rules/decided.md#nothing-on-the-map-overlaps): fix where the pass measures,
+ * (rules/RULES.md#nothing-on-the-map-overlaps): fix where the pass measures,
  * never with a margin.
  *
  * What it means in practice, measured from the capture that prompted it: the
@@ -828,7 +828,7 @@ export class PlacementPass {
      *  was neither refused nor absorbed, so the card stood drawn over it — a
      *  pair card covering most of a power reading's badge (owner's phone
      *  screenshot, 2026-10-27). The self-check counted it as "under a card's
-     *  overhang (allowed)"; nothing overlaps (rules/decided.md#nothing-on-the-map-overlaps). */
+     *  overhang (allowed)"; nothing overlaps (rules/RULES.md#nothing-on-the-map-overlaps). */
     const groupBox = (g: PendingEntityGroup): { hw: number; hh: number } => {
       const lay = layoutOf(this.f, g, g.members.length);
       return { hw: (lay.width / 2) * scale * allow, hh: (lay.height / 2) * scale * allow };
@@ -1732,7 +1732,7 @@ export class PlacementPass {
     // Reported three times, last with a screenshot: focus a room and its badges
     // sit on top of other rooms' chips. 2.430.0 fixed WHICH of them paints in
     // front and which answers a tap; it could not remove the overlap, and
-    // nothing overlaps (rules/decided.md#nothing-on-the-map-overlaps).
+    // nothing overlaps (rules/RULES.md#nothing-on-the-map-overlaps).
     //
     // Nothing above can resolve it, and that is structural rather than an
     // oversight:

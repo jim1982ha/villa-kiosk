@@ -32,18 +32,16 @@ permissions:
   packages: write
 
 jobs:
-  # ⚠️ THE GATES RUN FIRST, AND THE IMAGE WAITS FOR THEM. This job did not
-  # exist: build.yaml and ci.yaml both fired on a push to dev2/main and neither
-  # knew about the other, so `push: true` below published whatever the commit
-  # contained and `sync-dev2-manifest` (needs: build) then made Home Assistant
-  # offer it. The only gate that could actually stop a release was
-  # `RUN npm run build` inside the Dockerfile — which is the single gate
-  # ci.yaml's own banner was written to complain about.
+  # Every check runs first and the image waits for it. A backport merge on main skips them: its tree equals dev2's
+  # apart from main's own channel folders, and the backport refuses unless dev2's CI was green on that tree
+  # (tools/release.py names the commit "Backport dev2 ...").
   checks:
+    if: ${{ !(github.ref_name == 'main' && startsWith(github.event.head_commit.message, 'Backport dev2 ')) }}
     uses: ./.github/workflows/ci.yaml
 
   build:
     needs: [checks]
+    if: ${{ !cancelled() && (needs.checks.result == 'success' || needs.checks.result == 'skipped') }}
     # ⚠️ EACH ARCH ON ITS OWN HARDWARE (2026-10-05): aarch64 built on an amd64 runner, its nginx/apk
     # stage under QEMU. GitHub's arm64 runner (free for a public repository) builds it natively; the
     # npm stage runs on the runner's own platform either way (BUILDPLATFORM), and the lockfile carries

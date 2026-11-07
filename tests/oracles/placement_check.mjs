@@ -69,13 +69,13 @@ const items = [0, 1, 2].map((i) => ({ sx: i * 200, sy: 0, sz: 0, reach: 20, reac
 ck("a pure solve accepts the same badges reversed", check({ solve: { items, gap: 2, mode: "priority", drawableMax: 6 } }).orderDependent === false);
 
 // ── NO HIDDEN EXCEPTIONS (owner, 2026-10-27) ──────────────────────────────
-// Every count is a failure unless ALLOWED_FINDINGS names the owner's decision in rules/decided.md. The old check
+// Every count is a failure unless ALLOWED_FINDINGS names the owner's decision in rules/RULES.md. The old check
 // called an overhung badge "allowed" and a focused room's overlaps "expected", which no owner ever decided.
 const { readFileSync } = await import("node:fs");
-const decided = readFileSync(new URL("../../rules/decided.md", import.meta.url), "utf8");
-const anchors = new Set([...decided.matchAll(/^## (.+)$/gm)].map((m) => m[1].toLowerCase().replace(/[^\w\s-]/g, "").trim().replace(/\s+/g, "-")));
+const decided = readFileSync(new URL("../../rules/RULES.md", import.meta.url), "utf8");
+const anchors = new Set([...decided.matchAll(/^#{2,3} (.+)$/gm)].map((m) => m[1].toLowerCase().replace(/[^\w\s-]/g, "").trim().replace(/\s+/g, "-")));
 const unanchored = Object.entries(ALLOWED_FINDINGS).filter(([, a]) => !anchors.has(a));
-ck("every allowed finding names an entry in rules/decided.md", Object.keys(ALLOWED_FINDINGS).length > 0 && unanchored.length === 0, unanchored);
+ck("every allowed finding names an entry in rules/RULES.md", Object.keys(ALLOWED_FINDINGS).length > 0 && unanchored.length === 0, unanchored);
 ck("  ...and the owner allowed one category only: a badge behind a wall while walking",
    JSON.stringify(ALLOWED_FINDINGS) === JSON.stringify({ byWall: "badges-behind-a-wall-hide-while-walking" }), ALLOWED_FINDINGS);
 const every = [clean, ov, foc, mixed, bur, hang, cc, ch, cp, est, moved, leak, orph,

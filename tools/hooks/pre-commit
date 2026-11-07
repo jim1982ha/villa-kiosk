@@ -1,8 +1,6 @@
 #!/bin/sh
-# Refuse a commit on `main`. All work ships on `dev2`; main is
-# frozen at the known-good release and advances only by a merge the owner has
-# verified. This existed as prose in CLAUDE.md, the /ship skill and a memory
-# file — three places that all rely on someone reading them. This one does not.
+# Refuse a commit on `main`. All work ships on `dev2`; main advances only by
+# the owner's backport (tools/release.py backport).
 #
 # Deliberate escape hatch: VK_ALLOW_MAIN=1 git commit ...
 branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)

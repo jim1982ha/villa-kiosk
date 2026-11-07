@@ -12,7 +12,7 @@
 //
 // No 3D model is loaded, deliberately: the report carries each badge's world anchor and screen point as the device
 // resolved them, which the model alone cannot give (the device positions live in the Kiosk's stored config).
-// rules/kiosk-code.md#measure-on-the-real-model-offline says when to reach for it.
+// rules/RULES.md#measure-on-the-real-model-offline says when to reach for it.
 
 import { register } from "node:module";
 import { readFileSync } from "node:fs";
