@@ -64,11 +64,19 @@ const vesta133 = parseVestaMessage({ seq: 7, key: "incident:133", at: closedAt, 
   photos: [{ id: PHOTO(1), label: "Parking", at: new Date(began).toISOString() }, { id: PHOTO(2), label: "Door", at: new Date(began + 60_000).toISOString() }] });
 const closedView = messagesView({ open: [], watched: [], closed: closedOnes, announcements: [vesta133], filter: "issues", selected: null });
 const closedItem = (id) => closedView.closed.find((i) => i.key === `closed:${id}`);
+// owner, 2026-11-07: the villa's own visit, closed while VESTA was away, kept before 2.496.742 (no `since`): its time the
+// visit's first photo's, never its close; held, it erases as every closed card
+const { parseAnnouncement } = await import("@/messages/announcements");
+const villaVisit = parseAnnouncement({ seq: 9, key: "visit:example-9", at: closedAt, device: "Test door", entity_id: "lock.asked",
+  message: `<b>Test door opened while the villa is empty</b>\nTo: Owner &amp; FM\n<blockquote>Test door opened, ${clockTime(began + 60_000)}</blockquote>\n\nStatus:\n<blockquote><i>✅ Cleared at ${clockTime(closedAt)}.</i></blockquote>`,
+  photos: [{ id: PHOTO(3), label: "Door", at: new Date(began).toISOString() }] });
+const villaClosed = messagesView({ open: [], watched: [], closed: [], announcements: [villaVisit], filter: "issues", selected: null }).closed[0];
 const table = { offline: issue("unavailable:camera.offline"), missing: issue("unavailable:camera.gone"), alarm: issue("alarm:binary_sensor.leak"),
   "task never done": issue("schedule:s1"), fault: issue("fault:f1"), ticket: issue("fault:f2"), watched: { kind: "issue", key: "w", card: watched },
   "about to be watched": { kind: "issue", key: "w2", card: aboutToBe },
-  closed: closedItem("c1"), "closed alert": closedItem("c2") };
-const STATED = ["ticket", "watched", "about to be watched", "fault", "closed", "closed alert"];
+  closed: closedItem("c1"), "closed alert": closedItem("c2"), "closed villa visit": villaClosed };
+const STATED = ["ticket", "watched", "about to be watched", "fault", "closed", "closed alert", "closed villa visit"];
+const CLOSED_KINDS = ["closed", "closed alert", "closed villa visit"];
 
 const { AttentionCard } = await import("@/components/cockpit/IssueCard");
 console.log("\n  each field of the row, on each kind:");
@@ -140,9 +148,9 @@ ck("each kind that has a state says it; a ticket's, its stage, who took it its w
   const row = (k) => draw(h(InboxCard, { item: table[k], opened: true, canManage: false, onOpenEntity() {}, onEditTicket() {}, onRaiseTicket() {} }));
   const lead = (k) => inside(inside(row(k), "fm-record-strip"), "fm-record-lead");
   ck("a closed card never wears the Watch check: a closed fault and a closed alert wear their source, grey; Watch keeps its check",
-     /fault-watched-icon/.test(lead("watched")) && ["closed", "closed alert"].every((k) => !/fault-watched-icon/.test(row(k))
+     /fault-watched-icon/.test(lead("watched")) && CLOSED_KINDS.every((k) => !/fault-watched-icon/.test(row(k))
        && /cockpit-attention-icon cockpit-attention-lost/.test(lead(k))),
-     ["watched", "closed", "closed alert"].map((k) => [k, lead(k)]));
+     ["watched", ...CLOSED_KINDS].map((k) => [k, lead(k)]));
 }
 {
   // owner, 2026-11-07: a hold on #134-P1's card under Closed did nothing, the villa's message beside it asked for the
@@ -155,13 +163,19 @@ ck("each kind that has a state says it; a ticket's, its stage, who took it its w
     h(InboxCard, { item, opened: true, canManage: false, onOpenEntity() {}, onEditTicket() {}, onRaiseTicket() {} }))));
   const note = closedView.closed.length ? messagesView({ open: [], watched: [], closed: [], announcements: [vesta133], filter: "issues", selected: null }).closed[0] : null;
   ck("every card under Closed is held to erase: a closed fault, a closed alert VESTA told, a message no fault holds; never an open one",
-     held(table.closed) && held(table["closed alert"]) && note?.kind === "notification" && held(note)
+     CLOSED_KINDS.every((k) => held(table[k])) && note?.kind === "notification" && held(note)
      && !held(table.fault) && !held(table.watched), [note?.kind]);
   const done = [];
   const erase = cardErase(table["closed alert"].card, async (id, t) => done.push(`ticket ${id} ${t}`), async (a, t) => done.push(`message ${a.key} ${t}`));
   await erase.run("T");
   ck("  ...held, its fault and VESTA's message of it go, behind the code", done.join() === "ticket c2 T,message incident:133 T"
      && erase.detail === "#133-P1 Asked" && cardErase(table.fault.card, async () => {}, async () => {}) === undefined, done);
+  const gone = [];
+  const villaErase = cardErase(table["closed villa visit"].card, async (id) => gone.push(`ticket ${id}`), async (a, t) => gone.push(`message ${a.feed ?? "villa"} ${a.seq} ${a.key} ${t}`));
+  await villaErase?.run("T");
+  ck("  ...the villa's own closed visit: held, its stored message goes by its key, behind the code; open, nothing to hold",
+     gone.join() === "message villa 9 visit:example-9 T" && villaErase.detail === "Test door"
+     && cardErase({ ...table["closed villa visit"].card, look: undefined }, async () => {}, async () => {}) === undefined, gone);
 }
 {
   // owner, 2026-11-05: "#91-P1" a small chip in the strip, before the name, from the record (fmEngine.alertLabel)

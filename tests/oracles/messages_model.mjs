@@ -790,6 +790,19 @@ ck("  ...a report under Reports, an open alert a notification, a closed one in C
      cardStrip(doneCard).status.map((x) => x.text).join() === "Resolved" && doneCard.lines[0].who === "Done on Telegram on 07/11/2026 07:12 (Jm)"
      && (doneHtml.match(/Done on Telegram/g) ?? []).length === 1 && rowWhen(doneCard) === momentText(step1.at)
      && doneCard.lines[0].actions.length === 0, [cardStrip(doneCard), doneHtml]);
+  // owner, 2026-11-07: a visit card kept before 2.496.742 (no `since`) showed its close, 07:16, for its first send, 07:09
+  // its lines' times are the villa's clock (+08:00 here, the fixture's): read on it, wherever the check runs (CI is UTC)
+  const { firstMoment } = await import("@/messages/messagesModel");
+  const { setVillaTimeZone } = await import("@/utils/villaClock");
+  setVillaTimeZone("Etc/GMT-8");
+  const keptBefore = { ...over, photos: [] };
+  const keptCard = villaAlertCards([keptBefore]).closed[0];
+  const first = new Date("2026-11-07T07:09:00+08:00");
+  ck("  ...kept with no first send: its time the earliest it holds, its first line's (07:09) or its first photo's, never its close",
+     rowWhen(keptCard) === momentText(first.toISOString()) && rowWhen(keptCard) !== momentText(over.at)
+     && firstMoment(over) === new Date(Math.min(Date.parse(photo(1).at), first.getTime())).toISOString()
+     && firstMoment({ ...keptBefore, text: "" }) === new Date(over.at).toISOString() && firstMoment(at2) === step1.at,
+     [rowWhen(keptCard), firstMoment(over)]);
   // owner, 2026-11-07: the villa's card was named by its title's words and had no buttons, VESTA's by the device with
   // Done · Not a problem · Open Ticket · Need help
   const { visitWrite } = await import("@/components/fm/WorkButtons");

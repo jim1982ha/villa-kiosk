@@ -12,6 +12,7 @@ import { roomLabel } from "@/config/devicePlace";
 import { STAGE_WORDS } from "@/fm/fmEngine";
 import { pillClass, QUIET_PILL } from "@/fm/tone";
 import { byTime, stillKept } from "./feed";
+import { villaTime, wallClock } from "@/utils/villaClock";
 
 export type MessagesFilter = "issues" | "notifications" | "reports";
 
@@ -127,7 +128,7 @@ export function villaAlertCards(kept: readonly Announcement[]): { open: CardView
       lead: { sources: ["alert"], severities: [severity] },
       nextCheck: monitoring ? { text: capital(monitoring), at: null, when: monitoring, pill: monitoring,
         tip: `${capital(monitoring)}: the villa's system closes this alert then if nothing more is seen; each new sign moves it later.` } : null,
-      lines: [{ key: `villa:${a.key}`, text: a.device ? a.title : "", records: [], actions: over || !a.record ? [] : visitActions(a.key!), asked: null, story: [], openedAt: a.since || a.at || null,
+      lines: [{ key: `villa:${a.key}`, text: a.device ? a.title : "", records: [], actions: over || !a.record ? [] : visitActions(a.key!), asked: null, story: [], openedAt: a.since || firstMoment(a),
         closing: null, ...(over && state ? { who: statusWords(a.status) } : {}),
         // its words are the visit's lines: drawn under "Status:" as VESTA's card draws its own; its bottom line is the
         // state line's (or the who line's) alone
@@ -139,6 +140,23 @@ export function villaAlertCards(kept: readonly Announcement[]): { open: CardView
     (over ? closed : open).push(card);
   }
   return { open, closed };
+}
+
+/** When the villa's message was first sent: its `since` (kept by the add-on since 2.496.742), else, for one kept before,
+ *  the earliest moment it holds — a photo's time, its first line's time ("Seen at Parking, 07:09", on its own last
+ *  step's day at the villa, the day before when later than it), its last step's. ⚠️ OWNER, 2026-11-07: a visit kept before showed its
+ *  close (07:16) for its first send (07:09). Pure. */
+export function firstMoment(a: Pick<Announcement, "since" | "at" | "photos" | "text">): string | null {
+  if (a.since) return a.since;
+  const last = Date.parse(a.at ?? "");
+  const times = a.photos.map((p) => Date.parse(p.at)).filter(Number.isFinite);
+  const m = /\b(\d{1,2}):(\d{2})\b/.exec(a.text.split("\n").map((l) => l.trim()).find(Boolean) ?? "");
+  if (m && Number.isFinite(last)) {
+    const w = wallClock(last), on = (day: number) => villaTime(w.year, w.month, day, Number(m[1]), Number(m[2]));
+    times.push(on(w.day) > last ? on(w.day - 1) : on(w.day));
+  }
+  if (Number.isFinite(last)) times.push(last);
+  return times.length ? new Date(Math.min(...times)).toISOString() : a.at || null;
 }
 
 /** The buttons of the villa's own open visit card (its key `visit:<id>`), in the order of every card's (Done · Not a
