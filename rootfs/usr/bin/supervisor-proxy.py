@@ -4291,7 +4291,7 @@ def _announcements_with(stored: list, rec: dict) -> list:
 
 def _photos_listed(rec: dict) -> dict:
     """A record as this Kiosk keeps it: one an older Kiosk wrote with its single `photo` (a name) read as its `photos`, a
-    list of one ({id, label: "", at: the record's}). ⚠️ FORMATS OUTLIVE THEIR WRITER (rules/git-gates-ci.md): the
+    list of one ({id, label: "", at: the record's}). ⚠️ FORMATS OUTLIVE THEIR WRITER: the
     announcements and VESTA's messages kept before 2.496.731 name their picture so; read through every tidy, so the
     sweep never takes their file for an orphan, and written back so at the next write. Pure."""
     if "photo" not in rec:

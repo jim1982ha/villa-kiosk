@@ -50,10 +50,8 @@ script and no general JS test runner: `tsc -b` (strict, `noUnusedLocals`,
 **Oracles** (`tests/oracles/*.mjs`) are plain Node scripts — Node strips the
 types, imports go through `tests/consistency/alias-hook.mjs`. Prefer checks
 that DRIVE VALUES through a pure module over regexes on source (markup shape: `tests/consistency/jsx.mjs`
-reads elements, props and their `&&` guards from the compiler's tree). Each fix's
-main check is shown red ONCE without the fix: `npm run mutate -- FILE 'old' 'new' -- CMD`
-(RED = it catches it; the file always comes back; `--restore` after a killed run), or the
-fix reverted. Not a mutation per assertion (owner, 2026-11-07).
+reads elements, props and their `&&` guards from the compiler's tree). A fix comes
+with a normal test; no mutation proof (owner, 2026-11-07: back to a standard way of validating).
 
 ⚠️ **`tests/` is gitignored and 83 files under it are tracked anyway** (5 at
 `tests/`, 76 in `tests/oracles/`, 2 in `tests/consistency/`), by negation
@@ -145,8 +143,7 @@ asset.** Known traps: `displayLoadingUI`/`DefaultLoadingScreen`,
 
 ⚠️ **ONE SET OF RULES FOR EVERY CONTRIBUTOR'S CLAUDE** (owner, 2026-10-25).
 `rules/` holds every standing rule of how this repository is worked on (the
-owner's decisions, how to verify a claim, git and gates, the villa's system,
-Kiosk and Agent code, review). Read the index below; open a rule's file when its
+owner's decisions, the villa's system, Kiosk and Agent code). Read the index below; open a rule's file when its
 hook matches the task. A new rule goes into `rules/` (on `dev2`; `agent-dev`
 copies it, its release checks they match), never only into a private memory.
 Nothing villa-specific goes in (the hard rule below; `hard-rules.py` scans them).
@@ -181,4 +178,3 @@ of its skills run only when the owner types them — check a skill's frontmatter
   frozen deliverables (their REQ-/ARCH-/TEST- ids resolve to nothing),
   `docs/blueprint/` OLD copies of the villa's blueprints, possibly out of date: edit the villa's own copy, read
   through the MCP. Not a documentation system.
-* `rules/coding-standards.md` — the judgement calls a reviewer checks on a diff. Read it when reviewing.

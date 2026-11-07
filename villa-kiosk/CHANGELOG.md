@@ -1,3 +1,8 @@
+## 2.496.741
+
+What you will see:
+- Nothing on the tablet. Updates are prepared faster: the step that proved each test could fail is gone, and the rulebook every helper reads is cut to your product decisions and the facts about the villa.
+
 ## 2.496.740
 
 What you will see:
