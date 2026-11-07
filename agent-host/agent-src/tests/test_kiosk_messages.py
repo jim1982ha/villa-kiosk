@@ -535,7 +535,7 @@ def test_the_rules_late_all_clear_keeps_every_line_of_the_tablets_card(agent, ki
                                                   "bot": BOT})
     scenario(agent, lambda v: run_of(v, "opened", 500, "P1"), not_a_problem, lambda v: tick(v, 24 * 60))
     watched_out = list(kiosk.messages["incident:1"]["status"])
-    assert watched_out[-1].startswith("✅ Closed on ") and any("Not a problem" in ln for ln in watched_out), watched_out
+    assert watched_out[-1].startswith(("✅ Closed on ", "✅ Closed at ")) and any("Not a problem" in ln for ln in watched_out), watched_out
     scenario(agent, lambda v: run_of(v, "resolved", 501))
     assert kiosk.messages["incident:1"]["status"] == watched_out
 

@@ -41,7 +41,7 @@ from vesta_shared.messaging import incident_tag
 from vesta_shared.problems import again_days
 from vesta_shared.timeutil import moment_label
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 from typing import Callable
 
@@ -663,15 +663,35 @@ class Notices:
         resent: dict[int, set[str]] = {}
         for i, j in into.items():
             resent.setdefault(j, set()).update(self._roles(history[i]))
+        told = []
         for i, h in enumerate(history):
             note = None if i in into else self._line(h, kiosk=True)
             if note and i in resent:
                 # its card sent again for it, on its own line, as Telegram's Status says it (resent_into)
                 note = status_words.resent(note, audience(resent[i]) or "nobody")
             if note:
-                # a step repeated in a row: its line, counted, in place of the fault's lines of each time (`ats`, kiosk.noted)
-                out.append({"at": h["at"], "note": note, "stage": h.get("stage"),
-                            **({"ats": list(h["ats"])} if h.get("ats") else {})})
+                told.append((i, h, note))
+        # ⚠️ ONE MOMENT PER LINE (owner, 2026-11-07: the fault's story lacked "Alert sent", at the very moment of the
+        # visit's first line — the fault keeps one line per moment, kiosk.noted): a line at a moment another holds is a
+        # microsecond after it, the card's time the same; a notice keeps its own (a run starts at it: tickets._run_start)
+        used: set[str] = set()
+        moment: dict[int, str] = {}
+        for i, h, _note in sorted(told, key=lambda x: observed(x[1])):
+            at, m = h["at"], _moment(h["at"])
+            while at in used and m is not None:
+                m += timedelta(microseconds=1)
+                at = m.isoformat()
+            used.add(at)
+            moment[i] = at
+        for i, h, note in told:
+            at = moment[i]
+            # a step repeated in a row: its line, counted, in place of the fault's lines of each time (`ats`,
+            # kiosk.noted); ⚠️ a visit's line, or one its card was sent again for, said anew at its moment (owner,
+            # 2026-11-07: the door's ": alert sent again (to: …)" never reached the fault, its line written already)
+            ats = [a for a in h.get("ats") or () if a != h["at"] and a not in used]
+            again = observed(h) or i in resent
+            out.append({"at": at, "note": note, "stage": h.get("stage"),
+                        **({"ats": [*ats, at]} if h.get("ats") or again else {})})
         return out
 
     def _line(self, h: dict, lang: str = "en", kiosk: bool = False) -> str | None:

@@ -458,6 +458,14 @@ class Outcome:
         if self.thread is not None:
             for run in ([str(ctx)] if ctx else []) + [str(t) for t in (h.get("takes") or [])]:
                 self.thread.taken(int(iid), run)
+        if h.get("alone"):
+            # ⚠️ THE VILLA'S CARDS ARE FINAL (owner's drill, 2026-11-07, #138): a visit that ended while VESTA was away is
+            # the tablet's one card, drawn as every copy is (its heading, its story, its words), no chat's message touched
+            if self.thread is not None and self.notices:
+                p = layout.parts(body=text, status=h.get("status") or "",
+                                 head=self.notices.heading(0, int(iid), stage=h.get("stage")))
+                self.thread.tell(int(iid), p)
+            return []
         if named is not None:
             # the cards the villa's record names, never the run's messages; a chat already holding a copy of the
             # incident keeps it (`held`: its card, or one that replaced the card named)

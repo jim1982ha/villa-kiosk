@@ -7,6 +7,8 @@ drill (never offers the siren); and the Limits tab showing and setting the villa
 every id invented."""
 from __future__ import annotations
 
+import re
+
 import asyncio
 
 from test_visit_story import (FM, NAMES, OWNER, PARKING, ENTRANCE, LOCK, Visit, Writer, at, copy, lines, play, send, tick,
@@ -46,7 +48,9 @@ def test_a_press_on_the_villas_own_button_is_left_to_the_villa_then_applied_from
     play(v, send(ev))
     assert Store(v.s.store_path).incident(1)["closed_at"], "Wayan's Done closed the alert"
     for chat in (OWNER, FM):
-        assert "Done at " in copy(v, chat)["text"] and "(Wayan)" in copy(v, chat)["text"], copy(v, chat)["text"]
+        # "Done at 18:25", or "Done on 07/11 00:00" once the clock is past the visit's own day (DAY): a press is
+        # stamped when VESTA takes it in
+        assert re.search(r"Done (at|on) ", copy(v, chat)["text"]) and "(Wayan)" in copy(v, chat)["text"], copy(v, chat)["text"]
         assert "Watch" not in copy(v, chat)["text"]
     assert [t for _c, t, _k in v.tg.sent[sent:] if not t.startswith("Approval")] == [], "nothing sent anew"
     assert len([d for d in told(v) if d.get("answered")]) == 1

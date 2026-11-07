@@ -128,7 +128,7 @@ def test_not_a_problem_then_the_rules_late_all_clear_then_its_watch_tell_the_pre
     tick(agent, 24 * 60)                                                   # its watch is over
     lines = status_lines(card(agent, GROUP))
     assert len(lines) == 3 and lines[1].startswith("- Not a problem at "), lines
-    assert lines[2].startswith("✅ Closed on ") and "did not come back" in lines[2], lines
+    assert lines[2].startswith(("✅ Closed on ", "✅ Closed at ")) and "did not come back" in lines[2], lines
     assert not any("Cleared" in ln or "Closing note" in ln for ln in lines), lines
 
 

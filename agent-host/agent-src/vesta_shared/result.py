@@ -228,7 +228,7 @@ def settle(incident: int, note: str, mark: str | None = None, note_in: dict | No
 
 def ha_message(incident: int, text: str, context: str | None, stage: str | None = None, status: str | None = None,
                status_in: dict | None = None, as_it_stands: bool = False, messages=None, takes=None,
-               at: str | None = None) -> dict:
+               at: str | None = None, alone: bool = False) -> dict:
     """Home Assistant's own messages of the automation run `context` (the event's context) become `incident`'s
     messages, rewritten as `text` under the incident's heading, like every other notice about it (`stage`: STAGES;
     `status_in`: as `message`'s). `as_it_stands`: the incident closed before this message (the rule's late all-clear)
@@ -240,7 +240,9 @@ def ha_message(incident: int, text: str, context: str | None, stage: str | None 
     card each chat shows now. A chat already holding a copy of the incident is never taken over again. `takes`: the
     villa's announcements on the tablet this card stands for, by their key ("visit:<id>"). `at`: when the step
     happened, its Status line's moment — a visit's alert taken over late is "Alert sent" when the VILLA sent it (owner's
-    drill #129: "Alert sent 22:57", VESTA's take-over, for an alert sent at 22:55)."""
+    drill #129: "Alert sent 22:57", VESTA's take-over, for an alert sent at 22:55). `alone`: the tablet's card only,
+    no chat's message taken over or sent — ⚠️ A VISIT THAT ENDED WHILE VESTA WAS AWAY (owner's drill, 2026-11-07, #138):
+    the villa's cards are final, VESTA records the visit and the tablet shows its one card."""
     m = {"incident_id": int(incident), "text": text, "context": context,
          **({"status": status, **_in("status_in", status_in)} if status else {}),
          **({"as_it_stands": True} if as_it_stands else {})}
@@ -250,6 +252,8 @@ def ha_message(incident: int, text: str, context: str | None, stage: str | None 
         m["takes"] = [str(t) for t in takes]          # the villa's announcements it stands for on the tablet, by key
     if at:
         m["at"] = str(at)                              # when the step happened (a visit's alert: when the villa sent it)
+    if alone:
+        m["alone"] = True                              # the tablet's card only (a visit that ended while VESTA was away)
     if stage is not None:
         if stage not in STAGES:
             raise ValueError(f"stage must be one of {', '.join(STAGES)}")

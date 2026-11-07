@@ -354,7 +354,12 @@ class IncidentThread:
         card = self.state.incident_card(iid)
         if card is None or self.state.incident_chats(iid):
             return
-        self.tell(iid, layout.changed(card["parts"], **{k: v for k, v in change.items() if v is not None}), None)
+        p = layout.changed(card["parts"], **{k: v for k, v in change.items() if v is not None})
+        if change.get("status") is not None and str(iid).isdigit():
+            # its heading as the incident stands now ("(closed)"): a visit that ended while VESTA was away is the
+            # tablet's card alone (owner's drill, 2026-11-07, #138), its close read as one on the tablet too
+            p = {**p, "head": self._head_now(iid, 0, p.get("head") or "")}
+        self.tell(iid, p, None)
 
     async def _finish(self, iid: int | str, note: str, note_in: dict | None) -> int:
         """`close` with `final`: the incident's last word (see there). Returns how many chats show it now."""

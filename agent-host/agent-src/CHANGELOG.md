@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.6.456 (7 November 2026)
+
+- A visit the villa closed while VESTA was away is recorded, never told (owner's drill, 2026-11-07, #138: the catch-up
+  replayed the villa's closed visit, opened #138 again, ran the villa's tell script twice — its record rewritten: owner
+  vesta, number, ack_seq, its 4 reply ids lost — and closed it "Cleared at 07:17" for the villa's 07:16): app
+  `_visit_now` reads the record's state too — closed for this visit (or a later visit holding it), `now.closed` and the
+  whole story as the record holds it (VISIT_STORY); desk.visit_of takes the record whole then; visit_intake opens it
+  `away` (VISIT_AWAY): its fault made, no send, no Telegram card taken over (R.ha_message `alone`: the tablet's card
+  only, drawn by Outcome.adopt_ha through notices.heading, standing for the villa's announcement by its key), no ring,
+  redraw, sheet, siren, answer or tell, the tick never chases it; a step of a visit closed on the villa is never told
+  either; resolved closes a visit at the record's close moment ("{time}" its own, closed_at its own), an away one with
+  its settle alone (IncidentThread._tell_alone retitles the tablet's card "(closed)"). tests/test_visit_drills.py
+  replays the drill; 2 mutations red.
+- The fault's short story has every line Telegram's Status has (owner, 2026-11-07): Notices.story gives each line its
+  own moment (a line at a moment another holds is a microsecond after it, a notice keeping its own: kiosk.noted keeps one
+  line per moment — "Alert sent", at the visit's first line's moment, was never written), and a visit's line or one its
+  card was sent again for carries `ats`, so ": alert sent again (to: …)" rewrites the fault's line in place. 2 mutations
+  red.
+- Four tests read a close's or a press's moment "at HH:MM" only: past the fixture's own day (UTC midnight) it reads
+  "on DD/MM HH:MM", by design; they accept both (test_visit_villa_side, test_alert_card_runs, test_kiosk_messages,
+  test_visit_drills).
+
 ## 0.6.455 (7 November 2026)
 
 - A person's close of a fault nothing watches says so (owner, 2026-11-07, drill #136-P1: a visit closed in the Cockpit
