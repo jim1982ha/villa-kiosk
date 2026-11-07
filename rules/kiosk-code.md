@@ -5,8 +5,7 @@ Rules specific to the VESTA Kiosk (React, TypeScript, Babylon.js). The commands 
 ## Checks drive values
 
 Oracles (`tests/oracles/*.mjs`) drive values through pure modules or draw the component (`tests/consistency/screen.mjs`,
-`tests/consistency/jsx.mjs`), rather than matching source text. A fix's main check is proved red once
-([A test must have gone red](verifying.md#a-test-must-have-gone-red)). `npm run oracles:changed` runs the checks naming
+`tests/consistency/jsx.mjs`), rather than matching source text. `npm run oracles:changed` runs the checks naming
 a changed file in seconds; `ship` runs those, and CI runs them all before anything is published.
 
 **Why:** checks that pinned the exact wording of the code failed four releases in one day (2026-10-24) on harmless

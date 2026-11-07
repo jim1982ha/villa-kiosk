@@ -80,7 +80,6 @@ GATES: list[tuple[str, list[str], str, str]] = [
     ("What the host sends is what the agent reads", [PY, "agent-host/tests/test_env_contract.py"], ".", "rest"),
     ("The agent's manifest and the host state", [PY, "agent-host/tests/test_manifest.py"], ".", "rest"),
     ("The release module", [PY, "agent-host/tests/test_release.py"], ".", "rest"),
-    ("A mutation run always gives the file back", [PY, "agent-host/tests/test_mutate.py"], ".", "rest"),
     # ⚠️ NO NAME USED THAT IS NOT DEFINED (retro, 2026-10-15): a 1,042-line split of the reports' composer was checked
     # for missing imports by a throwaway script. pyflakes' rules (ruff F) on the agent's own code; on the tests,
     # undefined names only (their fixture imports read as unused). `# noqa: F401` marks a re-export.
@@ -114,7 +113,6 @@ SHIP_WHEN: dict[str, tuple[str, ...] | None] = {
     "What the host sends is what the agent reads": None,
     "The agent's manifest and the host state": None,
     "The release module": ("agent-host/tools/release.py", "agent-host/tests/test_release.py"),
-    "A mutation run always gives the file back": ("agent-host/tools/mutate.py", "agent-host/tests/test_mutate.py"),
     "Every name the agent's code uses is defined": None,
     "Every name the tests use is defined": None,
 }

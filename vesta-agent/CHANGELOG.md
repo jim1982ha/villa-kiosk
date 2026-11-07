@@ -1,3 +1,8 @@
+## 0.12.474
+
+- Nothing changes in what VESTA does. Updates are prepared faster: the step that proved each test could fail is gone,
+  and the shared rulebook is cut to your product decisions and the facts about the villa.
+
 ## 0.12.473
 
 - A visit the villa ended while VESTA was stopped is recorded by VESTA when it starts again as one closed alert, with

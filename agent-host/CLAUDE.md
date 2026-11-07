@@ -39,8 +39,7 @@ refuses to ship when they differ (`agent-host/tests/check_shared_rules.sh` print
 - The checks are `tools/release.py gates` (tests, ruff on the folders it names, every other gate); CI runs them all
   before the image is built. `ship` runs here only the fast ones and the tests naming a changed file (owner,
   2026-11-07), and records the starter skills itself. Python is `agent-host/.venv/bin/python` (3.13, gitignored; rebuilt as `PY` says).
-- One red proof per fix: its main test fails without the fix, with `tools/mutate.py FILE 'old' 'new' -- CMD` (RED =
-  it catches it; the file always comes back; `--restore` after a killed run) or the fix reverted.
+- A fix comes with a normal test; no mutation proof (owner, 2026-11-07).
 
 ## Owner rules that stand (the decision and its date are in ARCHITECTURE.md)
 - SKILLS BEFORE CODE (mandatory): whatever a skill can define (sections, thresholds, wording, routes, which scripts run, which rules are alerts) lives in the skill, never in `vesta_agent/`. No threshold in code: a missing one is named, not guessed.
