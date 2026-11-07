@@ -201,7 +201,11 @@ export function pillOf(mark: BadgeMark): Exclude<LinkPill, null> {
  *  function as the top-right), else filled when it is on, hollow when off; none without a linked entity. */
 export function linkPillOf(r: DeviceReading): LinkPill {
   if (!r.linked) return null;
-  const mark = r.link ? badgeMarkOf(r.link) : null;
+  // ⚠️ ONE "!" PER DEVICE (owner, 2026-11-07, #148-P1: a camera wore two amber "!", top-right and bottom-right): a
+  // fault names an entity AND its device (attention.deviceIssues), so a fault on the linked entity was drawn in both
+  // corners. The top-right already says it; this corner then says what the linked entity does.
+  const link = r.link && r.fault ? { ...r.link, fault: false } : r.link;
+  const mark = link ? badgeMarkOf(link) : null;
   // in use is the linked entity "on": the one filled dot, both corners (pillOf)
   return mark ? pillOf(mark) : r.linkedOn ? "on" : "off";
 }

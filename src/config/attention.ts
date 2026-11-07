@@ -250,6 +250,7 @@ export function deviceIssues(groups: readonly AttentionGroup[]): DeviceIssues {
   for (const g of groups) {
     for (const item of g.items) {
       for (const one of item.fault ? [item, item.fault] : [item]) {
+        if (aboutActivity(one)) continue;
         const s = attentionSeverity(one);
         note(one.entityId, s);
         note(g.entityId, s);
@@ -257,6 +258,15 @@ export function deviceIssues(groups: readonly AttentionGroup[]): DeviceIssues {
     }
   }
   return { amber };
+}
+
+/** A problem that is about what happened AROUND a device, not about the device: an open visit's fault (its
+ *  `monitoredUntil`, which the VESTA Agent writes on a visit's fault only, agent-contract.json ticket.fields). Its
+ *  device names where the activity was seen, so it never wears the amber "!" of a device problem (deviceIssues).
+ *  ⚠️ A VISIT IS NO DEVICE FAULT (owner, 2026-11-07, visit #148-P1: the motion sensor of the visit's strongest step
+ *  put two amber "!" on its camera's badge, "there is nothing wrong with this device"). Its card stays in the Cockpit. */
+export function aboutActivity(item: Pick<AttentionItem, "monitoredUntil">): boolean {
+  return !!item.monitoredUntil;
 }
 
 /** The amber issues one profile's Cockpit lists (`may`: the devices it may see, villaVisibility.visibleTo): what a

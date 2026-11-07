@@ -1,3 +1,9 @@
+## 2.496.748
+
+What you will see:
+- During a visit (activity while the villa is empty), the camera or sensor where it was seen no longer wears the amber "!" on the map or in its window: nothing is wrong with it. It shows its usual look, the detection's plain purple pill while it sees someone. The visit's card stays in the Cockpit.
+- A device with a fault on its detection or its sensor shows one amber "!" (top right), no longer a second one bottom right.
+
 ## 2.496.747
 
 What you will see:
