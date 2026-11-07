@@ -1,3 +1,10 @@
+## 2.496.746
+
+What you will see:
+- While VESTA Agent is off, the villa's own visit card under Closed can be erased like every other closed card: hold it, enter the superadmin code, and it goes.
+- A visit card kept before the last update shows the time the visit was first sent (07:09), no longer the time it closed (07:16).
+- With the updated Presence Guard blueprint pasted on the villa, a visit that ends says "Cleared at 07:16." on Telegram and on the tablet, the time only, as its other lines, no longer the full date.
+
 ## 2.496.743
 
 What you will see:
