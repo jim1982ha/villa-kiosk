@@ -1,3 +1,8 @@
+## 2.496.755
+
+What you will see:
+- Nothing changes on the tablet; fewer checks before each release.
+
 ## 2.496.754
 
 What you will see:

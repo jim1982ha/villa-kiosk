@@ -8,8 +8,10 @@ small Python proxy, `rootfs/usr/bin/supervisor-proxy.py`). Path alias `@/*` → 
 ```bash
 npm run dev                  # https://localhost:5173
 npm run build                # tsc -b + vite build: run before calling a change done
-npm run gates                # every check (what CI runs)
-npm run test:oracles         # the Node checks in tests/oracles/
+npm test                     # the tests in tests/oracles/ (node --test)
+npm run test:proxy           # the proxy's rules (Python, needs aiohttp)
+npm run test:hard-rules      # nothing villa-specific, no internet dependency
+npm run gates                # build + the three above: what CI runs before the image's start-up test
 npm run ship -- -F msg.txt   # release (below)
 npm run backport -- --owner-asked   # dev2 → main, only on the owner's word
 ```
@@ -39,8 +41,7 @@ the proxy (`ship` runs it when the proxy is staged). Never move it under `tests/
 - **No internet dependency.** The tablet may have only a LAN path to the villa: no CDN, webfont or remote asset.
   Before using a Babylon feature, check it does not fetch lazily (loading screen, default environment, lens flares,
   KTX2 defaults).
-- **Never name the platform** in text a person reads: "the villa's system", never "Home Assistant" or "HA"
-  (`no_platform_name.mjs`).
+- **Never name the platform** in text a person reads: "the villa's system", never "Home Assistant" or "HA".
 
 ## Private folders
 
