@@ -532,6 +532,14 @@ fresh = proxy._announcements_with([], {"seq": 1, "key": "Q", "message": "Ask", "
 ck("  ...never on a record that never asked, and never taken from the writer",
    "asked" not in note[-1] and "asked" not in fresh[-1], (note, fresh))
 
+# owner, 2026-11-07 (drill, VESTA stopped): the villa's visit card took its last step's time (a press) for its own
+v1 = {"seq": 1, "key": "visit:x", "at": "2026-11-07T08:48:10+08:00", "message": "Step 1"}
+v3 = proxy._announcements_with(proxy._announcements_with([v1], {"seq": 2, "key": "visit:x", "at": "2026-11-07T08:49:00+08:00",
+     "message": "Step 2"}), {"seq": 3, "key": "visit:x", "at": "2026-11-07T08:53:00+08:00", "message": "Done", "since": "x"})
+ck("a rewrite keeps when its first version arrived (`since`), never the writer's",
+   v3[-1].get("since") == "2026-11-07T08:48:10+08:00" and v3[-1]["at"] == "2026-11-07T08:53:00+08:00"
+   and "since" not in proxy._announcements_with([], dict(v1, since="x"))[-1], v3)
+
 # ── VESTA's card shows the pictures of the villa's messages it took over (owner, 2026-11-02: #107 on the tablet) ─────
 print("\n  a card that took a villa message over:")
 ph = lambda i: {"id": i, "label": i[0].upper(), "at": "2026-11-06T18:00:00+00:00"}

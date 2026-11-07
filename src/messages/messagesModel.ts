@@ -6,7 +6,10 @@
 // tests/oracles/messages_model.mjs.
 
 import { othersFirst, saysWord, type CardView } from "@/config/cockpitCard";
-import { alertStage, incidentKey, versionOf, type Announcement } from "./announcements";
+import { alertStage, incidentKey, statusWords, versionOf, type Announcement } from "./announcements";
+import { roomLabel } from "@/config/devicePlace";
+import { STAGE_WORDS } from "@/fm/fmEngine";
+import { pillClass, QUIET_PILL } from "@/fm/tone";
 import { byTime, stillKept } from "./feed";
 
 export type MessagesFilter = "issues" | "notifications" | "reports";
@@ -95,6 +98,14 @@ export const idOf = (a: Announcement): string => `${a.feed === "vesta" ? "v" : "
  * "visit:<id>") is drawn as every alert is, its words, photos and Status inside the one card (CardLine `told`): under
  * Open issues while it is open, under Closed once over. VESTA's card takes its place by that key (supersedes, shownTogether)
  * the moment VESTA tells it, its fault then holding it. Pure: tests/oracles/messages_model.mjs.
+ *
+ * ⚠️ THE SAME FIELDS AT THE SAME PLACE AS VESTA'S CARD (owner, 2026-11-07, drill with VESTA stopped): it wore the live
+ * state's icon, took the time of its last step (a press) and said its whole bottom line as its state. Now: the alert's
+ * icon, the visit's first send (`since`, kept by the add-on) as its one time, the room line ("Other": the villa names
+ * none), its lines under "Status:" (its `story`), on an open visit its state's words alone ("New alert") with "monitoring
+ * until 08:54" in the pill at their right; once over, the closed stage's word, its bottom line ("Done on Telegram on …
+ * (Jm)") its who line. No chip: the villa numbers no alert (VESTA does). No buttons: a press on the tablet reaches the
+ * villa only through VESTA.
  */
 export function villaAlertCards(kept: readonly Announcement[]): { open: CardView[]; closed: CardView[] } {
   const open: CardView[] = [], closed: CardView[] = [];
@@ -102,12 +113,20 @@ export function villaAlertCards(kept: readonly Announcement[]): { open: CardView
     const stage = a.feed === undefined && a.key !== null && !isReport(a) ? alertStage(a) : null;
     if (!stage) continue;
     const over = stage === "watch" || stage === "closed";
-    // the villa's system reports it (its source "live", in the problem's colour; grey once over)
     const severity = over ? "lost" as const : "danger" as const;
+    const { state, monitoring } = villaState(a.status, over);
     const card: CardView = {
-      key: `villa:${a.key}`, title: a.title, lead: { sources: ["live"], severities: [severity] }, nextCheck: null,
-      lines: [{ key: `villa:${a.key}`, text: "", records: [], actions: [], asked: null, story: [], openedAt: a.at || null,
-        closing: null, told: a }],
+      key: `villa:${a.key}`, title: a.title, room: roomLabel(null),
+      // an alert of the villa's: the alert's icon, in the problem's colour, grey once over
+      lead: { sources: ["alert"], severities: [severity] },
+      nextCheck: monitoring ? { text: capital(monitoring), at: null, when: monitoring, pill: monitoring,
+        tip: `${capital(monitoring)}: the villa's system closes this alert then if nothing more is seen; each new sign moves it later.` } : null,
+      lines: [{ key: `villa:${a.key}`, text: "", records: [], actions: [], asked: null, story: [], openedAt: a.since || a.at || null,
+        closing: null, ...(over && state ? { who: statusWords(a.status) } : {}),
+        // its words are the visit's lines: drawn under "Status:" as VESTA's card draws its own; its bottom line is the
+        // state line's (or the who line's) alone
+        told: { ...a, text: "", story: a.text.split("\n").map((l) => l.trim()).filter(Boolean), status: "" } }],
+      status: state ? [{ text: state, tone: over ? QUIET_PILL : pillClass("danger") }] : [],
       tone: severity,
       ...(over ? { look: "closed" as const, ...(a.at ? { closedAt: a.at } : {}) } : {}),
     };
@@ -115,6 +134,17 @@ export function villaAlertCards(kept: readonly Announcement[]): { open: CardView
   }
   return { open, closed };
 }
+
+/** A villa alert's bottom line as its card says it: open, its stage's words ("New alert") and what follows them
+ *  ("monitoring until 08:54", the pill's); over, the closed stage's word (the line itself is the who line). Pure. */
+function villaState(status: string, over: boolean): { state: string; monitoring: string } {
+  const words = statusWords(status);
+  if (!words) return { state: "", monitoring: "" };
+  if (over) return { state: STAGE_WORDS.closed.card, monitoring: "" };
+  const cut = words.indexOf(", ");
+  return cut < 0 ? { state: words, monitoring: "" } : { state: words.slice(0, cut), monitoring: words.slice(cut + 2).trim() };
+}
+const capital = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 /** VESTA's card of each alert an open issue carries, in the order of its lines (its thread `incident:<n>`, the Agent's
  *  kiosk_messages.thread_key): what the issue shows above its own buttons, as Telegram shows it. Pure. */
@@ -271,7 +301,8 @@ export function messagePlaces({ open, watched, closed = [], announcements, read 
   // its message's words, photos and Status inside it as on Open issues and Watch
   const villa = villaAlertCards(announcements);
   const withIssue = new Set([...[...open, ...watched, ...closed].flatMap((c) => cardsOfIssue(c, announcements)),
-    ...[...villa.open, ...villa.closed].flatMap((c) => c.lines.flatMap((l) => (l.told ? [l.told] : [])))]);
+    // the villa's own alert by its card's key: the card draws a copy of it (its lines as its Status)
+    ...announcements.filter((a) => a.feed === undefined && [...villa.open, ...villa.closed].some((c) => c.key === `villa:${a.key}`))]);
   const of = (a: Announcement): MessagePlace => (withIssue.has(a) ? "issue" : placeOf(a));
   const seen = new Set(read);
   // ⚠️ LISTED WITH ITS ISSUE, NO UNREAD (architecture review 2026-10-29 #2): counted, the mark opened Messages on an

@@ -1,3 +1,8 @@
+## 2.496.742
+
+What you will see:
+- While VESTA Agent is off, the villa's own visit card looks like VESTA's card of a visit: the alert's siren icon, the time the visit was first sent (it no longer changes to the time someone answered), the room line, the visit's lines under "Status:", "New alert" as its state with "monitoring until 08:54" in the pill at its right. Once answered or over, it says "Resolved", and the answer ("Done on Telegram on 07/11/2026 08:53 (Jm)") is its line naming who closed it. It has no number chip and no buttons: the villa does not number alerts, and its buttons are on Telegram.
+
 ## 2.496.741
 
 What you will see:
