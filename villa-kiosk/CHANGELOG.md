@@ -1,3 +1,9 @@
+## 2.496.756
+
+What you will see:
+- A visit's card on the tablet shows the camera pictures VESTA took when it offered the siren, as Telegram's picture
+  does (needs the VESTA Agent's update too).
+
 ## 2.496.755
 
 What you will see:

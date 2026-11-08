@@ -12,6 +12,7 @@ Run: python3 tests/store-doors.py   (also part of `npm run test:proxy`)
 from __future__ import annotations
 
 import asyncio
+import base64
 import importlib.util
 import json
 import os
@@ -402,6 +403,18 @@ async def main() -> None:
     kept = proxy._copy_announcement_photos(flagged)
     ck("  ...the strongest step's photo keeps its flag (`strongest: true` only) from the event to the kept record",
        [p.get("strongest") for p in flagged] == [True, None] and [p.get("strongest") for p in kept] == [True, None], kept)
+    # ⚠️ Telegram and the tablet show the same photos (owner, 2026-11-08, #154): VESTA's card names a visit's one list,
+    # the villa's files by their path, the cameras its siren snapped as the picture itself
+    snap = base64.b64encode(proxy._JPEG_MAGIC + b"garden snapshot").decode()
+    pushed = proxy._pushed_photos([{**shot("door", "Main door", "2026-11-06T18:35:41+00:00"), "strongest": True},
+                                   {"photo": snap, "label": "Garden", "at": "2026-11-06T18:36:00+00:00"},
+                                   {"path": "/etc/passwd", "label": "x"}, {"photo": "not a picture", "label": "y"}, "z"])
+    card = proxy._message_photos(None, proxy._copy_announcement_photos(flagged), "2026-11-06T18:40:00+00:00", pushed)
+    ck("a VESTA card's own photos: a media file copied, a snapshot kept, anything else left out; then the taken ones, the "
+       "same picture once",
+       [(p["label"], p.get("strongest")) for p in pushed] == [("Main door", True), ("Garden", None)]
+       and all((DATA / proxy.ANNOUNCEMENT_PHOTO_DIR / p["id"]).is_file() for p in pushed)
+       and [p["label"] for p in card] == ["Main door", "Garden", "Entrance lock"], (pushed, card))
     # ⚠️ formats outlive their writer: a record an older Kiosk kept with its single `photo` (before 2.496.731)
     legacy_id = "e" * 32 + ".jpg"
     (DATA / proxy.ANNOUNCEMENT_PHOTO_DIR / legacy_id).write_bytes(proxy._JPEG_MAGIC + b"kept before")
