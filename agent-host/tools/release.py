@@ -2,14 +2,14 @@
 """The VESTA Agent's release: `gates` and `ship`.
 
     python3 agent-host/tools/release.py gates              # every gate, even after a red one, then a summary (CI runs this)
-    python3 agent-host/tools/release.py ship -F msg.txt    # version → quick check → commit → push → wait until published
+    python3 agent-host/tools/release.py ship -F msg.txt    # version → quick checks + touched tests → commit → push → wait until published
     python3 agent-host/tools/release.py ship --dry-run     # what ship would do, changing nothing
 
 ONE VERSION: the top `## x.y.z` of vesta-agent/CHANGELOG.md, written into vesta-agent/config.yaml (what the store
 offers) and agent-src/vesta-agent.yaml (the agent reads it as its __version__, the UI's cache path).
 
 CI is the gate: agent-host.yaml runs `gates` before the image is built, so a red gate publishes nothing. `ship` runs
-only the quick checks here, then waits once for main's vesta-agent-dev/config.yaml to name the version: exit 0 when
+the quick checks and the tests naming a staged module here, then waits once for main's vesta-agent-dev/config.yaml to name the version: exit 0 when
 published, 3 when pushed but not published in time (read the CI run), 2 when refused.
 """
 
@@ -59,6 +59,29 @@ GATES: list[tuple[str, list[str], str, bool]] = [
 
 class ReleaseError(RuntimeError):
     pass
+
+
+def touched_tests(staged: list[str]) -> list[str]:
+    """The agent's tests (under SRC/tests, villa ones aside) that are staged or name a staged module: what ship runs
+    before pushing, so a test the change made stale fails here in seconds, not in CI 40 minutes later (0.12.488)."""
+    tests = sorted(t for t in (ROOT / SRC / "tests").rglob("test_*.py") if "villa" not in t.parts)
+    stems = {Path(f).stem for f in staged if f.startswith(SRC + "/") and f.endswith(".py")}
+    picked = []
+    for t in tests:
+        rel = str(t.relative_to(ROOT))
+        if rel in staged or (stems and re.search(r"\b(" + "|".join(map(re.escape, stems)) + r")\b", t.read_text())):
+            picked.append(str(t.relative_to(ROOT / SRC)))
+    return picked
+
+
+def run_touched_tests(staged: list[str]) -> bool:
+    """touched_tests, run as CI runs them (UTC: two failures came from the local clock); True when none or all pass."""
+    picked = touched_tests(staged)
+    if not picked:
+        return True
+    print(f"\n═══ The {len(picked)} test files this change touches ═══", flush=True)
+    return subprocess.run([PY, "-m", "pytest", *picked, "-q", "-p", "no:cacheprovider", "-n", "auto"],
+                          cwd=ROOT / SRC, env={**os.environ, "TZ": "UTC"}).returncode == 0
 
 
 def run_gates(quick: bool = False) -> bool:
@@ -174,7 +197,7 @@ def ship(message: str | None, dry_run: bool, wait_minutes: float, poll_seconds: 
                        cwd=ROOT / SRC, check=True)
         git("add", SHIPPED_SKILLS)
 
-    if not run_gates(quick=True):
+    if not run_gates(quick=True) or not run_touched_tests(staged):
         raise ReleaseError("a quick check failed: nothing committed. Fix, stage, and ship again")
 
     subprocess.run(["git", "commit", "-q", "-F", "-"], cwd=ROOT, input=message, text=True, check=True)

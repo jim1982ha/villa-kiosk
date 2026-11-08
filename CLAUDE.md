@@ -23,7 +23,7 @@ $PY agent-host/tools/release.py ship -F msg.txt     # release
 
 **Release:** add an entry at the TOP of `vesta-agent/CHANGELOG.md` (what the owner will see, plain words; its
 `## x.y.z` heading IS the version, the only version and the only change list), stage what ships by name, then `ship`.
-It writes the version, runs the quick checks (seconds), commits, pushes `agent-dev` and waits for the store:
+It writes the version, runs the quick checks and the tests naming a changed module (in UTC, as CI), commits, pushes `agent-dev` and waits for the store:
 exit 0 = published, 3 = pushed but not published yet (read the CI run), 2 = refused. CI runs every gate first.
 
 **The gates** (listed once, in `release.py`): the Kiosk is untouched (`check_isolation.sh`), the app manifest

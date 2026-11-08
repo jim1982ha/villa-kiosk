@@ -1,3 +1,8 @@
+## 0.12.491
+
+- Nothing changes in what you see; releases check more before they go out, so a broken update is caught before it
+  reaches the store instead of 40min later.
+
 ## 0.12.490
 
 - Nothing changes in what you see; reminders and escalations are simpler inside: one place decides when an alert's
