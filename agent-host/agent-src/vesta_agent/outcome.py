@@ -166,17 +166,18 @@ class Outcome:
         if not isinstance(res, dict) or not res:
             return done
         # a visit's step acknowledged to the villa FIRST, before its sheet, any chat's message or the tablet: the villa
-        # waits for VESTA's answer a short while, then takes the visit back itself (visit.Visits.acknowledge)
+        # waits for VESTA's answer a short while, then takes the visit back itself (visit.Visits.step); its full tell,
+        # the cards each chat shows, goes in the actions below, once they are drawn
+        to_villa: dict[int, Callable[[], Awaitable[bool]]] = {}
         if self.visits is not None:
-            for a in res.get("actions") or []:
+            for n, a in enumerate(res.get("actions") or []):
                 if isinstance(a, dict) and a.get("action") == TELL_VILLA and str(a.get("incident_id") or "").isdigit():
+                    vid = int(a["incident_id"])
                     try:
-                        await self.visits.acknowledge(int(a["incident_id"]), str(a.get("script") or ""),
-                                                      dict(a.get("fields") or {}),
-                                                      self.incidents.name(int(a["incident_id"])) if self.incidents else "")
-                    except Exception as e:  # noqa: BLE001 — the full tell below still goes
-                        log.warning("Incident #%s: its step could not be acknowledged at once (%s)", a["incident_id"],
-                                    type(e).__name__)
+                        to_villa[n] = await self.visits.step(vid, str(a.get("script") or ""), dict(a.get("fields") or {}),
+                                                             self.incidents.name(vid) if self.incidents else "")
+                    except Exception as e:  # noqa: BLE001 — the villa takes the visit back itself after its wait
+                        log.warning("Incident #%s: its step could not be told to the villa (%s)", vid, type(e).__name__)
         # a visit's story lines FIRST: every copy this result draws or posts lists them (notice.Notices.observe); the
         # heading each copy shows then, for a quiet redraw (result.redraw)
         heads: dict[int, dict] = {}
@@ -395,7 +396,7 @@ class Outcome:
         # result.faults_changed(); the older shapes — ticket with a task_id, ticket.resolve, ticket.reopen, their words
         # unread — still come from a starter skill edited on a villa (updates keep it), and mean the same.
         faults_moved = _moves_faults(res)
-        for a in res.get("actions") or []:
+        for n, a in enumerate(res.get("actions") or []):
             if isinstance(a, int) and not isinstance(a, bool):
                 continue        # a task id: an edited desk adding Problems.settle's return to its actions (_moves_faults)
             kind = (a or {}).get("action")
@@ -415,9 +416,8 @@ class Outcome:
                     if iid in sheets:
                         await self.visits.picture(iid)
                 elif kind == TELL_VILLA and str(a.get("incident_id") or "").isdigit() and self.visits is not None:
-                    iid = int(a["incident_id"])
-                    await self.visits.tell(iid, str(a.get("script") or ""), dict(a.get("fields") or {}),
-                                           self.incidents.name(iid) if self.incidents is not None else "")
+                    if n in to_villa:
+                        await to_villa[n]()
                 elif kind == WITHDRAW_SIREN and str(a.get("incident_id") or "").isdigit() and self.visits is not None:
                     await self.visits.withdraw(int(a["incident_id"]))
                 elif kind == TAKE_ON and str(a.get("incident_id") or "").isdigit():

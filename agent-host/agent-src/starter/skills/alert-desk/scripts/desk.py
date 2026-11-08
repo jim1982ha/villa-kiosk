@@ -1200,7 +1200,7 @@ def abandoned(store: Store, ev: dict, now: datetime, params: VillaParams | None 
     # ("Still-there alert sent 17/10/2026 10:24 to Owner — Still not fixed …"), so the words no longer repeat it
     said = about(inc, say("still_not_fixed", done=label_in("done", "Done")))
     out["ha_messages"] = [R.ha_message(inc["id"], context=ev.get("_context_id"), stage="still", **said)]
-    out["send"] += tell(inc["severity"], "still", incident=inc["id"], escalate=True, **said)
+    escalate(inc["id"], inc["severity"], out, said, stage="still")
     return out
 
 
@@ -1607,10 +1607,6 @@ def visit_intake(store: Store, ev: dict, now: datetime, params: VillaParams | No
         out["ha_messages"] = [R.ha_message(iid, details(p, rule_id), ev.get("_context_id"), stage="update",
                                            messages=[] if away else _cards(v), takes=[f"{VISIT}:{vid}"], alone=away)]
     out["incident_id"] = iid
-    if v.get("reminded_at") and not away:
-        # the villa reminded already (it held the visit: VESTA away at its start, or silent mid-visit): VESTA's chase
-        # goes on from there, never sending that reminder again
-        store.move(iid, (Incident.ASKED,), Incident.REASKED, reasked_at=(_when(v["reminded_at"]) or now).isoformat())
     store.note(iid, {VISIT: v, "ha_incident": vid})
     # only the lines that changed are told (the engine folds each into its line: Notices.observe)
     was = notes_of(store.incident(iid)).get(VISIT_LINES) or {}
@@ -1815,7 +1811,7 @@ def need_help(store: Store, inc: dict, pressed: Said, now: datetime, out: dict, 
     # ONE sentence in every chat (owner, 2026-10-11: one incident, one picture — "over to you" / "the owner has been
     # told" were two)
     helped = say("asked_to_act", pressed=pressed, role=role_in(CHASE["escalates_to"])).only(pressed.langs)
-    out["send"] += tell(inc["severity"], "escalated", incident=inc["id"], mark=mark, **about(inc, helped))
+    escalate(inc["id"], inc["severity"], out, about(inc, helped), mark=mark)
     return helped
 
 
@@ -1839,14 +1835,86 @@ def help_alerts(store: Store, now: datetime, out: dict, t: dict | None = None) -
         pressed = kiosk_words.read(h.get("said"))
         helped = say("asked_to_act", pressed=Said(str(pressed), getattr(pressed, "langs", None)),
                      role=role_in(CHASE["escalates_to"]))
-        out["send"] += tell("P2", "escalated", incident=iid, text=title, **_status(helped))
+        escalate(iid, "P2", out, {"text": title, **_status(helped)})
         out["actions"].append(R.faults_changed())       # the fault's card carries the alert's number and story
         made.append(iid)
     return made
 
 
-#: The alert's reminder already sent (its moment): never a second one for the same alert.
+#: The alert's reminder already sent by the desk (its moment): never a second one for the same alert (reminded).
 REMINDED = "reminded_at"
+
+
+def escalate(iid: int, sev: str, out: dict, said: dict, *, stage: str = "escalated", mark: str | None = None) -> None:
+    """⚠️ ONE ESCALATION (architecture review 2026-11-09, card 5): alert `iid` handed on to the chase's escalates_to,
+    told to them with the buttons, `said` its words — the chase's own (chase: nobody of the asked role received it, or
+    no answer in time), Need help (need_help), a fault's help alert (help_alerts), the rule giving up (abandoned: its
+    `stage` "still"). Each caller writes the alert's state as its own moment needs; the message is this one. Told to a
+    role that already has the alert, the engine makes it a quiet Status line (ringing.decide)."""
+    out["send"] += tell(sev, stage, incident=iid, escalate=True, mark=mark, **said)
+
+
+def reminded(p: dict) -> tuple[datetime | None, bool]:
+    """When alert notes `p`'s one reminder went, and whether by the villa: the desk's (REMINDED), else a visit's own
+    record's (the villa reminded while it held the visit: VESTA away at its start, or silent mid-visit). ⚠️ ONE
+    REMINDER, WHOEVER SENT IT (architecture review 2026-11-09, card 5): the visit's was read at intake, the desk's at
+    the tick, two records of one fact."""
+    if _when(p.get(REMINDED)):
+        return _when(p.get(REMINDED)), False
+    villa = _when((p.get(VISIT) or {}).get("reminded_at"))
+    return villa, villa is not None
+
+
+def chase(store: Store, inc: dict, now: datetime, out: dict, params: VillaParams, zone: str | None) -> None:
+    """⚠️ ONE CHASE (architecture review 2026-11-09, card 5): open alert `inc`'s reminder and escalation, timed in one
+    place. Nobody of the asked role received it: escalated now. Asked and quiet for reask_minutes (quiet_since): ONE
+    reminder, never a second (reminded) — the villa's own already sent, the chase goes on from its moment. Reminded and
+    still unanswered at escalate_minutes: escalated. Each move only if the alert is still where it was read (store.move):
+    taken on in the Cockpit meanwhile, it is chased no more."""
+    p = notes_of(inc)
+    reask, escal = params.behaviour("reask_minutes"), params.behaviour("escalate_minutes")
+    if p.get(Notes.UNREACHED) and inc["state"] in (Incident.ASKED, Incident.REASKED) and \
+            store.take_note(inc["id"], Notes.UNREACHED, state=Incident.ESCALATED, escalated_at=now.isoformat(),
+                            assignee=CHASE["escalates_to"]):
+        # ⚠️ NOBODY OF THE FACILITY MANAGER'S RECEIVED IT (architecture review 25): Telegram refused every chat of
+        # theirs, and the owner heard of it only at the 45-minute escalation — told now
+        escalate(inc["id"], inc["severity"], out, about(inc, say("not_delivered", asked=role_in(CHASE["asks"]),
+                                                                 to=role_in(CHASE["escalates_to"]))))
+        out["escalated"].append(inc["id"])
+        return
+    if inc["state"] not in (Incident.ASKED, Incident.REASKED):
+        return
+    asked = datetime.fromisoformat(inc["asked_at"])
+    sent, by_villa = reminded(p)
+    if inc["state"] == Incident.ASKED and by_villa and \
+            store.move(inc["id"], (Incident.ASKED,), Incident.REASKED, reasked_at=sent.isoformat()):
+        # the villa reminded already: VESTA's chase goes on from there, never sending that reminder again
+        inc = {**inc, "state": Incident.REASKED, "reasked_at": sent.isoformat()}
+    if inc["state"] == Incident.ASKED and now - quiet_since(inc, p) >= timedelta(minutes=reask) and \
+            store.move(inc["id"], (Incident.ASKED,), Incident.REASKED, reasked_at=now.isoformat()):
+        if sent:
+            # reminded already (asked again since: its return, a reopening): one reminder per alert, never two
+            return
+        store.note(inc["id"], {REMINDED: now.isoformat()})
+        asked_now = say("no_answer", after=lasting_in(reask * 60))
+        if p.get(VISIT):
+            # ⚠️ A VISIT'S REMINDER SAYS WHAT CHANGED (owner, 2026-11-06): "No answer after 15min. Someone went
+            # inside at 18:36. Was this visit expected?"
+            asked_now = visit_reminder(asked_now, p, zone)
+            visit_told(store.incident(inc["id"]), out, reminded_at=now.isoformat())
+        out["send"] += tell(inc["severity"], "reminder", incident=inc["id"], chased=True,
+                            # the engine writes the step first: "Reminder sent … to FM — No answer after 15 min";
+                            # the duration as both apps word one (timeutil.lasting: "1 h 30 min", never "90 min")
+                            **about(inc, asked_now))
+        out["reasked"].append(inc["id"])
+    # a reminder that waited for the alert to go quiet (quiet_since) keeps its escalation as long after it as before
+    elif inc["state"] == Incident.REASKED and now - asked >= timedelta(minutes=escal) and \
+            now - (_when(inc.get("reasked_at")) or asked) >= timedelta(minutes=max(escal - reask, 0)) and \
+            store.move(inc["id"], (Incident.REASKED,), Incident.ESCALATED, escalated_at=now.isoformat(),
+                       assignee=CHASE["escalates_to"]):
+        escalate(inc["id"], inc["severity"], out, about(inc, say("no_answer_from", role=role_in(CHASE["asks"]),
+                                                                 after=lasting_in(escal * 60))))
+        out["escalated"].append(inc["id"])
 
 
 def quiet_since(inc: dict, p: dict) -> datetime:
@@ -1861,8 +1929,6 @@ def tick(store: Store, now: datetime, params: VillaParams | None = None, client=
     """Every 5 minutes: what Home Assistant will never say is over (`client`: its states, read again), chase ladder,
     villa-silent watch, alert fatigue."""
     params = _params(params)                       # no parameters given: the desk's own timings, never a copy here
-    reask = params.behaviour("reask_minutes")
-    escal = params.behaviour("escalate_minutes")
     silent_min = params.behaviour("villa_silent_minutes")
     out = {"send": [], "actions": [], "escalated": [], "reasked": []}
     if client is not None:
@@ -1904,47 +1970,7 @@ def tick(store: Store, now: datetime, params: VillaParams | None = None, client=
             said = Said(str(said), getattr(said, "langs", None))
             out["send"] += tell(inc["severity"], "reopened", incident=inc["id"], chased=True, **about(inc, said))
             continue
-        if p.get(Notes.UNREACHED) and inc["state"] in (Incident.ASKED, Incident.REASKED) and \
-                store.take_note(inc["id"], Notes.UNREACHED, state=Incident.ESCALATED, escalated_at=now.isoformat(),
-                                assignee=CHASE["escalates_to"]):
-            # ⚠️ NOBODY OF THE FACILITY MANAGER'S RECEIVED IT (architecture review 25): Telegram refused every chat of
-            # theirs, and the owner heard of it only at the 45-minute escalation — told now
-            out["send"] += tell(inc["severity"], "escalated", incident=inc["id"],
-                                **about(inc, say("not_delivered", asked=role_in(CHASE["asks"]),
-                                                 to=role_in(CHASE["escalates_to"]))))
-            out["escalated"].append(inc["id"])
-            continue
-        if inc["state"] not in (Incident.ASKED, Incident.REASKED):
-            continue
-        asked = datetime.fromisoformat(inc["asked_at"])
-        age = now - asked
-        # only if it is still where it was read (store.move): taken on in the Cockpit meanwhile, it is chased no more
-        if inc["state"] == Incident.ASKED and now - quiet_since(inc, p) >= timedelta(minutes=reask) and \
-                store.move(inc["id"], (Incident.ASKED,), Incident.REASKED, reasked_at=now.isoformat()):
-            if p.get(REMINDED):
-                # reminded already (asked again since: its return, a reopening): one reminder per alert, never two
-                continue
-            store.note(inc["id"], {REMINDED: now.isoformat()})
-            asked_now = say("no_answer", after=lasting_in(reask * 60))
-            if p.get(VISIT):
-                # ⚠️ A VISIT'S REMINDER SAYS WHAT CHANGED (owner, 2026-11-06): "No answer after 15min. Someone went
-                # inside at 18:36. Was this visit expected?"
-                asked_now = visit_reminder(asked_now, p, zone)
-                visit_told(store.incident(inc["id"]), out, reminded_at=now.isoformat())
-            out["send"] += tell(inc["severity"], "reminder", incident=inc["id"], chased=True,
-                                # the engine writes the step first: "Reminder sent … to FM — No answer after 15 min";
-                                # the duration as both apps word one (timeutil.lasting: "1 h 30 min", never "90 min")
-                                **about(inc, asked_now))
-            out["reasked"].append(inc["id"])
-        # a reminder that waited for the alert to go quiet (quiet_since) keeps its escalation as long after it as before
-        elif inc["state"] == Incident.REASKED and age >= timedelta(minutes=escal) and \
-                now - (_when(inc.get("reasked_at")) or asked) >= timedelta(minutes=max(escal - reask, 0)) and \
-                store.move(inc["id"], (Incident.REASKED,), Incident.ESCALATED, escalated_at=now.isoformat(),
-                           assignee=CHASE["escalates_to"]):
-            out["send"] += tell(inc["severity"], "escalated", incident=inc["id"],
-                                **about(inc, say("no_answer_from", role=role_in(CHASE["asks"]),
-                                                 after=lasting_in(escal * 60))))
-            out["escalated"].append(inc["id"])
+        chase(store, inc, now, out, params, zone)
     # villa silent: the engine's Home Assistant connection has been down too long
     last = store.last_beat(HA_BEAT)
     if last and now - datetime.fromisoformat(last) > timedelta(minutes=silent_min):

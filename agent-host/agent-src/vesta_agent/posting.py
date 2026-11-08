@@ -60,8 +60,8 @@ class Poster:
         ({code: text}) — an alert's copy says the one its chat reads. `keep`: a note sent on its own is also kept for the
         tablet (True; or the skill's own `key`, so a later rewrite replaces it there too) — a reply to a person is not;
         sent by a scheduled run it is kept as a report, with its `document` and the `language` its words are in (one
-        version of several: kiosk_messages.reported). `sheet`: `photo` is a visit's sheet (its fingerprint): the tablet's
-        card takes the villa's own photos instead. Whether it rings is the step's (ringing.decide): a quiet step is an edit
+        version of several: kiosk_messages.reported). `sheet`: `photo` is a visit's sheet (its fingerprint), never the
+        tablet's: its card shows the visit's one list (visit.photos). Whether it rings is the step's (ringing.decide): a quiet step is an edit
         of the chat's copy, else sent without a sound. The message id, or None when nothing arrived."""
         # "{time}": the moment it says what happened, as every notice writes one (10/10/2026 15:04, the villa's time)
         now = datetime.now(timezone.utc)

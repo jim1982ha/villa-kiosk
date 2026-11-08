@@ -142,7 +142,25 @@ class Visits:
                 return
 
     # ------------------------------------------------------------------ the villa told
-    async def tell(self, iid: int, script: str, fields: dict, name: str = "", cards: bool = True) -> bool:
+    async def step(self, iid: int, script: str, fields: dict, name: str = "") -> Callable[[], Awaitable[bool]]:
+        """One step of visit `iid` told to the villa (its `script` run with `fields`; `name`, the alert's "#125-P1"):
+        acknowledged NOW, the full tell — with the cards each chat shows — returned, to run once they are drawn.
+
+        ⚠️ THE STEP ACKNOWLEDGED FIRST (owner, 2026-11-08, live #154 at 09:14): VESTA had the step at 09:14:52 and told the
+        villa at 09:16:09, after the sheet, every chat's edit and the tablet — 77s, past the villa's 60s wait for VESTA's
+        answer: the villa took the visit back and posted its own reply photo, a message that rang, then VESTA took over
+        again. ⚠️ ONE CALL, ITS ORDER HERE (architecture review 2026-11-09, card 5): the acknowledgement and the tell were
+        two calls in the caller's order; the tell is now only what this returns. A step with nothing to acknowledge
+        (no `ack_seq`: an answer, a reminder) is told in full alone."""
+        if "ack_seq" in fields:
+            keep = ("record", "visit", "owner", "number", "ack_seq")
+            await self._told(iid, script, {k: fields[k] for k in keep if k in fields}, name, cards=False)
+
+        async def cards() -> bool:
+            return await self._told(iid, script, fields, name)
+        return cards
+
+    async def _told(self, iid: int, script: str, fields: dict, name: str = "", cards: bool = True) -> bool:
         """The villa's `script` run with `fields`, the cards each chat shows of incident `iid` now (`messages`) and the
         alert's name (`name`, "#125-P1"). `fields["drop"]`: the villa's replies ([chat, message id]) VESTA removes now it
         holds the visit — its one card tells it all (owner, 2026-11-06, #129: "Deleted message" and the villa's "TEST:
@@ -154,7 +172,7 @@ class Visits:
         relock's results told the villa within the same second, each with the cards it had read earlier — the relock's
         step was taken back by the older one, the villa thought VESTA silent and took the visit back a minute later.
 
-        `cards` False: the step acknowledged alone, before any card is drawn (acknowledge) — no card named, none dropped."""
+        `cards` False: the step acknowledged alone, before any card is drawn (step) — no card named, none dropped."""
         if self._tell is None or not str(script).startswith("script."):
             return False
         fields = dict(fields)
@@ -177,19 +195,6 @@ class Visits:
             except Exception as e:  # noqa: BLE001 — the villa keeps the visit itself
                 log.warning("Incident #%s: the villa could not be told of its visit (%s)", iid, type(e).__name__)
                 return False
-
-    async def acknowledge(self, iid: int, script: str, fields: dict, name: str = "") -> bool:
-        """The villa told at once that VESTA holds visit `iid` and has its step (`fields`' owner, number and ack_seq),
-        before any card is drawn: the full tell (`tell`, the cards each chat shows) follows once they are.
-
-        ⚠️ THE STEP ACKNOWLEDGED FIRST (owner, 2026-11-08, live #154 at 09:14): VESTA had the step at 09:14:52 and told the
-        villa at 09:16:09, after the sheet, every chat's edit and the tablet — 77s, past the villa's 60s wait for VESTA's
-        answer: the villa took the visit back and posted its own reply photo, a message that rang, then VESTA took over
-        again. False when there is no step to acknowledge or the villa could not be told."""
-        if "ack_seq" not in fields:
-            return False
-        keep = ("record", "visit", "owner", "number", "ack_seq")
-        return await self.tell(iid, script, {k: fields[k] for k in keep if k in fields}, name, cards=False)
 
     # ------------------------------------------------------------------ the siren of a visit
     def card(self, iid: int, chat: int) -> int | None:
