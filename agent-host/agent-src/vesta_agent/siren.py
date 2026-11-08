@@ -73,10 +73,10 @@ class Request:
         # visit.Visits: a visit's request is part of its one story (its card, its sheet, a line of its Status)
         self.visits = visits
 
-    async def gate(self, gate: dict, origin=None, rang=()) -> dict:
+    async def gate(self, gate: dict, origin=None, rang=None) -> dict:
         """Carry out a script's gate: {asked: bool, why: what kept it from being asked ("" when asked), warned: the
-        chats told of the intrusion by the warning itself}. An unarmed gate does nothing. `rang`: the chats where this
-        result just sent the visit's card again (it rang there already: the question is put on it quietly)."""
+        chats told of the intrusion by the warning itself}. An unarmed gate does nothing. `rang`: what this result
+        rang where (ringing.Rang: the visit's card just sent again rang there already, the question goes on it quietly)."""
         out = {"asked": False, "why": "", "warned": set()}
         prompt = gate.get("prompt") if isinstance(gate, dict) and gate.get("armed") else None
         if not prompt:
@@ -100,41 +100,35 @@ class Request:
                                               None, True)
         if msg and self.ask is None:
             answer, msg = "no way to ask for an approval here (built without the approvals)", None
-        head = prompt
         visit = int(gate["visit"]) if str(gate.get("visit") or "").isdigit() and self.visits is not None else None
-        replies: dict[int, int] = {}
         if msg and visit is not None:
             # ⚠️ A VISIT'S REQUEST IS PART OF ITS ONE STORY (owner, 2026-11-06, 18:35: six "Camera snapshot" messages, then
             # the request, beside the visit's card): the cameras that showed nothing lately go into the visit's sheet
             await self.visits.snap(visit, gate.get("cameras"))
-            replies = {c: m for c in msg.chats if (m := self.visits.card(visit, c))}
-            if msg.chats and set(replies) >= set(msg.chats) and isinstance(gate.get("buttons"), dict):
-                # ⚠️ THE QUESTION ON THE ALERT ITSELF (owner, 2026-11-08, visit #154: the card, then a separate "Approval
-                # request" replying to it, each ringing): every owner chat shows the visit's card, so the question is
-                # two buttons on it there (visit.Visits.offered) — the approval itself unchanged: only an owner's own
-                # press on it sounds the siren (actions.decide), silence or expiry never; a facility manager's copy and
-                # the tablet never carry it
-                await self.visits.offered(visit, msg.approval_id, str(gate.get("offered") or ""),
-                                          gate.get("offered_in") if isinstance(gate.get("offered_in"), dict) else None,
-                                          chats=list(msg.chats), buttons=gate["buttons"],
-                                          waiting=str(gate.get("waiting") or ""),
-                                          waiting_in=gate.get("waiting_in") if isinstance(gate.get("waiting_in"), dict)
-                                          else None, rang=set(rang))
+            # ⚠️ THE QUESTION ON THE ALERT ITSELF, ONLY THERE (owner, 2026-11-08, visit #154: the card, then a separate
+            # "Approval request" replying to it, each ringing): two buttons on the visit's card in every owner chat — one
+            # without the card gets it first (visit.Visits.offered). The approval itself unchanged: only an owner's own
+            # press on it sounds the siren (actions.decide), silence or expiry never; a facility manager's copy and
+            # the tablet never carry it
+            shown = await self.visits.offered(visit, msg.approval_id, str(gate.get("offered") or ""),
+                                              gate.get("offered_in") if isinstance(gate.get("offered_in"), dict) else None,
+                                              chats=list(msg.chats),
+                                              buttons=gate["buttons"] if isinstance(gate.get("buttons"), dict) else None,
+                                              waiting=str(gate.get("waiting") or ""),
+                                              waiting_in=gate.get("waiting_in") if isinstance(gate.get("waiting_in"), dict)
+                                              else None, rang=rang)
+            if shown:
                 out["asked"] = True
                 return out
-            # a chat of the owner's without the visit's card: the question a message of its own, a reply to the card
-            # where there is one
-            if gate.get("seen") and msg.chats and set(replies) >= set(msg.chats):
-                head = f"{prompt} {gate['seen']}"
+            self.state.undeliver_approval(msg.approval_id)
+            self.state.set_visit_siren(msg.approval_id, None)
+            answer, msg = "no chat of the owner's received the request", None
         # ⚠️ THE INTRUSION IS SAID, WHATEVER BECOMES OF THE REQUEST (architecture review 21): its words travel only as
         # the siren request's lead — a request no owner chat received showed them nowhere
-        if msg and not await self.ask(msg, head=head, origin=origin, **({"reply_to": replies} if replies else {})):
+        if msg and not await self.ask(msg, head=prompt, origin=origin):
             answer, msg = "no chat of the owner's received the request", None
         if msg:
             out["asked"] = True
-            if visit is not None:
-                await self.visits.offered(visit, msg.approval_id, str(gate.get("offered") or ""),
-                                          gate.get("offered_in") if isinstance(gate.get("offered_in"), dict) else None)
             return out
         out["why"] = answer
         out["warned"] = await self._warn(gate, origin, f"The siren cannot be requested: {answer}")

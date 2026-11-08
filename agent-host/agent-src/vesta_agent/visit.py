@@ -9,7 +9,7 @@ VESTA did with it, and its siren request told as a line of its story.
   photo, once (Telegram cannot give a text message a picture);
 - the TELL (result.tell_villa): the villa's own script, named by the villa's event, told the cards each chat shows now
   — never a script named here, never asked by the AI (rules/agent-code.md "The engine delivers what must be seen");
-- the SIREN of a visit (siren.Request): its question a reply to the visit's card in the owner's chats, the cameras
+- the SIREN of a visit (siren.Request): its question on the visit's card in the owner's chats, the cameras
   that showed nothing lately snapped into the sheet instead of a message each, and "Siren offered to the Owner 18:35,
   expired on 18:50: nothing was done" a line of the visit's story (owner, 2026-11-06: six "Camera snapshot" messages and
   a separate request came beside the alert at 18:35).
@@ -18,6 +18,8 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import hashlib
+import json
 import logging
 import os
 from datetime import datetime, timezone
@@ -26,7 +28,7 @@ from typing import Awaitable, Callable
 from vesta_shared import visit_state
 from vesta_shared.timeutil import clock
 
-from . import sheet
+from . import ringing, sheet
 
 log = logging.getLogger("vesta.visit")
 
@@ -34,6 +36,8 @@ log = logging.getLogger("vesta.visit")
 SIREN_LINE = "siren"
 #: The most photos one Telegram album holds (sendMediaGroup)
 ALBUM = 10
+#: How many visits' sheets are kept made (Visits.sheet): the ones being told now
+SHEETS_KEPT = 8
 
 
 def photos(state, iid) -> list[dict]:
@@ -61,21 +65,45 @@ class Visits:
         self.state, self.thread, self.notices = state, thread, notices
         self.photo, self.out_dir, self.tz, self._tell, self.keyboard = photo, out_dir, timezone_name, tell, keyboard
         self._locks: dict[int, asyncio.Lock] = {}
+        self._sheets: dict[int, tuple[str, tuple[bytes, str]]] = {}   # visit → (what it was made of, its sheet)
 
     # ------------------------------------------------------------------ the sheet
-    async def jpeg(self, iid: int, photos: list[dict], shown: int) -> bytes | None:
-        """The visit's sheet: `photos` (the desk's, the strongest first) and the cameras its siren snapped; None when
-        none can be read."""
-        both = visit_state.ordered(list(photos) + self.state.visit_snaps(iid), shown)
-        return await asyncio.to_thread(sheet.build, both, shown, self.tz, os.path.join(self.out_dir, "visits"))
+    async def sheet(self, iid: int) -> tuple[bytes, str] | None:
+        """Visit `iid`'s sheet as its record stands (the desk's last photos, the strongest first, and the cameras its
+        siren snapped): (jpeg, fingerprint), None when it has no photo or none can be read. Made once for what it is
+        made of: every send, edit and re-send of one result carries the same picture; a new photo makes it anew.
 
-    async def picture(self, iid: int, photos: list[dict], shown: int, jpeg: bytes | None = None) -> int:
-        """The visit's sheet (`jpeg`, else made now) on every copy of incident `iid` that does not carry it yet (a copy
-        this result just sent with it does). How many copies show it now."""
-        jpeg = jpeg or await self.jpeg(iid, photos, shown)
+        ⚠️ ONE PICTURE BUILDER (architecture review of 2026-11-09, card 3): the sheet was made in five places, each with
+        its own try and fingerprint, and the escalation re-sent as text without its picture came from one forgotten."""
+        rec, snaps = self.state.visit_photos(iid), self.state.visit_snaps(iid)
+        taken, shown = list(rec.get("photos") or []), int(rec.get("shown") or 1)
+        if not taken and not snaps:
+            return None
+        made_of = json.dumps([taken, shown, snaps], sort_keys=True, default=str)
+        kept = self._sheets.get(int(iid))
+        if kept and kept[0] == made_of:
+            return kept[1]
+        try:
+            jpeg = await asyncio.to_thread(sheet.build, visit_state.ordered(taken + snaps, shown), shown, self.tz,
+                                           os.path.join(self.out_dir, "visits"))
+        except Exception:  # noqa: BLE001 — the card goes without its sheet, never not at all
+            log.exception("Incident #%s: its photo sheet could not be made", iid)
+            return None
         if not jpeg:
+            return None
+        self._sheets.pop(int(iid), None)
+        self._sheets[int(iid)] = (made_of, (jpeg, hashlib.sha1(jpeg).hexdigest()))
+        while len(self._sheets) > SHEETS_KEPT:
+            self._sheets.pop(next(iter(self._sheets)))
+        return self._sheets[int(iid)][1]
+
+    async def picture(self, iid: int) -> int:
+        """The visit's sheet (`sheet`) on every copy of incident `iid` that does not carry it yet (a copy this result
+        just sent with it does). How many copies show it now."""
+        got = await self.sheet(iid)
+        if not got:
             return 0
-        return await self.thread.picture(iid, jpeg, (lambda c: self.keyboard(iid, c)) if self.keyboard else None)
+        return await self.thread.picture(iid, got, (lambda c: self.keyboard(iid, c)) if self.keyboard else None)
 
     # ------------------------------------------------------------------ every photo, on ask
     def every_photo(self, iid: int) -> list[dict]:
@@ -195,38 +223,62 @@ class Visits:
         return n
 
     async def offered(self, iid: int, aid: str, said: str, said_in: dict | None = None, *, chats=(),
-                      buttons: dict | None = None, waiting: str = "", waiting_in: dict | None = None, rang=()) -> None:
-        """Approval request `aid` (the siren's) asked within visit `iid`: "Siren offered to the Owner 18:35: waiting for
-        your answer" a line of its story, told again once the request is decided (decided). With `buttons` ({"y"|"n":
-        {label, labels}}: the desk's words), the question is ON the visit's card in each of `chats` (the owner's): its
-        two buttons on a row of their own (alert_buttons.AlertButtons) while it waits. The card is sent again there so it rings — once:
-        a chat in `rang` (the card just sent again by this same step) is edited quietly instead.
+                      buttons: dict | None = None, waiting: str = "", waiting_in: dict | None = None,
+                      rang: ringing.Rang | None = None) -> int:
+        """Approval request `aid` (the siren's) asked within visit `iid`, ON the visit's card in each of `chats` (the
+        owner's): "Siren offered to the Owner 18:35: waiting for your answer" a line of its story, told again once the
+        request is decided (decided), and its two buttons (`buttons`: {"y"|"n": {label, labels}}, the desk's words) on a
+        row of their own (alert_buttons.AlertButtons) while it waits. The question rings (ringing.Rang.question): the
+        card sent again there — a chat this result just rang (`rang`) has its card edited quietly instead, and an owner
+        chat without the card gets the card first, with the question on it. How many owner chats show it.
 
-        ⚠️ THE QUESTION ON THE ALERT ITSELF (owner, 2026-11-08, visit #154 at 08:47: the card rang, then a separate
-        "Approval request … Turn on Siren Alarm switch?" replying to it rang, then the reminder rang)."""
+        ⚠️ THE QUESTION ON THE ALERT ITSELF, NEVER A MESSAGE OF ITS OWN (owner, 2026-11-08, visit #154 at 08:47: the
+        card rang, then a separate "Approval request … Turn on Siren Alarm switch?" replying to it rang, then the
+        reminder rang)."""
         hm = clock(datetime.now(timezone.utc), self.tz, days=False)
         said, said_in = said.replace("{time}", hm), {k: t.replace("{time}", hm) for k, t in (said_in or {}).items()}
-        on_card = [int(c) for c in chats] if buttons else []
+        on_card = [int(c) for c in chats]
         self.state.set_visit_siren(aid, {"incident": int(iid), "said": said, "said_in": said_in,
-                                         **({"chats": on_card, "buttons": buttons} if on_card else {})})
-        tail = f": {waiting}" if on_card and waiting else ""
+                                         "chats": on_card, "buttons": buttons or {}})
+        tail = f": {waiting}" if waiting else ""
         tail_in = {k: f": {t}" for k, t in (waiting_in or {}).items()} if tail else {}
-        # the siren's question rings (message_format.rings: it changes the picture): the card sent again in the owner's
-        # chats it did not just ring in, every other copy edited
-        again = [c for c in on_card if c not in {int(r) for r in rang} and self.card(iid, c)]
-        heads = await self._line(iid, said, said_in, tail, tail_in, rekey=bool(on_card), skip=again)
-        if not again:
-            return
-        rec = self.state.visit_photos(iid)
-        jpeg = await self.jpeg(iid, list(rec.get("photos") or []), int(rec.get("shown") or 1)) \
-            if rec.get("photos") or self.state.visit_snaps(iid) else None
+        rang = rang or ringing.Rang()
+        again = [c for c in on_card if rang.question(iid, c) == ringing.RING_NEW]
+        # an owner chat without the card: a copy still answering is its card there (its skill's buttons with it)
+        like = next((int(c) for c, r in self.state.incident_chats(iid)
+                     if r.get("mid") and r.get("buttons") and not r.get("settled")), None)
+        lacking = {c: like for c in again if self.card(iid, c) is None and like is not None}
+        for c in lacking:
+            if (skill := self.state.alert_skill(iid, like)) and not self.state.alert_skill(iid, c):
+                self.state.set_alert_skill(iid, c, skill)
+        heads = await self._line(iid, said, said_in, tail, tail_in, rekey=True, skip=again, like=lacking)
+        got = await self.sheet(iid) if again else None
+        missed = []
         for chat in again:
-            await self.thread.resend(iid, chat, jpeg, (lambda c: self.keyboard(iid, c)) if self.keyboard else None,
-                                     head=heads.get(chat))
+            if not await self.thread.resend(iid, chat, got, (lambda c: self.keyboard(iid, c)) if self.keyboard
+                                            else None, head=heads.get(chat), like=lacking.get(chat)):
+                missed.append(chat)
+        if missed:
+            # not sent again (Telegram refused it): the card it holds carries the question all the same, quietly
+            await self.thread.reheaded(iid, {c: h for c, h in heads.items() if c in missed and self.card(iid, c)},
+                                       keyboard=(lambda c: self.keyboard(iid, c)) if self.keyboard else None)
+        return sum(1 for c in on_card if self.card(iid, c) is not None)
+
+    def siren(self, iid: int | str, chat: int) -> dict | None:
+        """The siren's question waiting on visit `iid`'s card in `chat` — {id: the approval's, buttons: the desk's
+        words} — None when none waits there (decided, expired, withdrawn, or asked in another chat: a facility
+        manager's copy and the tablet never carry it)."""
+        now = datetime.now(timezone.utc)
+        for ap in self.state.approvals_in("pending"):
+            v = self.state.visit_siren(ap["id"]) or {}
+            if str(v.get("incident")) == str(iid) and int(chat) in [int(c) for c in v.get("chats") or []] \
+                    and datetime.fromisoformat(ap["expires_at"]) > now:
+                return {"id": ap["id"], "buttons": v.get("buttons") or {}}
+        return None
 
     def asked_in(self, aid: str) -> list[int] | None:
-        """The chats whose visit card carries request `aid`'s buttons (offered with `buttons`); None for a request that
-        is a message of its own."""
+        """The chats whose visit card carries request `aid`'s buttons (offered); None for a request that is no visit's
+        (a message of its own: approvals.Approvals.ask)."""
         v = self.state.visit_siren(aid)
         return [int(c) for c in v["chats"]] if v and v.get("chats") else None
 
@@ -258,12 +310,13 @@ class Visits:
         return n
 
     async def _line(self, iid: int, said: str, said_in: dict, tail: str = "", tail_in: dict | None = None,
-                    rekey: bool = False, skip=()) -> dict:
+                    rekey: bool = False, skip=(), like: dict | None = None) -> dict:
         """The siren's line of visit `iid`'s story, `tail` after it (its other languages' in `tail_in`, else `tail`),
         every copy but those in `skip` edited; `rekey`: their buttons drawn again (the siren's row comes or goes).
-        Returns each chat's heading."""
+        Returns each chat's heading — `like` ({chat: chat}): a chat about to get another's copy, headed as it."""
         heads = self.notices.observe(iid, [{"key": SIREN_LINE, "note": said + tail,
-                                            "note_in": {k: t + (tail_in or {}).get(k, tail) for k, t in said_in.items()}}])
+                                            "note_in": {k: t + (tail_in or {}).get(k, tail) for k, t in said_in.items()}}],
+                                     **({"like": like} if like else {}))
         await self.thread.reheaded(iid, {c: h for c, h in heads.items() if c not in set(skip)},
                                    keyboard=(lambda c: self.keyboard(iid, c)) if rekey and self.keyboard else None)
         return heads

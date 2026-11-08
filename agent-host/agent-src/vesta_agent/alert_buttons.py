@@ -7,7 +7,6 @@ incident_thread.IncidentThread's (architecture review 12, 2026-10-09).
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
 from typing import Awaitable, Callable
 
 from vesta_shared.message_format import ON_TABLET, ON_TELEGRAM, PRESSED
@@ -32,8 +31,10 @@ RETIRED = {"not_found", "mute"}
 
 class AlertButtons:
     def __init__(self, *, state, skills, incidents: Incidents, thread, run_job: Callable[..., Awaitable] | None = None,
-                 facts=None):
+                 facts=None, siren: Callable[[int, int], dict | None] | None = None):
         self.state = state
+        # visit.Visits.siren: the siren's question waiting on a visit's card in a chat; None: no visit asks one
+        self.siren = siren
         self.facts = facts              # chat_facts.ChatFacts: the press is told to the AI with the chat's next message
         self.skills = skills
         self.incidents = incidents      # the alert desk's incidents, as the engine reads them (built once, by app)
@@ -70,17 +71,13 @@ class AlertButtons:
         .offered keeps them) — in the chats it was asked in only (the owner's; never a facility manager's copy, never the
         tablet: kiosk_messages.of_parts). They are the approval's own buttons (button_data.APPROVAL): only an owner's own
         press sounds the siren (actions.decide). Gone once it is decided, expired or withdrawn (no longer pending)."""
-        now = datetime.now(timezone.utc)
-        for ap in self.state.approvals_in("pending"):
-            v = self.state.visit_siren(ap["id"]) or {}
-            if str(v.get("incident")) != str(iid) or int(chat) not in [int(c) for c in v.get("chats") or []] \
-                    or datetime.fromisoformat(ap["expires_at"]) <= now:
-                continue
-            b, lang = v.get("buttons") or {}, self.thread.words.lang(chat) if hasattr(self.thread.words, "lang") else "en"
-            return [[{"text": ((b.get(yn) or {}).get("labels") or {}).get(lang) or (b.get(yn) or {}).get("label") or word,
-                      "callback_data": button_data.make(button_data.APPROVAL, ap["id"], yn)}
-                     for yn, word in (("y", "Sound siren"), ("n", "No siren"))]]
-        return []
+        q = self.siren(iid, chat) if self.siren is not None else None
+        if not q:
+            return []
+        b, lang = q["buttons"], self.thread.words.lang(chat) if hasattr(self.thread.words, "lang") else "en"
+        return [[{"text": ((b.get(yn) or {}).get("labels") or {}).get(lang) or (b.get(yn) or {}).get("label") or word,
+                  "callback_data": button_data.make(button_data.APPROVAL, q["id"], yn)}
+                 for yn, word in (("y", "Sound siren"), ("n", "No siren"))]]
 
     def _photos_row(self, iid: int, chat: int) -> list[list[dict]]:
         """⚠️ EVERY PHOTO OF A VISIT, ON ASK (owner, 2026-11-07): the card's picture holds at most visit.sheet_tiles small

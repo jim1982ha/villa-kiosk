@@ -47,7 +47,7 @@ from vesta_shared.message_format import KIOSK_UNREACHED
 from vesta_shared.result import FAULTS_CHANGED, REDRAW, SHEET, TAKE_ON, TELL_VILLA, WITHDRAW_SIREN
 from vesta_shared.ha_client import error_short_chars
 
-from . import layout
+from . import layout, ringing
 from vesta_shared.status_words import pick
 from . import siren
 from .notice import stays
@@ -219,32 +219,14 @@ class Outcome:
                     self.state.set_visit_photos(int(a["incident_id"]), {"photos": list(a.get("photos") or []),
                                                                         "button": a.get("button") or {},
                                                                         "shown": int(a.get("shown") or 1)})
-                    try:
-                        got = await self.visits.jpeg(int(a["incident_id"]), list(a.get("photos") or []),
-                                                     int(a.get("shown") or 1))
-                    except Exception:  # noqa: BLE001 — the card goes without its sheet, never not at all
-                        log.exception("Incident #%s: its photo sheet could not be made", a["incident_id"])
-                        got = None
-                    if got:
-                        import hashlib
-                        sheets[int(a["incident_id"])] = (got, hashlib.sha1(got).hexdigest())
-        if self.visits is not None:
+                    if got := await self.visits.sheet(int(a["incident_id"])):
+                        sheets[int(a["incident_id"])] = got
             # ⚠️ A VISIT'S CARD SENT AGAIN KEEPS ITS PICTURE (owner's screenshot, 2026-11-08, live #154 at 09:35): a step
             # with no sheet of its own (a reminder, from the desk's tick) sent the card again as text, its photos lost
             for item in res.get("send") or []:
                 iid_s = item.get("incident_id") if isinstance(item, dict) else None
-                if str(iid_s or "").isdigit() and int(iid_s) not in sheets:
-                    rec = self.state.visit_photos(int(iid_s))
-                    if rec.get("photos") or self.state.visit_snaps(int(iid_s)):
-                        try:
-                            got = await self.visits.jpeg(int(iid_s), list(rec.get("photos") or []),
-                                                         int(rec.get("shown") or 1))
-                        except Exception:  # noqa: BLE001 — the card goes without its sheet, never not at all
-                            log.exception("Incident #%s: its photo sheet could not be made", iid_s)
-                            got = None
-                        if got:
-                            import hashlib
-                            sheets[int(iid_s)] = (got, hashlib.sha1(got).hexdigest())
+                if str(iid_s or "").isdigit() and int(iid_s) not in sheets and (got := await self.visits.sheet(int(iid_s))):
+                    sheets[int(iid_s)] = got
         adopted: set[tuple[int, int, str | None]] = set()        # (incident, chat, step) shown by a taken-over copy
         for h in res.get("ha_messages") or []:
             hid, stage = int(h.get("incident_id") or 0), h.get("stage")
@@ -393,18 +375,18 @@ class Outcome:
                     self.incidents.unreached(iid)
                 log.warning("Incident #%s: no chat of the people asked to answer received it — handed on", iid)
         # the siren's request, start to end (siren.Request: when it is asked, who hears of an intrusion when it cannot be);
-        # a visit's card this result sent again rang already: the question is put on it quietly there
+        # a visit's card this result put in a chat rang already: the question is put on it quietly there (ringing.Rang)
         gate = res.get("siren_gate") or {}
         visit = int(gate["visit"]) if isinstance(gate, dict) and str(gate.get("visit") or "").isdigit() else None
-        asked_now = await self.siren.gate(gate, origin=origin, rang={c for c, _s, _a in posted.get(visit, [])})
+        rang = ringing.Rang()
+        for c, _s, _a in posted.get(visit, []) if visit is not None else []:
+            rang.shown(visit, c)
+        asked_now = await self.siren.gate(gate, origin=origin, rang=rang)
         if visit in sheets and asked_now.get("asked") and self.visits is not None:
             # the cameras it snapped are in the sheet now (the card sent again with the question carries them): the
             # other copies get the same picture (result.sheet, below)
-            rec = self.state.visit_photos(visit)
-            got = await self.visits.jpeg(visit, list(rec.get("photos") or []), int(rec.get("shown") or 1))
-            if got:
-                import hashlib
-                sheets[visit] = (got, hashlib.sha1(got).hexdigest())
+            if got := await self.visits.sheet(visit):
+                sheets[visit] = got
         # ⚠️ ONE HAND MOVES THE CARDS (architecture review, 2026-10-15): a script's fault actions were carried out here,
         # and the repair worked the same cards out from the tasks — two routes, a 2-day "redo the close" window for when
         # the first failed, and a person's Done that could meet the agent's close. A fault about a task is now the
@@ -431,7 +413,7 @@ class Outcome:
                 elif kind == SHEET and str(a.get("incident_id") or "").isdigit() and self.visits is not None:
                     iid = int(a["incident_id"])
                     if iid in sheets:
-                        await self.visits.picture(iid, [], 1, sheets[iid][0])
+                        await self.visits.picture(iid)
                 elif kind == TELL_VILLA and str(a.get("incident_id") or "").isdigit() and self.visits is not None:
                     iid = int(a["incident_id"])
                     await self.visits.tell(iid, str(a.get("script") or ""), dict(a.get("fields") or {}),

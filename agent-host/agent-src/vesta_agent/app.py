@@ -204,7 +204,8 @@ class Vesta:
                                      media=(self.delivery.edit_media if self.tg else None),
                                      send=(self.delivery.send if self.tg else None))
         self.buttons = AlertButtons(state=self.state, skills=self.skills, incidents=incidents,
-                                    thread=self.thread, run_job=self.run_code_job, facts=self.chat_facts)
+                                    thread=self.thread, run_job=self.run_code_job, facts=self.chat_facts,
+                                    siren=lambda iid, chat: self.visits.siren(iid, chat))
         self.tickets = Tickets(kiosk=self.kiosk, state=self.state, store_path=settings.store_path,
                                timezone=settings.timezone,
                                story=lambda iid: self.notices.story(iid),

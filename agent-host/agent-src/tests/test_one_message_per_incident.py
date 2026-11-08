@@ -155,9 +155,9 @@ def test_need_help_reaches_the_owner_with_the_buttons_to_answer(agent):
     # the escalation's step to the owner only — never the presser's chat, which got the answer (owner, 2026-10-16)
     assert re.fullmatch(r"Escalation sent .+, Need help at .+ \(Wayan\): Owner is asked to act\. \(to: Owner\)",
                         status(owner["text"])) and SUMMARY in owner["text"]
-    # an escalation does not ring (owner, 2026-11-08): edited in place, its buttons with it
-    last = max(i for i, (c, m, _t) in enumerate(agent.tg.edits) if (c, m) == (GROUP, owner["mid"]))
-    assert agent.tg.edit_keyboards[last], "its buttons are still there"
+    # a person's Need help forwarded rings (owner, 2026-11-09): a new message with its sound, its buttons with it
+    assert owner["mid"] > reminder and (GROUP, owner["mid"]) not in agent.tg.silent and owner.get("kb"), \
+        "it rings: a new message, its buttons there"
     (fm,) = shown(agent, FM_CHAT)
     # the same sentence in every chat (2026-10-11); the owner's copy, the escalation, says its step first (2026-10-16)
     assert status(owner["text"]).endswith(", " + status(fm) + " (to: Owner)")

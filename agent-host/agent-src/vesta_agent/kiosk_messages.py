@@ -31,9 +31,9 @@ import os
 from datetime import datetime, timezone
 
 from vesta_shared import agreement
-from vesta_shared.message_format import AND, rings
+from vesta_shared.message_format import AND
 
-from . import button_data, layout
+from . import button_data, layout, ringing
 from .kiosk_owed import MESSAGE, KioskOwed
 from .in_progress import scheduled_run
 from .scheduler import job_of
@@ -129,11 +129,11 @@ def of_parts(key: str, p: dict, *, keyboard: dict | None = None, photo: str | No
     }
     if is_incident(key):
         # ⚠️ AN ALERT'S CARD: ITS POP-UP ONLY WHEN IT RINGS (owner, 2026-11-08, visit #154): the tablet pops a card up
-        # at each new step, as Telegram rang each; a step that does not ring on Telegram (message_format.rings) is
+        # at each new step, as Telegram rang each; a step that does not ring on Telegram (ringing.decide) is
         # `quiet` on the tablet too. ⚠️ THE SIREN'S QUESTION IS THE OWNER'S CHATS' ONLY: its buttons on the visit's
         # card (visit.Visits.offered) never on the tablet, everyone's card, as never on the facility manager's copy
         rec["buttons"] = [b for b in rec["buttons"] if b["kind"] != button_data.APPROVAL]
-        if not rings(said.get("stage"), p.get("mark")):
+        if ringing.decide(key, said.get("stage"), p.get("mark")) != ringing.RING_NEW:
             rec["quiet"] = True
     return _finished(rec, photo)
 

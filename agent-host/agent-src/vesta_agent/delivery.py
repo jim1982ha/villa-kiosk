@@ -139,7 +139,7 @@ class Delivery:
         """The message's id, or None: nothing arrived. `origin`: on whose behalf — a job asked for in a chat
         (kind JOB) makes this its result, which replaces the chat's "being prepared" message. `reply_to`: one of the
         agent's messages this one answers (a rewrite's backup, Outcome.rewrite). `silent`: without a sound (an alert's
-        quiet step: message_format.rings)."""
+        quiet step: ringing.decide)."""
         mid = await self._place(chat_id).send(chat_id, plain_text(text), keyboard=keyboard, document=document,
                                               photos=[photo] if photo else [], reply_to=reply_to, silent=silent)
         # a run's message arrived: nothing owed at the next start; a job's result: its waiting message goes

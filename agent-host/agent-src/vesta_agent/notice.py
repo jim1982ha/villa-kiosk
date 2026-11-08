@@ -467,20 +467,23 @@ class Notices:
             return sum(1 for h in new[held[first]:] if not observed(h)) if first < len(old) else 0
         return {chat: self.heading(chat, int(incident), before=left(n)) for chat, n in befores.items()}
 
-    def observe(self, incident: int, lines: list[dict]) -> dict[int, str]:
+    def observe(self, incident: int, lines: list[dict], like: dict | None = None) -> dict[int, str]:
         """A visit's story lines (result.seen: {key, note, note_in?, at?}) in incident `incident`'s history — a key it
         holds already is THAT line said anew (`_fold_target`, the one fold: `_merged`), a new key a new line — and the
         heading each chat's copy shows then, its bottom line's notices still left to it: {chat: heading}.
 
         ⚠️ ONE VISIT, ONE STORY (owner, 2026-11-06, #125-P1): four cameras, a lock and the living room in two minutes were
         a "Still-there alert sent" line each, and a second alert for the lock. Each kind of step is now one line,
-        updated in place in every copy, on the tablet and in the Kiosk fault's story (`story`)."""
+        updated in place in every copy, on the tablet and in the Kiosk fault's story (`story`). `like` ({chat: chat}): a
+        chat about to get another chat's copy (visit.Visits.offered), headed as that copy is."""
         history = self.state.incident_history(incident)
         befores = {}
         for chat, rec in self.state.incident_chats(incident):
             h = layout.head_of((rec.get("parts") or {}).get("head"))
             found = self.story_of(incident, chat, h["history"]) if h and "history" in h else None
             befores[int(chat)] = found[0] if found is not None else 0
+        for chat, src in (like or {}).items():
+            befores.setdefault(int(chat), befores.get(int(src), 0))
         now = datetime.now(timezone.utc).isoformat()
         for ln in lines:
             line = {"at": str(ln.get("at") or now), "stage": SEEN_STAGE, "fold": str(ln["key"]),

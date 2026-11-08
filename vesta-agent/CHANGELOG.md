@@ -1,3 +1,9 @@
+## 0.12.489
+
+- Nothing changes in what you see; the alerts are simpler inside: whether a step rings is decided in one place, the
+  siren question only ever goes on the alert itself (an Owner chat that missed the alert gets it, with the question
+  on it), and the photo sheet of a visit is made in one place, so every copy shows the same picture.
+
 ## 0.12.488
 
 - When someone presses Need help, the message forwarded to the Owner rings again, so a request for help is never missed.

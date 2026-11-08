@@ -113,10 +113,11 @@ class Approvals:
         self._watching: set[asyncio.Task] = set()
 
     # ------------------------------------------------------------------ asked and shown
-    async def ask(self, msg, head: str = "", origin=None, reply_to: dict | None = None) -> int:
+    async def ask(self, msg, head: str = "", origin=None) -> int:
         """An approval request (actions.request's Outgoing) in every chat it is for, each copy one message of the same
         thread: a press in one settles them all. `head`: why it is asked (the intrusion), kept when the body changes.
-        Returns how many chats have it. `reply_to`: {chat: message} the copy there answers (a visit's card).
+        Returns how many chats have it. A visit's siren question is never one: it is on the visit's card
+        (visit.Visits.offered).
 
         ⚠️ NONE IS "UNDELIVERED", NEVER "WAITING" (architecture review 21): recorded pending before the sends, a request
         no chat received was told to the AI as waiting until it expired — "it is waiting for your approval", no button
@@ -127,8 +128,7 @@ class Approvals:
         n = 0
         for chat in msg.chats:
             if await self.post(chat, msg.text, status=msg.status, lead=head, roles={msg.to} if msg.to else (), title=TITLE,
-                               keyboard=msg.keyboard, thread=approval_thread(msg.approval_id), origin=origin,
-                               **({"reply_to": reply_to[chat]} if reply_to and reply_to.get(chat) else {})):
+                               keyboard=msg.keyboard, thread=approval_thread(msg.approval_id), origin=origin):
                 n += 1
         if not msg.chats and self.tablet_keeps():
             # ⚠️ NO TELEGRAM CHAT MAY APPROVE IT, THE TABLET DOES (owner, 2026-10-29): kept for the tablet alone, with its
@@ -183,14 +183,14 @@ class Approvals:
         aid, yn = p.parts
         ap = self.state.approval(aid)
         key = approval_thread(aid)
-        # ⚠️ A SIREN QUESTION ON A VISIT'S CARD (visit.Visits.offered) is pressed there, in the owner chats it was asked
-        # in alone: never a message of its own to post or settle — the card says what became of it (_tell_asker)
+        # ⚠️ ONE CHECK OF WHERE IT MAY BE PRESSED: a siren question on a visit's card (visit.Visits.offered) in the owner
+        # chats it was asked in alone — never a message of its own to post or settle, the card says what became of it
+        # (_tell_asker); any other request in the chat that asked it and those showing it. A tablet shows every request
+        # it keeps, whoever's chat it was sent to (ticket 22 of "One inbox")
         on_card = self.visits.asked_in(aid) if self.visits is not None else None
-        if on_card is not None and p.chat not in on_card and p.place != TABLET:
-            self.state.log("press_refused", {"approval": aid, "by": p.presser, "reason": "button pressed from another chat"})
-            return await p.toast("This button belongs to another chat.")
-        # a tablet shows every request it keeps, whoever's chat it was sent to (ticket 22 of "One inbox")
-        if on_card is None and ap and ap["chat_id"] != p.chat and p.chat not in self.thread.shown(key) and p.place != TABLET:
+        allowed = on_card if on_card is not None else (
+            None if not ap else [ap["chat_id"], *self.thread.shown(key)])
+        if allowed is not None and p.chat not in allowed and p.place != TABLET:
             self.state.log("press_refused", {"approval": aid, "by": p.presser, "reason": "button pressed from another chat"})
             return await p.toast("This button belongs to another chat.")
         out = await asyncio.to_thread(self.actions.decide, aid, p.presser, yn == "y", chat=p.chat,

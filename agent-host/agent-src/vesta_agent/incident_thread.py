@@ -31,7 +31,7 @@ from vesta_shared.message_format import AND
 from vesta_shared.messaging import incident_tag
 from vesta_shared.status_words import pick
 
-from . import kiosk_messages, layout
+from . import kiosk_messages, layout, ringing
 from .telegram import GONE
 
 log = logging.getLogger("vesta.thread")
@@ -525,7 +525,7 @@ class IncidentThread:
         return n
 
     async def restep(self, iid: int | str, chat: int, parts: dict, keyboard: dict | None = None) -> int | None:
-        """Incident `iid`'s copy in `chat` shows `parts` now — a step that does not ring (message_format.rings), edited in
+        """Incident `iid`'s copy in `chat` shows `parts` now — a step that does not ring (ringing.EDIT_QUIET), edited in
         place, its picture kept — with `keyboard` (none: its buttons go), open again. Its message id; None when the chat
         holds no live copy (none, or deleted there): the caller sends one.
 
@@ -542,39 +542,40 @@ class IncidentThread:
                 return None
             return int(rec["mid"])
 
-    async def resend(self, iid: int | str, chat: int, jpeg: bytes | None = None,
-                     keyboard: Callable[[int], dict | None] | None = None, head: str | None = None) -> bool:
-        """Incident `iid`'s copy in `chat` sent again as a new message — so it rings — with the picture `jpeg` (a visit's
-        sheet), its heading `head` when given and the buttons `keyboard(chat)` gives it; the older one goes (`_post`).
-        Only a copy still answering. ⚠️ ONLY FOR WHAT RINGS (message_format.rings): a visit's siren question (visit.Visits
-        .offered). False when it was not sent."""
+    async def resend(self, iid: int | str, chat: int, sheet: tuple[bytes, str] | None = None,
+                     keyboard: Callable[[int], dict | None] | None = None, head: str | None = None,
+                     like: int | None = None) -> bool:
+        """Incident `iid`'s copy in `chat` sent again as a new message — it rings (ringing.RING_NEW) — with the visit's
+        sheet (`sheet`: jpeg, fingerprint: visit.Visits.sheet), its heading `head` when given and the buttons
+        `keyboard(chat)` gives it; the older one goes (`_post`). Only a copy still answering. A chat that holds no copy
+        gets chat `like`'s (`head`: its own heading), still answering. False when it was not sent."""
         import base64
-        import hashlib
         from vesta_shared.messaging import telegram_caption_chars, telegram_message_chars
         async with self._lock(iid):
             rec = self.state.incident_message(iid, chat)
+            if (not rec or not rec.get("mid")) and like is not None:
+                rec = self.state.incident_message(iid, like)
             if not rec or not rec.get("mid") or rec.get("settled") or not rec.get("buttons") or self.send is None:
                 return False
             kb = (keyboard(chat) if keyboard else None) or rec.get("kb")
             p = {**layout.of(rec), **({"head": head} if head else {}),
-                 "limit": telegram_caption_chars() if jpeg else telegram_message_chars()}
+                 "limit": telegram_caption_chars() if sheet else telegram_message_chars()}
             mid = await self.send(chat, layout.render(p), keyboard=kb,
-                                  **({"photo": (base64.b64encode(jpeg).decode(), "image/jpeg")} if jpeg else {}))
+                                  **({"photo": (base64.b64encode(sheet[0]).decode(), "image/jpeg")} if sheet else {}))
             if not mid:
                 return False
-            await self._post(iid, chat, mid, p, buttons=bool(kb), keyboard=kb,
-                             sheet=hashlib.sha1(jpeg).hexdigest() if jpeg else None)
+            await self._post(iid, chat, mid, p, buttons=bool(kb), keyboard=kb, sheet=sheet[1] if sheet else None)
             return True
 
-    async def picture(self, iid: int | str, jpeg: bytes, keyboard: Callable[[int], dict | None] | None = None) -> int:
-        """Every copy of incident `iid` carries the picture `jpeg` (a visit's sheet), its caption drawn again within a
-        caption's limit and its buttons kept — replaced in place, no sound; a copy that is a text message (Telegram
-        gives no text message a picture) sent again as a photo, which replaces it (`_post`) without a sound. Returns
-        how many copies carry it now."""
+    async def picture(self, iid: int | str, sheet: tuple[bytes, str],
+                      keyboard: Callable[[int], dict | None] | None = None) -> int:
+        """Every copy of incident `iid` carries the visit's sheet (`sheet`: jpeg, fingerprint: visit.Visits.sheet), its
+        caption drawn again within a caption's limit and its buttons kept — replaced in place, no sound; a copy that is
+        a text message (Telegram gives no text message a picture) sent again as a photo, which replaces it (`_post`),
+        as ringing.PICTURE says. Returns how many copies carry it now."""
         import base64
-        import hashlib
         from vesta_shared.messaging import telegram_caption_chars
-        made = hashlib.sha1(jpeg).hexdigest()
+        jpeg, made = sheet
         async with self._lock(iid):
             n = 0
             for chat, rec in self.state.incident_chats(iid):
@@ -592,9 +593,8 @@ class IncidentThread:
                                                                 **({"kb": kb} if kb else {})})
                     n += 1
                 elif said == "not_media" and self.send:
-                    # its picture is no news: sent again without a sound (message_format.rings, owner 2026-11-08)
                     mid = await self.send(chat, text, keyboard=kb, photo=(base64.b64encode(jpeg).decode(), "image/jpeg"),
-                                          silent=True)
+                                          **({"silent": True} if ringing.PICTURE != ringing.RING_NEW else {}))
                     if mid:
                         await self._post(iid, chat, mid, p, buttons=bool(kb), keyboard=kb, sheet=made)
                         n += 1

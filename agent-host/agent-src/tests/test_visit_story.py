@@ -128,13 +128,13 @@ def kiosk():
     return FakeKiosk()
 
 
-def villa(tmp_path, kiosk, empty="on"):
+def villa(tmp_path, kiosk, empty="on", owners=((OWNER, "Owner"),)):
     import base64
     buf = io.BytesIO()
     from PIL import Image
     Image.new("RGB", (64, 48), (10, 10, 10)).save(buf, "JPEG")
     v = make_agent(tmp_path, {"act_enabled": True, "siren_entity": SIREN, "allowed_services": {"switch.turn_on": "owner"}},
-                   roster=Roster.of(owner=[(OWNER, "Owner")], fm=[(FM, "Wayan")]), skills=["alert-desk"],
+                   roster=Roster.of(owner=list(owners), fm=[(FM, "Wayan")]), skills=["alert-desk"],
                    reader=FakeHA(tools=[tool("ha_get_state")], states={EMPTY_SENSOR: {"entity_id": EMPTY_SENSOR, "state": empty}},
                                  images={PARKING_CAM: base64.b64encode(buf.getvalue()).decode()}), kiosk=kiosk)
     with open(v.s.pack_path, "w", encoding="utf-8") as f:
@@ -336,6 +336,42 @@ def test_the_owners_press_on_the_card_sounds_it_and_its_buttons_go(tmp_path, kio
     assert "Siren offered to the Owner" in copy(v, OWNER, 1)["text"] and "waiting for your answer" not in copy(v, OWNER, 1)["text"]
     assert copy(v, OWNER, 1)["mid"] in [m for c, m in [(c, i) for i, (c, _t, _k) in enumerate(v.tg.sent, start=1001)]
                                          if c == OWNER], "the card stays: no message of the request to settle"
+
+
+OWNER2 = 333
+
+
+def test_an_owner_chat_without_the_card_gets_the_card_with_the_question_never_a_message_of_its_own(tmp_path, kiosk,
+                                                                                                   media):
+    # architecture review of 2026-11-09, card 2: the question is on the card only. An owner chat Telegram refused the
+    # step's card gets the card first, the question on it; the facility manager's copy and the tablet never carry it
+    from vesta_agent.telegram import TelegramError
+    v = villa(tmp_path, kiosk, owners=((OWNER, "Owner"), (OWNER2, "Second")))
+    real = v.tg.send
+
+    async def refusing(chat_id, text, keyboard=None, **kw):
+        if chat_id == OWNER2 and not siren_row(keyboard):
+            raise TelegramError("sendMessage: 400 refused by the test")
+        return await real(chat_id, text, keyboard=keyboard, **kw)
+    v.tg.send = refusing
+    vi = Visit(media=media)
+    vi.add("motion", PARKING, "02:10:01")
+    vi.add("motion", PARKING, "02:10:09", photo=True)
+    play(v, send(vi.event("opened")))
+    assert copy(v, OWNER2) is None, "Telegram refused the second owner's card"
+    vi.add("door", GARDEN_DOOR, "02:10:40")
+    play(v, send(vi.event()))
+    (ap,) = v.state.approvals_in("pending")
+    assert not [t for _c, t, _k in v.tg.sent if t.startswith("Approval")], "no message of its own"
+    mine = copy(v, OWNER2)
+    assert mine and siren_row(mine.get("kb")) == [("🚨 Sound siren", f"a:{ap['id']}:y"), ("No siren", f"a:{ap['id']}:n")]
+    assert mine["text"].startswith("#1-P1 (new)\n") and "Garden Door opened while the villa is empty" in mine["text"]
+    assert any(siren_row(k) for c, _t, k in v.tg.sent if c == OWNER2) and (OWNER2, mine["mid"]) not in v.tg.silent
+    assert siren_row(copy(v, FM).get("kb")) == [] and siren_row(copy(v, OWNER).get("kb"))
+    assert not [b for b in kiosk.messages["incident:1"].get("buttons") or [] if b["kind"] == "a"]
+    # the owner's own press there sounds it (from the facility manager's chat it never does: the tests above)
+    play(v, press_siren(v, OWNER2, OWNER2, ap["id"]))
+    assert [c[:2] for c in Writer.calls if c[0] == "switch"] == [("switch", "turn_on")]
 
 
 def test_a_drill_never_offers_the_siren(tmp_path, kiosk, media):

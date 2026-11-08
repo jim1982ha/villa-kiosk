@@ -264,7 +264,8 @@ def rings(stage: str | None, mark: str | None = None) -> bool:
 
     ⚠️ RING ONLY FOR WHAT CHANGES THE PICTURE (owner, 2026-11-08, visit #154: the card, a separate siren question and a
     reminder all rang for one visit): the first alert, its return, a stronger step and the one reminder ring (STEPS
-    `rings`); the siren's question rings too (visit.Visits.offered). Every other step (an escalation, a still-there
+    `rings`); the siren's question rings too. How a message of a step goes in a chat is vesta_agent/ringing.py's, which
+    reads this. Every other step (an escalation, a still-there
     repeat, a reopening, an answer, a close) is told quietly: sent without a sound or edited in place."""
     s = STEPS.get(stage or "")
     # a person's Need help forwarded to the escalation role rings: someone is asking for help (owner, 2026-11-09)
