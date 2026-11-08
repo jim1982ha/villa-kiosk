@@ -1,3 +1,10 @@
+## 2.496.757
+
+What you will see:
+- The tablet pops an alert's card up only when the alert rings on Telegram: its first message, a stronger signal
+  and the one reminder. A later step (an escalation, a repeat, a close) changes the card quietly (needs the VESTA
+  Agent's update too).
+
 ## 2.496.756
 
 What you will see:
