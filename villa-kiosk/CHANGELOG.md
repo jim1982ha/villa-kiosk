@@ -1,3 +1,8 @@
+## 2.496.758
+
+What you will see:
+- Nothing changes on screen. A wording rule is added: the app is called VESTA, never "the tablet".
+
 ## 2.496.757
 
 What you will see:
