@@ -523,14 +523,14 @@ console.log("\n  VESTA's words in this tablet's language (ticket 28 of \"One inb
   const settings = readFileSync(new URL("../../src/components/settings/SettingsModal.tsx", import.meta.url), "utf8");
   const { SETTINGS_KEYS } = await import("@/config/configSlice");
   ck("the tablet's own setting, in Settings › Messages, in this dialog's draft (Save / Cancel)",
-     SETTINGS_KEYS.includes("tabletLanguage") && SETTINGS_KEYS.includes("chatLanguages") && /ariaLabel="Language on this tablet"/.test(settings)
+     SETTINGS_KEYS.includes("tabletLanguage") && SETTINGS_KEYS.includes("chatLanguages") && /ariaLabel="Language on this device"/.test(settings)
      && /tabletLanguages\(v\.chatLanguages\)/.test(settings));
   // owner, 2026-11-03 ("very badly explained … clearer and also shorter"): nothing to choose, nothing drawn; the chats'
   // column says what their menu is
   const { elements, guardsOf, parseTsx, propText } = await import("../consistency/jsx.mjs");
   // a setting line as every other (architecture review 19 #5: it was a section title over a loose control)
   const pick = elements(parseTsx("components/settings/SettingsModal.tsx"), "SettingRow")
-    .filter((e) => propText(e, "label") === '"Language on this tablet"');
+    .filter((e) => propText(e, "label") === '"Language on this device"');
   ck("  ...drawn only while there is a language to choose besides English, title and all",
      pick.length === 1 && guardsOf(pick[0]).includes("languages.length > 1") && !/so far|Only English/.test(settings), pick.map(guardsOf));
   // owner, 2026-11-06: each chat the Cockpit's card, its menu its one field, named as the column was

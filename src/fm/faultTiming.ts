@@ -265,7 +265,7 @@ export const watchedLive = (p: CheckedProblem): boolean => p.source === "live" &
  *  card goes in the Live row's own words (ROWS.live.goes, the table's). */
 export const LIVE_CHECK: CheckSaid = {
   text: "Checked live", at: null, when: "checked live", pill: "checked live",
-  tip: `This tablet watches it all the time: the card goes ${ROWS.live.goes.charAt(0).toLowerCase()}${ROWS.live.goes.slice(1)}`,
+  tip: `The VESTA UI watches it all the time: the card goes ${ROWS.live.goes.charAt(0).toLowerCase()}${ROWS.live.goes.slice(1)}`,
 };
 
 /** A card's pill: its faults' next check when one has a time (a card with a live state AND a VESTA fault says the

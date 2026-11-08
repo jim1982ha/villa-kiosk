@@ -268,7 +268,7 @@ export function HeaderActions({ glbUpload, logout }: {
         {glbUpload && <CentralModelInfo addonCfg={glbUpload.addonCfg} loadedModel={glbUpload.loadedModel} />}
         {logout && (
           <div style={glbUpload ? { marginTop: 12 } : undefined}>
-            <strong>Log Out All</strong> signs every device out at once, this one too. Use it if a tablet went missing or
+            <strong>Log Out All</strong> signs every device out at once, this one too. Use it if a device went missing or
             a passcode was seen by someone who shouldn't have it.
           </div>
         )}
@@ -413,7 +413,7 @@ export default function ConfigEditorModal({ onBack, withinSettings, focusEntityI
                 hid the Refresh/Copy/Download/Probe buttons, which are the
                 reason somebody opens this tab. */}
             <TipTitle title="Device telemetry" tip={<>
-              What every tablet and phone that opens VESTA has reported, newest first: load times, errors and pauses.
+              What every device that opens the VESTA UI has reported, newest first: load times, errors and pauses.
               Copy and Download give every detail; Clear empties the list.
             </>} />
             <TelemetryPanel />

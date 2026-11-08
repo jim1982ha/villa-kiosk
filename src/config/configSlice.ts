@@ -228,5 +228,5 @@ export function withReplaced(said: readonly ReplacedSubject[], found: readonly R
 /** The line the dialog shows for one subject, the device named as every screen names it (`labelOf`). */
 export function replacedLine(subject: ReplacedSubject, labelOf: (entityId: string) => string): string {
   const name = "device" in subject ? labelOf(subject.device) : subject.setting;
-  return `${name} was changed on another tablet; your change was replaced.`;
+  return `${name} was changed on another device; your change was replaced.`;
 }

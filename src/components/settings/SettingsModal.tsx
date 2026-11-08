@@ -172,13 +172,13 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor, ta
         // list's change is held there until Save sends it to the villa).
         <PendingFields pending={slice.pending}>
           <TipTitle title="Full-screen announcements" tip={<>
-            The announcements picked here fill the screen of every tablet where full screen is on, each for its own
-            time, then stay in the Cockpit's Inbox. A tablet with full screen off shows them under the category bar for
+            The announcements picked here fill the screen of every device where full screen is on, each for its own
+            time, then stay in the Cockpit's Inbox. A device with full screen off shows them under the category bar for
             {" "}{fmtDuration(ANNOUNCEMENT_NOTICE_MS)}.
           </>} />
-          <OnOffToggle ariaLabel="Full screen on this tablet" title="Let a picked announcement fill the whole screen of this tablet"
+          <OnOffToggle ariaLabel="Full screen on this device" title="Let a picked announcement fill the whole screen of this device"
             on={v.ringsFullScreen} onChange={(ringsFullScreen) => slice.set({ ringsFullScreen }, { now: true })}
-            icon={<Maximize size={16} />} label="Full screen on this tablet" />
+            icon={<Maximize size={16} />} label="Full screen on this device" />
           {can("editConfig") && (
             <FullScreenAnnouncements value={v.fullScreen} onChange={(fullScreen) => slice.set({ fullScreen }, { now: true })} />
           )}
@@ -196,12 +196,12 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor, ta
               2026-11-03: "very badly explained … clearer and also shorter": NOTHING drawn while there is nothing to
               choose (every chat in English) */}
           {languages.length > 1 && (
-              <SettingRow icon={<Languages size={16} />} label="Language on this tablet"
-                tip="The language VESTA's messages show in on this tablet: one of the chats' languages above.">
-                <SegmentedGroup ariaLabel="Language on this tablet" active={v.tabletLanguage}
+              <SettingRow icon={<Languages size={16} />} label="Language on this device"
+                tip="The language VESTA's messages show in on this device: one of the chats' languages above.">
+                <SegmentedGroup ariaLabel="Language on this device" active={v.tabletLanguage}
                   onChange={(code) => slice.set({ tabletLanguage: code }, { now: true })}
                   options={languages.map((code) => (
-                    { key: code, title: `VESTA's messages in ${languageName(code)} on this tablet`, label: languageName(code) }))} />
+                    { key: code, title: `VESTA's messages in ${languageName(code)} on this device`, label: languageName(code) }))} />
               </SettingRow>
           )}
         </PendingFields>
@@ -249,11 +249,11 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor, ta
           on={v.highlightInteractive} onChange={(highlightInteractive) => slice.set({ highlightInteractive }, { now: true })}
           icon={<MousePointerClick size={16} />} label="Clickable Glow" />
         {can("editConfig") && (
-          <OnOffToggle ariaLabel="Room glow and camera cones" title="Room glow and camera cones, on every tablet"
+          <OnOffToggle ariaLabel="Room glow and camera cones" title="Room glow and camera cones, on every device"
             on={v.roomGlowAndCones} onChange={(roomGlowAndCones) => slice.set({ roomGlowAndCones }, { now: true })}
             icon={<Radar size={16} />} label="Room glow" tip={<>
               Light up the room in red and draw the camera's cone when presence is detected or a sensor triggers (the
-              devices themselves still glow). It applies to every tablet.
+              devices themselves still glow). It applies to every device.
             </>} />
         )}
         <OnOffToggle ariaLabel="Natural scrolling" title="Natural scrolling in the bird's-eye view"

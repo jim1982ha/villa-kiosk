@@ -58,7 +58,7 @@ export function notDoneLine(outcome: { ok: true } | { ok: false; reason: string;
   if (outcome.reason === "refused") return saveProblemLine(outcome);
   if (outcome.reason === "transport") return `Not ${what}: the add-on could not be reached, nothing was changed. Try again.`;
   if (outcome.reason === "conflict-retries-exhausted") {
-    return `Not ${what}: another tablet was saving at the same moment, nothing was changed. Try again.`;
+    return `Not ${what}: another device was saving at the same moment, nothing was changed. Try again.`;
   }
   return null;
 }

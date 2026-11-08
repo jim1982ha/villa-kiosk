@@ -106,7 +106,7 @@ export default function GuestReportModal({
             <h3>Thank you, that&apos;s been reported.</h3>
             <p className="muted body-text">
               {queued
-                ? "This tablet will send it on its own as soon as it reaches the villa's system. You don't need to do anything else."
+                ? "This device will send it on its own as soon as it reaches the villa's system. You don't need to do anything else."
                 : "Whoever looks after this villa can see it now. You don't need to do anything else."}
             </p>
           </div>

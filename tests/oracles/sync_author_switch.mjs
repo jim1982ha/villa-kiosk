@@ -82,7 +82,7 @@ srv.down = true;
 await page.act(async () => { await fm.advanceTickets(["t1"], "in_progress", { photoIds: [] }); });
 await page.act(async () => { prof.login("guest"); await sleep(5); }); await turn();
 ck("a guest, who may not send the facility manager's work, is told it waits on this tablet",
-   fm.heldFor.length === 1 && heldLine(fm.heldFor) === "Work by the Facility Manager is waiting on this tablet: it is sent as soon as someone allowed to send it signs in here.",
+   fm.heldFor.length === 1 && heldLine(fm.heldFor) === "Work by the Facility Manager is waiting on this device: it is sent as soon as someone allowed to send it signs in here.",
    fm.heldFor);
 await page.act(async () => { await fm.addTicket({ title: "Shower drain blocked", photoIds: [], reportedBy: "guest" }); });
 await page.act(async () => { prof.login("owner"); await sleep(5); }); await turn();

@@ -104,7 +104,7 @@ console.log("\n  the rows, drawn:");
   // heading holds its columns' words only: "Time" over the time, nothing over the ✕; the time and its unit joined, "15s"
   const before = html.slice(0, html.indexOf('<div class="fm-list'));
   ck("  ...the add on the list's title line above the card, a worded \"+ Add\" (no search box until it is pressed)",
-     /<div class="add-line"><span class="add-line-title"><span class="settings-list-title">On every tablet<\/span><\/span>[\s\S]*<button[^>]*class="btn ghost add-line-button"[^>]*aria-label="Add an announcement"[^>]*><svg[\s\S]*?<\/svg> Add<\/button>/.test(before)
+     /<div class="add-line"><span class="add-line-title"><span class="settings-list-title">On every device<\/span><\/span>[\s\S]*<button[^>]*class="btn ghost add-line-button"[^>]*aria-label="Add an announcement"[^>]*><svg[\s\S]*?<\/svg> Add<\/button>/.test(before)
      && !/placeholder="Add an announcement…"/.test(html), before.slice(-600));
   // owner, 2026-11-06: each announcement the Cockpit's card (RecordCard): its title in the strip, its time on screen its
   // one field, its bin at its strip's right (no bar left); no table heading any more
@@ -132,7 +132,7 @@ console.log("\n  where they are:");
      fs.length === 1 && who.length === 1
      && [...fs, ...who].every((e) => guardsOf(e).includes('can("editConfig")') && allGuards(e).includes('tab === "messages"')),
      [...fs, ...who].map(allGuards));
-  const sw = elements(set, "OnOffToggle").filter((e) => propText(e, "ariaLabel") === '"Full screen on this tablet"');
+  const sw = elements(set, "OnOffToggle").filter((e) => propText(e, "ariaLabel") === '"Full screen on this device"');
   ck("  ...this tablet's switch for every profile that opens Settings, an On | Off, first in the section",
      sw.length === 1 && !allGuards(sw[0]).includes('can("editConfig")') && allGuards(sw[0]).includes('tab === "messages"')
      && fs.length === 1 && sw[0].getStart() < fs[0].getStart()
@@ -140,7 +140,7 @@ console.log("\n  where they are:");
   const tips = elements(set, "TipTitle").map((e) => propText(e, "title"));
   const at = (t) => tips.indexOf(t);
   // owner, 2026-11-03 ("i still don't understand the difference"): the tablet's language after the chats it picks from
-  const lang = '"Language on this tablet"';
+  const lang = '"Language on this device"';
   ck("  ...one section \"Full-screen announcements\", \"Who gets the messages\" after it, the tablet's language last",
      at('"Full-screen announcements"') >= 0 && at('"Full-screen announcements"') < at("LISTS_TITLE")
      && ((row) => !!row && elements(set, "TipTitle").find((e) => propText(e, "title") === "LISTS_TITLE").getStart() < row.getStart())(

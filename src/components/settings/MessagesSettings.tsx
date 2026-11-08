@@ -36,7 +36,7 @@ export function FullScreenAnnouncements({ value, onChange }: Props) {
           the add button sat in the head beside "Seconds", over two lines on a phone): the list's add is where every
           list's is (common/AddOnLine: Schedule's "Add a task", Who gets the messages' "Add a chat"), "Time" over the
           time, nothing over the ✕ */}
-      <AddOnLine title={<span className="settings-list-title">On every tablet</span>} label="Add an announcement" words="Add">
+      <AddOnLine title={<span className="settings-list-title">On every device</span>} label="Add an announcement" words="Add">
         {(done) => <SearchPicker compact startOpen placeholder="Add an announcement…"
           onPick={(t) => { done(); onChange([...value.filter((x) => x.title !== t), { title: t, seconds: FULL_SCREEN_S_DEFAULT }]); }}
           rows={(q) => offered.filter((t) => t.toLowerCase().includes(q.trim().toLowerCase())).map((t) => ({ key: t, label: t }))}

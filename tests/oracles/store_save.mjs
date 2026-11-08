@@ -172,7 +172,7 @@ console.log("\n  what a save's answer means for a screen, decided once for both 
        && del.line === "Not deleted: the add-on could not be reached, nothing was changed. Try again." && !/refused/.test(del.line), del);
   const clash = run({ ok: false, reason: "conflict-retries-exhausted" }, true);
   ck("  ...another tablet saving at the same moment: said so", clash.verdict === "undone"
-     && clash.line === "Not deleted: another tablet was saving at the same moment, nothing was changed. Try again.", clash.line);
+     && clash.line === "Not deleted: another device was saving at the same moment, nothing was changed. Try again.", clash.line);
   const refusedDelete = run({ ok: false, reason: "refused", takeBack: {} }, true);
   ck("  ...the add-on's own no: taken back as any refusal, said as refused", refusedDelete.verdict === "refused"
      && JSON.stringify(refusedDelete.calls) === '[["takeBack",{}]]' && /refused/.test(refusedDelete.line), refusedDelete);
