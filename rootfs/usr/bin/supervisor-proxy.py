@@ -4625,16 +4625,39 @@ def _taken_photos(announcements: list, takes) -> list:
     return out
 
 
-def _message_photos(own: str | None, taken: list, at: str) -> list:
-    """A VESTA message's photos: its own picture first (one, the push's `photo`, kept as `own`), then those of the villa
-    messages it took over (_taken_photos), each once, at most the agreement's count. Pure — tests/store-doors.py drives
-    it."""
+def _message_photos(own: str | None, taken: list, at: str, pushed: list = ()) -> list:
+    """A VESTA message's photos: its own picture first (one, the push's `photo`, kept as `own`), then its list (`pushed`,
+    _pushed_photos: a visit's one list, in the Agent's order), then those of the villa messages it took over
+    (_taken_photos), each once (the same picture is one id), at most the agreement's count; one with no time takes the
+    message's. Pure — tests/store-doors.py drives it."""
     out, seen = [], set()
-    for p in ([{"id": own, "label": "", "at": at}] if own else []) + list(taken):
+    for p in ([{"id": own, "label": "", "at": at}] if own else []) + list(pushed) + list(taken):
         if p["id"] not in seen:
             seen.add(p["id"])
-            out.append(p)
+            out.append({**p, "at": p.get("at") or at})
     return out[:int(VESTA_MESSAGE_LIMITS.get("photos") or 0)]
+
+
+def _pushed_photos(raw) -> list:
+    """A VESTA message's `photos` kept ([{id, label, at, strongest?}], in their order): each a file of the villa's media
+    folder (`path`, copied as a villa announcement's: _announcement_photo_sources) or a picture of the Agent's own
+    (`photo`, base64: _keep_pushed_photo); one that is neither is left out. ⚠️ TELEGRAM AND THE TABLET SHOW THE SAME
+    PHOTOS (owner, 2026-11-08, #154): the cameras VESTA's siren snapped were in Telegram's picture of the visit, and its
+    card on the tablet showed the villa's photos only. Blocking: called on a worker thread."""
+    out = []
+    for one in (raw if isinstance(raw, list) else [])[:int(VESTA_MESSAGE_LIMITS.get("photos") or 0)]:
+        if not isinstance(one, dict):
+            continue
+        if one.get("photo"):
+            name = _keep_pushed_photo(one["photo"])
+            meta = {"label": _photo_label(one.get("label")),
+                    "at": one["at"] if isinstance(one.get("at"), str) and _iso_epoch(one["at"]) is not None else "",
+                    **({"strongest": True} if one.get("strongest") is True else {})}
+            kept = [{"id": name, **meta}] if name else []
+        else:
+            kept = _copy_announcement_photos(_announcement_photo_sources({"data": {"photos": [one]}}))
+        out += kept
+    return out
 
 
 def _vesta_messages_tidy(items) -> list:
@@ -4664,10 +4687,12 @@ async def agent_vesta_message_handler(request: web.Request) -> web.Response:
     own = await asyncio.to_thread(_keep_pushed_photo, body["photo"]) if body.get("photo") else None
     # then the pictures of the villa's messages it took over (_taken_photos); a rewrite with none keeps them (KEPT_ON_REWRITE)
     taken = _taken_photos(await asyncio.to_thread(ANNOUNCED.items), body["takes"]) if isinstance(body.get("takes"), list) else []
+    # and its own list (a visit's every photo, the cameras its siren snapped with the villa's), before the taken ones
+    pushed = await asyncio.to_thread(_pushed_photos, body.get("photos")) if body.get("photos") else []
 
     def record(seq: int) -> dict:
         rec = _vesta_message_record(body, seq, _now_iso())
-        photos = _message_photos(own, taken, rec["at"])
+        photos = _message_photos(own, taken, rec["at"], pushed)
         return {**rec, "photos": photos} if photos else rec
 
     rec = await MESSAGED.add(record, _announcements_with)
