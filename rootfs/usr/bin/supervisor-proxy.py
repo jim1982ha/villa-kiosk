@@ -4628,17 +4628,28 @@ def _taken_photos(announcements: list, takes) -> list:
     return out
 
 
-def _message_photos(own: str | None, taken: list, at: str, pushed: list = ()) -> list:
-    """A VESTA message's photos: its own picture first (one, the push's `photo`, kept as `own`), then its list (`pushed`,
-    _pushed_photos: a visit's one list, in the Agent's order), then those of the villa messages it took over
-    (_taken_photos), each once (the same picture is one id), at most the agreement's count; one with no time takes the
-    message's. Pure — tests/store-doors.py drives it."""
+def _message_photos(own: str | None, listed: list, at: str) -> list:
+    """A VESTA message's photos: its own picture first (one, the push's `photo`, kept as `own`), then `listed` (_listed_photos),
+    each once (the same picture is one id), at most the agreement's count; one with no time takes the message's. Pure —
+    tests/store-doors.py drives it."""
     out, seen = [], set()
-    for p in ([{"id": own, "label": "", "at": at}] if own else []) + list(pushed) + list(taken):
+    for p in ([{"id": own, "label": "", "at": at}] if own else []) + list(listed):
         if p["id"] not in seen:
             seen.add(p["id"])
             out.append({**p, "at": p.get("at") or at})
     return out[:int(VESTA_MESSAGE_LIMITS.get("photos") or 0)]
+
+
+async def _listed_photos(body: dict) -> list:
+    """The photo list of one VESTA push. ⚠️ ONE LIST FOR A VISIT (architecture review 2026-11-09, card 4): a push carrying
+    its own `photos` (a visit's one list, visit.photos: the villa's with the siren's snapshots, in the Agent's order) is
+    the card's only list (_pushed_photos); one with none (a message that is not a visit) takes the pictures of the villa
+    messages it took over (_taken_photos). The two were merged, the order and duplicates the merge's."""
+    if body.get("photos"):
+        return await asyncio.to_thread(_pushed_photos, body["photos"])
+    if isinstance(body.get("takes"), list):
+        return _taken_photos(await asyncio.to_thread(ANNOUNCED.items), body["takes"])
+    return []
 
 
 def _pushed_photos(raw) -> list:
@@ -4688,14 +4699,12 @@ async def agent_vesta_message_handler(request: web.Request) -> web.Response:
         return web.json_response({"error": "a message names a key and says something"}, status=400)
     # ⚠️ its own picture is ONE base64 `photo`, as the Agent sends it today, the first of its photos (_message_photos)
     own = await asyncio.to_thread(_keep_pushed_photo, body["photo"]) if body.get("photo") else None
-    # then the pictures of the villa's messages it took over (_taken_photos); a rewrite with none keeps them (KEPT_ON_REWRITE)
-    taken = _taken_photos(await asyncio.to_thread(ANNOUNCED.items), body["takes"]) if isinstance(body.get("takes"), list) else []
-    # and its own list (a visit's every photo, the cameras its siren snapped with the villa's), before the taken ones
-    pushed = await asyncio.to_thread(_pushed_photos, body.get("photos")) if body.get("photos") else []
+    # then its one list (_listed_photos); a rewrite with none keeps the first one's (KEPT_ON_REWRITE)
+    listed = await _listed_photos(body)
 
     def record(seq: int) -> dict:
         rec = _vesta_message_record(body, seq, _now_iso())
-        photos = _message_photos(own, taken, rec["at"], pushed)
+        photos = _message_photos(own, listed, rec["at"])
         return {**rec, "photos": photos} if photos else rec
 
     rec = await MESSAGED.add(record, _announcements_with)

@@ -1,3 +1,10 @@
+## 2.496.760
+
+What you will see:
+- Nothing changes in what you see; a visit's alert card in the VESTA UI now shows VESTA's one list of the visit's
+  photos, the same as Telegram's, never mixed with the villa's own messages' photos. Other alerts, and a visit before
+  VESTA takes it over, show the villa's photos as before.
+
 ## 2.496.759
 
 What you will see:
