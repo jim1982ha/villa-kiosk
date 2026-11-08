@@ -1,3 +1,9 @@
+## 0.12.490
+
+- Nothing changes in what you see; reminders and escalations are simpler inside: one place decides when an alert's
+  reminder or escalation is due (the villa's own reminder counts as the one reminder), and each step of a visit is
+  confirmed to the villa at once, then its messages told, always in that order.
+
 ## 0.12.489
 
 - Nothing changes in what you see; the alerts are simpler inside: whether a step rings is decided in one place, the
