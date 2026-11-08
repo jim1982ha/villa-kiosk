@@ -66,6 +66,9 @@ export interface Announcement {
   asked?: boolean;
   /** VESTA's card: its alert's stage as its title says it ("new", "existing", "watch", "closed"); none without one. */
   vestaStage?: string;
+  /** VESTA's card at a step that did not ring on Telegram (an escalation, a repeat, a close): no pop-up for it
+   *  (messagesModel.afterRead). Absent: it rings. */
+  quiet?: boolean;
   /** VESTA's report (ticket 20 of "One inbox"): the scheduled job that sent it (the morning digest, the weekly and monthly
    *  reports, the night check's message); listed under Reports, never as a notification. None for anything else. */
   report?: string;
@@ -362,6 +365,7 @@ export function parseVestaMessage(raw: unknown): Announcement | null {
     status: lines[lines.length - 1] ?? "", story: lines.slice(0, -1), photos: photosOf(r),
     key: r.key, buttons: vestaButtons(r.buttons), feed: "vesta", takes: strings(r.takes),
     ...(r.asked === true ? { asked: true } : {}),
+    ...(r.quiet === true ? { quiet: true } : {}),
     ...(typeof r.stage === "string" && r.stage ? { vestaStage: r.stage } : {}),
     ...(typeof r.report === "string" && r.report ? { report: r.report } : {}),
     ...(typeof r.page === "string" && r.page ? { page: r.page } : {}),

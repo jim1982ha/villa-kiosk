@@ -294,7 +294,10 @@ export function afterRead(held: readonly Announcement[], items: readonly Announc
       was: a.key !== null ? held.find((h) => h.key === a.key && h.feed === a.feed && h.seq < a.seq) : undefined }))
     // ⚠️ A QUIET REWRITE IS NO NEWS (ticket 27): VESTA redraws a card whose bottom line stays (a title retouched, its
     // words translated) — on Telegram a quiet edit, never a ping; a new step (reminder, escalation, cleared) changes it
-    .filter(({ announcement: a, was }) => !(a.feed === "vesta" && was && was.status === a.status))
+    // ⚠️ A STEP THAT DID NOT RING IS NO NEWS EITHER (owner, 2026-11-08, visit #154: "fewer notifications for one
+    // issue"): only the first alert, its return, a stronger step and the one reminder ring on Telegram; VESTA marks
+    // every other step `quiet`, and the tablet pops nothing up for it (the card itself changes as always)
+    .filter(({ announcement: a, was }) => !(a.feed === "vesta" && (a.quiet || (was && was.status === a.status))))
     .map(({ announcement, was }) => ({ announcement, rewrite: was !== undefined }));
   return { kept: merged, arrived };
 }

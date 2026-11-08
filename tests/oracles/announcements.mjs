@@ -91,6 +91,14 @@ ck("  ...one erased (held, then the superadmin code; owner 2026-10-29) goes too:
 ck("  ...a new ring (no key held) is not; every one of a read arrives, oldest first (one in a read with another is shown)",
    afterRead(baseline.kept, [{ ...a(9), key: "run-2" }], false).arrived[0]?.rewrite === false
    && afterRead([], [a(10), a(12), a(11)], false).arrived.map((x) => x.announcement.seq).join() === "10,11,12");
+// VESTA's card, as the add-on keeps it: a step that rang, then one that did not (owner, 2026-11-08, visit #154)
+const card = (seq, status, more = {}) => parseVestaMessage({ seq, key: "incident:154", title: "#154-P1", status: [status], ...more });
+const rang = afterRead([], [card(20, "⚠️ New alert")], true).kept;
+ck("VESTA's card at a step that rang pops up; at a quiet step (an escalation, a repeat) it changes but pops nothing up",
+   afterRead(rang, [card(21, "Reminder sent 09:00")], false).arrived.length === 1
+   && afterRead(rang, [card(22, "Escalation sent 09:30", { quiet: true })], false).arrived.length === 0
+   && afterRead(rang, [card(22, "Escalation sent 09:30", { quiet: true })], false).kept.map((x) => x.seq).join() === "22"
+   && card(23, "x", { quiet: "yes" })?.quiet === undefined);
 const notice = src("components/hud/AnnouncementNotice.tsx");
 ck("  ...the notice sends each to the notice model and keeps no memory of its own",
    /for \(const \{ announcement, rewrite \} of fresh\?\.arrived \?\? \[\]\)/.test(notice)
