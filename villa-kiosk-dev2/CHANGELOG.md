@@ -1,3 +1,10 @@
+## 2.496.759
+
+What you will see:
+- The VESTA UI no longer says "tablet" for itself: a setting for the screen you hold says "this device" ("Full
+  screen on this device", "Language on this device"), one for every screen says "every device", and a save that
+  clashed says "another device".
+
 ## 2.496.758
 
 What you will see:
