@@ -1,3 +1,22 @@
+## 2.496.759
+
+What you will see:
+- The VESTA UI no longer says "tablet" for itself: a setting for the screen you hold says "this device" ("Full
+  screen on this device", "Language on this device"), one for every screen says "every device", and a save that
+  clashed says "another device".
+
+## 2.496.758
+
+What you will see:
+- Nothing changes on screen. A wording rule is added: the app is called VESTA, never "the tablet".
+
+## 2.496.757
+
+What you will see:
+- The tablet pops an alert's card up only when the alert rings on Telegram: its first message, a stronger signal
+  and the one reminder. A later step (an escalation, a repeat, a close) changes the card quietly (needs the VESTA
+  Agent's update too).
+
 ## 2.496.756
 
 What you will see:

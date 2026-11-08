@@ -164,7 +164,7 @@ ck("  ...and hovering it says when: the nightly check's next run, the Agent's ne
   const { timingRow, LIVE_CHECK } = await import("@/fm/faultTiming");
   const goes = timingRow("live", null).goes;
   ck("  ...a problem watched live: \"checked live\", its tip when the card goes in the table's Live row's words",
-     LIVE_CHECK.pill === "checked live" && LIVE_CHECK.tip === `This tablet watches it all the time: the card goes ${goes[0].toLowerCase()}${goes.slice(1)}`
+     LIVE_CHECK.pill === "checked live" && LIVE_CHECK.tip === `The VESTA UI watches it all the time: the card goes ${goes[0].toLowerCase()}${goes.slice(1)}`
      && goes === "As soon as the device is back to normal", LIVE_CHECK);
   const dev = { key: "camera.example_storage", label: "Storage Room Person Detection", room: "Storage" };
   const liveItem = { id: "unavailable:camera.example_storage", kind: "unavailable", title: dev.label, detail: "Unavailable",
@@ -172,7 +172,7 @@ ck("  ...and hovering it says when: the nightly check's next run, the Agent's ne
   const drawn = (items) => draw(h(AttentionCard, { card: cockpitCard(groupAttention(items)[0], CADENCE), onOpenEntity: () => {} }));
   const alone = drawn([liveItem]);
   ck("  ...drawn: a live-only card has the pill at the right of its first line, saying \"checked live\"",
-     /<span class="fm-entity-chip fm-chip-static fm-record-check" aria-label="This tablet watches it all the time[^"]*"><svg[^>]*lucide-refresh-cw[\s\S]*?<\/svg>checked live<\/span><\/div>$/.test(stateLine(alone)), stateLine(alone));
+     /<span class="fm-entity-chip fm-chip-static fm-record-check" aria-label="The VESTA UI watches it all the time[^"]*"><svg[^>]*lucide-refresh-cw[\s\S]*?<\/svg>checked live<\/span><\/div>$/.test(stateLine(alone)), stateLine(alone));
   // a live state and a fault of another problem on one card: the card's pill is the fault's (the later check, the one
   // to wait for); the live part its own "checked live" on its header, before its time
   const fault = { id: "fault:f9", kind: "fault", title: "Storage camera storage full", detail: "Fault", entityId: "sensor.example_storage_card", ticketId: "f9",

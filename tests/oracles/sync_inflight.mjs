@@ -164,7 +164,7 @@ console.log("\n  the dialog says when another tablet replaced one of ITS OWN cha
   const said = ledgerOnRemote(dialog, before, me.heard).replaced;
   ck("the other tablet's value is on screen", label(me.config, "light.hall") === "Lobby");
   ck("the same device: one line, naming it as the screen does",
-     said.length === 1 && replacedLine(said[0], labels(me.config)) === "Lobby was changed on another tablet; your change was replaced.",
+     said.length === 1 && replacedLine(said[0], labels(me.config)) === "Lobby was changed on another device; your change was replaced.",
      said.map((s) => replacedLine(s, labels(me.config))));
   ck("  ...said once however often it is heard", withReplaced(said, said).length === 1);
 

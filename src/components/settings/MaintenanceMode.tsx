@@ -19,10 +19,10 @@ export function MaintenanceModeExplained() {
         <li>urgent (P1) alerts still reach the {ROLE_LABELS.owner} and the {ROLE_LABELS.ops} through VESTA, numbered and
           chased as usual;</li>
         <li>any other new alert is not taken up by VESTA: no number, no reminder, no fault. The villa's own message
-          still appears in its chat and on the tablet;</li>
+          still appears in its chat and in the VESTA UI;</li>
         <li>alerts already open carry on as before.</li>
       </ul>
-      It takes effect within a few minutes. Every tablet shows "Maintenance" in its top bar while it is on. Turn it off
+      It takes effect within a few minutes. Every device shows "Maintenance" in its top bar while it is on. Turn it off
       in Advanced Settings › Villa once the work is done: the alerts that came meanwhile are not sent afterwards.
     </>
   );
@@ -34,7 +34,7 @@ export default function MaintenanceMode() {
   const { config, update } = useConfig();
   const on = config.maintenanceMode;
   return (
-    <OnOffToggle ariaLabel="Maintenance mode" title="Maintenance mode, on every tablet" on={on}
+    <OnOffToggle ariaLabel="Maintenance mode" title="Maintenance mode, on every device" on={on}
       onChange={(maintenanceMode) => update({ maintenanceMode })}
       icon={<Wrench size={16} />} label="Maintenance mode" tip={<MaintenanceModeExplained />} />
   );

@@ -71,7 +71,7 @@ export default function CentralModelInfo({
               since the upload left the top bar (2.496.516); a second text for a profile that cannot upload was
               never drawn (this part is only shown with "Upload Model") */}
           <div style={{ marginTop: 8, color: "var(--text-dim)" }}>
-            Upload Model, beside this (i), replaces the villa's 3D model on every tablet. Upload its room file
+            Upload Model, beside this (i), replaces the villa's 3D model on every device. Upload its room file
             (<code>.rooms.json</code>) with it.
           </div>
     </>

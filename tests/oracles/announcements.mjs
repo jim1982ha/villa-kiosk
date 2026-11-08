@@ -91,6 +91,14 @@ ck("  ...one erased (held, then the superadmin code; owner 2026-10-29) goes too:
 ck("  ...a new ring (no key held) is not; every one of a read arrives, oldest first (one in a read with another is shown)",
    afterRead(baseline.kept, [{ ...a(9), key: "run-2" }], false).arrived[0]?.rewrite === false
    && afterRead([], [a(10), a(12), a(11)], false).arrived.map((x) => x.announcement.seq).join() === "10,11,12");
+// VESTA's card, as the add-on keeps it: a step that rang, then one that did not (owner, 2026-11-08, visit #154)
+const card = (seq, status, more = {}) => parseVestaMessage({ seq, key: "incident:154", title: "#154-P1", status: [status], ...more });
+const rang = afterRead([], [card(20, "⚠️ New alert")], true).kept;
+ck("VESTA's card at a step that rang pops up; at a quiet step (an escalation, a repeat) it changes but pops nothing up",
+   afterRead(rang, [card(21, "Reminder sent 09:00")], false).arrived.length === 1
+   && afterRead(rang, [card(22, "Escalation sent 09:30", { quiet: true })], false).arrived.length === 0
+   && afterRead(rang, [card(22, "Escalation sent 09:30", { quiet: true })], false).kept.map((x) => x.seq).join() === "22"
+   && card(23, "x", { quiet: "yes" })?.quiet === undefined);
 const notice = src("components/hud/AnnouncementNotice.tsx");
 ck("  ...the notice sends each to the notice model and keeps no memory of its own",
    /for \(const \{ announcement, rewrite \} of fresh\?\.arrived \?\? \[\]\)/.test(notice)
@@ -515,14 +523,14 @@ console.log("\n  VESTA's words in this tablet's language (ticket 28 of \"One inb
   const settings = readFileSync(new URL("../../src/components/settings/SettingsModal.tsx", import.meta.url), "utf8");
   const { SETTINGS_KEYS } = await import("@/config/configSlice");
   ck("the tablet's own setting, in Settings › Messages, in this dialog's draft (Save / Cancel)",
-     SETTINGS_KEYS.includes("tabletLanguage") && SETTINGS_KEYS.includes("chatLanguages") && /ariaLabel="Language on this tablet"/.test(settings)
+     SETTINGS_KEYS.includes("tabletLanguage") && SETTINGS_KEYS.includes("chatLanguages") && /ariaLabel="Language on this device"/.test(settings)
      && /tabletLanguages\(v\.chatLanguages\)/.test(settings));
   // owner, 2026-11-03 ("very badly explained … clearer and also shorter"): nothing to choose, nothing drawn; the chats'
   // column says what their menu is
   const { elements, guardsOf, parseTsx, propText } = await import("../consistency/jsx.mjs");
   // a setting line as every other (architecture review 19 #5: it was a section title over a loose control)
   const pick = elements(parseTsx("components/settings/SettingsModal.tsx"), "SettingRow")
-    .filter((e) => propText(e, "label") === '"Language on this tablet"');
+    .filter((e) => propText(e, "label") === '"Language on this device"');
   ck("  ...drawn only while there is a language to choose besides English, title and all",
      pick.length === 1 && guardsOf(pick[0]).includes("languages.length > 1") && !/so far|Only English/.test(settings), pick.map(guardsOf));
   // owner, 2026-11-06: each chat the Cockpit's card, its menu its one field, named as the column was

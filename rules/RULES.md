@@ -17,6 +17,8 @@ Keep this file short: add a rule only when the owner states one, and remove rule
 ## Words a person reads
 
 - "Automation", never "rule", for the villa's automations.
+- The app is the "VESTA UI", seen on any screen (tablet, phone, computer): never "the tablet" in text a person reads,
+  nor when talking to the owner; a setting for one screen says "this device".
 - A role, duration, window or threshold in text comes from its setting, never typed by hand.
 - Durations are joined: "30s", "10min", "1h 30min".
 - No long dash (" — "): use a colon, a comma or a new sentence.

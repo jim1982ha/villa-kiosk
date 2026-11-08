@@ -140,9 +140,9 @@ console.log("\n  every control of Settings, through the same draft (a change lig
     ["Summary bar", { showSummaryBar: !opened.showSummaryBar }, true],
     ["Eye height", { eyeHeight: 1.9 }, false],
     ["Walk speed", { walkSpeed: 2.2 }, false],
-    ["Full screen on this tablet", { ringsFullScreen: !opened.ringsFullScreen }, true],
+    ["Full screen on this device", { ringsFullScreen: !opened.ringsFullScreen }, true],
     ["Full-screen announcements: one added", { fullScreen: [{ title: "Front gate doorbell", seconds: 60 }] }, true],
-    ["Language on this tablet", { tabletLanguage: "de" }, true],
+    ["Language on this device", { tabletLanguage: "de" }, true],
     ["A chat's language", { chatLanguages: { "notify.example_chat": "id" } }, true],
   ];
   for (const [name, write, now] of CONTROLS) {

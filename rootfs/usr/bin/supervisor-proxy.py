@@ -4591,6 +4591,9 @@ def _vesta_message_record(body, seq: int, now_iso: str) -> dict | None:
         rec["language"] = body["language"]
     if buttons := _vm_buttons(body.get("buttons")):
         rec["buttons"] = buttons
+    if body.get("quiet") is True:
+        # a step of an alert that did not ring on Telegram: the tablet pops nothing up for it (owner, 2026-11-08)
+        rec["quiet"] = True
     langs = {}
     for code, words in (body.get("languages") or {}).items() if isinstance(body.get("languages"), dict) else ():
         if (_vm_language(code) and isinstance(words, dict)
