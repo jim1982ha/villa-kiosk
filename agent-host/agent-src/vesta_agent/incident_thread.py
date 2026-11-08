@@ -155,9 +155,12 @@ class IncidentThread:
         # ⚠️ THE VILLA'S OWN MESSAGES IT STANDS FOR (tickets 26-27 of "One inbox", owner 2026-10-28: "update the existing
         # card, the same way it is done on Telegram"): every run of the villa's alert this incident took over, so the
         # tablet shows this one card in place of the villa's alert, its repeat and its all-clear
+        # ⚠️ A VISIT'S PHOTOS ARE ITS ONE LIST (visit.photos): the siren's snapshots with the villa's, as Telegram's picture
+        from .visit import photos
         self.mirror(kiosk_messages.of_parts(kiosk_messages.thread_key(iid), parts, keyboard=keyboard,
                                             photo=kiosk_messages.photo_b64(photo), to=AND.join(roles) if roles else None,
-                                            takes=self.state.incident_runs(iid)))
+                                            takes=self.state.incident_runs(iid),
+                                            photos=photos(self.state, iid) if str(iid).isdigit() else None))
 
     def _for_everyone(self, parts: dict) -> dict:
         """A chat's copy as the tablet's card: in English, the languages it was said in carried beside it

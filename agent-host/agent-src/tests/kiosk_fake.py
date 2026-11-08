@@ -59,6 +59,12 @@ def message_record(body) -> dict | None:
         rec["at"] = body["at"]
     if isinstance(body.get("photo"), str) and body["photo"]:   # the add-on keeps the picture apart and names it in the
         rec["photo"] = body["photo"]                            # record (_keep_pushed_photo); here, the picture as sent
+    # a visit's photos: a file of the villa's media folder the add-on copies (_announcement_photo_sources), or VESTA's own
+    # picture (base64) it keeps (_keep_pushed_photo); here, as sent
+    if pics := [{f: p[f] for f in ("path", "photo", "label", "at", "strongest") if f in p} for p in body.get("photos") or []
+                if isinstance(p, dict) and (isinstance(p.get("path"), str) or isinstance(p.get("photo"), str))
+                ][:int(limits.get("photos") or 0)]:
+        rec["photos"] = pics
     for field in ("title", "to", "lead", "body", "stage", "mark", "report"):
         if value := text(body.get(field), field):
             rec[field] = value

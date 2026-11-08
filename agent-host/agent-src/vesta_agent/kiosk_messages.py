@@ -23,9 +23,11 @@ The record's shape is the agreement's (agent-contract.json `vestaMessage`): its 
 from __future__ import annotations
 
 import asyncio
+import base64
 import hashlib
 import json
 import logging
+import os
 from datetime import datetime, timezone
 
 from vesta_shared import agreement
@@ -42,6 +44,11 @@ log = logging.getLogger("vesta.kiosk")
 REMEMBERED = 500
 #: A report's page as a file of the out folder, until the push uploads it and names it by its Kiosk id (`page`).
 PAGE_FILE = "_page"
+
+
+#: The most base64 of the Agent's own photos one record carries: the Kiosk reads a push of at most 1 MB (its web
+#: server's default request size), the card's words and its other photos with them
+OWN_PHOTOS_B64 = 700_000
 
 
 def agreed_limit(name: str) -> int:
@@ -88,10 +95,11 @@ def roles_of(to: str) -> list[str]:
 
 
 def of_parts(key: str, p: dict, *, keyboard: dict | None = None, photo: str | None = None, to: str | None = None,
-             takes: list[str] | None = None) -> dict:
+             takes: list[str] | None = None, photos: list[dict] | None = None) -> dict:
     """The record of a message drawn as `layout` parts `p`: its title and "To:", the Status lines (the history, then where it
     stands), its stage, the words it was drawn in besides English when the agent holds them, its buttons. `to`: the "To:"
-    of every chat's copy together (IncidentThread.tell), else this copy's; `takes`: the villa's runs it stands for."""
+    of every chat's copy together (IncidentThread.tell), else this copy's; `takes`: the villa's runs it stands for;
+    `photos`: a visit's one list of photos (visit.photos), each a file of the villa's media folder."""
     h = layout.head_of(p.get("head"))
     said = p.get("said") if isinstance(p.get("said"), dict) else {}
     # ⚠️ THE STATE IS THE STAGE ALONE (owner, 2026-11-07): a reminder's state line was its whole bottom line, "Reminder
@@ -117,9 +125,36 @@ def of_parts(key: str, p: dict, *, keyboard: dict | None = None, photo: str | No
         "status": _lines(layout.status_shown(h, [*((h.get("story") or h["history"]) if h else []),
                                                  *([f"- {said_with}"] if said_with else []), status]), "status", "statusLine"),
         "stage": (h or {}).get("word") or said.get("stage") or "", "mark": p.get("mark") or "",
-        "buttons": buttons_of(keyboard), "languages": languages,
+        "buttons": buttons_of(keyboard), "languages": languages, "photos": tablet_photos(photos),
     }
     return _finished(rec, photo)
+
+
+def tablet_photos(photos) -> list[dict]:
+    """`photos` ({path, label, at, strongest?, own?}, a visit's one list in its order: visit.photos) as a record names
+    them for the Kiosk, at most the agreement's count, each label cut at its length: a file of the villa's media folder
+    by its `path` (the Kiosk copies it, as a villa announcement's), one the Agent took itself (`own`: a camera its siren
+    snapped, in its own folder the Kiosk cannot read) as the picture itself, `photo` (base64 of a JPEG no larger than a
+    sheet's tile, sheet.small) — together never more than OWN_PHOTOS_B64, the rest left out (logged)."""
+    from . import sheet
+    root = os.path.realpath(sheet.MEDIA) + os.sep
+    out, room = [], OWN_PHOTOS_B64
+    for ph in photos or []:
+        if not isinstance(ph, dict) or not ph.get("path"):
+            continue
+        one = {"label": _cut(ph.get("label"), "photoLabel"), "at": str(ph.get("at") or ""),
+               **({"strongest": True} if ph.get("strongest") else {})}
+        if ph.get("own"):
+            jpeg = sheet.small(str(ph["path"]))
+            b64 = base64.b64encode(jpeg).decode() if jpeg else ""
+            if not b64 or len(b64) > room:
+                log.info("A photo of a visit was left off the tablet's card: %s", "too large" if b64 else "unreadable")
+                continue
+            room -= len(b64)
+            out.append({"photo": b64, **one})
+        elif os.path.realpath(str(ph["path"])).startswith(root):
+            out.append({"path": str(ph["path"]), **one})
+    return out[:agreed_limit("photos")] if agreed_limit("photos") else []
 
 
 def _step_and_words(status: str, said: dict) -> tuple[str, str]:

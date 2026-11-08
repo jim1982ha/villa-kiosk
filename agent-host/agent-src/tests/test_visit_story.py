@@ -7,6 +7,7 @@ already replaced never taken over again; a reopened alert's count). Synthetic vi
 from __future__ import annotations
 
 import asyncio
+import base64
 import io
 import json
 import re
@@ -268,6 +269,13 @@ def test_the_siren_is_one_line_of_the_visit_a_reply_to_its_card_and_no_snapshot_
     # the parking camera showed nothing within the siren's window: snapped into the sheet, never a message of its own
     assert any(n == "ha_get_camera_image" for n, _a in v.reader.calls)
     assert v.state.visit_snaps(1) and not [t for _c, t, _k in v.tg.sent if "Camera snapshot" in t]
+    # Telegram and the tablet show the same photos (#154, 2026-11-08): the snapshot on the tablet's card too (the picture
+    # itself: the Kiosk reads no file of the Agent's folder), in the one list Telegram's "All photos" sends
+    shown = kiosk.messages["incident:1"]["photos"]
+    want = v.visits.every_photo(1)
+    assert [(p["label"], p["at"]) for p in shown] == [(p["label"], p["at"]) for p in want] and len(shown) > 1, shown
+    (snap,) = [p for p in shown if "photo" in p]
+    assert snap["label"] == v.state.visit_snaps(1)[0]["label"] and base64.b64decode(snap["photo"])[:2] == b"\xff\xd8"
     st = lines(copy(v, OWNER, 1)["text"])
     (line,) = [ln for ln in st if "Siren offered" in ln]
     assert re.fullmatch(r"- Siren offered to the Owner \d\d:\d\d", line), line

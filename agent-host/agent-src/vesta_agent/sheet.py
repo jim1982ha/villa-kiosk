@@ -12,6 +12,7 @@ wheels for aarch64 and amd64, Python 3.13).
 """
 from __future__ import annotations
 
+import functools
 import io
 import logging
 import os
@@ -44,6 +45,29 @@ def _inside(path: str, roots) -> str | None:
     real = os.path.realpath(str(path or ""))
     ok = any(real.startswith(os.path.realpath(r) + os.sep) for r in roots if r)
     return real if ok and os.path.isfile(real) else None
+
+
+def small(path: str) -> bytes | None:
+    """The photo at `path` as the tablet is sent it: a JPEG no larger than a sheet's largest tile (twice tile_px wide),
+    each photo whole; None when it cannot be read. The same file read again is not drawn again (its time unchanged)."""
+    try:
+        return _small(os.path.realpath(path), os.path.getmtime(path), tile_px())
+    except OSError:
+        return None
+
+
+@functools.lru_cache(maxsize=32)
+def _small(path: str, _mtime: float, w: int) -> bytes | None:
+    from PIL import Image, ImageOps
+    try:
+        with Image.open(path) as im:
+            fit = ImageOps.contain(im.convert("RGB"), (2 * w, 2 * w * 9 // 16))
+    except Exception as e:  # noqa: BLE001 — a broken file is left out, never the card
+        log.info("A visit photo could not be read (%s)", type(e).__name__)
+        return None
+    out = io.BytesIO()
+    fit.save(out, "JPEG", quality=85)
+    return out.getvalue()
 
 
 def cells(n: int) -> tuple[tuple[int, int], list[tuple[int, int, int]]]:

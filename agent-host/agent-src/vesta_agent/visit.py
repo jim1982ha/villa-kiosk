@@ -36,6 +36,16 @@ SIREN_LINE = "siren"
 ALBUM = 10
 
 
+def photos(state, iid) -> list[dict]:
+    """Every photo of visit `iid` (the desk's last sheet and the cameras its siren snapped), in the visit's one order
+    (visit_state.ordered: the strongest step's first, then the rest oldest first): Telegram's "All photos" and the
+    tablet's card read this one list.
+
+    ⚠️ TELEGRAM AND THE TABLET SHOW THE SAME PHOTOS (owner, 2026-11-08, #154 at 08:47): the siren's snapshots of Garden
+    and Terrace and both patios were in Telegram's picture, and the tablet's card showed the villa's photos only."""
+    return visit_state.ordered(list(state.visit_photos(iid).get("photos") or []) + state.visit_snaps(iid))
+
+
 class Visits:
     def __init__(self, *, state, thread, notices, photo: Callable[[str], Awaitable], out_dir: str, timezone_name: str,
                  tell: Callable[[str, dict], Awaitable[bool]] | None = None,
@@ -69,9 +79,8 @@ class Visits:
 
     # ------------------------------------------------------------------ every photo, on ask
     def every_photo(self, iid: int) -> list[dict]:
-        """Every photo of visit `iid` (the desk's last sheet and the cameras its siren snapped), in the visit's one order
-        (visit_state.ordered: the strongest step's first, then the rest oldest first)."""
-        return visit_state.ordered(list(self.state.visit_photos(iid).get("photos") or []) + self.state.visit_snaps(iid))
+        """Every photo of visit `iid`, in the visit's one order (photos)."""
+        return photos(self.state, iid)
 
     async def album(self, p) -> None:
         """"All photos" pressed (`p`, press.Press: button_data.PHOTOS) under a visit's card: every photo of the visit,
@@ -146,7 +155,8 @@ class Visits:
         return int(rec["mid"]) if rec and rec.get("mid") else None
 
     async def snap(self, iid: int, cameras) -> int:
-        """What each of `cameras` shows now, kept as a photo of the visit (its sheet carries it): how many."""
+        """What each of `cameras` shows now, kept as a photo of the visit (its sheet carries it, the tablet's card too):
+        how many."""
         kept = self.state.visit_snaps(iid)
         n = 0
         for cam in cameras or []:
