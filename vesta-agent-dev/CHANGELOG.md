@@ -1,3 +1,21 @@
+## 0.12.487
+
+Fewer notifications for one alert (needs VESTA (dev2) 2.496.757 or later for the pop-ups):
+- The siren question is on the alert itself: the Owner's copy of a visit's card gets "🚨 Sound siren" and "No siren"
+  on their own row, and its Status says "Siren offered to the Owner 08:47: waiting for your answer". No separate
+  "Approval request" message any more, on Telegram or in the VESTA UI. Only the Owner's own press sounds the siren;
+  unanswered, refused or expired, nothing is done and the buttons go. The facility manager's copy never has them.
+- One reminder per alert, and only once the alert has gone quiet: while a visit keeps getting new steps, the "No
+  answer after 15min" reminder waits until 15min pass with no new step.
+- A message rings only for the first alert, its return, a stronger step (a door or a lock opened), the siren question
+  and the one reminder. Everything else (an escalation, a repeat, an answer, a close) quietly updates the card you
+  already have, keeping its pictures; the VESTA UI pops up only for the same steps.
+- A visit's card sent again (the reminder) keeps its photos instead of becoming a text message.
+- Each step of a visit is acknowledged to the villa at once, so the villa no longer takes the visit back and posts its
+  own extra message while VESTA is still updating the cards.
+- "+3 more photos in the VESTA UI" on Telegram (it said "on the tablet"); the line is no longer shown in the VESTA UI
+  itself, which shows every photo. Every other text that said "the tablet" now says "the VESTA UI".
+
 ## 0.12.486
 
 - A visit's card on the tablet now shows the camera pictures VESTA took when it offered the siren, the same photos as
