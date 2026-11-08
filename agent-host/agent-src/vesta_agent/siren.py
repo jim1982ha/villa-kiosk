@@ -73,9 +73,10 @@ class Request:
         # visit.Visits: a visit's request is part of its one story (its card, its sheet, a line of its Status)
         self.visits = visits
 
-    async def gate(self, gate: dict, origin=None) -> dict:
+    async def gate(self, gate: dict, origin=None, rang=()) -> dict:
         """Carry out a script's gate: {asked: bool, why: what kept it from being asked ("" when asked), warned: the
-        chats told of the intrusion by the warning itself}. An unarmed gate does nothing."""
+        chats told of the intrusion by the warning itself}. An unarmed gate does nothing. `rang`: the chats where this
+        result just sent the visit's card again (it rang there already: the question is put on it quietly)."""
         out = {"asked": False, "why": "", "warned": set()}
         prompt = gate.get("prompt") if isinstance(gate, dict) and gate.get("armed") else None
         if not prompt:
@@ -104,10 +105,25 @@ class Request:
         replies: dict[int, int] = {}
         if msg and visit is not None:
             # ⚠️ A VISIT'S REQUEST IS PART OF ITS ONE STORY (owner, 2026-11-06, 18:35: six "Camera snapshot" messages, then
-            # the request, beside the visit's card): the cameras that showed nothing lately go into the visit's sheet,
-            # and the question is a reply to its card in each owner chat, whose picture they look at
+            # the request, beside the visit's card): the cameras that showed nothing lately go into the visit's sheet
             await self.visits.snap(visit, gate.get("cameras"))
             replies = {c: m for c in msg.chats if (m := self.visits.card(visit, c))}
+            if msg.chats and set(replies) >= set(msg.chats) and isinstance(gate.get("buttons"), dict):
+                # ⚠️ THE QUESTION ON THE ALERT ITSELF (owner, 2026-11-08, visit #154: the card, then a separate "Approval
+                # request" replying to it, each ringing): every owner chat shows the visit's card, so the question is
+                # two buttons on it there (visit.Visits.offered) — the approval itself unchanged: only an owner's own
+                # press on it sounds the siren (actions.decide), silence or expiry never; a facility manager's copy and
+                # the tablet never carry it
+                await self.visits.offered(visit, msg.approval_id, str(gate.get("offered") or ""),
+                                          gate.get("offered_in") if isinstance(gate.get("offered_in"), dict) else None,
+                                          chats=list(msg.chats), buttons=gate["buttons"],
+                                          waiting=str(gate.get("waiting") or ""),
+                                          waiting_in=gate.get("waiting_in") if isinstance(gate.get("waiting_in"), dict)
+                                          else None, rang=set(rang))
+                out["asked"] = True
+                return out
+            # a chat of the owner's without the visit's card: the question a message of its own, a reply to the card
+            # where there is one
             if gate.get("seen") and msg.chats and set(replies) >= set(msg.chats):
                 head = f"{prompt} {gate['seen']}"
         # ⚠️ THE INTRUSION IS SAID, WHATEVER BECOMES OF THE REQUEST (architecture review 21): its words travel only as

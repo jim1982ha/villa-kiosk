@@ -104,7 +104,7 @@ class Spoken:
             data = await asyncio.wait_for(self.sink.kiosk.voice(self.name), self.sink._timeout_s())
         except (KioskError, asyncio.TimeoutError) as e:
             log.warning("A spoken question could not be fetched from the tablet (%s)", type(e).__name__)
-            return "Your spoken question could not be fetched from the tablet. Hold to talk again, or type it."
+            return "Your spoken question could not be fetched from the VESTA UI. Hold to talk again, or type it."
         return data or "Your spoken question is no longer kept. Hold to talk again, or type it."
 
     async def heard(self, words: str) -> None:
@@ -188,7 +188,7 @@ class Tablet:
     # ⚠️ DELIVERY'S SECOND PLACE (delivery.TelegramChats is the first): the same five steps, each as the tablet shows it.
     # Buttons and "typing…" are ticket 22's (the keyboard is not drawn yet, a hold shows nothing).
     async def send(self, chat: int, text: str, *, keyboard: dict | None = None, document: str | None = None, photos=(),
-                   reply_to: int | None = None) -> int | None:
+                   reply_to: int | None = None, silent: bool = False) -> int | None:
         """One turn of VESTA's in `chat`'s conversation: its words, the camera pictures ((base64, mime)) and a page (an
         HTML file of the out folder, uploaded first). Its message id: a turn the Kiosk did not take yet is owed, and arrives
         at the housekeeping pass."""
@@ -203,7 +203,7 @@ class Tablet:
             if page:
                 rec["page"] = page
             else:
-                rec["text"] = (rec["text"] + "\n\n" if rec["text"] else "") + "(A file came with this answer: the tablet cannot show it.)"
+                rec["text"] = (rec["text"] + "\n\n" if rec["text"] else "") + "(A file came with this answer: the VESTA UI cannot show it.)"
         mid = self._mid()
         return mid if await self._write({"key": turn_key(mid), **rec}, mid) else None
 

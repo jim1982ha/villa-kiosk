@@ -625,7 +625,7 @@ class Problems:
         place ("Done on Telegram" — a Done on the alert standing for it, "Done in the Cockpit on …"), else the
         Cockpit's (a close in the Kiosk kept no note before 0.12.456). ⚠️ A TELEGRAM DONE WAS "CLOSED IN THE COCKPIT" (architecture review, 2026-10-30 evening): the facility
         manager read "Closed in the Cockpit on …, but still there" of a fault done on Telegram."""
-        note = str(task.get("close_note") or "")
+        note = mf.place_now(str(task.get("close_note") or ""))
         return next((w for w in [*mf.LASTING_IN.values(), *mf.NOTHING_IN.values(), *mf.DONE_IN.values()]
                      if note.startswith(w)),
                     mf.DONE_IN[mf.IN_COCKPIT])

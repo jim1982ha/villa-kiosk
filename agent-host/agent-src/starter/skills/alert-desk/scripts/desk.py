@@ -1498,9 +1498,13 @@ def visit_siren(store: Store, iid: int, v: dict, ev: dict) -> dict | None:
                 and _when(ph.get("at")) >= since}
     cams = [c for c in cameras_near([{"entity_id": s.get("entity_id"), "payload": "{}"} for s in recent]) if c not in pictured]
     offered = say("visit_siren", role=role_in("owner"), time="{time}")
+    # ⚠️ THE QUESTION ON THE ALERT ITSELF (owner, 2026-11-08, visit #154: the card, then a separate "Approval request"
+    # replying to it, each ringing): two buttons on the owner's copy of the card, its Status saying it waits
+    waiting, sound, no = say("visit_siren_waiting"), say("visit_siren_sound"), say("visit_siren_no")
     return R.siren(True, prompt, ("owner", "fm"), signals=sorted(signals), occupancy=mode, cameras=cams,
                    seen="Look at the camera picture above first.", visit=iid, offered=str(offered),
-                   offered_in=offered.langs)
+                   offered_in=offered.langs, waiting=str(waiting), waiting_in=waiting.langs,
+                   buttons={"y": {"label": str(sound), "labels": sound.langs}, "n": {"label": str(no), "labels": no.langs}})
 
 
 def visit_intake(store: Store, ev: dict, now: datetime, params: VillaParams | None, occupancy_reader, zone) -> dict:
@@ -1613,7 +1617,7 @@ def visit_intake(store: Store, ev: dict, now: datetime, params: VillaParams | No
     # at most 9: what the sheet's landscape grid holds (sheet.cells), Telegram cropping a taller picture
     shown = int(limit("visit.sheet_tiles", 9, unit="photos", group="text", lo=1, hi=9,
                       says="How many of a visit's photos its Telegram picture shows: the strongest step's, then the latest.",
-                      reached="The others are on the tablet's card; the Status says how many.", told="person"))
+                      reached="The others are on the alert's card in the VESTA UI; the Status says how many.", told="person"))
     # the visit's photos, in the one order and with the ones the picture shows marked (visit_state.ordered)
     photos = VS.ordered(VS.photos_of(v), shown)
     if VS.off_sheet(photos):
@@ -1841,6 +1845,18 @@ def help_alerts(store: Store, now: datetime, out: dict, t: dict | None = None) -
     return made
 
 
+#: The alert's reminder already sent (its moment): never a second one for the same alert.
+REMINDED = "reminded_at"
+
+
+def quiet_since(inc: dict, p: dict) -> datetime:
+    """When incident `inc` (its notes `p`) last changed: asked, or its latest step since — a repeat of its alert, a
+    visit's step. ⚠️ ONE REMINDER, ONLY WHEN QUIET (owner, 2026-11-08, visit #154: the reminder rang at 15 minutes while
+    the visit was still growing step by step): the reminder waits until reask_minutes passed with no new step."""
+    times = [_when(t) for t in (inc.get("asked_at"), inc.get("last_seen_at"), (p.get(VISIT) or {}).get("last_at"))]
+    return max(t for t in times if t)
+
+
 def tick(store: Store, now: datetime, params: VillaParams | None = None, client=None, zone: str | None = None) -> dict:
     """Every 5 minutes: what Home Assistant will never say is over (`client`: its states, read again), chase ladder,
     villa-silent watch, alert fatigue."""
@@ -1903,8 +1919,12 @@ def tick(store: Store, now: datetime, params: VillaParams | None = None, client=
         asked = datetime.fromisoformat(inc["asked_at"])
         age = now - asked
         # only if it is still where it was read (store.move): taken on in the Cockpit meanwhile, it is chased no more
-        if inc["state"] == Incident.ASKED and age >= timedelta(minutes=reask) and \
+        if inc["state"] == Incident.ASKED and now - quiet_since(inc, p) >= timedelta(minutes=reask) and \
                 store.move(inc["id"], (Incident.ASKED,), Incident.REASKED, reasked_at=now.isoformat()):
+            if p.get(REMINDED):
+                # reminded already (asked again since: its return, a reopening): one reminder per alert, never two
+                continue
+            store.note(inc["id"], {REMINDED: now.isoformat()})
             asked_now = say("no_answer", after=lasting_in(reask * 60))
             if p.get(VISIT):
                 # ⚠️ A VISIT'S REMINDER SAYS WHAT CHANGED (owner, 2026-11-06): "No answer after 15min. Someone went
@@ -1916,7 +1936,9 @@ def tick(store: Store, now: datetime, params: VillaParams | None = None, client=
                                 # the duration as both apps word one (timeutil.lasting: "1 h 30 min", never "90 min")
                                 **about(inc, asked_now))
             out["reasked"].append(inc["id"])
+        # a reminder that waited for the alert to go quiet (quiet_since) keeps its escalation as long after it as before
         elif inc["state"] == Incident.REASKED and age >= timedelta(minutes=escal) and \
+                now - (_when(inc.get("reasked_at")) or asked) >= timedelta(minutes=max(escal - reask, 0)) and \
                 store.move(inc["id"], (Incident.REASKED,), Incident.ESCALATED, escalated_at=now.isoformat(),
                            assignee=CHASE["escalates_to"]):
             out["send"] += tell(inc["severity"], "escalated", incident=inc["id"],

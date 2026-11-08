@@ -92,7 +92,8 @@ def test_each_chat_keeps_only_the_latest_message_and_it_recalls_the_alert(agent)
     (grp,) = shown(agent, GROUP)
     assert re.fullmatch(r"Escalation sent (?:\d\d/\d\d(?:/\d{4})? )?\d\d:\d\d, No answer from FM after 45min \(to: Owner\)",
                         status(grp)) and SUMMARY in grp
-    assert (GROUP, 500) in agent.tg.deleted
+    # an escalation does not ring (owner, 2026-11-08): the owner's copy edited in place, never sent again
+    assert (GROUP, 500) not in agent.tg.deleted and (GROUP, 500) in {(c, m) for c, m, _t in agent.tg.edits}
     assert len(shown(agent, FM_CHAT)) == 1     # the FM's reminder is untouched by the owner's message
 
 
@@ -154,7 +155,9 @@ def test_need_help_reaches_the_owner_with_the_buttons_to_answer(agent):
     # the escalation's step to the owner only — never the presser's chat, which got the answer (owner, 2026-10-16)
     assert re.fullmatch(r"Escalation sent .+, Need help at .+ \(Wayan\): Owner is asked to act\. \(to: Owner\)",
                         status(owner["text"])) and SUMMARY in owner["text"]
-    assert all(mid != owner["mid"] for _, mid, _ in agent.tg.edits)     # never edited: its buttons are still there
+    # an escalation does not ring (owner, 2026-11-08): edited in place, its buttons with it
+    last = max(i for i, (c, m, _t) in enumerate(agent.tg.edits) if (c, m) == (GROUP, owner["mid"]))
+    assert agent.tg.edit_keyboards[last], "its buttons are still there"
     (fm,) = shown(agent, FM_CHAT)
     # the same sentence in every chat (2026-10-11); the owner's copy, the escalation, says its step first (2026-10-16)
     assert status(owner["text"]).endswith(", " + status(fm) + " (to: Owner)")

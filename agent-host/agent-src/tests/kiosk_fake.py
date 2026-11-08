@@ -73,6 +73,8 @@ def message_record(body) -> dict | None:
             rec[field] = value
     if value := page(body.get("page")):
         rec["page"] = value
+    if body.get("quiet") is True:                         # a step that does not ring: no pop-up (only true is kept)
+        rec["quiet"] = True
     if language(body.get("language")):
         rec["language"] = body["language"]
     buttons = []

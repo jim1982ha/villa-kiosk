@@ -37,7 +37,7 @@ def tile_px() -> int:
 def photo_bytes() -> int:
     return limit("visit.photo_bytes", 3000000, unit="bytes", group="read", lo=100000, hi=20000000,
                  says="The largest photo file of a visit that is put in its Telegram picture.",
-                 reached="That photo is left out of the picture; the tablet still shows it.", told="")
+                 reached="That photo is left out of the picture; the VESTA UI still shows it.", told="")
 
 
 def _inside(path: str, roots) -> str | None:

@@ -31,7 +31,7 @@ import os
 from datetime import datetime, timezone
 
 from vesta_shared import agreement
-from vesta_shared.message_format import AND
+from vesta_shared.message_format import AND, rings
 
 from . import button_data, layout
 from .kiosk_owed import MESSAGE, KioskOwed
@@ -122,11 +122,19 @@ def of_parts(key: str, p: dict, *, keyboard: dict | None = None, photo: str | No
         "takes": takes or [],
         "lead": p.get("lead"), "body": layout.body_shown(p, h),
         # the tablet is everyone's: every step, whoever it went to (layout.head's `story`), else this copy's own
-        "status": _lines(layout.status_shown(h, [*((h.get("story") or h["history"]) if h else []),
+        "status": _lines(layout.status_shown(h, [*(_tablet_lines((h.get("story") or h["history"])) if h else []),
                                                  *([f"- {said_with}"] if said_with else []), status]), "status", "statusLine"),
         "stage": (h or {}).get("word") or said.get("stage") or "", "mark": p.get("mark") or "",
         "buttons": buttons_of(keyboard), "languages": languages, "photos": tablet_photos(photos),
     }
+    if is_incident(key):
+        # ⚠️ AN ALERT'S CARD: ITS POP-UP ONLY WHEN IT RINGS (owner, 2026-11-08, visit #154): the tablet pops a card up
+        # at each new step, as Telegram rang each; a step that does not ring on Telegram (message_format.rings) is
+        # `quiet` on the tablet too. ⚠️ THE SIREN'S QUESTION IS THE OWNER'S CHATS' ONLY: its buttons on the visit's
+        # card (visit.Visits.offered) never on the tablet, everyone's card, as never on the facility manager's copy
+        rec["buttons"] = [b for b in rec["buttons"] if b["kind"] != button_data.APPROVAL]
+        if not rings(said.get("stage")):
+            rec["quiet"] = True
     return _finished(rec, photo)
 
 
@@ -155,6 +163,18 @@ def tablet_photos(photos) -> list[dict]:
         elif os.path.realpath(str(ph["path"])).startswith(root):
             out.append({"path": str(ph["path"]), **one})
     return out[:agreed_limit("photos")] if agreed_limit("photos") else []
+
+
+#: The line of a visit's story only Telegram's copy needs: "+3 more photos on the tablet" (its picture holds a few)
+TELEGRAM_ONLY_LINES = {"seen:photos"}
+
+
+def _tablet_lines(lines) -> list:
+    """A heading's Status lines as the tablet tells them: every one but those of Telegram's copy alone.
+
+    ⚠️ "+3 MORE PHOTOS ON THE TABLET" ON THE TABLET (owner's screenshot, 2026-11-08, #154): meaningless there, the
+    tablet's card shows every photo."""
+    return [x for x in lines or () if not (isinstance(x, dict) and x.get("id") in TELEGRAM_ONLY_LINES)]
 
 
 def _step_and_words(status: str, said: dict) -> tuple[str, str]:
@@ -231,6 +251,11 @@ def page_id(html: bytes) -> str:
     """A page's id at the Kiosk: its content's, so the same page sent to two chats or again later is the same file,
     written again (its age starts again) — never an id remembered here for a file the Kiosk may have tidied away."""
     return hashlib.sha1(html).hexdigest()
+
+
+def is_incident(key: str) -> bool:
+    """Is `key` an incident's thread (thread_key of a number), never an approval's or a note's?"""
+    return any(str(key) == thread_key(n) for n in [str(key).rsplit(":", 1)[-1]] if n.isdigit())
 
 
 def thread_key(iid) -> str:

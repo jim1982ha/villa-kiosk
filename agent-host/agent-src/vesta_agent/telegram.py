@@ -82,9 +82,11 @@ class Part:
     media: str | None = None
     keyboard: dict | None = None
     reply_to: int | None = None
+    silent: bool = False        # sent without a sound (disable_notification): a quiet step of an alert
 
 
-def layout(text: str, keyboard: dict | None = None, media: str | None = None, reply_to: int | None = None) -> list[Part]:
+def layout(text: str, keyboard: dict | None = None, media: str | None = None, reply_to: int | None = None,
+           silent: bool = False) -> list[Part]:
     """How one message reaches Telegram, in order: a photo or a file first with the start of the text as its caption,
     the rest of the text in parts it takes, the buttons on the LAST part, the reply on the first. Pure: the real
     Telegram and the tests' fake both send what it says.
@@ -100,11 +102,11 @@ def layout(text: str, keyboard: dict | None = None, media: str | None = None, re
         parts.append(Part(head[0], media))
         text = rest
         if not text:
-            return [Part(parts[0].text, media, keyboard, reply_to)]
-    parts += [Part(p) for p in split_message(text or "…")]
+            return [Part(parts[0].text, media, keyboard, reply_to, silent)]
+    parts += [Part(p, silent=silent) for p in split_message(text or "…")]
     first = parts[0]
-    parts[0] = Part(first.text, first.media, first.keyboard, reply_to)
-    parts[-1] = Part(parts[-1].text, parts[-1].media, keyboard, parts[-1].reply_to)
+    parts[0] = Part(first.text, first.media, first.keyboard, reply_to, silent)
+    parts[-1] = Part(parts[-1].text, parts[-1].media, keyboard, parts[-1].reply_to, silent)
     return parts
 
 
@@ -177,14 +179,15 @@ class Telegram:
         raise AssertionError("unreachable")
 
     async def send(self, chat_id: int, text: str, keyboard: dict | None = None, document: str | None = None,
-                   photo_b64: tuple[str, str] | None = None, reply_to: int | None = None) -> list[int]:
+                   photo_b64: tuple[str, str] | None = None, reply_to: int | None = None,
+                   silent: bool = False) -> list[int]:
         """Send one message as `layout` says, with at most one file or one photo. Returns the id of EVERY message it
         made, in order (a reply to any of them is a reply to the agent). Any failure is a TelegramError, carrying the
-        ids that did arrive before it (`delivered`)."""
+        ids that did arrive before it (`delivered`). `silent`: without a sound (a quiet step of an alert)."""
         if document and photo_b64:
             raise TelegramError("one file or one photo per message")
         ids: list[int] = []
-        for part in layout(text, keyboard, "document" if document else "photo" if photo_b64 else None, reply_to):
+        for part in layout(text, keyboard, "document" if document else "photo" if photo_b64 else None, reply_to, silent):
             try:
                 res = await self._part(chat_id, part, document, photo_b64)
             except TelegramError as e:
@@ -205,6 +208,8 @@ class Telegram:
                     f.add_field("reply_markup", json.dumps(part.keyboard))
                 if part.reply_to:
                     f.add_field("reply_parameters", json.dumps({"message_id": part.reply_to, "allow_sending_without_reply": True}))
+                if part.silent:
+                    f.add_field("disable_notification", "true")
                 f.add_field(name, content, **file)
                 return f
             if part.media == "document":
@@ -226,6 +231,8 @@ class Telegram:
             data["reply_markup"] = part.keyboard
         if part.reply_to:
             data["reply_parameters"] = {"message_id": part.reply_to, "allow_sending_without_reply": True}
+        if part.silent:
+            data["disable_notification"] = True
         return await self.api("sendMessage", **data) or {}
 
     async def album(self, chat_id: int, photos: list[tuple[bytes, str]], reply_to: int | None = None) -> list[int]:

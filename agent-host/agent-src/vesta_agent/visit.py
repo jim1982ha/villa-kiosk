@@ -114,7 +114,7 @@ class Visits:
                 return
 
     # ------------------------------------------------------------------ the villa told
-    async def tell(self, iid: int, script: str, fields: dict, name: str = "") -> bool:
+    async def tell(self, iid: int, script: str, fields: dict, name: str = "", cards: bool = True) -> bool:
         """The villa's `script` run with `fields`, the cards each chat shows of incident `iid` now (`messages`) and the
         alert's name (`name`, "#125-P1"). `fields["drop"]`: the villa's replies ([chat, message id]) VESTA removes now it
         holds the visit — its one card tells it all (owner, 2026-11-06, #129: "Deleted message" and the villa's "TEST:
@@ -124,7 +124,9 @@ class Visits:
 
         ⚠️ ONE TELL AT A TIME PER VISIT, ITS CARDS READ WHEN IT GOES (owner's drill #127, 22:42:02): the lock's and the
         relock's results told the villa within the same second, each with the cards it had read earlier — the relock's
-        step was taken back by the older one, the villa thought VESTA silent and took the visit back a minute later."""
+        step was taken back by the older one, the villa thought VESTA silent and took the visit back a minute later.
+
+        `cards` False: the step acknowledged alone, before any card is drawn (acknowledge) — no card named, none dropped."""
         if self._tell is None or not str(script).startswith("script."):
             return False
         fields = dict(fields)
@@ -138,15 +140,28 @@ class Visits:
                     continue
                 if self.thread.delete is not None and await self.thread.delete(chat, mid):
                     dropped.append(mid)
-            cards = [{"chat_id": int(c), "message_id": int(r["mid"]), "role": "card"}
-                     for c, r in self.state.incident_chats(iid) if r.get("mid")]
-            data = {**{k: v for k, v in fields.items() if v is not None}, "messages": cards,
+            shown = [{"chat_id": int(c), "message_id": int(r["mid"]), "role": "card"}
+                     for c, r in self.state.incident_chats(iid) if r.get("mid")] if cards else []
+            data = {**{k: v for k, v in fields.items() if v is not None}, **({"messages": shown} if cards else {}),
                     **({"name": name} if name else {}), **({"dropped": dropped} if dropped else {})}
             try:
                 return bool(await self._tell(script, data))
             except Exception as e:  # noqa: BLE001 — the villa keeps the visit itself
                 log.warning("Incident #%s: the villa could not be told of its visit (%s)", iid, type(e).__name__)
                 return False
+
+    async def acknowledge(self, iid: int, script: str, fields: dict, name: str = "") -> bool:
+        """The villa told at once that VESTA holds visit `iid` and has its step (`fields`' owner, number and ack_seq),
+        before any card is drawn: the full tell (`tell`, the cards each chat shows) follows once they are.
+
+        ⚠️ THE STEP ACKNOWLEDGED FIRST (owner, 2026-11-08, live #154 at 09:14): VESTA had the step at 09:14:52 and told the
+        villa at 09:16:09, after the sheet, every chat's edit and the tablet — 77s, past the villa's 60s wait for VESTA's
+        answer: the villa took the visit back and posted its own reply photo, a message that rang, then VESTA took over
+        again. False when there is no step to acknowledge or the villa could not be told."""
+        if "ack_seq" not in fields:
+            return False
+        keep = ("record", "visit", "owner", "number", "ack_seq")
+        return await self.tell(iid, script, {k: fields[k] for k in keep if k in fields}, name, cards=False)
 
     # ------------------------------------------------------------------ the siren of a visit
     def card(self, iid: int, chat: int) -> int | None:
@@ -179,13 +194,41 @@ class Visits:
         self.state.set_visit_snaps(iid, kept)
         return n
 
-    async def offered(self, iid: int, aid: str, said: str, said_in: dict | None = None) -> None:
-        """Approval request `aid` (the siren's) asked within visit `iid`: "Siren offered to the Owner 18:35" a line of
-        its story, told again once the request is decided (decided)."""
+    async def offered(self, iid: int, aid: str, said: str, said_in: dict | None = None, *, chats=(),
+                      buttons: dict | None = None, waiting: str = "", waiting_in: dict | None = None, rang=()) -> None:
+        """Approval request `aid` (the siren's) asked within visit `iid`: "Siren offered to the Owner 18:35: waiting for
+        your answer" a line of its story, told again once the request is decided (decided). With `buttons` ({"y"|"n":
+        {label, labels}}: the desk's words), the question is ON the visit's card in each of `chats` (the owner's): its
+        two buttons on a row of their own (alert_buttons.AlertButtons) while it waits. The card is sent again there so it rings — once:
+        a chat in `rang` (the card just sent again by this same step) is edited quietly instead.
+
+        ⚠️ THE QUESTION ON THE ALERT ITSELF (owner, 2026-11-08, visit #154 at 08:47: the card rang, then a separate
+        "Approval request … Turn on Siren Alarm switch?" replying to it rang, then the reminder rang)."""
         hm = clock(datetime.now(timezone.utc), self.tz, days=False)
         said, said_in = said.replace("{time}", hm), {k: t.replace("{time}", hm) for k, t in (said_in or {}).items()}
-        self.state.set_visit_siren(aid, {"incident": int(iid), "said": said, "said_in": said_in})
-        await self._line(iid, said, said_in, "")
+        on_card = [int(c) for c in chats] if buttons else []
+        self.state.set_visit_siren(aid, {"incident": int(iid), "said": said, "said_in": said_in,
+                                         **({"chats": on_card, "buttons": buttons} if on_card else {})})
+        tail = f": {waiting}" if on_card and waiting else ""
+        tail_in = {k: f": {t}" for k, t in (waiting_in or {}).items()} if tail else {}
+        # the siren's question rings (message_format.rings: it changes the picture): the card sent again in the owner's
+        # chats it did not just ring in, every other copy edited
+        again = [c for c in on_card if c not in {int(r) for r in rang} and self.card(iid, c)]
+        heads = await self._line(iid, said, said_in, tail, tail_in, rekey=bool(on_card), skip=again)
+        if not again:
+            return
+        rec = self.state.visit_photos(iid)
+        jpeg = await self.jpeg(iid, list(rec.get("photos") or []), int(rec.get("shown") or 1)) \
+            if rec.get("photos") or self.state.visit_snaps(iid) else None
+        for chat in again:
+            await self.thread.resend(iid, chat, jpeg, (lambda c: self.keyboard(iid, c)) if self.keyboard else None,
+                                     head=heads.get(chat))
+
+    def asked_in(self, aid: str) -> list[int] | None:
+        """The chats whose visit card carries request `aid`'s buttons (offered with `buttons`); None for a request that
+        is a message of its own."""
+        v = self.state.visit_siren(aid)
+        return [int(c) for c in v["chats"]] if v and v.get("chats") else None
 
     async def decided(self, aid: str, ap: dict | None) -> None:
         """Approval request `aid` decided, expired or withdrawn (`ap`, its record): its visit's siren line says how
@@ -198,7 +241,10 @@ class Visits:
         how = note(ap["status"], ap.get("decided_name") or "", time=clock(at, self.tz, days=False))
         if not how:
             return
-        await self._line(int(v["incident"]), v["said"], v.get("said_in") or {}, how[:1].lower() + how[1:])
+        how = how[:1].lower() + how[1:]
+        # its buttons go with the wait (alert_buttons.AlertButtons reads the request, no longer pending)
+        await self._line(int(v["incident"]), v["said"], v.get("said_in") or {}, f", {how}",
+                         {k: f", {how}" for k in (v.get("said_in") or {})}, rekey=bool(v.get("chats")))
         if ap["status"] not in ("approved", "moving"):
             self.state.set_visit_siren(aid, None)
 
@@ -211,8 +257,13 @@ class Visits:
                 n += 1
         return n
 
-    async def _line(self, iid: int, said: str, said_in: dict, how: str) -> None:
-        tail = f", {how}" if how else ""
+    async def _line(self, iid: int, said: str, said_in: dict, tail: str = "", tail_in: dict | None = None,
+                    rekey: bool = False, skip=()) -> dict:
+        """The siren's line of visit `iid`'s story, `tail` after it (its other languages' in `tail_in`, else `tail`),
+        every copy but those in `skip` edited; `rekey`: their buttons drawn again (the siren's row comes or goes).
+        Returns each chat's heading."""
         heads = self.notices.observe(iid, [{"key": SIREN_LINE, "note": said + tail,
-                                            "note_in": {k: t + tail for k, t in said_in.items()}}])
-        await self.thread.reheaded(iid, heads)
+                                            "note_in": {k: t + (tail_in or {}).get(k, tail) for k, t in said_in.items()}}])
+        await self.thread.reheaded(iid, {c: h for c, h in heads.items() if c not in set(skip)},
+                                   keyboard=(lambda c: self.keyboard(iid, c)) if rekey and self.keyboard else None)
+        return heads

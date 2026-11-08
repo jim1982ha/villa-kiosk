@@ -144,7 +144,7 @@ def test_a_press_in_a_private_chat_is_answered_there_and_its_buttons_go(agent):
     before = len(agent.tg.sent)
     run(agent.on_ha_event("telegram_callback", press))
     replies = agent.tg.sent[before:]
-    assert replies and all(chat == FM for chat, _, _ in replies)           # never the group
+    assert all(chat == FM for chat, _, _ in replies)           # never the group (the answer: an edit, it does not ring)
     # the receipt at once, then the desk's own close with its watch (architecture review 21 card 1): this message only
     assert {(c, m) for c, m, _ in agent.tg.edits} == {(FM, mid)}
     chat, m, text = agent.tg.edits[0]

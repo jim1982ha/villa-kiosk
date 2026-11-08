@@ -134,12 +134,14 @@ class Delivery:
 
     # ------------------------------------------------------------------ one message
     async def send(self, chat_id: int, text: str, *, keyboard: dict | None = None, document: str | None = None,
-                   photo: Photo | None = None, origin: Origin | None = None, reply_to: int | None = None) -> int | None:
+                   photo: Photo | None = None, origin: Origin | None = None, reply_to: int | None = None,
+                   silent: bool = False) -> int | None:
         """The message's id, or None: nothing arrived. `origin`: on whose behalf — a job asked for in a chat
         (kind JOB) makes this its result, which replaces the chat's "being prepared" message. `reply_to`: one of the
-        agent's messages this one answers (a rewrite's backup, Outcome.rewrite)."""
+        agent's messages this one answers (a rewrite's backup, Outcome.rewrite). `silent`: without a sound (an alert's
+        quiet step: message_format.rings)."""
         mid = await self._place(chat_id).send(chat_id, plain_text(text), keyboard=keyboard, document=document,
-                                              photos=[photo] if photo else [], reply_to=reply_to)
+                                              photos=[photo] if photo else [], reply_to=reply_to, silent=silent)
         # a run's message arrived: nothing owed at the next start; a job's result: its waiting message goes
         return await self._arrived(chat_id, mid, origin)
 
@@ -235,8 +237,9 @@ class TelegramChats:
         return self.tg is not None
 
     async def send(self, chat_id: int, text: str, *, keyboard: dict | None = None, document: str | None = None,
-                   photos=(), reply_to: int | None = None) -> int | None:
-        """One message (its last part's id), or None: nothing arrived. `photos`: at most one, the message's picture."""
+                   photos=(), reply_to: int | None = None, silent: bool = False) -> int | None:
+        """One message (its last part's id), or None: nothing arrived. `photos`: at most one, the message's picture.
+        `silent`: without a sound (disable_notification)."""
         photo = photos[-1] if photos else None
         if self.tg is None:
             self.state.log("send_skipped", {"chat": chat_id, "reason": "Telegram is off (\"Agent replies on Telegram\" is off)"})
@@ -244,7 +247,8 @@ class TelegramChats:
             return None
         try:
             ids = await self.tg.send(int(chat_id), text, keyboard=keyboard, document=document,
-                                     photo_b64=photo, **({"reply_to": int(reply_to)} if reply_to else {}))
+                                     photo_b64=photo, **({"reply_to": int(reply_to)} if reply_to else {}),
+                                     **({"silent": True} if silent else {}))
         except TelegramError as e:
             ids = e.delivered
             log.warning("send failed%s: %s", f" after {len(ids)} part(s) arrived" if ids else "", e)

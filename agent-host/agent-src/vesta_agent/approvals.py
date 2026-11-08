@@ -183,8 +183,14 @@ class Approvals:
         aid, yn = p.parts
         ap = self.state.approval(aid)
         key = approval_thread(aid)
+        # ⚠️ A SIREN QUESTION ON A VISIT'S CARD (visit.Visits.offered) is pressed there, in the owner chats it was asked
+        # in alone: never a message of its own to post or settle — the card says what became of it (_tell_asker)
+        on_card = self.visits.asked_in(aid) if self.visits is not None else None
+        if on_card is not None and p.chat not in on_card and p.place != TABLET:
+            self.state.log("press_refused", {"approval": aid, "by": p.presser, "reason": "button pressed from another chat"})
+            return await p.toast("This button belongs to another chat.")
         # a tablet shows every request it keeps, whoever's chat it was sent to (ticket 22 of "One inbox")
-        if ap and ap["chat_id"] != p.chat and p.chat not in self.thread.shown(key) and p.place != TABLET:
+        if on_card is None and ap and ap["chat_id"] != p.chat and p.chat not in self.thread.shown(key) and p.place != TABLET:
             self.state.log("press_refused", {"approval": aid, "by": p.presser, "reason": "button pressed from another chat"})
             return await p.toast("This button belongs to another chat.")
         out = await asyncio.to_thread(self.actions.decide, aid, p.presser, yn == "y", chat=p.chat,
@@ -192,7 +198,7 @@ class Approvals:
         await p.toast(out["toast"])
         if not out.get("state"):
             return
-        if p.mid and p.chat not in self.thread.shown(key):
+        if p.mid and p.chat not in self.thread.shown(key) and on_card is None:
             # a request sent before 0.12.128 has no thread: the pressed message is its one copy
             from .layout import legacy
             await self.thread.post(key, p.chat, int(p.mid), legacy(p.words), buttons=True)

@@ -577,16 +577,16 @@ same_time_night:
 
 # the visit's photo sheet on Telegram holds the strongest and the latest; the tablet's card every one
 visit_more_photos:
-  en: "+{n} more photos on the tablet"
-  fr: "+{n} autres photos sur la tablette"
-  id: "+{n} foto lainnya di tablet"
-  de: "+{n} weitere Fotos auf dem Tablet"
-  es: "+{n} fotos más en la tableta"
-  it: "+{n} altre foto sul tablet"
-  nl: "+{n} foto's meer op de tablet"
-  zh: "平板上还有 {n} 张照片"
-  ja: "タブレットに他 {n} 枚の写真"
-  ko: "태블릿에 사진 {n}장 더"
+  en: "+{n} more photos in the VESTA UI"
+  fr: "+{n} autres photos dans VESTA UI"
+  id: "+{n} foto lainnya di VESTA UI"
+  de: "+{n} weitere Fotos in der VESTA UI"
+  es: "+{n} fotos más en VESTA UI"
+  it: "+{n} altre foto in VESTA UI"
+  nl: "+{n} foto's meer in de VESTA UI"
+  zh: "VESTA UI 中还有 {n} 张照片"
+  ja: "VESTA UI に他 {n} 枚の写真"
+  ko: "VESTA UI에 사진 {n}장 더"
 
 # the button under a visit's Telegram card that sends every photo of the visit, whole, in that chat
 visit_all_photos:
@@ -731,3 +731,41 @@ visit_siren:
   zh: "{time} 已向{role}提议拉响警报"
   ja: "{time} に{role}へサイレンを提案"
   ko: "{time}에 {role}에게 사이렌 제안"
+
+# ...while it waits: after that line, until the owner answers or it expires (the question is on the visit's card)
+visit_siren_waiting:
+  en: "waiting for your answer"
+  fr: "en attente de votre réponse"
+  id: "menunggu jawaban Anda"
+  de: "wartet auf Ihre Antwort"
+  es: "esperando su respuesta"
+  it: "in attesa della sua risposta"
+  nl: "wacht op uw antwoord"
+  zh: "等待您的答复"
+  ja: "ご返答待ち"
+  ko: "답변 대기 중"
+
+# the siren's question as two buttons on the owner's copy of the visit's card, on their own row
+visit_siren_sound:
+  en: "🚨 Sound siren"
+  fr: "🚨 Déclencher la sirène"
+  id: "🚨 Bunyikan sirene"
+  de: "🚨 Sirene auslösen"
+  es: "🚨 Activar la sirena"
+  it: "🚨 Attiva la sirena"
+  nl: "🚨 Sirene laten afgaan"
+  zh: "🚨 拉响警报"
+  ja: "🚨 サイレンを鳴らす"
+  ko: "🚨 사이렌 울리기"
+
+visit_siren_no:
+  en: "No siren"
+  fr: "Pas de sirène"
+  id: "Tanpa sirene"
+  de: "Keine Sirene"
+  es: "Sin sirena"
+  it: "Nessuna sirena"
+  nl: "Geen sirene"
+  zh: "不拉响警报"
+  ja: "サイレンなし"
+  ko: "사이렌 없음"

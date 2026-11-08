@@ -271,3 +271,10 @@ def voice_record(v) -> dict | None:
     import json
     recs = v.state.calls("voice")
     return json.loads(recs[-1]["detail"]) if recs else None
+
+
+def siren_question(text: str, keyboard: dict | None) -> bool:
+    """Does a message sent ask for the siren — a visit's card sent again with the question on it (the approval's buttons,
+    visit.Visits.offered), or a request of its own ("Approval request")? It rings, as it should."""
+    rows = (keyboard or {}).get("inline_keyboard") or []
+    return str(text).startswith("Approval") or any(str(b.get("callback_data") or "").startswith("a:") for r in rows for b in r)

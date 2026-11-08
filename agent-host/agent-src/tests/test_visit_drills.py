@@ -20,6 +20,8 @@ import re
 
 import pytest
 
+from helpers import siren_question
+
 import test_visit_record as record
 import test_visit_story
 from test_visit_story import (FM, GARDEN_DOOR, LOCK, OWNER, PARKING, RECORD, ENTRANCE, Visit, at, copy, just_past, lines,
@@ -94,11 +96,13 @@ def test_vesta_back_mid_visit_takes_the_villas_card_over_in_place_and_removes_it
         "id": vi.id, "owner": "villa", "messages": vi.messages + replies, "answered": None, "reminded_at": None,
         "ack_seq": 0, "closed": None}}
     play(v, send(first), send(second))
-    rang = [(c, t) for c, t, _k in v.tg.sent if not t.startswith("Approval")]
+    rang = [(c, t) for c, t, k in v.tg.sent if not siren_question(t, k)]
     assert rang == [], "the villa rang the door itself: VESTA sends nothing new"
     for chat, card in ((OWNER, 500), (FM, 501)):
-        assert copy(v, chat)["mid"] == card, "the villa's card, taken over in place"
-    assert {(c, m) for c, m, *_ in v.tg.media_edits} == {(OWNER, 500), (FM, 501)}, "the sheet on the villa's own card"
+        # the owner's sent again only with the siren's question on it (it rings: owner, 2026-11-08)
+        assert copy(v, chat)["mid"] == card or (chat == OWNER and siren_question("", copy(v, chat).get("kb"))), \
+            "the villa's card, taken over in place"
+    assert {(c, m) for c, m, *_ in v.tg.media_edits} >= {(FM, 501)}, "the sheet on the villa's own card"
     assert (OWNER, 600) in v.tg.deleted and (FM, 601) in v.tg.deleted, "the villa's replies removed"
     last = told(v)[-1]
     assert last["owner"] == "vesta" and sorted(last["dropped"]) == [600, 601], last
@@ -137,11 +141,13 @@ def test_vesta_back_while_the_villa_held_the_visit_never_rings_a_step_the_villa_
     _read_now(v, rec)
     edits = len(v.tg.edits)
     play(v, send(second))
-    assert [(c, t[:30]) for c, t, _k in v.tg.sent if not t.startswith("Approval")] == [], "the villa rang the door"
+    assert [(c, t[:30]) for c, t, k in v.tg.sent if not siren_question(t, k)] == [], "the villa rang the door"
     for chat, card in ((OWNER, 500), (FM, 501)):
+        if chat == OWNER and siren_question("", copy(v, chat).get("kb")):
+            continue                     # sent again with the siren's question on it (it rings: owner, 2026-11-08)
         assert copy(v, chat)["mid"] == card, "the villa's card kept, never deleted for a new one"
         assert (chat, card) not in v.tg.deleted
-    assert {(c, m) for c, m, _t in v.tg.edits[edits:]} >= {(OWNER, 500), (FM, 501)}, "the door folded in by an edit"
+    assert {(c, m) for c, m, _t in v.tg.edits[edits:]} >= {(FM, 501)}, "the door folded in by an edit"
     assert "- Garden Door opened, 03:30" in lines(copy(v, OWNER)["text"])
     assert not [ln for ln in lines(copy(v, OWNER)["text"]) if "Stronger signal sent" in ln or "alert sent again" in ln]
 
@@ -162,7 +168,7 @@ def test_a_step_after_vesta_holds_the_visit_the_villa_never_told_still_rings(tmp
     record.fire(rec, {"record": record.RECORD, "visit": vi.id, "token": "l", "set": {"seq": 3}})
     _read_now(v, rec)
     play(v, send(vi.event()))
-    rang = [c for c, t, _k in v.tg.sent if not t.startswith("Approval")]
+    rang = [c for c, t, k in v.tg.sent if not siren_question(t, k)]
     assert sorted(rang) == [OWNER, FM], "the lock, stronger and the villa's never: sent again, it rings"
     assert "- Outdoor entrance Lock opened at the lock, 03:33: alert sent again (to: Owner & FM)" in \
         lines(copy(v, OWNER)["text"])
@@ -176,7 +182,7 @@ def test_a_card_deleted_in_its_chat_is_sent_again_never_kept_as_a_pointer(tmp_pa
     vi.add("motion", PARKING, "22:55:00", photo=True)
     play(v, send(vi.event("opened")))
     assert copy(v, OWNER)["mid"] != 500 and copy(v, FM)["mid"] == 501
-    assert len([c for c, t, _k in v.tg.sent if c == OWNER and not t.startswith("Approval")]) == 1, "one card in its place"
+    assert len([c for c, t, k in v.tg.sent if c == OWNER and not siren_question(t, k)]) == 1, "one card in its place"
     vi.add("motion", ENTRANCE, "22:56:00")
     play(v, send(vi.event()))
     assert not [t for _c, _m, t in v.tg.edits if "see the newer message" in t]

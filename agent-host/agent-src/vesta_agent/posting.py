@@ -11,7 +11,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Awaitable, Callable
 
-from vesta_shared.message_format import UNTITLED, audience, fill_to, pages
+from vesta_shared.message_format import UNTITLED, audience, fill_to, pages, rings
 from vesta_shared.status_words import pick
 
 from . import kiosk_messages, layout
@@ -51,7 +51,7 @@ class Poster:
                    stage: str | None = None, mark: str | None = None, also=None,
                    title: str | None = None, told=None, reply_to: int | None = None,
                    status_in: dict | None = None, keep: str | bool | None = None,
-                   language: str | None = None, sheet: str | None = None) -> int | None:
+                   language: str | None = None, sheet: str | None = None, silent: bool | None = None) -> int | None:
         """The message in `chat`: its heading — who it is for (`roles`), the incident and its history — unless it answers
         the person who asked, in their chat, or is `plain`; its parts laid out (layout.py) to fit ONE Telegram message —
         a photo's or a file's caption included, so the copy recorded is the message sent; then its `thread` (an incident,
@@ -61,7 +61,9 @@ class Poster:
         tablet (True; or the skill's own `key`, so a later rewrite replaces it there too) — a reply to a person is not;
         sent by a scheduled run it is kept as a report, with its `document` and the `language` its words are in (one
         version of several: kiosk_messages.reported). `sheet`: `photo` is a visit's sheet (its fingerprint): the tablet's
-        card takes the villa's own photos instead. The message id, or None when nothing arrived."""
+        card takes the villa's own photos instead. `silent`: sent without a sound — by default an incident's message
+        whose step does not ring (message_format.rings: the first alert, its return, a stronger step, the one reminder
+        ring; owner, 2026-11-08). The message id, or None when nothing arrived."""
         # "{time}": the moment it says what happened, as every notice writes one (10/10/2026 15:04, the villa's time)
         now = datetime.now(timezone.utc)
         text, status, lead = (layout.fill_time(x, now, self.tz) for x in (text, status, lead))
@@ -109,8 +111,18 @@ class Poster:
         # photo and a separate text — only the text was recorded, so the next snapshot left the old photo behind
         limit = telegram_caption_chars() if (photo or document) else telegram_message_chars()
         shown = laid_out(lambda: layout.render(p, limit), "\n\n".join(x for x in (lead, text, status) if x))
+        if silent is None:
+            silent = incident is not None and not rings(stage)
+        if silent and incident is not None and thread is not None and str(thread) == str(incident) and \
+                self.thread is not None and not document and not reply_to:
+            # ⚠️ A QUIET STEP IS AN EDIT (owner, 2026-11-08, live #154): a chat that shows the alert already gets its
+            # copy edited in place, its picture kept — never sent again (IncidentThread.restep)
+            mid = await self.thread.restep(incident, chat, {**p, "limit": limit}, keyboard)
+            if mid:
+                return mid
         mid = await self.send(chat, shown, keyboard=keyboard, document=document, photo=photo,
-                              origin=origin, **({"reply_to": reply_to} if reply_to else {}))
+                              origin=origin, **({"reply_to": reply_to} if reply_to else {}),
+                              **({"silent": True} if silent else {}))
         if mid and thread is not None and self.thread is not None:
             await self.thread.post(thread, chat, mid, {**p, "limit": limit}, buttons=bool(keyboard), keyboard=keyboard,
                                    photo=None if sheet else photo, sheet=sheet)

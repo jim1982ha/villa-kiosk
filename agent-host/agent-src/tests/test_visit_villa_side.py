@@ -14,7 +14,7 @@ import asyncio
 from test_visit_story import (FM, NAMES, OWNER, PARKING, ENTRANCE, LOCK, Visit, Writer, at, copy, lines, play, send, tick,
                               told, villa)
 from test_visit_story import kiosk, media  # noqa: F401 — its fixtures
-from helpers import make_agent
+from helpers import make_agent, siren_question
 from vesta_shared.store import Store
 
 NOISE = "binary_sensor.example_server_noise"
@@ -52,7 +52,7 @@ def test_a_press_on_the_villas_own_button_is_left_to_the_villa_then_applied_from
         # stamped when VESTA takes it in
         assert re.search(r"Done (at|on) ", copy(v, chat)["text"]) and "(Wayan)" in copy(v, chat)["text"], copy(v, chat)["text"]
         assert "Watch" not in copy(v, chat)["text"]
-    assert [t for _c, t, _k in v.tg.sent[sent:] if not t.startswith("Approval")] == [], "nothing sent anew"
+    assert [t for _c, t, k in v.tg.sent[sent:] if not siren_question(t, k)] == [], "nothing sent anew"
     assert len([d for d in told(v) if d.get("answered")]) == 1
 
 

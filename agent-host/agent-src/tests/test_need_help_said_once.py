@@ -34,4 +34,4 @@ def test_need_help_is_said_once_in_every_chat_and_on_the_tablet(tmp_path, chat, 
     run(v.buttons.press(GROUP, ["1", "done"], owner, _toast, name="JM"))
     assert any(ln.startswith("- 🆘 Besoin d'aide à ") and ln.endswith("(Luc)") for ln in status(v, FM_FR)), status(v, FM_FR)
     # where it was pressed, as the fault's line says it (status_story: one wording, the moment apart)
-    assert any(re.match(r"- 🆘 Need help (on Telegram|on the tablet) at ", ln) for ln in status(v, GROUP)), status(v, GROUP)
+    assert any(re.match(r"- 🆘 Need help (on Telegram|in the VESTA UI) at ", ln) for ln in status(v, GROUP)), status(v, GROUP)

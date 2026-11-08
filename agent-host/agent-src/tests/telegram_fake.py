@@ -40,6 +40,7 @@ class FakeTelegram:
         self.media_edits: list = []       # (chat, message, jpeg bytes, caption, keyboard): editMessageMedia
         self.albums: list = []            # (chat, [caption, ...], the message it answers): sendMediaGroup
         self.with_photo: set = set()      # (chat, message) of every message sent with a picture (a test may add the villa's)
+        self.silent: set = set()          # (chat, message) of every message sent without a sound (disable_notification)
         self.gone: set = set()            # (chat, message) deleted in the chat by someone else: Telegram finds it no more
         self.refuse: set[str] = set()
         self.next_id = 1000
@@ -50,7 +51,7 @@ class FakeTelegram:
     async def close(self):
         pass
 
-    async def send(self, chat_id, text, keyboard=None, document=None, photo_b64=None, reply_to=None):
+    async def send(self, chat_id, text, keyboard=None, document=None, photo_b64=None, reply_to=None, silent=False):
         if "blocked" in self.refuse or f"blocked {chat_id}" in self.refuse:
             raise TelegramError("sendMessage: 403 Forbidden: bot can't initiate conversation with a user", refused=True)
         if "send" in self.refuse:
@@ -60,11 +61,14 @@ class FakeTelegram:
         if document and photo_b64:
             raise TelegramError("one file or one photo per message")
         ids: list[int] = []
-        for i, part in enumerate(layout(text, keyboard, "document" if document else "photo" if photo_b64 else None, reply_to)):
+        for i, part in enumerate(layout(text, keyboard, "document" if document else "photo" if photo_b64 else None, reply_to,
+                                        silent)):
             if i and "second part" in self.refuse:
                 raise TelegramError("sendMessage: 429 Too Many Requests (the test)", delivered=ids)
             self.next_id += 1
             self.sent.append((chat_id, part.text, part.keyboard))
+            if part.silent:
+                self.silent.add((chat_id, self.next_id))
             if part.media == "photo":
                 self.photos.append((chat_id, photo_b64))
                 self.with_photo.add((chat_id, self.next_id))

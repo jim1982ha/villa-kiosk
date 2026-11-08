@@ -139,7 +139,15 @@ NIGHT = {"watched": "watched until {until}", "closed": "Closed", "not_back": "it
 #: close in the Cockpit): the place said once, here — done_in writes the line.
 ON_TELEGRAM, ON_TABLET, IN_COCKPIT = "telegram", "tablet", "cockpit"
 #: Each place as a line names it after the button: "Need help on the tablet (JM)" (the Kiosk card's story too)
-ON_PLACE = {ON_TELEGRAM: "on Telegram", ON_TABLET: "on the tablet", IN_COCKPIT: "in the Cockpit"}
+#: ⚠️ "THE VESTA UI", NEVER "THE TABLET" (owner, 2026-11-08): VESTA is seen on any screen, tablet, phone or computer
+ON_PLACE = {ON_TELEGRAM: "on Telegram", ON_TABLET: "in the VESTA UI", IN_COCKPIT: "in the Cockpit"}
+#: What a line kept before said for the VESTA UI: read as it (status_words.closed_where, problems.done_where)
+ON_TABLET_BEFORE = "on the tablet"
+
+
+def place_now(words: str) -> str:
+    """Words a line kept before 2026-11-08 ("Done on the tablet") as a line says them now ("Done in the VESTA UI")."""
+    return str(words).replace(ON_TABLET_BEFORE, ON_PLACE[ON_TABLET])
 DONE_IN = {ON_TELEGRAM: f"Done {ON_PLACE[ON_TELEGRAM]}", ON_TABLET: f"Done {ON_PLACE[ON_TABLET]}",
            IN_COCKPIT: COCKPIT["closed"]}
 #: …and its "Not a problem while it lasts", by the same places: a close never read again while the problem lasts.
@@ -201,6 +209,9 @@ class Step(NamedTuple):
     #: that is part of the story, never the alert's state. ⚠️ (owner's drills, 2026-11-06: the tablet's card read
     #: "Stronger signal sent 22:57, TEST: Test door opened while the villa is empty (to: Owner & FM)" as its state)
     listed: bool = False
+    #: its message rings (a new message, with a sound, and the tablet's pop-up): the first alert, its return, a
+    #: stronger step, the one reminder. Every other step is told quietly (rings).
+    rings: bool = False
 
 
 #: EVERY STEP OF AN ALERT, ONE LINE EACH (architecture review, 2026-10-17: a step was named in five tables — the
@@ -218,17 +229,17 @@ class Step(NamedTuple):
 STEPS: dict[str, Step] = {
     # a NEW number within the week says it too (architecture review, 2026-10-19): a return after reopen_hours is a new
     # number (owner, 2026-10-18), and its card and the digest said "(again: 3 times in 7 days)" while Telegram said New
-    "new": Step("Alert sent", "new", timed=False, starts_run=True, line="Alert sent {at}{times} (to: {who})"),
-    "reminder": Step("Reminder sent", "existing", timed=True),
+    "new": Step("Alert sent", "new", timed=False, starts_run=True, line="Alert sent {at}{times} (to: {who})", rings=True),
+    "reminder": Step("Reminder sent", "existing", timed=True, rings=True),
     "escalated": Step("Escalation sent", "existing", timed=True),
     "update": Step("Update sent", "existing", timed=False),
     "back": Step("Back: alert sent", "existing", timed=True, starts_run=True,
-                 line="Back at {at}{times} (to: {who})"),
+                 line="Back at {at}{times} (to: {who})", rings=True),
     "still": Step("Still-there alert sent", "existing", timed=True),
     # a visit's step stronger than every one before it (a lock after motion): its card sent again, so it rings — a line
     # of its Status, the card's state "New alert" again (owner, 2026-11-06: one visit, one story; a break-in is never
     # folded quietly; the state line is the short state)
-    "stronger": Step("Stronger signal sent", "new", timed=False, listed=True),
+    "stronger": Step("Stronger signal sent", "new", timed=False, listed=True, rings=True),
     "reopened": Step("Reopen request sent", "existing", timed=True),
     "closed": Step("Closing note sent", "closed", timed=False),
 }
@@ -246,6 +257,17 @@ RESENT = "alert sent again"
 #: The words a moment follows in a Status line when it is a day ("Cleared on 08/11 09:20") and when it is a time alone
 #: ("Cleared at 05:23": timeutil.status_moments); status_words.ON has each language's.
 ON = ("on", "at")
+
+
+def rings(stage: str | None) -> bool:
+    """Does a message of an alert's step `stage` ring — on Telegram a message with its sound, on the tablet its pop-up?
+
+    ⚠️ RING ONLY FOR WHAT CHANGES THE PICTURE (owner, 2026-11-08, visit #154: the card, a separate siren question and a
+    reminder all rang for one visit): the first alert, its return, a stronger step and the one reminder ring (STEPS
+    `rings`); the siren's question rings too (visit.Visits.offered). Every other step (an escalation, a still-there
+    repeat, a reopening, an answer, a close) is told quietly: sent without a sound or edited in place."""
+    s = STEPS.get(stage or "")
+    return bool(s) and s.rings
 
 
 def folds(stage: str | None) -> bool:
@@ -286,7 +308,7 @@ def status_superseded(lines: list[str]) -> list[int]:
 PRESSED = acted("{label}", "{time}", "{name}") + "."
 #: A take-on the VESTA Kiosk could not record (result.take_on: Open Ticket on Telegram, the Kiosk unreachable or the
 #: alert's fault not there yet): the copies say it, their buttons back (owner, 2026-11-05: nothing half done)
-KIOSK_UNREACHED = "The VESTA Kiosk cannot be reached: open the ticket on the tablet."
+KIOSK_UNREACHED = "The VESTA Kiosk cannot be reached: open the ticket in the VESTA UI."
 #: Sections whose items are notes — what happened, said by the agent — rather than the things reported.
 NOTE_SECTIONS = frozenset({STATUS})
 

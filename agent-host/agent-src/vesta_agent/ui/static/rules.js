@@ -350,7 +350,7 @@ export function toolsCard(f, t, reload) {
       }))));
   };
   // what a role changes: the (i) of its tab (owner, 2026-10-08: a paragraph above the table became a tooltip)
-  const ROLES_INFO = `When a person writes, the AI only gets the tools their role allows; in a group listed for the facility manager, never more than the facility manager's; in a private chat, the person's own role. A tool switched off in ${place("ha_tools")} or ${place("agent_tools")} is off for everyone. Guests (on the tablet): answers only, from what the guest's tablet shows: no action, no camera, nobody's presence; the Guest column is what a guest keeps.`;
+  const ROLES_INFO = `When a person writes, the AI only gets the tools their role allows; in a group listed for the facility manager, never more than the facility manager's; in a private chat, the person's own role. A tool switched off in ${place("ha_tools")} or ${place("agent_tools")} is off for everyone. Guests (in the VESTA UI): answers only, from what the guest's VESTA UI shows: no action, no camera, nobody's presence; the Guest column is what a guest keeps.`;
   const roles = () => {
     const fm = f.tool_access.fm;             // group → allowed, as the form says it (policy_doc.to_form)
     return [

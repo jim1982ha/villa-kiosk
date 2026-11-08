@@ -151,7 +151,7 @@ def utcnow() -> datetime:
 def kiosk_copies_bytes() -> int:
     """How much the tablet's kept turns, and the copies owed to it, may take each in the agent's store."""
     return limit("state.kiosk_copies_mb", 30, unit="MB", group="run", lo=1, hi=1000,
-                 says="How much the tablet's answers kept for an edit, and the copies owed to the tablet, may take each in "
+                 says="How much the VESTA UI's answers kept for an edit, and the copies owed to it, may take each in "
                       "the agent's store (camera pictures included).",
                  reached="The oldest go first: an older answer edited after a restart loses its pictures.") * 1_000_000
 
@@ -468,7 +468,8 @@ class State:
         self.put(f"visitsnaps:{incident}", json.dumps(snaps))
 
     def visit_photos(self, incident: int | str) -> dict:
-        """The visit's photos as its desk last gave them ({photos, button}: result.sheet), {} before its first sheet."""
+        """The visit's photos as its desk last gave them ({photos, button, shown}: result.sheet), {} before its first
+        sheet."""
         return json.loads(self.get(f"visitphotos:{incident}") or "{}")
 
     def set_visit_photos(self, incident: int | str, record: dict) -> None:
@@ -481,7 +482,8 @@ class State:
         self.put(f"visitsheet:{incident}", made)
 
     def visit_siren(self, approval_id: str) -> dict | None:
-        """The visit a siren request belongs to, and its story line's words ({incident, said, said_in})."""
+        """The visit a siren request belongs to, and its story line's words ({incident, said, said_in}); asked on the
+        visit's card, the owner chats whose card carries its buttons and their words ({chats, buttons})."""
         return json.loads(self.get(f"visitsiren:{approval_id}") or "null")
 
     def set_visit_siren(self, approval_id: str, record: dict | None) -> None:

@@ -165,6 +165,18 @@ class Outcome:
         done = {"sent": 0, "not_sent": 0, "tickets": 0, "resolved": 0, "unrouted": 0, "edited": 0}
         if not isinstance(res, dict) or not res:
             return done
+        # a visit's step acknowledged to the villa FIRST, before its sheet, any chat's message or the tablet: the villa
+        # waits for VESTA's answer a short while, then takes the visit back itself (visit.Visits.acknowledge)
+        if self.visits is not None:
+            for a in res.get("actions") or []:
+                if isinstance(a, dict) and a.get("action") == TELL_VILLA and str(a.get("incident_id") or "").isdigit():
+                    try:
+                        await self.visits.acknowledge(int(a["incident_id"]), str(a.get("script") or ""),
+                                                      dict(a.get("fields") or {}),
+                                                      self.incidents.name(int(a["incident_id"])) if self.incidents else "")
+                    except Exception as e:  # noqa: BLE001 — the full tell below still goes
+                        log.warning("Incident #%s: its step could not be acknowledged at once (%s)", a["incident_id"],
+                                    type(e).__name__)
         # a visit's story lines FIRST: every copy this result draws or posts lists them (notice.Notices.observe); the
         # heading each copy shows then, for a quiet redraw (result.redraw)
         heads: dict[int, dict] = {}
@@ -205,7 +217,8 @@ class Outcome:
                 if isinstance(a, dict) and a.get("action") == SHEET and str(a.get("incident_id") or "").isdigit():
                     # kept before any copy is sent: its "All photos" button (alert_buttons.keyboard) and its press
                     self.state.set_visit_photos(int(a["incident_id"]), {"photos": list(a.get("photos") or []),
-                                                                        "button": a.get("button") or {}})
+                                                                        "button": a.get("button") or {},
+                                                                        "shown": int(a.get("shown") or 1)})
                     try:
                         got = await self.visits.jpeg(int(a["incident_id"]), list(a.get("photos") or []),
                                                      int(a.get("shown") or 1))
@@ -215,6 +228,23 @@ class Outcome:
                     if got:
                         import hashlib
                         sheets[int(a["incident_id"])] = (got, hashlib.sha1(got).hexdigest())
+        if self.visits is not None:
+            # ⚠️ A VISIT'S CARD SENT AGAIN KEEPS ITS PICTURE (owner's screenshot, 2026-11-08, live #154 at 09:35): a step
+            # with no sheet of its own (a reminder, from the desk's tick) sent the card again as text, its photos lost
+            for item in res.get("send") or []:
+                iid_s = item.get("incident_id") if isinstance(item, dict) else None
+                if str(iid_s or "").isdigit() and int(iid_s) not in sheets:
+                    rec = self.state.visit_photos(int(iid_s))
+                    if rec.get("photos") or self.state.visit_snaps(int(iid_s)):
+                        try:
+                            got = await self.visits.jpeg(int(iid_s), list(rec.get("photos") or []),
+                                                         int(rec.get("shown") or 1))
+                        except Exception:  # noqa: BLE001 — the card goes without its sheet, never not at all
+                            log.exception("Incident #%s: its photo sheet could not be made", iid_s)
+                            got = None
+                        if got:
+                            import hashlib
+                            sheets[int(iid_s)] = (got, hashlib.sha1(got).hexdigest())
         adopted: set[tuple[int, int, str | None]] = set()        # (incident, chat, step) shown by a taken-over copy
         for h in res.get("ha_messages") or []:
             hid, stage = int(h.get("incident_id") or 0), h.get("stage")
@@ -362,8 +392,19 @@ class Outcome:
                 if self.incidents is not None:
                     self.incidents.unreached(iid)
                 log.warning("Incident #%s: no chat of the people asked to answer received it — handed on", iid)
-        # the siren's request, start to end (siren.Request: when it is asked, who hears of an intrusion when it cannot be)
-        await self.siren.gate(res.get("siren_gate") or {}, origin=origin)
+        # the siren's request, start to end (siren.Request: when it is asked, who hears of an intrusion when it cannot be);
+        # a visit's card this result sent again rang already: the question is put on it quietly there
+        gate = res.get("siren_gate") or {}
+        visit = int(gate["visit"]) if isinstance(gate, dict) and str(gate.get("visit") or "").isdigit() else None
+        asked_now = await self.siren.gate(gate, origin=origin, rang={c for c, _s, _a in posted.get(visit, [])})
+        if visit in sheets and asked_now.get("asked") and self.visits is not None:
+            # the cameras it snapped are in the sheet now (the card sent again with the question carries them): the
+            # other copies get the same picture (result.sheet, below)
+            rec = self.state.visit_photos(visit)
+            got = await self.visits.jpeg(visit, list(rec.get("photos") or []), int(rec.get("shown") or 1))
+            if got:
+                import hashlib
+                sheets[visit] = (got, hashlib.sha1(got).hexdigest())
         # ⚠️ ONE HAND MOVES THE CARDS (architecture review, 2026-10-15): a script's fault actions were carried out here,
         # and the repair worked the same cards out from the tasks — two routes, a 2-day "redo the close" window for when
         # the first failed, and a person's Done that could meet the agent's close. A fault about a task is now the

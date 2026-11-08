@@ -114,7 +114,7 @@ def test_the_kiosk_unreachable_is_said_and_nothing_changes(agent):
     (inc,) = Store(agent.s.store_path).incidents(open_only=True)
     assert inc["state"] != Incident.TAKEN
     texts = [t for c, _m, t in agent.tg.edits if c == FM_CHAT]
-    assert status(texts[-1]) == "The VESTA Kiosk cannot be reached: open the ticket on the tablet."
+    assert status(texts[-1]) == "The VESTA Kiosk cannot be reached: open the ticket in the VESTA UI."
     assert last_keyboard(agent, FM_CHAT) == ORDER                # the buttons back, as before the press
 
 

@@ -65,9 +65,10 @@ def test_the_more_photos_line_is_the_last_status_line_whatever_comes_after(tmp_p
     vi.add("lock", LOCK, "18:40:00", how="lock")                     # a later step: its line comes after, by time
     play(v, send(vi.event()))
     shown = lines(copy(v, OWNER)["text"])
-    assert shown[-2] == "- +1 more photos on the tablet", shown
+    assert shown[-2] == "- +1 more photos in the VESTA UI", shown
+    # the tablet shows every photo: the line is Telegram's alone (owner's screenshot, 2026-11-08, #154)
     tablet = kiosk.messages["incident:1"]["status"]
-    assert tablet[-2] == "- +1 more photos on the tablet", tablet
+    assert not [ln for ln in tablet if "more photos" in ln] and tablet[-2] == shown[-3], tablet
 
 
 def test_the_tablets_state_is_the_stage_alone_its_words_a_status_line_above(tmp_path, kiosk, media):

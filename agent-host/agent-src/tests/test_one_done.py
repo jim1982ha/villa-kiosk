@@ -51,10 +51,10 @@ def test_a_done_names_where_it_was_pressed_and_the_report_says_it_once(tmp_path)
     in_cockpit, cockpit_task = alert(st, key="k3", at="2026-09-30T08:00:00+00:00")
     Problems(st).closed_in_kiosk(cockpit_task, who="JM")
     assert [st.incident(i)["reply"] for i in (on_telegram, on_tablet, in_cockpit)] == [
-        "Done on Telegram (Jim)", "Done on the tablet (Jim)", "Done in the Cockpit (JM)"]
+        "Done on Telegram (Jim)", "Done in the VESTA UI (Jim)", "Done in the Cockpit (JM)"]
     assert st.task(tid)["close_note"] == "Done on Telegram (Jim)."
     assert sorted(r["outcome"] for r in facts._alert_rows(c)) == [
-        "Done in the Cockpit (JM)", "Done on Telegram (Jim)", "Done on the tablet (Jim)"]
+        "Done in the Cockpit (JM)", "Done in the VESTA UI (Jim)", "Done on Telegram (Jim)"]
 
 
 def test_a_press_on_the_tablets_notice_is_handed_to_the_desk_as_the_tablets(tmp_path):
@@ -90,7 +90,7 @@ def test_a_press_on_the_tablets_notice_is_handed_to_the_desk_as_the_tablets(tmp_
     from vesta_agent.policy import Policy
     from vesta_agent.roster import Roster
     notices = Notices(d.state, lambda: Policy({}, Roster.of(fm=[(1, "Marie")])), "UTC")
-    assert [x["note"] for x in notices.story(6)] == ["🆘 Need help on the tablet (Marie)"]
+    assert [x["note"] for x in notices.story(6)] == ["🆘 Need help in the VESTA UI (Marie)"]
     with open(os.path.join(STARTER_SKILLS, "alert-desk", "skill.yaml"), encoding="utf-8") as f:
         assert "--place {place}" in f.read()                         # the shipped skill hands it on
 
@@ -159,3 +159,11 @@ def test_a_second_need_help_on_a_finding_whose_alert_is_open_goes_to_that_alert(
     run(v.tickets.repair())
     assert json.loads(st.incident(iid)["payload"]).get("kiosk_help")       # mailed to the open alert
     assert desk.tick(st, datetime.now(timezone.utc))["helped"] == []
+
+
+def test_a_line_kept_before_says_the_vesta_ui_never_the_tablet():
+    # owner, 2026-11-08: VESTA is seen on any screen; a close kept as "Done on the tablet" reads as the VESTA UI's
+    from vesta_shared import status_words
+    from vesta_shared.problems import Problems as P
+    assert status_words.closed_where("Done on the tablet", "10:00", "Jim", "fr").startswith("Terminé dans VESTA UI")
+    assert P.done_where({"close_note": "Not a problem on the tablet (Jim)."}) == "Not a problem in the VESTA UI"

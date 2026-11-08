@@ -41,8 +41,8 @@ MIME = "audio/mpeg"
 def speak_s() -> int:
     # its own clock, apart from a voice message's one (transcriber.timeout_s): saying an answer is a separate job
     return limit("speech.timeout_s", 60, unit="seconds", group="run", lo=10, hi=300,
-                 says="How long the Agent waits for the villa's voice to say an answer to a question spoken on the "
-                      "tablet (reading the voice settings, then making the sound).",
+                 says="How long the Agent waits for the villa's voice to say an answer to a question spoken in the "
+                      "VESTA UI (reading the voice settings, then making the sound).",
                  reached="The answer stays in words; it says it could not be spoken.", told="person")
 
 

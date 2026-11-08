@@ -94,21 +94,21 @@ def inbox_timeout_s() -> float:
     Kiosk's own hold (the agreement's conversation.waitSeconds), and a margin."""
     return float(agreement.section("conversation").get("waitSeconds") or 0) + limit(
         "kiosk.inbox_margin_s", 15, unit="seconds", group="run", lo=5, hi=120,
-        says="How much longer than the Kiosk's own hold the agent waits for its answer when collecting the tablet's "
-             "questions.",
+        says="How much longer than the Kiosk's own hold the agent waits for its answer when collecting the questions "
+             "asked in the VESTA UI.",
         reached="The read is tried again; a question is never lost (the Kiosk keeps it).", told="")
 
 
 def message_timeout_s() -> float:
     return limit("kiosk.message_timeout_s", 10, unit="seconds", group="run", lo=2, hi=120,
-                 says="How long the agent waits for the VESTA Kiosk to keep a message for the tablet.",
-                 reached="That copy is not kept for the tablet yet; Telegram's message is unaffected, and the copy is "
+                 says="How long the agent waits for the VESTA Kiosk to keep a message for the VESTA UI.",
+                 reached="That copy is not kept for the VESTA UI yet; Telegram's message is unaffected, and the copy is "
                          "sent again (kiosk.message_retry_s).", told="")
 
 
 def message_retry_s() -> float:
     return limit("kiosk.message_retry_s", 300, unit="seconds", group="run", lo=30, hi=3600,
-                 says="How often a message the VESTA Kiosk did not keep for the tablet (unreachable, restarting, "
+                 says="How often a message the VESTA Kiosk did not keep for the VESTA UI (unreachable, restarting, "
                       "refused) is sent to it again.",
                  reached="The copy is sent again; the newest copy of each message, never an older one.", told="")
 

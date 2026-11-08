@@ -16,7 +16,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from ha_fake import FakeHA, tool
-from helpers import make_agent, restarted
+from helpers import make_agent, restarted, siren_question
 from kiosk_fake import FakeKiosk
 from vesta_agent import sheet
 from vesta_agent.roster import Roster
@@ -238,11 +238,12 @@ def test_the_evening_of_06_11_is_one_alert_one_message_per_chat_one_story(tmp_pa
         card = copy(v, chat, 4)["mid"]
         assert card in alive
         others = [m for m in alive if m != card]
-        # the one other live message is the siren's question, a reply to the card, in the owner's chat only
-        assert len(others) == (1 if chat == OWNER else 0), (chat, others)
+        # the siren's question is on the card itself (owner, 2026-11-08, #154): no other live message in any chat
+        assert others == [], (chat, others)
     # quiet steps were edits (the sheet and the story), never a new message: VESTA sent per chat the card again once
-    # (the lock) and, in the owner's, the siren's question
+    # (the lock) and, in the owner's, once more for the siren's question — each of them rings
     assert len([s for s in v.tg.sent if s[0] == FM]) == 1
+    assert len([s for s in v.tg.sent if s[0] == OWNER]) == 2 and not v.tg.silent
     assert not [t for _c, t, _k in v.tg.sent if t.startswith("Camera snapshot")], "no separate snapshot message"
     assert v.tg.media_edits, "the sheet replaced the villa's card's picture in place"
     # the villa told the cards each chat shows, that VESTA holds the visit, each step acknowledged
@@ -256,16 +257,34 @@ def test_the_evening_of_06_11_is_one_alert_one_message_per_chat_one_story(tmp_pa
     assert any("Someone is inside (Living Room) at 18:36" in ln for ln in card["status"])
 
 
-def test_the_siren_is_one_line_of_the_visit_a_reply_to_its_card_and_no_snapshot_message(tmp_path, kiosk, media):
+def siren_row(kb):
+    """The siren's buttons on a copy's keyboard: [(label, callback data)]."""
+    return [(b["text"], b["callback_data"]) for r in (kb or {}).get("inline_keyboard") or [] for b in r
+            if str(b.get("callback_data") or "").startswith("a:")]
+
+
+def press_siren(v, chat, user, aid, yn="y"):
+    async def go(v):
+        await v.on_ha_event("telegram_callback", {"id": "cb", "data": f"a:{aid}:{yn}", "chat_id": chat, "user_id": user,
+                                                  "message": {"message_id": copy(v, chat)["mid"], "chat": {"id": chat}},
+                                                  "bot": {"id": 8000, "username": "Villa_Test_bot"}})
+    return go
+
+
+def test_the_siren_question_is_on_the_owners_card_never_a_message_of_its_own(tmp_path, kiosk, media):
+    # owner, 2026-11-08, visit #154: the card rang, then a separate "Approval request … Turn on Siren Alarm switch?"
+    # replying to it rang. Now two buttons on the owner's copy of the card, the question a line of its Status
     v = villa(tmp_path, kiosk)
     evening(v, media)
     (ap,) = v.state.approvals_in("pending")
-    asks = [(c, t) for c, t, _k in v.tg.sent if t.startswith("Approval request")]
-    assert [c for c, _t in asks] == [OWNER], "the owner alone is asked"
-    ask_mid = 1000 + 1 + [i for i, (c, t, _k) in enumerate(v.tg.sent) if t.startswith("Approval request")][0]
-    (reply,) = [r for r in v.tg.replies if r[1] == ask_mid]
-    assert reply[2] == 500, "the question answers the visit's card in the owner's chat"
-    assert "Turn on" in asks[0][1] or "Siren" in asks[0][1]
+    assert not [t for _c, t, _k in v.tg.sent if t.startswith("Approval")], "no message of its own"
+    owner_kb, fm_kb = (v.state.incident_message(1, c).get("kb") for c in (OWNER, FM))
+    assert siren_row(owner_kb) == [("🚨 Sound siren", f"a:{ap['id']}:y"), ("No siren", f"a:{ap['id']}:n")], owner_kb
+    assert [len(r) for r in owner_kb["inline_keyboard"] if siren_row({"inline_keyboard": [r]})] == [2], "a row of its own"
+    assert siren_row(fm_kb) == [], "the facility manager's copy never carries it"
+    assert not [b for b in kiosk.messages["incident:1"].get("buttons") or [] if b["kind"] == "a"], "nor the tablet's"
+    # it rang: the owner's card was sent again with it (the lock rang again later), never silently
+    assert any(siren_row(k) for c, _t, k in v.tg.sent if c == OWNER) and not v.tg.silent
     # the parking camera showed nothing within the siren's window: snapped into the sheet, never a message of its own
     assert any(n == "ha_get_camera_image" for n, _a in v.reader.calls)
     assert v.state.visit_snaps(1) and not [t for _c, t, _k in v.tg.sent if "Camera snapshot" in t]
@@ -276,17 +295,59 @@ def test_the_siren_is_one_line_of_the_visit_a_reply_to_its_card_and_no_snapshot_
     assert [(p["label"], p["at"]) for p in shown] == [(p["label"], p["at"]) for p in want] and len(shown) > 1, shown
     (snap,) = [p for p in shown if "photo" in p]
     assert snap["label"] == v.state.visit_snaps(1)[0]["label"] and base64.b64decode(snap["photo"])[:2] == b"\xff\xd8"
-    st = lines(copy(v, OWNER, 1)["text"])
-    (line,) = [ln for ln in st if "Siren offered" in ln]
-    assert re.fullmatch(r"- Siren offered to the Owner \d\d:\d\d", line), line
-    # nobody approves: it expires, and the story says so — the siren never sounds
+    for chat in (OWNER, FM):
+        (line,) = [ln for ln in lines(copy(v, chat, 1)["text"]) if "Siren offered" in ln]
+        assert re.fullmatch(r"- Siren offered to the Owner \d\d:\d\d: waiting for your answer", line), line
+    # asked once per visit, whatever came after (four more steps, two sources each time)
+    assert len(v.state.approvals_in("pending")) == 1
+
+
+def test_the_siren_on_the_card_needs_the_owners_own_press(tmp_path, kiosk, media):
+    # rules: The siren needs a human, always. Pressed from the facility manager's chat, or by the facility manager in
+    # the owner's: nothing sounds, it still waits. Unanswered: it expires, its buttons go, nothing sounds
+    v = villa(tmp_path, kiosk)
+    evening(v, media)
+    (ap,) = v.state.approvals_in("pending")
+    play(v, press_siren(v, FM, FM, ap["id"]))
+    assert ("cb", "This button belongs to another chat.") in v.tg.toasts
+    play(v, press_siren(v, OWNER, FM, ap["id"]))
+    assert v.state.approval(ap["id"])["status"] == "pending" and not [c for c in Writer.calls if c[0] == "switch"]
     asyncio.run(v.approvals.expire(datetime.now(timezone.utc) + timedelta(hours=2)))
-    st = lines(copy(v, OWNER, 1)["text"])
-    (line,) = [ln for ln in st if "Siren offered" in ln]
+    assert v.state.approval(ap["id"])["status"] == "expired"
+    assert siren_row(v.state.incident_message(1, OWNER).get("kb")) == [], "its buttons gone"
+    # ...on Telegram too: the owner's card's last edit carries no siren button
+    last = max(i for i, (c, m, _t) in enumerate(v.tg.edits) if (c, m) == (OWNER, copy(v, OWNER, 1)["mid"]))
+    assert siren_row(v.tg.edit_keyboards[last]) == [] and v.tg.edit_keyboards[last], v.tg.edit_keyboards[last]
+    (line,) = [ln for ln in lines(copy(v, OWNER, 1)["text"]) if "Siren offered" in ln]
     assert re.fullmatch(r"- Siren offered to the Owner \d\d:\d\d, expired at \d\d:\d\d: nothing was done", line), line
     assert v.state.siren_stop() is None and not [c for c in Writer.calls if c[0] == "switch"]
-    # asked once per visit, whatever came after (four more steps, two sources each time)
-    assert len([1 for _c, t, _k in v.tg.sent if t.startswith("Approval")]) == 1
+    # a press after that sounds nothing either
+    play(v, press_siren(v, OWNER, OWNER, ap["id"]))
+    assert not [c for c in Writer.calls if c[0] == "switch"]
+
+
+def test_the_owners_press_on_the_card_sounds_it_and_its_buttons_go(tmp_path, kiosk, media):
+    v = villa(tmp_path, kiosk)
+    evening(v, media)
+    (ap,) = v.state.approvals_in("pending")
+    play(v, press_siren(v, OWNER, OWNER, ap["id"]))
+    assert [c[:2] for c in Writer.calls if c[0] == "switch"] == [("switch", "turn_on")]
+    assert siren_row(v.state.incident_message(1, OWNER).get("kb")) == []
+    assert "Siren offered to the Owner" in copy(v, OWNER, 1)["text"] and "waiting for your answer" not in copy(v, OWNER, 1)["text"]
+    assert copy(v, OWNER, 1)["mid"] in [m for c, m in [(c, i) for i, (c, _t, _k) in enumerate(v.tg.sent, start=1001)]
+                                         if c == OWNER], "the card stays: no message of the request to settle"
+
+
+def test_a_drill_never_offers_the_siren(tmp_path, kiosk, media):
+    v = villa(tmp_path, kiosk)
+    vi = Visit(media=media)
+    vi.add("motion", PARKING, "02:10:01")
+    play(v, send({**vi.event("opened")}))
+    vi.add("door", GARDEN_DOOR, "02:10:40")
+    ev = vi.event()
+    ev["visit"]["drill"] = True
+    play(v, send(ev))
+    assert not v.state.approvals_in("pending") and not [k for _c, _t, k in v.tg.sent if siren_row(k)]
 
 
 def test_a_reminder_says_what_changed_and_the_villa_is_told_it_was_sent(tmp_path, kiosk, media):
@@ -296,6 +357,73 @@ def test_a_reminder_says_what_changed_and_the_villa_is_told_it_was_sent(tmp_path
     bottom = lines(copy(v, FM, 1)["text"])[-1]
     assert "No answer after 15min. Someone went inside at 18:36. Was this visit expected?" in bottom, bottom
     assert told(v)[-1].get("reminded_at")
+
+
+def test_one_reminder_only_once_the_visit_is_quiet_and_it_rings_while_quiet_steps_do_not(tmp_path, kiosk, media):
+    # owner, 2026-11-08, visit #154: the reminder rang at 15 minutes while the visit kept growing step by step
+    v = villa(tmp_path, kiosk)
+    vi = evening(v, media)
+    later = (datetime.now(timezone.utc) + timedelta(minutes=10)).isoformat()
+    vi.steps.append({"seq": len(vi.steps) + 1, "kind": "motion", "entity_id": ENTRANCE, "name": NAMES[ENTRANCE], "at": later})
+    n = len(v.tg.sent)
+    play(v, send(vi.event()))
+    assert len(v.tg.sent) == n, "a step no stronger: an edit, no sound"
+
+    def reminders():
+        return [(c, m) for m, (c, t, _k) in enumerate(v.tg.sent, start=1001) if "Reminder sent" in t]
+    play(v, lambda v: tick(v, 20))                  # 10 minutes after the latest step: not yet
+    assert reminders() == []
+    play(v, lambda v: tick(v, 26))                  # 16 minutes without a step: the one reminder, and it rings
+    sent = reminders()
+    assert sorted(c for c, _m in sent) == [OWNER, FM] and not [x for x in sent if x in v.tg.silent], sent
+    # asked again later (reopened in the Cockpit, say): never a second reminder for the same alert
+    Store(v.s.store_path).update_incident(1, state="asked", asked_at=datetime.now(timezone.utc).isoformat())
+    play(v, lambda v: tick(v, 60))
+    assert reminders() == sent
+
+
+def test_steps_that_change_nothing_seen_never_ring(tmp_path, kiosk, media):
+    # a visit's escalation (no answer after 45min) to the owner, who has its card from the start (owner's screenshot,
+    # 2026-11-08, live #154 at 09:35: the card sent again as text, its picture lost): an edit in place, no sound, its
+    # picture kept, its pop-up quiet on the tablet
+    v = villa(tmp_path, kiosk)
+    evening(v, media)
+    play(v, lambda v: tick(v, 20))
+    reminders = [(c, m) for m, (c, t, _k) in enumerate(v.tg.sent, start=1001) if "Reminder sent" in t]
+    assert reminders and all(x in v.tg.with_photo for x in reminders), "the reminder sent again with the visit's picture"
+    n = len(v.tg.sent)
+    assert not kiosk.messages["incident:1"].get("quiet"), "the reminder rings on the tablet too"
+    play(v, lambda v: tick(v, 70))
+    assert len(v.tg.sent) == n, "nothing sent again"
+    assert "Escalation sent" in copy(v, OWNER, 1)["text"] and (OWNER, copy(v, OWNER, 1)["mid"]) in v.tg.with_photo
+    assert kiosk.messages["incident:1"].get("quiet") is True
+    # and the siren's question never a card of its own on the tablet
+    assert list(kiosk.messages) == ["incident:1"], list(kiosk.messages)
+
+
+def test_a_visits_step_is_acknowledged_to_the_villa_before_any_telegram_work(tmp_path, kiosk, media):
+    # owner, 2026-11-08, live #154 at 09:14: the step told to the villa 77s late, after the sheet and every chat's
+    # edit — past its 60s wait: the villa took the visit back and posted its own ringing reply
+    v = villa(tmp_path, kiosk)
+    vi = Visit(media=media)
+    vi.add("motion", PARKING, "18:19:58", photo=True)
+    play(v, send(vi.event("opened")))
+    seen = []
+    tell = v.visits._tell
+
+    async def spy(script, data):
+        seen.append((data.get("ack_seq"), "messages" in data,
+                     len(v.tg.sent) + len(v.tg.edits) + len(v.tg.media_edits) + len(v.tg.deleted)))
+        return await tell(script, data)
+    v.visits._tell = spy
+    before = len(v.tg.sent) + len(v.tg.edits) + len(v.tg.media_edits) + len(v.tg.deleted)
+    vi.add("door", GARDEN_DOOR, "18:20:40", photo=True)        # stronger: the card sent again, its sheet, every edit
+    play(v, send(vi.event()))
+    after = len(v.tg.sent) + len(v.tg.edits) + len(v.tg.media_edits) + len(v.tg.deleted)
+    assert after > before
+    first, *rest = seen
+    assert first == (2, False, before), seen
+    assert rest and rest[-1][:2] == (2, True), "the cards told after, once drawn"
 
 
 def test_the_visit_ends_once_with_no_watch_and_a_done_ends_it_on_the_villa(tmp_path, kiosk, media):
@@ -356,7 +484,7 @@ def test_a_door_forced_after_motion_rings_and_arms_the_siren_never_folded_quietl
     sent_before = len(v.tg.sent)
     vi.add("door", GARDEN_DOOR, "02:10:40")
     play(v, send(vi.event()))
-    rang = [(c, t) for c, t, _k in v.tg.sent[sent_before:] if not t.startswith("Approval")]
+    rang = [(c, t) for c, t, k in v.tg.sent[sent_before:] if not siren_question(t, k)]
     assert sorted(c for c, _t in rang) == [OWNER, FM], "the door is stronger than motion: sent again, it rings"
     assert all(t.startswith("#1-P1 (new)\n") and "Garden Door opened while the villa is empty" in t for _c, t in rang)
     assert all("- Garden Door opened, 02:10: alert sent again (to: Owner & FM)" in lines(copy(v, c, 1)["text"]) for c in (OWNER, FM))
@@ -403,8 +531,10 @@ def test_vesta_restarted_mid_visit_carries_on_the_same_card(tmp_path, kiosk, med
     vi.owner = "villa"
     vi.add("lock", LOCK, "18:35:40", how="lock")
     play(v, send(vi.event()))
-    assert [t for _c, t, _k in v.tg.sent[sent:] if not t.startswith("Approval request")] == []
-    assert copy(v, OWNER, 1)["mid"] == 500
+    assert [t for _c, t, k in v.tg.sent[sent:] if not siren_question(t, k)] == []
+    # the owner's card sent again only for the siren's question (it rings: owner, 2026-11-08), never for the step
+    assert copy(v, OWNER, 1)["mid"] == 500 or siren_question("", copy(v, OWNER, 1).get("kb"))
+    assert copy(v, FM, 1)["mid"] == 501
     assert "- Outdoor entrance Lock opened at the lock, 18:35" in lines(copy(v, OWNER, 1)["text"])
     # the card is taken over once: a step is an edit, never a notice of its own ("Update sent")
     assert not [ln for ln in lines(copy(v, OWNER, 1)["text"]) if "Update sent" in ln]
@@ -421,7 +551,7 @@ def test_vesta_back_after_the_villa_held_the_visit_takes_over_the_same_card_send
     vi.add("motion", DOOR_MOTION, "18:35:41", photo=True)
     play(v, send(vi.event()))
     # no card sent: the villa's cards taken over in place (the siren's question is VESTA's alone: the villa never asks)
-    assert [t for _c, t, _k in v.tg.sent if not t.startswith("Approval request")] == []
+    assert [t for _c, t, k in v.tg.sent if not siren_question(t, k)] == []
     assert {(c, m) for c, m, _t in v.tg.edits} >= {(OWNER, 500), (FM, 501)}
     assert v.tg.media_edits and {(c, m) for c, m, *_ in v.tg.media_edits} == {(OWNER, 500), (FM, 501)}
     st = lines(copy(v, OWNER, 1)["text"])
@@ -452,8 +582,8 @@ def test_a_press_the_villa_recorded_while_vesta_was_away_is_applied_once(tmp_pat
     play(w, send(wi.event()))
     wi.add("motion", WATERWALL, "18:27:00")
     play(w, send(wi.event()))
-    asked = [t for _c, t, _k in w.tg.sent if "is asked to act" in t]
-    assert len(asked) == 1, asked
+    asked = [h for h in w.state.incident_history(1) if h.get("stage") == "escalated"]
+    assert len(asked) == 1 and "is asked to act" in copy(w, OWNER, 1)["text"], asked
 
 
 # ---------------------------------------------------------------------------------------------- the reopened count

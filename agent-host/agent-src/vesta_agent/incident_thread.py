@@ -498,14 +498,16 @@ class IncidentThread:
         async with self._lock(iid):
             return await self._reheaded(iid, self.words.refold(int(iid)))
 
-    async def reheaded(self, iid: int | str, heads: dict, body: str | None = None) -> int:
+    async def reheaded(self, iid: int | str, heads: dict, body: str | None = None,
+                       keyboard: Callable[[int], dict | None] | None = None) -> int:
         """Every copy of incident `iid` shows the heading `heads` gives its chat ({chat: heading}: notice.Notices.observe,
         a visit's story as it stands) and, when given, the alert's new `body` — quietly, an edit, its buttons and bottom
-        line kept; the tablet's card with it. Returns how many changed."""
+        line kept; the tablet's card with it. `keyboard(chat)`: the buttons a copy still answering shows now (a visit's
+        siren question come or gone: alert_buttons.AlertButtons), drawn again. Returns how many changed."""
         async with self._lock(iid):
-            return await self._reheaded(iid, heads, body)
+            return await self._reheaded(iid, heads, body, keyboard)
 
-    async def _reheaded(self, iid: int | str, heads: dict, body: str | None = None) -> int:
+    async def _reheaded(self, iid: int | str, heads: dict, body: str | None = None, keyboard=None) -> int:
         n = 0
         for chat, head in heads.items():
             rec = self.state.incident_message(iid, chat)
@@ -514,14 +516,60 @@ class IncidentThread:
             p = {**layout.of(rec), "head": head}
             if body is not None and body != p.get("body"):
                 p = self._own_words(iid, chat, layout.changed(p, body=body))
-            if layout.render(p) != rec.get("text"):
+            kb = rec.get("kb") if rec.get("buttons") and not rec.get("settled") else None
+            if keyboard is not None and kb is not None:
+                kb = keyboard(chat)
+                rec = {**rec, "kb": kb} if kb else {**rec, "buttons": False, "kb": None}
+            if layout.render(p) != rec.get("text") or kb != (self.state.incident_message(iid, chat) or {}).get("kb"):
                 n += await self._show(iid, chat, rec, p)
         return n
+
+    async def restep(self, iid: int | str, chat: int, parts: dict, keyboard: dict | None = None) -> int | None:
+        """Incident `iid`'s copy in `chat` shows `parts` now — a step that does not ring (message_format.rings), edited in
+        place, its picture kept — with `keyboard` (none: its buttons go), open again. Its message id; None when the chat
+        holds no live copy (none, or deleted there): the caller sends one.
+
+        ⚠️ A QUIET STEP IS AN EDIT (owner, 2026-11-08, live #154 at 09:35): "Escalation sent 09:35 … (to: Owner)" sent the
+        visit's card again in the owner's group, which had it from the start — a text message, its picture lost."""
+        async with self._lock(iid):
+            rec = self.state.incident_message(iid, chat)
+            if not rec or not rec.get("mid") or rec.get("gone") or self.edit is None:
+                return None
+            p = {**parts, "limit": layout.of(rec).get("limit") or parts.get("limit")}
+            kept = {k: v for k, v in rec.items() if k not in ("interim", "kb", "finished")}
+            ok = await self._show(iid, chat, {**kept, "settled": False, "buttons": bool(keyboard)}, p, keyboard=keyboard)
+            if not ok and (self.state.incident_message(iid, chat) or {}).get("gone"):
+                return None
+            return int(rec["mid"])
+
+    async def resend(self, iid: int | str, chat: int, jpeg: bytes | None = None,
+                     keyboard: Callable[[int], dict | None] | None = None, head: str | None = None) -> bool:
+        """Incident `iid`'s copy in `chat` sent again as a new message — so it rings — with the picture `jpeg` (a visit's
+        sheet), its heading `head` when given and the buttons `keyboard(chat)` gives it; the older one goes (`_post`).
+        Only a copy still answering. ⚠️ ONLY FOR WHAT RINGS (message_format.rings): a visit's siren question (visit.Visits
+        .offered). False when it was not sent."""
+        import base64
+        import hashlib
+        from vesta_shared.messaging import telegram_caption_chars, telegram_message_chars
+        async with self._lock(iid):
+            rec = self.state.incident_message(iid, chat)
+            if not rec or not rec.get("mid") or rec.get("settled") or not rec.get("buttons") or self.send is None:
+                return False
+            kb = (keyboard(chat) if keyboard else None) or rec.get("kb")
+            p = {**layout.of(rec), **({"head": head} if head else {}),
+                 "limit": telegram_caption_chars() if jpeg else telegram_message_chars()}
+            mid = await self.send(chat, layout.render(p), keyboard=kb,
+                                  **({"photo": (base64.b64encode(jpeg).decode(), "image/jpeg")} if jpeg else {}))
+            if not mid:
+                return False
+            await self._post(iid, chat, mid, p, buttons=bool(kb), keyboard=kb,
+                             sheet=hashlib.sha1(jpeg).hexdigest() if jpeg else None)
+            return True
 
     async def picture(self, iid: int | str, jpeg: bytes, keyboard: Callable[[int], dict | None] | None = None) -> int:
         """Every copy of incident `iid` carries the picture `jpeg` (a visit's sheet), its caption drawn again within a
         caption's limit and its buttons kept — replaced in place, no sound; a copy that is a text message (Telegram
-        gives no text message a picture) sent again as a photo, which replaces it (`_post`) and rings once. Returns
+        gives no text message a picture) sent again as a photo, which replaces it (`_post`) without a sound. Returns
         how many copies carry it now."""
         import base64
         import hashlib
@@ -544,7 +592,9 @@ class IncidentThread:
                                                                 **({"kb": kb} if kb else {})})
                     n += 1
                 elif said == "not_media" and self.send:
-                    mid = await self.send(chat, text, keyboard=kb, photo=(base64.b64encode(jpeg).decode(), "image/jpeg"))
+                    # its picture is no news: sent again without a sound (message_format.rings, owner 2026-11-08)
+                    mid = await self.send(chat, text, keyboard=kb, photo=(base64.b64encode(jpeg).decode(), "image/jpeg"),
+                                          silent=True)
                     if mid:
                         await self._post(iid, chat, mid, p, buttons=bool(kb), keyboard=kb, sheet=made)
                         n += 1
