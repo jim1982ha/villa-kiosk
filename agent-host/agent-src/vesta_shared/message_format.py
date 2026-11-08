@@ -259,7 +259,7 @@ RESENT = "alert sent again"
 ON = ("on", "at")
 
 
-def rings(stage: str | None) -> bool:
+def rings(stage: str | None, mark: str | None = None) -> bool:
     """Does a message of an alert's step `stage` ring — on Telegram a message with its sound, on the tablet its pop-up?
 
     ⚠️ RING ONLY FOR WHAT CHANGES THE PICTURE (owner, 2026-11-08, visit #154: the card, a separate siren question and a
@@ -267,7 +267,8 @@ def rings(stage: str | None) -> bool:
     `rings`); the siren's question rings too (visit.Visits.offered). Every other step (an escalation, a still-there
     repeat, a reopening, an answer, a close) is told quietly: sent without a sound or edited in place."""
     s = STEPS.get(stage or "")
-    return bool(s) and s.rings
+    # a person's Need help forwarded to the escalation role rings: someone is asking for help (owner, 2026-11-09)
+    return mark == "help" or (bool(s) and s.rings)
 
 
 def folds(stage: str | None) -> bool:

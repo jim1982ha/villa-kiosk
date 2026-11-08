@@ -1,3 +1,7 @@
+## 0.12.488
+
+- When someone presses Need help, the message forwarded to the Owner rings again, so a request for help is never missed.
+
 ## 0.12.487
 
 Fewer notifications for one alert (needs VESTA (dev2) 2.496.757 or later for the pop-ups):

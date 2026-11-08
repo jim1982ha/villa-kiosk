@@ -112,7 +112,7 @@ class Poster:
         limit = telegram_caption_chars() if (photo or document) else telegram_message_chars()
         shown = laid_out(lambda: layout.render(p, limit), "\n\n".join(x for x in (lead, text, status) if x))
         if silent is None:
-            silent = incident is not None and not rings(stage)
+            silent = incident is not None and not rings(stage, mark)
         if silent and incident is not None and thread is not None and str(thread) == str(incident) and \
                 self.thread is not None and not document and not reply_to:
             # ⚠️ A QUIET STEP IS AN EDIT (owner, 2026-11-08, live #154): a chat that shows the alert already gets its

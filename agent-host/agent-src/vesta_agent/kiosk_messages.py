@@ -133,7 +133,7 @@ def of_parts(key: str, p: dict, *, keyboard: dict | None = None, photo: str | No
         # `quiet` on the tablet too. ⚠️ THE SIREN'S QUESTION IS THE OWNER'S CHATS' ONLY: its buttons on the visit's
         # card (visit.Visits.offered) never on the tablet, everyone's card, as never on the facility manager's copy
         rec["buttons"] = [b for b in rec["buttons"] if b["kind"] != button_data.APPROVAL]
-        if not rings(said.get("stage")):
+        if not rings(said.get("stage"), p.get("mark")):
             rec["quiet"] = True
     return _finished(rec, photo)
 
