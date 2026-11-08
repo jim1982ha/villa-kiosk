@@ -1,3 +1,8 @@
+## 0.12.486
+
+- A visit's card on the tablet now shows the camera pictures VESTA took when it offered the siren, the same photos as
+  its Telegram picture (needs VESTA (dev2) 2.496.756 or later on the tablet).
+
 ## 0.12.485
 
 - Nothing changes in what VESTA does; fewer checks before each release.
