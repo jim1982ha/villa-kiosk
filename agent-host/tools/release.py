@@ -2,26 +2,30 @@
 """The VESTA Agent's release: `gates` and `ship`.
 
     python3 agent-host/tools/release.py gates              # every gate, even after a red one, then a summary (CI runs this)
-    python3 agent-host/tools/release.py ship -F msg.txt    # version → quick checks + touched tests → commit → push → wait until published
+    python3 agent-host/tools/release.py ship -F msg.txt    # version → quick checks → commit → push → follow CI until published
     python3 agent-host/tools/release.py ship --dry-run     # what ship would do, changing nothing
 
 ONE VERSION: the top `## x.y.z` of vesta-agent/CHANGELOG.md, written into vesta-agent/config.yaml (what the store
 offers) and agent-src/vesta-agent.yaml (the agent reads it as its __version__, the UI's cache path).
 
-CI is the gate: agent-host.yaml runs `gates` before the image is built, so a red gate publishes nothing. `ship` runs
-the quick checks and the tests naming a staged module here, then waits once for main's vesta-agent-dev/config.yaml to name the version: exit 0 when
-published, 3 when pushed but not published in time (read the CI run), 2 when refused.
+CI is the gate: agent-host.yaml runs `gates` before the image is built, so a red gate publishes nothing. ⚠️ THE TESTS
+RUN ONCE, IN CI (owner, 2026-11-09: "redundant and useless test gates that make a release ship too long"): `ship` runs
+only the quick checks (seconds), pushes, then follows the commit's CI run — a red run is said the moment it ends, with
+the failed step — and waits for main's vesta-agent-dev/config.yaml to name the version: exit 0 when published, 1 when
+CI failed, 3 when pushed but not published in time (read the CI run), 2 when refused.
 """
 
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import re
 import subprocess
 import sys
 import time
 from pathlib import Path
+from urllib.request import Request, urlopen
 
 ROOT = Path(__file__).resolve().parents[2]
 IN_CI = os.environ.get("GITHUB_ACTIONS") == "true"
@@ -59,29 +63,6 @@ GATES: list[tuple[str, list[str], str, bool]] = [
 
 class ReleaseError(RuntimeError):
     pass
-
-
-def touched_tests(staged: list[str]) -> list[str]:
-    """The agent's tests (under SRC/tests, villa ones aside) that are staged or name a staged module: what ship runs
-    before pushing, so a test the change made stale fails here in seconds, not in CI 40 minutes later (0.12.488)."""
-    tests = sorted(t for t in (ROOT / SRC / "tests").rglob("test_*.py") if "villa" not in t.parts)
-    stems = {Path(f).stem for f in staged if f.startswith(SRC + "/") and f.endswith(".py")}
-    picked = []
-    for t in tests:
-        rel = str(t.relative_to(ROOT))
-        if rel in staged or (stems and re.search(r"\b(" + "|".join(map(re.escape, stems)) + r")\b", t.read_text())):
-            picked.append(str(t.relative_to(ROOT / SRC)))
-    return picked
-
-
-def run_touched_tests(staged: list[str]) -> bool:
-    """touched_tests, run as CI runs them (UTC: two failures came from the local clock); True when none or all pass."""
-    picked = touched_tests(staged)
-    if not picked:
-        return True
-    print(f"\n═══ The {len(picked)} test files this change touches ═══", flush=True)
-    return subprocess.run([PY, "-m", "pytest", *picked, "-q", "-p", "no:cacheprovider", "-n", "auto"],
-                          cwd=ROOT / SRC, env={**os.environ, "TZ": "UTC"}).returncode == 0
 
 
 def run_gates(quick: bool = False) -> bool:
@@ -137,6 +118,37 @@ def git(*args: str) -> str:
     if p.returncode != 0:
         raise ReleaseError(f"git {' '.join(args)}: {p.stderr.strip() or p.stdout.strip()}")
     return p.stdout
+
+
+def _github(path: str) -> dict | None:
+    """GitHub's public API for this repository (no login: it is public), None when it cannot be read."""
+    repo = re.sub(r"^.*github\.com[:/]|\.git$", "", git("remote", "get-url", "origin").strip())
+    try:
+        with urlopen(Request(f"https://api.github.com/repos/{repo}/{path}",
+                             headers={"Accept": "application/vnd.github+json"}), timeout=20) as r:
+            return json.load(r)
+    except (OSError, ValueError):
+        return None
+
+
+def ci_run(sha: str, deadline: float, poll_seconds: float) -> dict | None:
+    """The CI run (agent-host.yaml) of `sha` once it has ended; None when GitHub cannot be read or the time is up — the
+    wait for main then says what happened."""
+    while time.monotonic() < deadline:
+        runs = (_github(f"actions/runs?head_sha={sha}&per_page=20") or {}).get("workflow_runs")
+        if runs is None:
+            return None
+        run = next((r for r in runs if r.get("path", "").endswith("agent-host.yaml")), None)
+        if run and run.get("status") == "completed":
+            return run
+        time.sleep(poll_seconds)
+    return None
+
+
+def failed_steps(run: dict) -> list[str]:
+    """The names of the steps that failed in `run`, "job › step"."""
+    jobs = (_github(f"actions/runs/{run['id']}/jobs") or {}).get("jobs") or []
+    return [f"{j['name']} › {st['name']}" for j in jobs for st in j.get("steps") or [] if st.get("conclusion") == "failure"]
 
 
 def published_version() -> str | None:
@@ -197,15 +209,19 @@ def ship(message: str | None, dry_run: bool, wait_minutes: float, poll_seconds: 
                        cwd=ROOT / SRC, check=True)
         git("add", SHIPPED_SKILLS)
 
-    if not run_gates(quick=True) or not run_touched_tests(staged):
+    if not run_gates(quick=True):
         raise ReleaseError("a quick check failed: nothing committed. Fix, stage, and ship again")
 
     subprocess.run(["git", "commit", "-q", "-F", "-"], cwd=ROOT, input=message, text=True, check=True)
     print(git("log", "-1", "--format=  committed %h %s").rstrip())
     git("push", "-q", "origin", f"HEAD:{BRANCH}")
-    print(f"  pushed to {BRANCH}; CI runs every gate, then publishes. Waiting for main…")
+    print(f"  pushed to {BRANCH}; CI runs every gate, then publishes. Following its run…")
 
     deadline = time.monotonic() + wait_minutes * 60
+    run = ci_run(git("rev-parse", "HEAD").strip(), deadline, poll_seconds)
+    if run and run.get("conclusion") != "success":
+        print(f"❌ CI {run.get('conclusion')}: {', '.join(failed_steps(run)) or 'see the run'}\n   {run.get('html_url')}")
+        return 1
     while time.monotonic() < deadline:
         if published_version() == version:
             print(f"✅ PUBLISHED: the store offers VESTA Agent (dev) {version}")
@@ -220,7 +236,7 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="release.py", description=__doc__.split("\n\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("gates", help="run every gate (what CI runs)")
-    s = sub.add_parser("ship", help="version → quick checks → commit → push → wait until published")
+    s = sub.add_parser("ship", help="version → quick checks → commit → push → follow CI until published")
     s.add_argument("-m", "--message")
     s.add_argument("-F", "--file", help="read the commit message from a file")
     s.add_argument("--dry-run", action="store_true")

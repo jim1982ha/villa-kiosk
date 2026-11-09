@@ -16,15 +16,17 @@ Python is `agent-host/.venv/bin/python` (3.13, gitignored; there is no `python` 
 
 ```bash
 PY=agent-host/.venv/bin/python
-$PY agent-host/tools/release.py gates               # the four gates CI runs before building the image
+$PY agent-host/tools/release.py gates               # the four gates CI runs before building the image (CI only)
 (cd agent-host/agent-src && ../.venv/bin/python -m pytest tests/test_x.py -q)   # one test file
 $PY agent-host/tools/release.py ship -F msg.txt     # release
 ```
 
 **Release:** add an entry at the TOP of `vesta-agent/CHANGELOG.md` (what the owner will see, plain words; its
 `## x.y.z` heading IS the version, the only version and the only change list), stage what ships by name, then `ship`.
-It writes the version, runs the quick checks and the tests naming a changed module (in UTC, as CI), commits, pushes `agent-dev` and waits for the store:
-exit 0 = published, 3 = pushed but not published yet (read the CI run), 2 = refused. CI runs every gate first.
+It writes the version, runs the quick checks (seconds), commits, pushes `agent-dev`, follows the commit's CI run and waits
+for the store: exit 0 = published, 1 = CI failed (the failed step is named), 3 = pushed but not published yet, 2 =
+refused. The tests run once, in CI: never run `gates` or the whole suite locally before a ship (at most the one test
+file being written).
 
 **The gates** (listed once, in `release.py`): the Kiosk is untouched (`check_isolation.sh`), the app manifest
 (`check_manifest.py`), ruff (compile + undefined names) on the agent's code, and pytest (`agent-src/tests`, plus the
