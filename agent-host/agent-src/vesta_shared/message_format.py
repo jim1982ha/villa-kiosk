@@ -509,7 +509,7 @@ def parts(text: str, struck: bool = False) -> list[tuple[str, int, int]]:
             continue
         if (after or ln.rstrip()[:-1] in _status_labels()) and _is_label(ln):
             if span:
-                found.append(("note" if section in NOTE_SECTIONS else "item", *span))
+                found.append(("note" if _is_note(section) else "item", *span))
                 span = None
             section = ln.rstrip()[:-1].strip()
             found.append(("label", starts[i], starts[i] + len(ln)))
@@ -517,7 +517,7 @@ def parts(text: str, struck: bool = False) -> list[tuple[str, int, int]]:
         after = False
         span = (span[0] if span else starts[i], starts[i] + len(ln))
     if span:
-        found.append(("note" if section in NOTE_SECTIONS else "item", *span))
+        found.append(("note" if _is_note(section) else "item", *span))
     # a Status section's lines a later one replaced, struck (status_superseded): the message's story, where each thing
     # stands now plain. The Status section is the message's last: its lines are those after its label
     label = next((p for p in reversed(found) if p[0] == "label" and text[p[1]:p[2]].rstrip()[:-1] in _status_labels()),
@@ -534,6 +534,14 @@ def parts(text: str, struck: bool = False) -> list[tuple[str, int, int]]:
     # ⚠️ A VILLA MESSAGE THAT IS OVER IS STRUCK TOO (owner, 2026-11-09: a doorbell opened or not answered, "strike the
     # text, the same way it is struck for other notifications where they are closed"): its text, above its Status
     return [("struck" if struck and k == "item" and (not label or a < label[1]) else k, a, b) for k, a, b in found]
+
+
+def _is_note(section: str | None) -> bool:
+    """Whether a section's items are notes: a NOTE_SECTIONS label in any chat's language.
+
+    ⚠️ "STATUT:" IS A STATUS (architecture review, 2026-11-09): only the English label was read as one, so a message
+    drawn in French or Indonesian showed its Status lines as plain quotes and never struck a replaced line."""
+    return section in NOTE_SECTIONS or (STATUS in NOTE_SECTIONS and section in _status_labels())
 
 
 def _status_parts(text: str) -> list[tuple[str, int, int]]:

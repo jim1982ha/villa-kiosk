@@ -78,3 +78,13 @@ def test_a_long_report_in_paragraphs_loses_nothing(tmp_path):
     assert sent == "".join(body.split("\n")[1:]).replace(" ", "")        # every character, in order
 
 
+
+
+def test_a_status_in_the_chats_language_reads_as_the_english_one():
+    # architecture review, 2026-11-09: a message drawn in French showed its "Statut:" lines as plain quotes and never
+    # struck a line a later one replaced; in every language they are italic notes, the replaced one struck
+    for label in ("Status", "Statut"):
+        text = f"🔔 Visiteur\nTo: FM\nQuelqu'un est à la porte.\n{label}:\n- Batterie · faible\n- Batterie · normale"
+        drawn = {(style, text[a:b]) for kind, a, b in F.parts(text) for style in F.TELEGRAM[kind]}
+        assert ("italic", "- Batterie · faible\n- Batterie · normale") in drawn, label
+        assert ("strikethrough", "- Batterie · faible") in drawn, label
