@@ -1,3 +1,8 @@
+## 0.12.493
+
+- In chats that read another language, a message's Status lines are in italics and an older line is struck, as in
+  English chats.
+
 ## 0.12.492
 
 - A doorbell message that is over (the gate opened, or nobody answered) has its text struck, like a closed
