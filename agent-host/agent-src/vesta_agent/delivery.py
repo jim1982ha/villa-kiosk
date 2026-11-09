@@ -149,10 +149,12 @@ class Delivery:
     # ⚠️ ONE WAY TO TELEGRAM FOR A MESSAGE'S WHOLE LIFE (architecture review 15, 2026-10-10): sending came here, but the
     # incident thread, the chat jobs and the button presses edited and deleted on Telegram themselves — each deciding
     # again whether Telegram was on, cutting a long text where a send splits it, and skipping plain_text.
-    async def edit(self, chat_id: int, message_id: int, text: str, keyboard: dict | None = None) -> bool:
+    async def edit(self, chat_id: int, message_id: int, text: str, keyboard: dict | None = None,
+                   struck: bool = False) -> bool:
         """Rewrite one of the agent's messages (its buttons go, or become `keyboard`), as a send would show it: plain
-        text. False: not there any more, or refused (Telegram off)."""
-        return await self._place(chat_id).edit(chat_id, message_id, plain_text(text), keyboard)
+        text; `struck`: its text struck, over (message_format.parts). False: not there any more, or refused (Telegram
+        off)."""
+        return await self._place(chat_id).edit(chat_id, message_id, plain_text(text), keyboard, struck)
 
     async def edit_media(self, chat_id: int, message_id: int, photo: bytes, text: str, keyboard: dict | None = None) -> str:
         """One of the agent's photo messages gets a new picture, its caption `text` and its buttons with it (a visit's
@@ -278,11 +280,12 @@ class TelegramChats:
                  " with buttons" if keyboard else "", " and a file" if document else "", " and a photo" if photo else "")
         return mid
 
-    async def edit(self, chat_id: int, message_id: int, text: str, keyboard: dict | None = None) -> bool:
+    async def edit(self, chat_id: int, message_id: int, text: str, keyboard: dict | None = None,
+                   struck: bool = False) -> bool:
         """One message cannot be split as a send is: at most Telegram's limit, cut between lines."""
         if self.tg is None:
             return False
-        ok = await self.tg.edit(int(chat_id), int(message_id), fit(text), keyboard)
+        ok = await self.tg.edit(int(chat_id), int(message_id), fit(text), keyboard, struck=struck)
         if not ok:
             self.state.log("edit_refused", {"chat": chat_id, "message": message_id, **({"gone": True} if ok is GONE else {})})
         return ok if ok is GONE else bool(ok)          # gone from its chat: said so (telegram.GONE), never retried

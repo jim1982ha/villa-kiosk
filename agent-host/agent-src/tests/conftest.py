@@ -43,9 +43,9 @@ def _wording_of_every_message(monkeypatch, request):
         return await send(self, chat_id, text, keyboard, *a, **k)
 
     @functools.wraps(edit)
-    async def edited(self, chat_id, message_id, text, keyboard=None):
+    async def edited(self, chat_id, message_id, text, keyboard=None, *a, **k):
         shown.extend([text, *_shown(keyboard)])
-        return await edit(self, chat_id, message_id, text, keyboard)
+        return await edit(self, chat_id, message_id, text, keyboard, *a, **k)
 
     @functools.wraps(toast)
     async def toasted(self, callback_id, text):

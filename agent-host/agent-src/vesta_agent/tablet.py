@@ -334,9 +334,9 @@ class Tablet:
         except (KioskError, asyncio.TimeoutError):
             pass                               # the tablet's dots are a courtesy: the answer itself never waits on them
 
-    async def edit(self, chat: int, mid: int, text: str, keyboard: dict | None = None) -> bool:
+    async def edit(self, chat: int, mid: int, text: str, keyboard: dict | None = None, struck: bool = False) -> bool:
         """`mid`'s turn says `text` now, its buttons gone or `keyboard`'s, its sound gone (its pictures and page kept): the
-        Kiosk replaces it by its key."""
+        Kiosk replaces it by its key. `struck` is Telegram's style only: the tablet draws its turns itself."""
         was = self._was(mid) or {"key": turn_key(mid), "profile": profile_of(chat)}
         # its sound goes too: it said the words being replaced
         rec = {k: v for k, v in was.items() if k not in ("buttons", "speech")}

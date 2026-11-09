@@ -1,3 +1,8 @@
+## 0.12.492
+
+- A doorbell message that is over (the gate opened, or nobody answered) has its text struck, like a closed
+  alert, in every chat's language: what still waits for you stands out.
+
 ## 0.12.491
 
 - Nothing changes in what you see; releases check more before they go out, so a broken update is caught before it

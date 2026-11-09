@@ -37,6 +37,7 @@ class FakeTelegram:
         self.toasts, self.edits, self.deleted, self.fetched, self.typing_in = [], [], [], [], []
         self.edit_keyboards = []
         self.replies: list = []            # (chat, message id, the message it answers): a send with reply_to
+        self.edit_struck: list = []
         self.media_edits: list = []       # (chat, message, jpeg bytes, caption, keyboard): editMessageMedia
         self.albums: list = []            # (chat, [caption, ...], the message it answers): sendMediaGroup
         self.with_photo: set = set()      # (chat, message) of every message sent with a picture (a test may add the villa's)
@@ -117,7 +118,7 @@ class FakeTelegram:
         self.buttoned.append((chat_id, message_id, keyboard))
         return True
 
-    async def edit(self, chat_id, message_id, text, keyboard=None):
+    async def edit(self, chat_id, message_id, text, keyboard=None, struck=False):
         if (chat_id, message_id) in self.gone:
             return GONE                      # "message to edit not found"
         if "edit" in self.refuse:
@@ -125,6 +126,7 @@ class FakeTelegram:
         text = tight_punctuation(text)        # as the real one (telegram.Telegram.edit)
         self.edits.append((chat_id, message_id, text))
         self.edit_keyboards.append(keyboard)             # the buttons an edit gave the message (None: they went)
+        self.edit_struck.append(struck)                  # drawn struck: over (message_format.parts)
         return True
 
     async def edit_media(self, chat_id, message_id, photo, caption, keyboard=None):

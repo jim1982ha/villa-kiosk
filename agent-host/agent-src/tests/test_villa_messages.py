@@ -75,6 +75,28 @@ def test_the_gate_opened_before_the_translation_came_is_never_drawn_over(tmp_pat
     assert v.tg.edit_keyboards[-1] is None                    # opened: its button gone, as the villa's rewrite left it
 
 
+def test_a_doorbell_that_is_over_stays_struck_when_drawn_again(tmp_path, monkeypatch):
+    # owner, 2026-11-09: a doorbell opened or not answered is struck, as a closed alert — in every chat's language
+    from vesta_shared.message_format import telegram_entities, tg_len
+    v = villa(tmp_path)
+    FakeAI(translator).install(monkeypatch)
+    struck = OPENED.replace("<blockquote>Someone is at the door.</blockquote>",
+                            "<blockquote><s>Someone is at the door.</s></blockquote>")
+
+    async def go():
+        await ring(v)
+        await v.on_ha_event("vesta_message", {"message": struck, "messages": [{"chat_id": FM_FR, "message_id": 700}],
+                                              CONTEXT_KEY: "RING-1b"})
+        await settle(v)
+    run(go())
+    (text, over), = [(t, k) for (c, m, t), k in zip(v.tg.edits, v.tg.edit_struck) if "Opened" in t]
+    lines = {e["offset"]: e for e in telegram_entities(text, over) if e["type"] == "strikethrough"}
+    door, opened = text.index("(fr) Someone is at the door."), text.index("(fr) ✅ Opened")
+    assert tg_len(text[:door]) in lines and tg_len(text[:opened]) not in lines, text
+    # the first words, before the villa said it was over, were drawn plain
+    assert v.tg.edit_struck[:-1] == [False] * (len(v.tg.edit_struck) - 1)
+
+
 def test_a_failed_translation_leaves_the_villas_english(tmp_path, monkeypatch):
     v = villa(tmp_path)
 
@@ -170,11 +192,11 @@ def test_a_slow_redraw_of_older_words_never_lands_over_the_newer_ones(tmp_path, 
     real = v.villa_messages.edit
     n = {"calls": 0}
 
-    async def slow(chat, mid, text, kb):
+    async def slow(chat, mid, text, kb, **k):
         n["calls"] += 1
         if n["calls"] == 1:
             await aio.sleep(0.3)
-        return await real(chat, mid, text, kb)
+        return await real(chat, mid, text, kb, **k)
     v.villa_messages.edit = slow
 
     async def go():

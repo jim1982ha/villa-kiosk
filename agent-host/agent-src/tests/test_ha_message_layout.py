@@ -20,7 +20,7 @@ from vesta_shared.message_format import STATUS, TELEGRAM, document, status_head
 
 HA = os.path.join(os.path.dirname(__file__), "..", "homeassistant")
 #: Telegram's HTML tag for each MessageEntity type the style table names.
-TAG = {"bold": "b", "blockquote": "blockquote", "italic": "i"}
+TAG = {"bold": "b", "blockquote": "blockquote", "italic": "i", "strikethrough": "s"}
 
 
 def _env() -> jinja2.Environment:
@@ -144,6 +144,17 @@ def test_the_bottom_line_is_said_in_the_agents_own_words_for_every_stage():
             said = stage_line(head[stage], fill_time(status or _words(stage), at, "UTC"))
             assert _status(stage, status, at) == said, (stage, status)
     assert _status("", "⚠️ written by hand") == "⚠️ written by hand"         # a rule saved before: as it is
+
+
+def test_a_message_that_is_over_has_its_text_struck_as_a_closed_alerts():
+    # owner, 2026-11-09: a doorbell opened or not answered, struck "the same way it is struck for other notifications
+    # where they are closed" — the agent's own style for a closed alert's text (TELEGRAM "struck"), its Status plain
+    src = ("{%- set vm_title, vm_to, vm_text, vm_status = t, r, x, s -%}{%- set vm_struck = k -%}"
+           "{% include 'vesta_message.jinja' ignore missing %}")
+    title, to, text, status = "🔔 Visitor at Parking Doorbell", "Owner & FM", "Someone is at the door.", "✅ Opened"
+    got = _env().from_string(src).render(t=title, r=to, x=text, s=status, k=True)
+    assert got == _expected(title, to, text, status).replace(_styled(text, "item"), _styled(text, "struck")), got
+    assert _env().from_string(src).render(t=title, r=to, x=text, s=status, k=False) == _expected(title, to, text, status)
 
 
 def _words(stage):

@@ -36,6 +36,9 @@
     (a rule saved before 2026-10-13). A pressed button is no longer drawn here (owner, 2026-10-19: only the agent
     chases; the task rule that drew one sent nothing since 2026-08-25).
 
+    A message that is over sets vm_struck true (owner, 2026-11-09: a doorbell opened or not answered): its text is
+    struck, as a closed alert's (message_format.TELEGRAM "struck"); the VESTA Agent's redraw keeps it struck.
+
     The tags are the agent's style table (message_format.TELEGRAM: title bold, item blockquote, note blockquote +
     italic); its test (tests/test_ha_message_layout.py) fails when this file and the agent's layout or words differ.
     Text is escaped here, once: Telegram's HTML refuses a bare "<", ">" or "&". -#}
@@ -73,7 +76,7 @@
 <b>{{ vm_escape(vm_title) }}</b>
 To: {{ vm_escape(vm_r) }}
 {%- if vm_t %}
-<blockquote>{{ vm_escape(vm_t) }}</blockquote>
+<blockquote>{% if vm_struck | default(false) %}<s>{{ vm_escape(vm_t) }}</s>{% else %}{{ vm_escape(vm_t) }}{% endif %}</blockquote>
 {%- endif %}
 {%- if vm_s %}{{ vm_status_break }}Status:
 <blockquote><i>{{ vm_escape(vm_s) }}</i></blockquote>

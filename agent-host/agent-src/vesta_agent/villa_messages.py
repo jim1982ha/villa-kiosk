@@ -24,6 +24,10 @@ The event's data:
 
 ⚠️ THE LATEST WORDS WIN: the doorbell says "New alert", then "Opened at 09:03:27" when the gate opens. A translation of
 the first that arrives after the second is never drawn over it.
+
+⚠️ WHAT IS OVER STAYS STRUCK (owner, 2026-11-09: a doorbell opened or not answered, struck "the same way it is struck
+for other notifications where they are closed"): the villa strikes its text (vesta_message.jinja's vm_struck: <s>);
+drawn again, it is struck the same (over).
 """
 from __future__ import annotations
 
@@ -132,11 +136,16 @@ class VillaMessages:
             mid_lines, said = shown[1:1 + len(body)], shown[1 + len(body):]
             page = document(shown[0], to, [(None, ["\n".join(mid_lines)]), (status_words.label(lang), said)])
             try:
-                ok = await self.edit(chat, mid, page, keyboard(data.get("buttons")))
+                ok = await self.edit(chat, mid, page, keyboard(data.get("buttons")), struck=over(data.get("message")))
             except Exception:  # noqa: BLE001 — the villa's English stays
                 log.exception("The villa's message %s in chat %s could not be drawn in %s", mid, chat, lang)
                 return 0
             return 1 if ok else 0
+
+
+def over(message) -> bool:
+    """Whether the villa wrote its message as over: its text struck (vesta_message.jinja's vm_struck)."""
+    return "<s>" in str(message or "")
 
 
 def shape(message) -> tuple[str, str, list[str], list[str]]:

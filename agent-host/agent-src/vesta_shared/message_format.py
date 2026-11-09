@@ -474,10 +474,12 @@ def _pieces(item: str, cap: int) -> list[str]:
     return out + ([rest] if rest else [])
 
 
-def parts(text: str) -> list[tuple[str, int, int]]:
+def parts(text: str, struck: bool = False) -> list[tuple[str, int, int]]:
     """The parts of a message in the shape, as (kind, start, end) character spans of `text`: "title", "to", "label",
     "item", "note" — a section's items are "note" under a NOTE_SECTIONS label. A message without a heading is only its
     Status section, when it ends in one as vesta_agent/layout.render writes it (_status_parts); [] for any other text.
+    `struck`: a message that says it is over by itself (a villa message drawn again: vesta_agent/villa_messages.py) —
+    its items struck and its Status lines but the last, as a closed alert's.
 
     ⚠️ AN ALERT'S TEXT IS ONE ITEM, WHATEVER IT SAYS (review 28): Home Assistant's own words are free text — a line
     "Status:" or "Water leak detected in:" in them was read as a section of the agent's, drawn as a heading and its next
@@ -527,7 +529,11 @@ def parts(text: str) -> list[tuple[str, int, int]]:
             rows.append((at, at + len(ln), ln))
             at += len(ln) + 1
         found += [("struck_lines", rows[i][0], rows[i][1]) for i in status_superseded([r[2] for r in rows])]
-    return found
+        if struck and len(rows) > 1:
+            found.append(("struck_lines", start, rows[-2][1]))
+    # ⚠️ A VILLA MESSAGE THAT IS OVER IS STRUCK TOO (owner, 2026-11-09: a doorbell opened or not answered, "strike the
+    # text, the same way it is struck for other notifications where they are closed"): its text, above its Status
+    return [("struck" if struck and k == "item" and (not label or a < label[1]) else k, a, b) for k, a, b in found]
 
 
 def _status_parts(text: str) -> list[tuple[str, int, int]]:
@@ -579,20 +585,20 @@ def _alert_parts(text: str, title_end: int, to_end: int) -> list[tuple[str, int,
     return found
 
 
-def entities(text: str, table: dict[str, tuple[str, ...]]) -> list[dict]:
+def entities(text: str, table: dict[str, tuple[str, ...]], struck: bool = False) -> list[dict]:
     """The text's parts styled by a channel's table, as MessageEntity-like dicts {type, offset, length} in the UTF-16
-    units Telegram counts. [] for a text not in the shape."""
+    units Telegram counts. [] for a text not in the shape. `struck`: as `parts`."""
     out = []
-    for kind, start, end in parts(text):
+    for kind, start, end in parts(text, struck):
         for style in table[kind]:
             out.append({"type": style, "offset": tg_len(text[:start]), "length": tg_len(text[start:end])})
     return out
 
 
-def telegram_entities(text: str) -> list[dict]:
+def telegram_entities(text: str, struck: bool = False) -> list[dict]:
     """How Telegram shows a message (TELEGRAM): the title in bold, each section's items quoted, its notes quoted in
-    italics."""
-    return entities(text, TELEGRAM)
+    italics; `struck`: as `parts`."""
+    return entities(text, TELEGRAM, struck)
 
 
 #: The words the villa's own alerts are drawn with (homeassistant/custom_templates/vesta_message.jinja) sit in that file

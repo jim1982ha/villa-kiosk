@@ -326,13 +326,15 @@ class Telegram:
             log.warning("editMessageReplyMarkup failed: %s", e)
             return False
 
-    async def edit(self, chat_id: int, message_id: int, text: str, keyboard: dict | None = None) -> bool:
-        """Rewrite one of the bot's messages: its buttons go, or become `keyboard`. False when Telegram refuses."""
+    async def edit(self, chat_id: int, message_id: int, text: str, keyboard: dict | None = None,
+                   struck: bool = False) -> bool:
+        """Rewrite one of the bot's messages: its buttons go, or become `keyboard`; `struck`: its text struck, over
+        (message_format.parts). False when Telegram refuses."""
         text = tight_punctuation(text)
         extra = {"reply_markup": keyboard} if keyboard else {}
         try:
             await self.api("editMessageText", chat_id=chat_id, message_id=message_id, text=text[:telegram_message_chars()], **extra,
-                           **_italic("entities", text[:telegram_message_chars()]))
+                           **_italic("entities", text[:telegram_message_chars()], struck))
             return True
         except TelegramError as e:
             if NOT_MODIFIED in str(e):
@@ -344,7 +346,7 @@ class Telegram:
         # there, every time — an alert sent with its file kept its buttons for good
         try:
             await self.api("editMessageCaption", chat_id=chat_id, message_id=message_id, caption=text[:telegram_caption_chars()],
-                           **extra, **_italic("caption_entities", text[:telegram_caption_chars()]))
+                           **extra, **_italic("caption_entities", text[:telegram_caption_chars()], struck))
             return True
         except TelegramError as e:
             if NOT_MODIFIED in str(e):
@@ -387,13 +389,13 @@ class Telegram:
 NOT_MEDIA = ("there is no media in the message", "message has no media", "can't be edited", "message_not_media")
 
 
-def _italic(key: str, text: str) -> dict:
+def _italic(key: str, text: str, struck: bool = False) -> dict:
     """{key: how Telegram shows this message} — the one style table, vesta_shared.message_format.TELEGRAM — else {}.
 
     ⚠️ A STYLE THAT FAILS LEAVES THE WORDS (owner, 2026-10-23: the layout must never block a message): reading the
     message's parts raised, and the send raised with it — the chat got nothing. It goes unstyled."""
     try:
-        found = telegram_entities(text)
+        found = telegram_entities(text, struck)
     except Exception:  # noqa: BLE001 — whatever the style table raised, the message still goes
         log.exception("A message's style could not be worked out: it goes unstyled")
         return {}
