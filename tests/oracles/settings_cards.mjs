@@ -92,7 +92,7 @@ const views = (html) => [...html.matchAll(/<button type="button" class="(active)
 const unescape = (t) => t.replace(/&#x27;/g, "'").replace(/&quot;/g, '"').replace(/&amp;/g, "&");
 /** A strip's remove: its icon and its words (its tooltip and aria-label are one `label`); null when it has none. */
 const removeOf = (strip) => {
-  const m = /<button type="button" class="icon-btn-sm fm-record-remove( danger)?" aria-label="([^"]*)"><svg[^>]*lucide-([a-z0-9-]+)/.exec(strip);
+  const m = /<button type="button" class="icon-quiet fm-record-remove( danger)?" aria-label="([^"]*)"><svg[^>]*lucide-([a-z0-9-]+)/.exec(strip);
   return m ? { glyph: m[3], label: unescape(m[2]), danger: !!m[1], last: strip.endsWith("</svg></button></div>") } : null;
 };
 /** Every card drawn: its frame's whole markup, its strip's name, its bar's words, its strip's remove. */

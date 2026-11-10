@@ -21,10 +21,8 @@
 .tp-card .scrim { position: absolute; inset: 0; background: linear-gradient(180deg, transparent, var(--card-scrim)); }
 .tp-card span { position: relative; font-family: var(--font-display); font-size: var(--text-xl); font-weight: 400; color: #fff; }
 .tp-card .floor-tag { position: absolute; top: 10px; right: 12px; font-size: var(--text-2xs); color: #fff; background: rgba(0,0,0,0.4); padding: 3px 8px; border-radius: 6px; }
-.tp-card .tp-delete { position: absolute; top: 8px; left: 10px; display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 8px; background: rgba(0,0,0,0.45); color: #fff; }
-@media (hover: hover) {
-  .tp-card .tp-delete:hover { color: var(--status-danger); }
-}
+/* a room card's bin (.media-btn small), in its corner */
+.tp-card .tp-delete { position: absolute; top: 8px; left: 10px; }
 .tp-card.tp-add { align-items: center; justify-content: center; flex-direction: column; gap: 8px; color: var(--accent); border-style: dashed; background: transparent; }
 .tp-card.tp-add span { font-family: var(--font-ui); font-size: var(--text-base); color: var(--accent); }
 /* --- Modals / wizard --- */
@@ -172,7 +170,6 @@
    One plain line each (.problem-line). */
 .modal-footer-note { flex: 0 0 auto; display: flex; align-items: flex-start; gap: 8px; padding: 12px 28px 0; background: var(--bg-overlay); }
 .modal-footer-note-lines { flex: 1 1 auto; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-.modal-footer-note-close { width: 30px; height: 30px; flex: 0 0 auto; }
 /* Section headings inside Settings — quiet, uppercase group labels. */
 .settings-section-title { font-size: var(--text-xs); text-transform: uppercase; letter-spacing: var(--tracking-eyebrow); color: var(--text-secondary); margin: 24px 0 12px; font-weight: 600; }
 /* ⚠️ `.settings-section-toggle` WENT WITH `CollapsibleSection`. Advanced
@@ -320,7 +317,6 @@
 .setting-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; min-width: 0; min-height: var(--touch-min); margin-top: 12px; }
 .setting-row-name { display: inline-flex; align-items: center; gap: 8px; flex: 1000 0 auto; max-width: 100%; min-height: 24px; color: var(--text-secondary); white-space: nowrap; }
 .setting-row-name > svg { flex: 0 0 auto; width: 16px; height: 16px; }
-.setting-row-name > .info-tip > .info-btn { width: 24px; height: 24px; }
 /* a slider's value, at the right end of its name's line (after the name, which takes the line's room) */
 .setting-row-value { flex: 0 0 auto; margin-left: auto; padding-left: 12px; color: var(--text-primary); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .setting-row-control { flex: 1 1 var(--setting-control); max-width: 100%; display: flex; align-items: center; justify-content: flex-end; gap: 10px; }
@@ -380,28 +376,20 @@
 /* Inline (i) info button + hover/focus tooltip (replaces the model info block). */
 .info-tip { position: relative; display: inline-flex; }
 /* ⚠️ THE ICON ALONE (owner, 2026-10-24: "It shall be a (I) icon only, consistently with any other (I) icons"): no
-   disc, no ring, in every place; the button keeps a tap area of 24 px at least, its hover colour and its focus ring.
-   The `button` variant (InfoTip `button`, a .btn) is not this rule's. tests/oracles/info_icon_css.mjs. */
-.info-tip > .info-btn {
-  width: 30px; height: 30px; border-radius: 50%;
-  display: inline-flex; align-items: center; justify-content: center;
-  background: none; color: var(--text-secondary);
-  border: none;
-}
-.info-tip > .info-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-@media (hover: hover) {
-  .info-tip > .info-btn:hover { color: var(--accent); }
-}
+   disc, no ring, in every place. The (i) is the app's lone icon button (common/IconButton, .icon-quiet small), no rule
+   of its own. */
 /* ⚠️ A CARD'S SOURCE ICON AS ITS TIP'S BUTTON (sourceIcons IconTip, owner 2026-11-06): the icon's own size and place,
    so the strip looks as before; its finger's area 44 px around it, drawn by nothing (::before). */
-.info-tip > .info-btn.info-btn-icon {
-  position: relative; width: auto; height: auto; padding: 0; border-radius: 4px; color: inherit; cursor: help;
+.info-tip > .info-trigger {
+  position: relative; display: inline-flex; align-items: center; justify-content: center; padding: 0; border: 0;
+  border-radius: 4px; background: none; color: inherit; cursor: help;
 }
-.info-tip > .info-btn.info-btn-icon::before {
+.info-tip > .info-trigger::before {
   content: ""; position: absolute; left: 50%; top: 50%; width: 44px; height: 44px; transform: translate(-50%, -50%);
 }
+.info-tip > .info-trigger:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 @media (hover: hover) {
-  .info-tip > .info-btn.info-btn-icon:hover { color: inherit; filter: brightness(1.15); }
+  .info-tip > .info-trigger:hover { filter: brightness(1.15); }
 }
 /* One icon's tip: its icon and name, then What it is, Appears, Goes, each a short labelled line. */
 .source-tip { display: flex; flex-direction: column; gap: 6px; }
@@ -411,10 +399,8 @@
 .source-tip-lines dd { display: inline; margin: 0; color: var(--text-primary); }
 
 /* A title or a label with its (i) beside it — the ONE place an option's explanation lives in Settings, Advanced
-   Settings and the Cockpit (owner, 2026-10-22: no visible description text). The (i) sits inline after the words, a
-   size that suits a title rather than the 30 px stand-alone button. */
+   Settings and the Cockpit (owner, 2026-10-22: no visible description text). The (i) sits inline after the words. */
 .with-tip { display: flex; align-items: center; gap: 6px; }
-:is(.with-tip, .with-tip > .title-after) > .info-tip > .info-btn { width: 24px; height: 24px; }
 .modal-body label.with-tip { display: flex; }
 
 /* The (i)'s card: portalled to <body>, `fixed`, placed by InfoTip (infoTipPlacement: below the (i), or above when
@@ -513,17 +499,6 @@
    other cell's plain select/input. */
 .device-card .config-search input {
   background: transparent; padding: 10px 0; border-radius: 0;
-}
-/* EntityPicker's optional "clear this link" button — sits inside the same
-   pill as the search input/icon, not off as its own separate control, since
-   it only ever applies to the value that pill is already showing. */
-.entity-picker-clear {
-  width: 26px; height: 26px; flex: 0 0 auto;
-  border: none; background: transparent; border-radius: 8px;
-  color: var(--text-dim);
-}
-@media (hover: hover) {
-  .entity-picker-clear:hover { background: var(--bg-panel); color: var(--text-primary); }
 }
 
 /* ⚠️ THE ID KEEPS A READABLE WIDTH (owner, 2026-11-03: on a phone "fan.cei / ling_fa / n_mas…" was cut every few
@@ -707,7 +682,7 @@
 /* the title on one line, its version after it, or under it at the left where the line is too short (a phone) */
 .config-editor-modal .modal-header h2 { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 8px; white-space: nowrap; min-width: 0; }
 
-.modal { --unit-field: 76px; --row-icon: 32px; }
+.modal { --unit-field: 76px; }
 /* A number and its unit joined in one box, "10s" (common/UnitField). */
 .unit-field { display: inline-flex; align-items: baseline; justify-content: center; width: var(--unit-field); box-sizing: border-box;
   padding: 0 10px; border-radius: 10px; background: var(--bg-input); border: 1px solid var(--hairline); min-height: 40px; align-items: center; }
@@ -722,14 +697,6 @@
 .add-line-button { margin-left: auto; white-space: nowrap; }
 .add-line-field { flex: 1 1 180px; min-width: 0; }
 .settings-list-title { color: var(--text-secondary); }
-/* THE small icon button of a list's row (owner, 2026-11-06: "remove buttons are the same small icon button
-   everywhere", they were big outlined squares): a round, borderless glyph; its touch target the row's height. */
-.icon-btn-sm { width: var(--row-icon); height: var(--row-icon); padding: 0; display: inline-flex; align-items: center; justify-content: center;
-  flex: 0 0 auto; border: 0; border-radius: 50%; background: transparent; color: var(--text-secondary); cursor: pointer; position: relative; }
-.icon-btn-sm::after { content: ""; position: absolute; inset: -6px; }
-@media (hover: hover) { .icon-btn-sm:hover:not(:disabled) { background: var(--bg-input); color: var(--text-primary); } }
-@media (hover: hover) { .icon-btn-sm.danger:hover { color: var(--status-danger); } }
-.icon-btn-sm:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 /* Who gets the messages: a list per role, its name and its add above, its chats' cards under them. */
 .recipients-role { display: flex; flex-direction: column; gap: 8px; }
 .recipients-role-name { font-weight: 600; }

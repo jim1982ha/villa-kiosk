@@ -9,6 +9,7 @@
 
 import type { ReactNode } from "react";
 import { X } from "lucide-react";
+import IconButton from "./IconButton";
 import ProblemLine from "./ProblemLine";
 
 export default function FooterNote({ lines, warn = false, onDismiss }: {
@@ -23,11 +24,7 @@ export default function FooterNote({ lines, warn = false, onDismiss }: {
       <div className="modal-footer-note-lines">
         {said.map((l, n) => <ProblemLine key={n} warn={warn}>{l}</ProblemLine>)}
       </div>
-      {onDismiss && (
-        <button type="button" className="icon-btn modal-footer-note-close" onClick={onDismiss} aria-label="Dismiss" title="Dismiss">
-          <X size={16} aria-hidden />
-        </button>
-      )}
+      {onDismiss && <IconButton small label="Dismiss" onClick={onDismiss}><X size={16} aria-hidden /></IconButton>}
     </div>
   );
 }

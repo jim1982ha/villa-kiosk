@@ -132,7 +132,7 @@ ck("  ...drawn by the open issues' own card: marked frame, a check, its device i
    && drawn.includes(`<span>Done${on(-2)} (JM)</span>`), drawn.slice(0, 900));
 // owner, 2026-11-05 ("Status on top", then "state first"): a Watch card's first line says when it closes, in green, with
 // its (i), under a green strip
-const stripOf = (html) => /class="fm-record-strip strip-ok">[\s\S]*?<div class="fm-record-main"><div class="fm-record-state strip-(\w+)"><span class="fm-record-status">([^<]*)<\/span><span class="info-tip"><button type="button" class="info-btn" aria-label="([^"]*)"/.exec(html);
+const stripOf = (html) => /class="fm-record-strip strip-ok">[\s\S]*?<div class="fm-record-main"><div class="fm-record-state strip-(\w+)"><span class="fm-record-status">([^<]*)<\/span><span class="info-tip"><button type="button" class="icon-quiet small" aria-label="([^"]*)"/.exec(html);
 const checkOf = (html) => /<span class="[^"]*\bfm-record-check" aria-label="([^"]*)">/.exec(html);
 {
   const strip = stripOf(drawn);

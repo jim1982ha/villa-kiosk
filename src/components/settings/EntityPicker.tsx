@@ -8,7 +8,6 @@
 // the id (deviceRecord.deviceSearchTexts, every device search's), so renaming a device never makes it unfindable.
 
 import { useState } from "react";
-import { X } from "lucide-react";
 import SearchPicker, { type SearchRow } from "@/components/common/SearchPicker";
 import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
@@ -80,17 +79,7 @@ export default function EntityPicker({
       empty={Object.keys(entities).length === 0 && !allowCustom ? "Entities show once connected." : undefined}
       // Only when there's actually something TO clear and the caller wants that offered (the shell hides it while
       // the list is open, where it would just sit awkwardly next to an in-progress search).
-      trailing={onClear && value && (
-        <button
-          type="button"
-          className="icon-btn entity-picker-clear"
-          onClick={(e) => { e.stopPropagation(); onClear(); }}
-          title={`Clear (was ${value})`}
-          aria-label={`Clear selection (was ${value})`}
-        >
-          <X size={16} />
-        </button>
-      )}
+      clear={!!onClear && !!value && { label: `Clear selection (was ${value})`, run: onClear }}
     />
   );
 }

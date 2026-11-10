@@ -69,7 +69,7 @@ ck("  ...its problem, then that problem's own buttons, the card's bar, its last 
   const sheets = ["07-facility.css", "08-shared.css"].map((f) => readFileSync(new URL(`../../src/styles/${f}`, import.meta.url), "utf8")).join("\n");
   ck("  ...the card is not pressed; its bar one row of equal segments, a finger tall, at every width",
      !/role="button"|fm-openable/.test(issue) && /\.fm-record-actions \{ display: flex; flex-wrap: wrap; gap: 1px;/.test(sheets)
-     && /\.fm-record-actions :is\(\.btn, \.icon-btn, \.fm-document-link\) \{\s*flex: 1 1 0; min-width: 0; min-height: var\(--touch-min\)/.test(sheets)
+     && /\.fm-record-actions :is\(\.btn, \.fm-document-link\) \{\s*flex: 1 1 0; min-width: 0; min-height: var\(--touch-min\)/.test(sheets)
      && (sheets.match(/^\s*\.fm-record-actions \{/gm) ?? []).length === 1, sheets.match(/[^\n]*\.fm-record-actions[^\n]*/g));
 }
 ck("  ...its name opens the device, no line says it again", /fm-title-link/.test(issue) && !text(meta(issue)).includes("Test lock"), issue);
@@ -328,7 +328,7 @@ ck("  ...a problem with no device: no chevron, nothing to tap, no buttons", !/ch
 
 console.log("\n  a scheduled task — the same card:");
 const task = draw(h(RecordCard, { title: "Pool filter clean", tone: "state-due-soon", status: { text: "Due soon", tone: "due-soon" },
-  when: "due in 3 days · every 30 days", actions: h(React.Fragment, null, btn("Log"), h("button", { className: "icon-btn", "aria-label": "Remove" })) }));
+  when: "due in 3 days · every 30 days", actions: h(React.Fragment, null, btn("Log"), h("button", { className: "btn icon-only", "aria-label": "Remove" })) }));
 ck("its name in its strip, its state its first line, Log and the bin its bar, its tint on the card",
    text(name(task)) === "|Pool filter clean|" && /fm-record-main"><div class="fm-record-state strip-neutral"><span class="fm-record-status">Due soon</.test(task) && /fm-record-actions[\s\S]*Log[\s\S]*aria-label="Remove"/.test(task)
    && /class="fm-record-card state-due-soon"/.test(task), task.slice(0, 300));

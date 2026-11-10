@@ -106,7 +106,7 @@ function BulkToggle({ devices, looks }: { devices: HassEntity[]; looks: LookSour
       onCancel={() => setConfirming(false)} />
   ) : (
     <button
-      className="icon-btn"
+      className="btn icon-only"
       onClick={() => setConfirming(true)}
       title={words}
       aria-label={words}

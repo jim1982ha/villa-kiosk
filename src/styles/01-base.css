@@ -555,6 +555,48 @@ button {
 .btn:active { transform: scale(0.96); }
 .btn.primary { background: var(--accent); color: var(--text-on-accent); font-weight: 600; }
 .btn.danger { background: var(--status-danger); color: #fff; }
+/* the worded button without its word: an action beside worded ones (a window header's, a card's Edit beside Pause) */
+.btn.icon-only { padding: 0; width: var(--touch-min); min-width: var(--touch-min); justify-content: center; }
+
+/* ⚠️ THE ONE LONE ICON BUTTON OF A WINDOW (common/IconButton; owner, 2026-11-10: "only 1 definition for all similar UI
+   elements"): a card's remove, a pill's ✕, a notice's and a footer note's ✕, a field's clear, the (i), a chart's
+   enlarge and Listen were eight rules, a black plate here, a ring there, 18 to 32 px. The icon alone, no plate and no
+   ring at rest (owner, 2026-10-24, of the (i); 2026-11-06, of the remove buttons); a soft disc under the mouse, seen on
+   any background; the focus ring; a finger's reach past its glyph (::after). .small: beside words (a title, a pill, a
+   field, a notice's line). Always pressable, in a column that lets presses through too (the notices'). No place redraws
+   it: a place only places it. Over the map the button is the plate (.icon-btn), over a photo or a video .media-btn. */
+.icon-quiet { position: relative; flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px; padding: 0; border: 0; border-radius: 50%; background: transparent;
+  color: var(--text-secondary); cursor: pointer; pointer-events: auto; }
+.icon-quiet.small { width: 24px; height: 24px; }
+.icon-quiet::after { content: ""; position: absolute; inset: -6px; }
+.icon-quiet:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+@media (hover: hover) {
+  .icon-quiet:hover:not(:disabled) { background: color-mix(in srgb, var(--text-primary) 10%, transparent); color: var(--text-primary); }
+  .icon-quiet.danger:hover:not(:disabled) { color: var(--status-danger); }
+}
+
+/* ⚠️ THE ONE BUTTON OVER A PHOTO OR A VIDEO (owner, 2026-11-10: one definition): the camera's bottom buttons were a
+   white frosted square, its header's a dark one, "tap to reset" a dark pill, the photo viewer's dark circles, a
+   thumbnail's ✕ and a room card's bin two more. A picture's colours are not the theme's: the dark scrim, a white icon
+   and a white hairline in both themes. Its size is its place's (--media-btn; a finger's 44 px unless said), its icon
+   a fixed share of it. .small: on a thumbnail, a card's corner. .worded: with its words. .on: lit (its list open). */
+.media-btn { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  width: var(--media-btn, var(--touch-min)); height: var(--media-btn, var(--touch-min)); padding: 0;
+  border-radius: var(--radius-squircle); border: 1px solid rgba(255, 255, 255, 0.25);
+  background: var(--chip-scrim); color: #fff; cursor: pointer; pointer-events: auto; }
+.media-btn > svg { width: 55%; height: 55%; }
+.media-btn.small { --media-btn: 24px; }
+.media-btn.worded { width: auto; height: auto; padding: 6px 14px; border-radius: var(--radius-pill);
+  font-size: var(--text-sm); font-weight: 500; }
+.media-btn.worded > svg { width: 16px; height: 16px; }
+.media-btn:active { transform: scale(0.94); }
+.media-btn:active, .media-btn.on { background: var(--chip-scrim-strong); }
+.media-btn:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+@media (hover: hover) {
+  .media-btn:hover:not(.on) { background: var(--chip-scrim-strong); }
+  .media-btn.danger:hover { color: var(--status-danger); }
+}
 
 /* ⚠️ NO BUTTON SHOWED IT WAS UNDER THE MOUSE (owner, 2026-10-18: "there is no hovering style when hovering the
    buttons"): every button lights in the accent tint, and an action button brightens. */

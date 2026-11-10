@@ -155,7 +155,7 @@ export default function TeleportMenu({ manager, currentFloor, onClose, onTelepor
             <span
               role="button"
               tabIndex={-1}
-              className="tp-delete"
+              className="media-btn small danger tp-delete"
               onClick={(e) => {
                 e.stopPropagation();
                 setAsk({ kind: "remove", name: p.name });

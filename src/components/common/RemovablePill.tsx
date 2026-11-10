@@ -6,6 +6,7 @@
 // device groups and its "Unavailable by design" list each drew this pill in inline styles of their own.
 
 import { X } from "lucide-react";
+import IconButton from "./IconButton";
 import Tip from "./Tip";
 
 export default function RemovablePill({ label, tip, removeLabel, onRemove }: {
@@ -20,11 +21,7 @@ export default function RemovablePill({ label, tip, removeLabel, onRemove }: {
     <Tip text={tip}>
       <span className="fm-entity-chip fm-chip-static fm-chip-removable">
         {label}
-        <Tip text={removeLabel}>
-          <button type="button" className="fm-chip-remove" aria-label={removeLabel} onClick={onRemove}>
-            <X size={12} aria-hidden="true" />
-          </button>
-        </Tip>
+        <IconButton small label={removeLabel} onClick={onRemove}><X size={14} aria-hidden="true" /></IconButton>
       </span>
     </Tip>
   );

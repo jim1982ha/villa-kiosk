@@ -1,3 +1,17 @@
+## 2.496.768
+
+What you will see:
+- A lone icon to press is now one quiet icon everywhere in a window: a card's remove (the bin in its strip), the ✕ of
+  a pill ("Pool pump ✕"), the ✕ that empties a search field or a device field, the (i), a chart's enlarge, the ✕ of a
+  notice and of the note in a window's footer, and Listen beside VESTA's answer. They were eight looks: a black
+  plate here, a ringed circle there, from 18 to 32 px. Under a mouse each one now names itself in the app's own tip.
+- A button without its word is the worded button, round: the bin at the end of a card's buttons, a schedule's
+  pencil, "all on / all off" in a category's list and a device window's header buttons.
+- A button over a photo or a video is one look, dark with a thin white line: the camera view's buttons (they were
+  frosted grey at the bottom and dark at the top), the photo viewer's close and arrows, the ✕ on a photo's
+  thumbnail and the bin on a room's card. A camera's lit button stays green, a sounding siren's red.
+- Nothing else changed: every button does what it did, and the siren still asks before it sounds.
+
 ## 2.496.767
 
 What you will see:

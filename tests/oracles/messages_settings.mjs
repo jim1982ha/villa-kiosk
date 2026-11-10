@@ -98,7 +98,7 @@ console.log("\n  the rows, drawn:");
     .map((m) => [m[1], /value="(\d+)"/.exec(m[0])?.[1]]);
   ck("one seconds field per picked announcement, named for it, holding its own time",
      J(fields) === J([["🔔 Visitor", "15"], ["🔥 Overload", "300"]]), fields);
-  ck("  ...each with its bin to delete it", (html.match(/class="icon-btn-sm fm-record-remove danger" aria-label="Delete the announcement [^"]+"/g) ?? []).length === 2);
+  ck("  ...each with its bin to delete it", (html.match(/class="icon-quiet fm-record-remove danger" aria-label="Delete the announcement [^"]+"/g) ?? []).length === 2);
   // owner, 2026-11-04: the search box under the list became an add on the list's title line (common/AddOnLine);
   // owner, 2026-11-06: that line sits ABOVE the card, its add a "+ Add" button as Schedule's "Add a task", and the card's
   // heading holds its columns' words only: "Time" over the time, nothing over the ✕; the time and its unit joined, "15s"

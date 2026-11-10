@@ -317,7 +317,7 @@ ck("  ...nothing open: the goal is met, and said once", allClear.state === "pass
   // owner, 2026-11-05: "always expanded (remove the capability to collapse the card)"
   ck("  ...the checks are always shown under their verdict: nothing folds",
      text(drawn).includes("|Ready, with things worth fixing|0 of 1 checks passing|") && drawn.includes("4 open faults")
-     && !/aria-expanded|fm-headline-toggle/.test(drawn.replace(/<button type="button" class="info-btn info-btn-icon"[^>]*>/g, "")), text(drawn));
+     && !/aria-expanded|fm-headline-toggle/.test(drawn.replace(/<button type="button" class="info-trigger"[^>]*>/g, "")), text(drawn));
   // owner, 2026-11-05: "show the device pills concerned by either the Ticket or Faults … never duplicate device"
   const pump = pumpBy((id) => (id.includes("pump") ? "switch.pump" : id));
   ck("  ...its devices as chips, as All devices reporting's: each device once (a pump's ticket and fault are one chip)",
@@ -595,7 +595,7 @@ console.log("\n  the buttons, drawn — ONE close-with-confirm for both tabs:");
     // its buttons, as wide as its widest label (Not a problem 98 px, a ticket's No action needed 121 px); the bar spans
     // the card edge to edge (no card padding, no icon column any more)
     const num = (re, t) => Number((t.match(re) ?? [])[1]);
-    const seg = /\.fm-record-actions :is\(\.btn, \.icon-btn, \.fm-document-link\) \{([^}]*)\}/.exec(fac)?.[1] ?? "";
+    const seg = /\.fm-record-actions :is\(\.btn, \.fm-document-link\) \{([^}]*)\}/.exec(fac)?.[1] ?? "";
     const pad = num(/padding: 0 (\d+)px/, seg), iconGap = num(/gap: (\d+)px/, seg);
     const hair = num(/\.fm-record-actions \{[^}]*gap: (\d+)px/, fac);
     const narrowBelow = num(/@container work-row \(max-width: (\d+)px\)/, fac) + 1;

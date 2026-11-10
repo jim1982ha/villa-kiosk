@@ -129,7 +129,7 @@ export default function ScheduleEditor() {
                 <button className="btn" onClick={() => void updateSchedule(s.id, { enabled: !s.enabled })}>
                   {s.enabled ? "Pause" : "Resume"}
                 </button>
-                <button className="icon-btn" onClick={() => startEdit(s)} aria-label={`Edit ${s.title}`}>
+                <button className="btn icon-only" onClick={() => startEdit(s)} aria-label={`Edit ${s.title}`}>
                   <Pencil size={16} />
                 </button>
               </>} />

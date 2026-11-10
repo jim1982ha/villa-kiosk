@@ -21,6 +21,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProp
 import { createPortal } from "react-dom";
 import { Info } from "lucide-react";
 import { useOutsideClose } from "@/hooks/useOutsideClose";
+import IconButton from "./IconButton";
 import { infoTipPlacement, INFO_TIP_WIDTH } from "./infoTipPlacement";
 
 /** How long the pointer may be between the (i) and its card before a hover-opened card closes. */
@@ -81,13 +82,15 @@ export default function InfoTip({ label, children, className, width = INFO_TIP_W
     leave.current = setTimeout(() => setOpen(false), HOVER_GRACE_MS);
   };
 
+  const press = () => setOpen((v) => hovering.current || !v);
+
   return (
     <span ref={ref} className={`info-tip${open ? " open" : ""}${className ? ` ${className}` : ""}`}
       onPointerEnter={hoverIn} onPointerLeave={hoverOut} {...KEEP_PRESS}>
-      <button type="button" className={trigger ? "info-btn info-btn-icon" : "info-btn"} aria-label={label} aria-expanded={open}
-        onClick={() => setOpen((v) => hovering.current || !v)}>
-        {trigger ?? <Info size={16} />}
-      </button>
+      {/* the app's lone icon button, its card in place of a tip; a card's own icon (`trigger`) stays that icon */}
+      {trigger
+        ? <button type="button" className="info-trigger" aria-label={label} aria-expanded={open} onClick={press}>{trigger}</button>
+        : <IconButton small label={label} tip={null} aria-expanded={open} onClick={press}><Info size={16} /></IconButton>}
       {open && createPortal(
         <div ref={pop} className="info-pop" role="tooltip" style={pos ?? { visibility: "hidden", width: `min(${width}px, calc(100vw - 24px))` }}
           onPointerEnter={hoverIn} onPointerLeave={hoverOut}>

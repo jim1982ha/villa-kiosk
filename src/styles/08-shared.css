@@ -117,10 +117,6 @@
 .vesta-notice-action { pointer-events: auto; }
 .vesta-notice-said { color: var(--text-secondary); }
 .vesta-notice.tappable { pointer-events: auto; cursor: pointer; min-height: var(--touch-min); }
-.vesta-notice-dismiss {
-  pointer-events: auto; background: none; border: none; color: var(--text-secondary); cursor: pointer;
-  display: flex; padding: 2px; flex: 0 0 auto;
-}
 /* an announcement's words, photos and status, as its Inbox card and VESTA's conversation draw them (AnnouncementContent) */
 .announcement-full-title { overflow-wrap: anywhere; }
 .announcement-full-text { margin: 0; font-size: var(--text-xl); white-space: pre-line; overflow-wrap: anywhere; }
@@ -523,11 +519,9 @@ body:has(.camera-fullscreen) .vesta-notice.below-camera { display: none; }
 .vesta-turn.asked { background: var(--accent-soft); align-self: flex-end; }
 .vesta-turn-head { display: flex; align-items: baseline; gap: 10px; font-size: var(--text-xs); }
 .vesta-turn-head b { font-size: var(--text-sm); }
-/* Listen, an icon at the end of an answer's own line (owner, 2026-10-29), its touch target kept */
-.vesta-turn-head .vesta-turn-listen { margin-left: auto; align-self: center; padding: 4px; min-width: var(--touch-min);
-  min-height: var(--touch-min); margin-block: calc((var(--touch-min) - 24px) / -2);
-  /* a plain icon (owner's phone, 2026-10-29: a framed box that pushed the answer down) */
-  border: 0; background: none; box-shadow: none; color: var(--text-secondary); }
+/* Listen, the lone icon button at the end of an answer's own line (owner, 2026-10-29), inside the line's height (owner's
+   phone, 2026-10-29: a framed box pushed the answer down) */
+.vesta-turn-head .vesta-turn-listen { margin: -4px 0 -4px auto; align-self: center; }
 .vesta-turn-text { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: var(--text-base); }
 .vesta-thread-ask { display: flex; gap: 8px; align-items: flex-end; flex: 0 0 auto; padding-top: 6px;
   background: var(--bg-modal); }
