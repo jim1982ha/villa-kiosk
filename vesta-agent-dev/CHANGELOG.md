@@ -1,3 +1,15 @@
+## 0.12.497
+
+- A problem that comes back on the same day is told as back. A critical device offline a second time in one day
+  sends "Back again: … (2nd time in 7 days)" at once, and its fault in the VESTA UI opens again with its count.
+  Before, only a return on a later day was told: the same day stayed silent until the night check.
+- A night-check or devices-offline message whose problem comes back now says so itself: "Back at 21/10/2026 02:00",
+  its "Cleared" line struck, its title no longer "All back to normal." The "Back again" message that follows says
+  each thing once: no "Back at …" line added every night while the problem is simply still there, no "Closed on …:
+  it did not come back." repeated night after night.
+- Messages this had left on "Cleared …: watched until 02:00." although their problem came back are corrected at the
+  next check (within 5min of the update).
+
 ## 0.12.496
 
 - In chats that read another language, a Status no longer carries an English weekday: "Toujours là: 4 fois depuis
