@@ -1,3 +1,20 @@
+## 2.496.762
+
+What you will see:
+- Cockpit › Spend: the month's entries are pages of ten, newest first, with the count and arrows under them; the
+  saved documents under "Monthly document" are pages of ten too.
+- A Cockpit form's Save greys and says "Saving…" while the record goes, on every form (a ticket, a task, a
+  spend entry): pressing twice can no longer save it twice.
+- "Report a problem" and a ticket's stage window have Cancel and the action grouped at the bottom right, like
+  Settings and every other window.
+- A guest adding several photos to a report keeps the ones that went through when one fails, and reads "Couldn't
+  add that photo." for the one that did not; Send waits while a photo is going.
+- With a keyboard: Enter or Space on a Cockpit card opens it (holding the key still asks for the erase code);
+  "Add photo" in a guest's report can be reached and pressed.
+- For a screen reader: the Cockpit and Advanced Settings windows are announced by the title they show, the camera
+  window's Close is named, the "How often" choices say which one is picked, the passcode screen's line is read once.
+- Nothing else changes on screen: the photo upload, the bin button and a form's "saving" are each written once.
+
 ## 2.496.761
 
 What you will see:
