@@ -136,6 +136,13 @@ def lasting_in(seconds: float):
     return lambda lang: SW.duration(seconds, lang)
 
 
+def since_in(t: datetime):
+    """The moment a Status counts from, in each language: with its weekday in English ("Fri 06/11/2026 18:20"), the
+    moment alone in every other — an English "Fri" stood in each language's sentence ("depuis Fri 06/11/2026 18:20",
+    architecture review, 2026-11-10). `t`: in the villa's time already (villa_time)."""
+    return lambda lang: day_time_label(t, weekday=lang == "en")
+
+
 def label_in(option: str, fallback: str = ""):
     """A button's label in each language (skill.yaml `labels`), its own label in English."""
     b = BUTTONS.get(option) or {}
@@ -534,7 +541,7 @@ def intake(store: Store, ev: dict, now: datetime, params: VillaParams | None = N
         cur = _restated(store, cur, ev, sev, now, route, out)
         # the villa's time, written as every message writes one ("Mon 05/10/2026 08:00"): it showed "2026-10-03T00:00", UTC
         # since THIS run began: a reopened alert counts from its return, never from its first run (#125-P1)
-        since = day_time_label(villa_time(cur.get("reopened_at") or cur["opened_at"], zone or "UTC"), weekday=True)
+        since = since_in(villa_time(cur.get("reopened_at") or cur["opened_at"], zone or "UTC"))
         # ⚠️ COUNTED ONCE (owner, 2026-11-06, #125-P1: "6 times since 18:20" after 5 alerts): `cur` is read again after
         # touch_incident counted this one (_restated), so its count is this alert's already — the "+ 1" counted it twice
         status = say("still_count", count=cur["count"], since=since)
@@ -1981,8 +1988,7 @@ def tick(store: Store, now: datetime, params: VillaParams | None = None, client=
             store.update_incident(iid, state=Incident.ASKED, asked_at=now.isoformat(), assignee=CHASE["asks"])
             out["send"] += tell("P1", "new", incident=iid, ladder=False,   # the priority is the heading's; the villa's time
                                 text="No contact with the villa's system. Check power, the router and the internet link.",
-                                **_status(say("villa_silent",
-                                              since=day_time_label(villa_time(last, zone or "UTC"), weekday=True))))
+                                **_status(say("villa_silent", since=since_in(villa_time(last, zone or "UTC")))))
     elif last:
         cur = store.find_open_incident("critical_internet---villa_silent|agent")
         if cur:

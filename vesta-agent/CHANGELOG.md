@@ -1,3 +1,11 @@
+## 0.12.496
+
+- In chats that read another language, a Status no longer carries an English weekday: "Toujours là: 4 fois depuis
+  06/11/2026 18:20" where it read "depuis Fri 06/11/2026 18:20" (the same for "Villa silent since"). English keeps
+  "since Fri 06/11/2026 18:20".
+- The weekly page's alert tile reads "7 alerts: 2 critical, 1 still open", as the Monday message does. It read
+  "7 critical alerts", which called every alert of the week critical.
+
 ## 0.12.495
 
 - Nothing changes in what you see. Each night-check rule is now described in one place, and a visit's steps (the

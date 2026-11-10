@@ -640,6 +640,21 @@ def test_the_owners_weekly_line_says_the_pages_own_figures(tmp_path):
     assert "- 7 alert(s), n/a critical, 4 still open; 5 maintenance problem(s) open." in older
 
 
+def test_the_weekly_page_counts_its_alerts_as_the_monday_lines_do(tmp_path):
+    # architecture review, 2026-11-10: the page's tile read "7 critical alerts, 1 still open" beside Monday lines
+    # saying "7 alert(s), 2 critical": the 7 are every alert of the week, the critical ones are a part of them
+    sys.path.insert(0, os.path.join(STARTER_SKILLS, "reports", "scripts"))
+    import re
+
+    import compose
+    kpis = {"open_tasks": 5, "new": 2, "carried": 3, "alerts": 7, "alerts_open": 1, "p1": 2, "kwh": 300,
+            "vs_prev_pct": 4, "offline": 0, "offline_critical": 0}
+    said = lambda k: " ".join(re.sub(r"<[^>]+>", " ", compose.page(
+        {"zone": "UTC", "order": ["kpis"], "sections": {"kpis": k}}, {})).split())
+    assert "7 alerts 2 critical, 1 still open" in said(kpis) and "critical alert" not in said(kpis)
+    assert "0 alerts none this week" in said({**kpis, "alerts": 0, "alerts_open": 0, "p1": 0})
+
+
 def test_the_owners_monday_lines_carry_the_weekly_page_they_point_to(tmp_path, monkeypatch, capsys):
     # owner, 2026-10-12: "Details in the FM weekly page." reached the owner group with no page — only the facility
     # manager was sent it. The lines now go with that page, on schedule and without the AI.

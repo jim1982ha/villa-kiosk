@@ -176,6 +176,8 @@ def test_a_repeated_alert_says_since_when_in_the_villas_time(store, monkeypatch)
     desk.intake(store, event(), T0, occupancy_reader=lambda: "occupied", zone="Asia/Makassar")
     res = desk.intake(store, event(), T0 + timedelta(hours=6), occupancy_reader=lambda: "occupied", zone="Asia/Makassar")
     assert res["send"][0]["status"].endswith("since Thu 01/10/2026 17:00")  # 09:00 UTC is 17:00 in the villa
+    # another language's sentence carries no English weekday ("depuis Thu 01/10/2026 17:00", review of 2026-11-10)
+    assert res["send"][0]["status_in"]["fr"].endswith("depuis 01/10/2026 17:00")
 
 
 def test_only_done_and_need_help_and_an_old_not_found_is_chased_again(tmp_path):
@@ -990,7 +992,8 @@ def test_the_desks_durations_are_worded_as_both_apps_word_one(store, monkeypatch
     assert gate["prompt"].endswith("Approving sounds the siren for 2h.")
     store.beat("ha_events", T0.isoformat())
     silent = desk.tick(store, T0 + timedelta(minutes=150), params)
-    assert silent["send"] and "Villa silent since" in silent["send"][0]["status"]
+    assert silent["send"] and "Villa silent since Thu 01/10/2026" in silent["send"][0]["status"]
+    assert "Villa muette depuis 01/10/2026" in silent["send"][0]["status_in"]["fr"]
     inc = store.find_open_incident("critical_internet---villa_silent|agent")
     assert "for 2h 30min:" in json.loads(inc["payload"])["message"]
 
