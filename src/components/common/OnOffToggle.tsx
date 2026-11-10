@@ -4,7 +4,7 @@
 // one SegmentedGroup with two options, On and Off, the one in force highlighted, at the right of the one setting line
 // (common/SettingRow); owner, 2026-11-03: half as wide as when it filled the rest of the line. A thin wrapper: the two options and their mapping to the boolean, nothing
 // drawn of its own. Every on/off setting draws it; a one-option group pressed while on read as a button saying what it
-// would do, not what is (tests/oracles/ui_dry.mjs).
+// would do, not what is.
 
 import type { ReactNode } from "react";
 import SegmentedGroup from "./SegmentedGroup";
@@ -12,7 +12,7 @@ import SettingRow from "./SettingRow";
 
 type OnOff = "on" | "off";
 
-export default function OnOffToggle({ on, onChange, ariaLabel, label, icon, title, tip, className = "" }: {
+export default function OnOffToggle({ on, onChange, ariaLabel, label, icon, title, tip, compact = false, className = "" }: {
   on: boolean;
   /** Called with the value pressed, only when it changes it. */
   onChange: (on: boolean) => void;
@@ -26,13 +26,15 @@ export default function OnOffToggle({ on, onChange, ariaLabel, label, icon, titl
   title?: string;
   /** The name's (i). */
   tip?: ReactNode;
+  /** On a card's own line, at that line's height (a device card's "Confirm"): the control's compact shape. */
+  compact?: boolean;
   className?: string;
 }) {
   const said = title ?? ariaLabel;
   return (
     <SettingRow className={`on-off${className ? ` ${className}` : ""}`} icon={icon} label={label} tip={tip}
       tipLabel={`About ${ariaLabel}`}>
-      <SegmentedGroup<OnOff> ariaLabel={ariaLabel} className="on-off-switch" active={on ? "on" : "off"}
+      <SegmentedGroup<OnOff> ariaLabel={ariaLabel} className="on-off-switch" layout={compact ? "compact" : "fill"} active={on ? "on" : "off"}
         onChange={(k) => { if ((k === "on") !== on) onChange(k === "on"); }}
         options={[{ key: "on", label: "On", title: `${said}: on` }, { key: "off", label: "Off", title: `${said}: off` }]} />
     </SettingRow>

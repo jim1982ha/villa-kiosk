@@ -201,41 +201,23 @@ body:has(.camera-fullscreen) .vesta-notice.below-camera { display: none; }
 /* --- Cockpit page (CockpitModal) — villa-wide status report ------------- */
 /* The Cockpit's Messages (cockpit/MessagesTab): one column of cards, as Tickets (owner, 2026-11-01). */
 .cockpit-modal { max-width: 1080px; }
-/* the filters and, at the right of the same line, the Issues' "Open Ticket" (owner, 2026-10-31): two groups that wrap
-   whole, so a line too narrow for both puts the button under the filters and never squeezes or cuts them */
+/* the filters (the one choice control, SegmentedGroup) and, at the right of the same line, a guest's "Report a
+   problem" (owner, 2026-10-31): two groups that wrap whole, so a line too narrow for both puts the button under the
+   filters and never squeezes or cuts them */
 /* ⚠️ NOTHING SHOWS BEHIND IT (owner, 2026-11-06: a card's "Reopened … next check" read through above and beside the
    pills on a phone): a sticky bar stops at the body's padding, so the cards scrolled through the 8px over it and the
    gutters at its sides. It stops at the body's very top (top: minus its padding) and spans the body's whole width (its
    gutters drawn by its own padding), in the window's solid colour, in light and dark. */
-.messages-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+.messages-toolbar { display: flex; flex-wrap: wrap; align-items: stretch; gap: 6px;
   padding: 4px var(--body-right, 0px) 8px var(--body-left, 0px); margin-inline: calc(-1 * var(--body-left, 0px)) calc(-1 * var(--body-right, 0px));
-  container-type: inline-size; position: sticky; top: calc(-1 * var(--body-top, 0px)); z-index: 2; background: var(--bg-modal); }
+  position: sticky; top: calc(-1 * var(--body-top, 0px)); z-index: 2; background: var(--bg-modal); }
 /* what brings itself into view stops under that line */
 .messages-card, .messages-toolbar ~ .fm-form { scroll-margin-top: 72px; }
-/* a filter's full word where the four buttons still fit one line, its short word below that width (owner, 2026-11-01:
-   "Notifications if it fits"); the short one is the default, so a browser without container queries keeps one line */
-.messages-filter-long { display: none; }
-@container (min-width: 368px) {
-  .messages-filter-long { display: inline; }
-  .messages-filter-short { display: none; }
-}
-.messages-filters { display: flex; flex-wrap: nowrap; gap: 6px; flex: 0 0 auto; max-width: 100%; }
-.messages-toolbar-actions { display: flex; align-items: center; gap: 6px; margin-left: auto; }
-.messages-filter {
-  flex: none; white-space: nowrap; background: transparent; color: var(--text-primary); font: inherit;
-  display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
-}
-/* ⚠️ ONE SHAPE FOR THE LINE'S FOUR BUTTONS (owner, 2026-10-31: "the corners are not the same: style them all the
-   same"): the filters were round pills, Open Ticket a card button's 12px corners. Their height, round corners, border,
-   padding and size are this one rule, after each one's own (the filter's `font: inherit` would undo the size). With
-   "Notifs", 8px each side holds the three filters and Open Ticket on one line on a 360 px phone
-   (tests/oracles/live_issues.mjs) */
-.messages-filter, .messages-toolbar-actions .btn {
-  min-height: var(--touch-min); padding: 0 8px; border-radius: 999px; border: 1px solid var(--hairline);
-  font-size: var(--text-sm);
-}
-.messages-filter.on { background: var(--accent); border-color: transparent; color: var(--bg-base); font-weight: 600; }
-.messages-filter-count { font-weight: 700; }
+.messages-toolbar-actions { display: flex; align-items: stretch; gap: 6px; margin-left: auto; }
+/* ⚠️ ONE SHAPE FOR THE LINE (owner, 2026-10-31: "the corners are not the same: style them all the same"): the filters
+   are the one choice control (SegmentedGroup), so the button beside them takes its track's round ends, and its
+   height by standing on its line (the line stretches it: no height written here). tests/oracles/live_issues.mjs */
+.messages-toolbar-actions .btn { padding: 0 12px; border-radius: var(--radius-pill); font-size: var(--text-sm); }
 .messages-empty { padding: 8px 0; }
 /* an open notification or report is the Cockpit's one card (RecordCard, owner 2026-10-29): its words as an issue's
    lines, its "To:" and Status as an issue's story; the full-screen ring keeps its large text (.announcement-full-text) */
@@ -244,7 +226,7 @@ body:has(.camera-fullscreen) .vesta-notice.below-camera { display: none; }
 .messages-card-body .announcement-full-to, .messages-card-body .announcement-full-status {
   font-size: var(--text-2xs); color: var(--text-dim); }
 .messages-card-body .photo-row { justify-content: center; }
-@media (max-width: 860px) { .messages-filters { overflow-x: auto; } }
+
 /* a fault the VESTA Agent is confirming: its check in the status green; its card is an open issue's (owner, 2026-10-23) */
 .fault-watched-icon { color: var(--status-on); }
 /* An open issue is THE Cockpit card (RecordCard, architecture review 2026-10-15): its own rules went with it — the

@@ -56,8 +56,13 @@ const src = (p) => readFileSync(new URL(`../../src/${p}`, import.meta.url), "utf
      && /const commit = \{\s*dirty: slice\.dirty,\s*saving: slice\.saving,\s*error: slice\.problem,\s*save: slice\.save,/.test(st));
 }
 
-const footer = elements(parseTsx("components/common/ModalFooter.tsx"), "button").map((b) => propText(b, "aria-label"));
-ck("the footer's buttons are Save and Cancel — no Close beside a Save", footer.includes('"Cancel"') && !footer.includes('"Close"'), footer);
+// each footer the piece can draw (its group of buttons): the one with a Save holds Cancel and no Close; Close is the
+// exit of the footer that has nothing to save (owner, 2026-11-10: in Save's shape, its glyph and its word)
+const footers = elements(parseTsx("components/common/ModalFooter.tsx"), "div").filter((d) => propText(d, "className") === '"modal-footer-actions"')
+  .map((d) => elements(d, "button").map((b) => propText(b, "aria-label")));
+const saving = footers.filter((f) => f.some((l) => /Save/.test(l ?? "")));
+ck("the footer's buttons are Save and Cancel — no Close beside a Save", saving.length === 1 && saving[0].includes('"Cancel"') && !saving[0].includes('"Close"')
+   && footers.some((f) => f.includes('"Close"') && !f.includes('"Cancel"')), footers);
 ck("Settings' Escape and backdrop are the same Cancel, and no question is asked any more",
    /const closeModal = footerExits\(commit, onClose, notice\)\.cancel;/.test(src("components/settings/SettingsModal.tsx"))
    && !existsSync(new URL("../../src/components/common/UnsavedChanges.tsx", import.meta.url))

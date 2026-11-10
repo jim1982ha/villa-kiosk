@@ -129,9 +129,12 @@
    padding, so every header is the same height whether it carries an icon, the
    theme selector or only a title. */
 .modal-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 24px 28px 16px; min-height: 84px; box-sizing: border-box; border-bottom: 1px solid var(--hairline); flex: 0 0 auto; }
-/* Matches .segmented-icons' own rendered height exactly (34px button +
-   3px×2 padding = 40px) — the default .icon-btn (48px) sat visibly taller
-   than the theme selector right next to it in this same header row. */
+/* A window's tabs (common/ModalTabs): the band under the header, at the window's gutters, holding the one choice
+   control in its tab shape. ⚠️ NEVER SHRINKS (owner, 2026-10-01): the window is a flex column, and a long tab's body
+   squeezed the band below its own height, the chosen tab cut in half. */
+.modal-tabs { display: flex; min-width: 0; padding: 10px 28px; border-bottom: 1px solid var(--hairline); flex: 0 0 auto; }
+/* A header's icon button: smaller than the default .icon-btn (48px), which sat visibly taller than the header's
+   other controls in the same row. */
 .header-icon-btn { width: 40px; height: 40px; border-radius: 11px; }
 /* The header's theme control now carries a written word. Two icon-only
    sun/moon triplets on one screen (this and Villa lighting) were reported as
@@ -240,11 +243,15 @@
   .legend-grid { grid-template-columns: 1fr; }
 }
 
-/* Segmented control (used for the Light / Dark / Auto / Night theme selector
-   and others). One --bg-input track, pill-shaped; the selected segment lifts
-   off it as a plain --bg-modal chip, NOT a solid accent block — three green
-   blocks per screen used to compete with each other and with the app's real
-   accent moments (VESTA-DESIGN.md §1.7). */
+/* ⚠️ THE ONE "CHOOSE ONE OF SEVERAL" CONTROL (common/SegmentedGroup; owner, 2026-11-10: the Cockpit's tabs were solid
+   green rectangles, its Inbox filters outlined pills, a schedule's presets solid pills and a device's modes ringed
+   buttons, beside Settings' soft track): every choice in the app is this track and these segments. The look of "this
+   one is chosen" is the ONE rule `.segmented button.active` below: changing it changes every tab, filter, range,
+   mode and On | Off at once. One --bg-input track, pill-shaped; the chosen segment a soft accent tint with accent
+   words, NOT a solid accent block: several green blocks per screen competed with each other and with the window's
+   one primary action (VESTA-DESIGN.md §1.7). Its shapes (SegmentedGroup `layout`): equal segments sharing the line
+   (the default), .segmented-natural, .segmented-compact, and the grid of more than four (.segmented-grid). A
+   caller's own class places the group in its line; it never restyles a segment. */
 .segmented, .tool-group { display: flex; gap: 4px; padding: 4px; border-radius: var(--radius-pill); background: var(--bg-input); }
 .segmented button, .tool-group > button, .tool-group > div > button {
   flex: 1 1 0; display: flex; align-items: center; justify-content: center; gap: 7px;
@@ -252,28 +259,32 @@
   color: var(--text-secondary); transition: background 0.15s, color 0.15s, box-shadow 0.15s;
 }
 .segmented button svg, .tool-group > button svg, .tool-group > div > button svg { flex: 0 0 auto; }
-/* Selected segment: a soft ACCENT tint with an accent-coloured glyph — the
-   exact treatment the HUD's category filter chips already use, so "this one
-   is on" looks the same everywhere in the app.
-   It was --bg-modal + --elev-1 (the guidelines' "raised light chip on a
-   neutral track"), which works on the cream light theme and fails completely
-   on the other two: --bg-modal is #171B18 in dark and #0F120F in night, sitting
-   on a --bg-input track of nearly identical luminance, so the shadow was the
-   only cue and the selection was reported as unreadable. Accent-soft still
-   honours the rule that mattered — the segment is NOT a solid green block
-   competing with the modal's one primary action — while actually being
-   visible in all three themes. */
+/* The chosen segment: a soft ACCENT tint with accent words, as the HUD's category filters. A raised --bg-modal chip
+   (the guidelines' "light chip on a neutral track") failed in dark and night: --bg-modal on a --bg-input track of
+   nearly the same luminance left the shadow as the only cue, reported as unreadable. */
 .segmented button.active {
   background: var(--accent-soft); color: var(--accent); font-weight: 600;
   box-shadow: var(--elev-1);
 }
+/* In a device's window the chosen mode or speed says THAT DEVICE's state, in its colour (--device-*, BasePanel), as
+   its On button does: a blue-badged device's mode is not the app's green (SegmentedGroup `device`). */
+.segmented-device button.active { background: var(--device-fill, var(--accent-soft)); color: var(--device-ink, var(--accent)); }
 /* A choice the view has nothing to draw for: still there, greyed (SegmentedGroup `disabled`). */
 .segmented button:disabled { opacity: 0.35; cursor: not-allowed; }
-
-/* Icon-only variant (theme selector in the Settings header): compact, not
-   full-width, square buttons — the Sun/Moon/Monitor glyphs are self-explanatory. */
-.segmented-icons { flex: 0 0 auto; }
-.segmented-icons button { flex: 0 0 auto; width: 44px; gap: 0; }
+.segmented button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+/* under the mouse: the segment or the tool lifts off the track, in a choice and in a tool group alike */
+@media (hover: hover) {
+  :is(.segmented button, .tool-group > button, .tool-group > div > button):hover:not(:disabled):not(.active) { background: var(--bg-modal); color: var(--text-primary); }
+}
+/* Each segment as wide as its own words (a window's tabs, the Inbox's filters, a header's control): the track is as
+   wide as its segments, never wider than its line, and slides sideways when they do not fit, cut by nothing. */
+.segmented-natural { flex: 0 1 auto; width: fit-content; max-width: 100%; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+.segmented-natural::-webkit-scrollbar { display: none; }
+.segmented-natural button { flex: 0 0 auto; min-width: var(--touch-min); padding: 0 14px; white-space: nowrap; line-height: 1; }
+/* More than four choices sharing a line (the languages, a schedule's "How often", a device's modes): a grid of equal
+   cells in a rounded box, never a pill stretched over several lines. */
+.segmented-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(104px, 1fr)); border-radius: var(--radius-squircle); }
+.segmented-grid button { border-radius: 10px; min-width: 0; }
 
 /* THE TOOL GROUP (owner, 2026-11-06: "the header's icon buttons the same style as the Settings header's theme
    control"): Advanced Settings' header buttons and the telemetry's toolbar are one .segmented track, each tool a
@@ -282,24 +293,14 @@
 .tool-group { flex: 0 0 auto; }
 .tool-group > button, .tool-group > div > button { flex: 0 0 auto; min-width: 44px; padding: 0 14px; color: var(--text-primary); }
 .tool-group .btn-label { margin-left: 0; }
-@media (hover: hover) { :is(.tool-group > button, .tool-group > div > button):hover:not(:disabled) { background: var(--bg-modal); } }
+
 :is(.tool-group > button, .tool-group > div > button):disabled { opacity: 0.4; cursor: not-allowed; }
 .tool-group .modal-actions { gap: 4px; }
 @media (max-width: 640px) {
   .tool-group > button, .tool-group > div > button { padding: 0 10px; }
 }
 
-/* Timeline header: the range label and its preset picker on one line. The
-   picker reuses .segmented (so it inherits the selected-segment treatment)
-   at a compact size — these are four two-character labels, not full-width
-   options.
-
-   These MUST sit after .segmented, not near the timeline's other rules: the
-   two selectors have identical specificity (.timeline-ranges button vs
-   .segmented button, both 0-1-1), so the later one simply wins. Authored
-   earlier in the file, every compact override here was silently discarded and
-   the picker rendered at the full 40px button height, which is what made it
-   collide with the chart beneath it. */
+/* Timeline header: the range label and its picker (the compact control below) on one line. */
 .timeline-head {
   display: flex; align-items: center; justify-content: space-between;
   gap: 10px; flex-wrap: wrap;
@@ -310,40 +311,28 @@
   margin-bottom: var(--field-label-gap);
 }
 .timeline-head .entity-label { margin: 0; white-space: nowrap; }
-/* ⚠️ THE COMPACT SEGMENTED CONTROL: the chart's ranges and a section's counts (FoldedList SectionViewButtons) */
-.segmented-compact, .timeline-ranges { flex: 0 0 auto; gap: 2px; padding: 2px; }
-.segmented-compact button, .timeline-ranges button {
-  flex: 0 0 auto; min-height: 26px; padding: 0 10px;
-  font-size: var(--text-xs); font-weight: 600;
-}
+/* ⚠️ THE COMPACT SHAPE (SegmentedGroup layout="compact"): a choice beside a heading or in a card's line, at the
+   line's own height: a chart's ranges, a section's counts (FoldedList SectionViewButtons), a card's On | Off. After
+   .segmented's rules: same specificity, the later one wins. */
+.segmented-compact { flex: 0 0 auto; gap: 2px; padding: 2px; }
+.segmented-compact button { flex: 1 0 auto; min-height: 26px; padding: 0 10px; font-size: var(--text-xs); font-weight: 600; }
 /* ⚠️ THE HEADING ALWAYS ON ONE LINE (owner, 2026-11-05: "LAST 24 HOURS · 5-min avg (i)" wrapped the pills onto a second
    line, "it should never happen"): never wrapped. The device panel's family is wide enough for the longest words beside
    the pills (03-panels.css .panel-modal); a narrower heading (a phone, 288 to 394px) leaves out the words the pill
    pressed already says ("Last 24 hours": the "24h" pill), kept for a screen reader and said in full in its (i), and
    its pills are compact. Measured in headless Chromium with the app's fonts: "LAST 24 HOURS · 5-min avg (i)" 216px,
-   the pills 188px (compact 148px), "5-min avg (i)" 106px. tests/oracles/history_heading.mjs. */
+   the pills 188px (148px tightened), "5-min avg (i)" 106px. The tightening is the compact shape's own, for any line
+   that narrow (no caller restyles a segment). */
 .timeline-head { flex-wrap: nowrap; container-type: inline-size; }
 @container (max-width: 425px) {
   .timeline-head .chart-range-words, .timeline-head .chart-step-sep {
     position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap;
   }
-  .timeline-head .timeline-ranges button { padding: 0 6px; }
+  .segmented-compact button { padding: 0 6px; }
 }
 /* the moved window's last report: under the heading, never in it (HistoryHeader `note`) */
 .chart-note { font-size: var(--text-xs); color: var(--text-secondary); margin: calc(-1 * var(--field-label-gap) + 2px) 0 var(--field-label-gap); }
 
-/* ⚠️ ONE SEGMENTED CONTROL (owner, 2026-11-06: the On | Off pills, Map look's Icon | Card and Villa lighting's icons were
-   three sizes): every .segmented in a setting line is the one above, its height, padding, radius and selected look;
-   an icon group filling its line shares it in equal centred segments. */
-.setting-row-control > .segmented-icons button { flex: 1 1 0; width: auto; }
-
-/* ⚠️ A CHOICE STANDING AS ITS SECTION'S OWN LINE FILLS IT (owner, 2026-11-03: "using the whole width of the modal and
-   the values inside it are well centred"): the group spans the line, its segments share it equally, each centred. On
-   a phone, segments that no longer fit wrap onto another line of the group, which still fills the width (iPhone and
-   Android alike: grouped, never stripped of their words). A group beside other controls on its line keeps its own
-   sizing (a setting line's own, common/SettingRow). tests/oracles/ui_dry.mjs. */
-.settings-modal .row > .segmented:only-child { flex: 1 1 100%; flex-wrap: wrap; }
-.settings-modal .row > .segmented:only-child button { flex: 1 1 0; min-width: 88px; justify-content: center; }
 
 /* THE line of one setting (common/SettingRow; owner, 2026-11-03: "the same layout, for consistency"): its icon and
    name at the left, its control at the right in a column of ONE width on every line, so the sliders, choices and
@@ -578,7 +567,6 @@
 @container (max-width: 520px) {
   .entity-id-confirm .setting-row-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   .entity-id-confirm .on-off.config-confirm .on-off-switch { min-width: 84px; }
-  .entity-id-confirm .on-off.config-confirm .on-off-switch button { padding: 0 8px; }
 }
 /* A device card's first line: its shown box, then its id's line. Before the phone's rule below, which it would
    otherwise outrank by coming later. */
@@ -691,8 +679,7 @@
    compact height, beside the device's name. */
 .on-off.config-confirm { flex: 0 0 auto; font-size: var(--text-xs); margin-top: 0; min-height: 0; flex-wrap: nowrap; }
 .on-off.config-confirm .setting-row-control { flex: 0 0 auto; }
-.on-off.config-confirm .on-off-switch { flex: 0 0 auto; width: auto; min-width: 110px; padding: 2px; }
-.on-off.config-confirm .on-off-switch button { min-height: 26px; height: 26px; padding: 0 10px; font-size: var(--text-xs); }
+.on-off.config-confirm .on-off-switch { flex: 0 0 auto; width: auto; min-width: 110px; }
 /* A field inside a settings card (RecordCard's words: a device's fields, an announcement's time, a chat's language):
    its name at the left on one line, its control taking the REST OF THE CARD'S WIDTH (owner, 2026-11-06: "the content of
    these cards taking the whole width"). ⚠️ EVERY CONTROL STARTS AT ONE X (owner, 2026-11-06: "the text fields all start
@@ -771,10 +758,3 @@
 .recipients-role { display: flex; flex-direction: column; gap: 8px; }
 .recipients-role-name { font-weight: 600; }
 .recipients-role + .recipients-role { margin-top: 12px; }
-/* A choice among many standing on its own line (SegmentedGroup, more than four options: the tablet's languages): a
-   grid of equal cells in a rounded box, never a pill stretched over several lines. A compact picker beside other
-   controls (the charts' five ranges) keeps its pill. */
-.settings-modal .row > .segmented.segmented-grid:only-child {
-  display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); border-radius: var(--radius-squircle);
-}
-.settings-modal .row > .segmented.segmented-grid:only-child button { border-radius: 10px; min-width: 0; }

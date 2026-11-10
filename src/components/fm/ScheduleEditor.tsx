@@ -10,6 +10,7 @@
 import InfoTip from "@/components/common/InfoTip";
 import { useState } from "react";
 import Dropdown from "@/components/common/Dropdown";
+import SegmentedGroup from "@/components/common/SegmentedGroup";
 import { Plus, Pencil } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
 import { useFmData } from "@/fm/FmDataContext";
@@ -65,16 +66,9 @@ export default function ScheduleEditor() {
 
       <div className="fm-field">
         <span>How often</span>
-        <div className="fm-chiprow">
-          {SCHEDULE_PRESETS.map((p) => (
-            <button
-              key={p.days}
-              className={`fm-entity-chip${days === p.days ? " on" : ""}`}
-              aria-pressed={days === p.days}
-              onClick={() => setDraft({ ...draft, everyDays: String(p.days) })}
-            >{p.label}</button>
-          ))}
-        </div>
+        <SegmentedGroup ariaLabel="How often" active={SCHEDULE_PRESETS.some((p) => p.days === days) ? String(days) : null}
+          onChange={(everyDays) => setDraft({ ...draft, everyDays })}
+          options={SCHEDULE_PRESETS.map((p) => ({ key: String(p.days), label: p.label }))} />
       </div>
 
       <label className="fm-field" style={{ maxWidth: 200 }}>

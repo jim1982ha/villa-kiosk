@@ -151,7 +151,7 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor, ta
         {can("customizeAppearance") && (
           <div className="settings-header-control">
             <span className="settings-inline-label">Interface</span>
-          <SegmentedGroup ariaLabel="Interface theme" className="segmented-icons" active={v.theme} onChange={(theme) => slice.set({ theme }, { now: true })} options={[
+          <SegmentedGroup ariaLabel="Interface theme" layout="natural" active={v.theme} onChange={(theme) => slice.set({ theme }, { now: true })} options={[
             { key: "light", title: "Light interface theme", label: <Sun size={17} /> },
             { key: "dark", title: "Dark interface theme", label: <Moon size={17} /> },
             { key: "auto", title: "Auto, follows the system, and dims to the night theme after dark", label: <Monitor size={17} /> },
@@ -304,7 +304,7 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor, ta
             Forces this villa's baked day or night look, or follows the real cycle on Auto. It relights the 3D
             model, unlike the Interface theme in the header, which only recolours the panels.
           </>}>
-            <SegmentedGroup ariaLabel="Villa lighting" className="segmented-icons"
+            <SegmentedGroup ariaLabel="Villa lighting"
               active={v.render.dayNightPreview ?? "auto"} onChange={(dayNightPreview) => applyRender({ dayNightPreview })} options={[
               { key: "day", title: "Light the villa as daytime", label: <Sunrise size={17} /> },
               { key: "night", title: "Light the villa as night", label: <Moon size={17} /> },

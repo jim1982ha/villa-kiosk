@@ -1,20 +1,12 @@
 // src/components/common/ModalTabs.tsx
 //
-// The tab strip every settings-family modal wears. ONE implementation.
+// The tab strip every settings-family window wears: THE choose-one control (common/SegmentedGroup) said as tabs, in
+// its band under the window's header. Its look is the control's own (owner, 2026-11-10: the tabs were a solid green
+// block of their own beside the soft green of every other choice).
 //
-// ⚠️ IT EXISTED ONCE BEFORE THIS FILE, AND ADVANCED SETTINGS WAS ABOUT TO MAKE
-// TWO. Facility carried the same fifteen lines — `.fm-tabs` / `role="tablist"`,
-// a `.fm-tab` button per entry with `aria-selected`, an icon and a label — and
-// hand-copying them a second time carries only the parts the copier notices.
-// `role`/`aria-selected` are the half nobody misses until a screen reader is
-// used.
-//
-// ⚠️ THE SCROLL-INTO-VIEW IS PART OF THE COMPONENT, NOT AN EXTRA. `.fm-tabs`
-// scrolls horizontally, so a surface opened directly onto a tab that is off
-// screen shows the row still highlighting the FIRST tab — an operator who
-// tapped "report a fault" sees the fault form under a tab bar that appears to
-// be on Today. Facility's own copy never had this, so converging it here is
-// what fixes the copy that did not know it was broken.
+// ⚠️ THE SCROLL-INTO-VIEW IS PART OF THE COMPONENT, NOT AN EXTRA. The strip scrolls sideways, so a window opened
+// directly onto a tab that is off screen showed the row still on its FIRST tab: an operator who tapped "report a
+// fault" saw the fault form under a tab bar that appeared to be on Today.
 //
 // ⚠️ IT DOES NOT OWN THE SELECTION. The caller keeps the state, because which
 // tabs exist is a permission question (Advanced Settings hides its System tab
@@ -26,6 +18,8 @@
 
 import { useEffect, useRef } from "react";
 import type { LucideIcon } from "lucide-react";
+import SegmentedGroup from "./SegmentedGroup";
+import { withCount } from "@/utils/countBadge";
 
 export interface ModalTab<Id extends string> {
   id: Id;
@@ -50,32 +44,21 @@ export default function ModalTabs<Id extends string>({
    *  their number between ()"). None, or 0: its name alone. */
   counts?: Partial<Record<Id, number>>;
 }) {
-  const activeRef = useRef<HTMLButtonElement>(null);
+  const band = useRef<HTMLDivElement>(null);
   // ⚠️ `block: "nearest"` SO A VERTICAL PAGE DOES NOT JUMP. The strip is the
   // only thing that should move; scrolling the body under the operator on open
   // is a second bug wearing the first one's fix.
   useEffect(() => {
-    activeRef.current?.scrollIntoView({ block: "nearest", inline: "nearest" });
+    band.current?.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: "nearest", inline: "nearest" });
   }, [active]);
 
   return (
-    <div className="fm-tabs" role="tablist" aria-label={label}>
-      {tabs.map((t) => {
-        const Icon = t.icon;
-        const on = t.id === active;
-        return (
-          <button
-            key={t.id}
-            ref={on ? activeRef : undefined}
-            role="tab"
-            aria-selected={on}
-            className={`fm-tab${on ? " active" : ""}`}
-            onClick={() => onSelect(t.id)}
-          >
-            <Icon size={16} /><span>{t.label}{counts?.[t.id] ? ` (${counts[t.id]})` : ""}</span>
-          </button>
-        );
-      })}
+    <div className="modal-tabs" ref={band}>
+      <SegmentedGroup tabs layout="natural" ariaLabel={label} active={active} onChange={onSelect}
+        options={tabs.map((t) => {
+          const Icon = t.icon;
+          return { key: t.id, label: <><Icon size={16} /><span>{withCount(t.label, counts?.[t.id])}</span></> };
+        })} />
     </div>
   );
 }

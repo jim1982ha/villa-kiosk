@@ -5,6 +5,7 @@ import type { PanelProps } from "@/types/panel.types";
 import { useHA } from "@/ha/HAStateStore";
 import { HAServices } from "@/ha/HAServiceCalls";
 import ControlFrame from "./ControlFrame";
+import SegmentedGroup from "@/components/common/SegmentedGroup";
 import { climateRange, climateStep, fmtTemp } from "@/utils/panelRules";
 import { useLiveDraft } from "@/hooks/useLiveDraft";
 
@@ -46,33 +47,17 @@ export default function ACPanel({ entity, mapping, onClose }: PanelProps) {
 
         <div className="field">
           <label className="entity-label">Mode</label>
-          <div className="row-buttons scroll">
-            {hvacModes.map((m) => (
-              <button
-                key={m}
-                className={`btn ${entity?.state === m ? "active" : "ghost"}`}
-                onClick={() => HAServices.setHvacMode(ws, mapping.entityId, m)}
-              >
-                {MODE_LABELS[m] ?? m}
-              </button>
-            ))}
-          </div>
+          <SegmentedGroup device ariaLabel="Mode" active={entity?.state ?? null}
+            onChange={(m) => HAServices.setHvacMode(ws, mapping.entityId, m)}
+            options={hvacModes.map((m) => ({ key: m, label: MODE_LABELS[m] ?? m }))} />
         </div>
 
       {fanModes.length > 0 && (
         <div className="field">
           <label className="entity-label">Fan speed</label>
-          <div className="row-buttons scroll">
-            {fanModes.map((f) => (
-              <button
-                key={f}
-                className={`btn ${a?.fan_mode === f ? "active" : "ghost"}`}
-                onClick={() => HAServices.setFanMode(ws, mapping.entityId, f)}
-              >
-                {f}
-              </button>
-            ))}
-          </div>
+          <SegmentedGroup device ariaLabel="Fan speed" active={typeof a?.fan_mode === "string" ? a.fan_mode : null}
+            onChange={(f) => HAServices.setFanMode(ws, mapping.entityId, f)}
+            options={fanModes.map((f) => ({ key: f, label: f }))} />
         </div>
       )}
       </ControlFrame>

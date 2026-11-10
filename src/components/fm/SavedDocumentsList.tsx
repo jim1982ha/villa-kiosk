@@ -14,6 +14,7 @@ import type { FmSavedDocument } from "@/fm/fmTypes";
 import AgentMark from "./AgentMark";
 import { Pager, usePaged, PAGE_CARDS } from "@/components/common/Paged";
 import RecordCard from "./RecordCard";
+import { withCount } from "@/utils/countBadge";
 
 export default function SavedDocumentsList({
   kind, onOpen,
@@ -51,7 +52,7 @@ export function SavedDocumentRows({ kind, docs: all, onOpen, onRemove }: {
   return (
     <div className="fm-stack">
       <div className="fm-row-sub muted" style={{ marginTop: 4 }}>
-        Saved {plural} ({docs.length})
+        {withCount(`Saved ${plural}`, docs.length)}
       </div>
       <div className="fm-list">
         {paged.page.map((doc) => (

@@ -70,7 +70,7 @@ type Readings = ReturnType<typeof useReadings>;
 export default function WeatherPanel({ station, onClose }: { station: WeatherStation; onClose: () => void }) {
   const now = useNow(10_000);
   const r = useReadings(station);
-  const { range, picker } = useHistoryRange("weather-ranges");
+  const { range, picker } = useHistoryRange("natural");
   return (
     <DataWindow title="Weather" icon={<CloudSun size={22} />} onClose={onClose}
       live={r.updated && <LiveNote>live · {ago(r.updated, now)}</LiveNote>} picker={picker}

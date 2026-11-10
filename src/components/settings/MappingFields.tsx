@@ -180,7 +180,7 @@ export function ObjectsField({ entityId, name, objects, links, onAdd, onTakeOff 
 export function ConfirmToggle({ m, draftField }: { m: EntityMapping; draftField: (change: Partial<EntityMapping>) => void }) {
   if (!CONFIRM_GATE_TYPES.has(m.type)) return null;
   return (
-    <OnOffToggle ariaLabel="Confirm before toggling" className="config-confirm" on={!!m.requireConfirm}
+    <OnOffToggle compact ariaLabel="Confirm before toggling" className="config-confirm" on={!!m.requireConfirm}
       onChange={(requireConfirm) => draftField({ requireConfirm })}
       title="Confirm before toggling: a tap on its badge opens its window, and its on/off asks first"
       icon={<ShieldCheck size={16} />} label="Confirm before toggling" />

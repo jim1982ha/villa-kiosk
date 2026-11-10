@@ -58,7 +58,7 @@ import LegendModal from "./LegendModal";
 import type { Doors } from "@/auth/doors";
 import { useVillaAttention } from "@/components/cockpit/useVillaAttention";
 import type { VillaHealthLevel } from "@/config/attention";
-import { formatCountBadge } from "@/utils/countBadge";
+import { formatCountBadge, withCount } from "@/utils/countBadge";
 import { useConversation } from "@/messages/ConversationContext";
 import { useAnnouncements } from "@/messages/AnnouncementsContext";
 import { countOf } from "@/utils/countOf";
@@ -709,7 +709,7 @@ export default function HUD({
                     {robot && agentDot}
                   </span>
                   <span>
-                    Cockpit{attentionGroups.length > 0 ? ` (${formatCountBadge(attentionGroups.length)})` : ""}
+                    {withCount("Cockpit", attentionGroups.length)}
                     {robot && <span className="sr-only">{`, ${agentTitle}`}</span>}
                     {unreadSaid && <span className="sr-only">{unreadSaid}</span>}
                   </span>

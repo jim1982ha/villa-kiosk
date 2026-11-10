@@ -3,35 +3,6 @@
    width/scroll/mobile behaviour for free; only what's specific to an
    operator worklist is defined here. Colour is semantic throughout — an
    overdue task must read as overdue before anything is actually read. */
-.fm-tabs {
-  /* Symmetric top/bottom padding — this had ZERO top padding (only 10px at
-     the bottom, before the border), so the tab buttons sat flush against the
-     row's top edge with all the breathing room below them, reading as "not
-     vertically centred" within the header band even though each button's
-     OWN icon+label were centred fine internally. */
-  display: flex; align-items: center; gap: 4px; padding: 10px 22px; overflow-x: auto;
-  scrollbar-width: none; border-bottom: 1px solid var(--hairline);
-  /* ⚠️ NEVER SHRINKS (owner, 2026-10-01). The modal is a flex column: with a
-     long tab (Faults) the row was squeezed below its own height, and since
-     overflow-x:auto clips vertically too, the active pill showed cut in half
-     with the cards scrolling right under it. Short tabs (Today) never showed it. */
-  flex-shrink: 0;
-}
-.fm-tabs::-webkit-scrollbar { display: none; }
-.fm-tab {
-  display: flex; align-items: center; gap: 7px; flex: 0 0 auto;
-  padding: 8px 13px; border-radius: 10px; border: 1px solid transparent;
-  background: transparent; color: var(--text-secondary);
-  /* line-height:1 — without it the label's line box (taller than its glyphs,
-     per normal font metrics) added asymmetric space the 16px icon next to it
-     doesn't have, so align-items:center still read as the TEXT sitting a
-     couple px off-centre against the icon despite both being flex-centred. */
-  font-size: var(--text-base); line-height: 1; cursor: pointer;
-}
-@media (hover: hover) {
-  .fm-tab:hover { background: var(--bg-input); }
-}
-.fm-tab.active { background: var(--accent); color: var(--text-on-accent); }
 .fm-stack { display: flex; flex-direction: column; gap: 16px; }
 
 /* Summary numbers — the glance layer above the detail. ⚠️ ONE LINE, HOWEVER
@@ -456,7 +427,7 @@
 @media (hover: hover) {
   .fm-entity-chip:hover { border-color: var(--accent); }
 }
-.fm-entity-chip.on { background: var(--accent); color: var(--text-on-accent); border-color: transparent; }
+
 /* the same pill with its own ✕ (common/RemovablePill): a member of a list, taken off by its ✕ */
 .fm-chip-removable { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; overflow-wrap: anywhere; padding-right: 4px; }
 .fm-chip-remove {

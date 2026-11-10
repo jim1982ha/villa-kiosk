@@ -108,12 +108,18 @@ export default function ModalFooter({
       : <span />;
 
   if (commit === undefined) {
-    // the one exit in the same group, at the same size, as Settings' Save and Cancel (owner, 2026-10-22: one footer)
+    // the one exit in the same group, at the same size, as Settings' Save and Cancel (owner, 2026-10-22: one footer),
+    // and in their shape (owner, 2026-11-10: the Cockpit's "Close" was a word pill beside Settings' round buttons on
+    // the same phone): its glyph and its word, the glyph alone on a phone. A window's own word stays words.
     return (
       <div className="modal-footer">
         {left}
         <div className="modal-footer-actions">
-          {actions ?? <button className="btn primary" onClick={onClose}>{closeLabel ?? "Close"}</button>}
+          {actions ?? (closeLabel
+            ? <button className="btn primary" onClick={onClose}>{closeLabel}</button>
+            : <button className="btn primary" aria-label="Close" onClick={onClose}>
+                <X size={18} aria-hidden /><span className="btn-label">Close</span>
+              </button>)}
         </div>
       </div>
     );
