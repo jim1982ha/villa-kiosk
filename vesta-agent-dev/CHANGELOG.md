@@ -1,3 +1,24 @@
+## 0.12.500
+
+- Every date on the Agent's page is in the villa's time and written as the messages write it ("10/11/2026 09:01").
+  The page used the time of the device it was read on: read from another country, a run showed an hour that was not
+  the villa's.
+- The page comes back where it was. A reload, or the address sent to someone, opens the same tab, the same sub-tab
+  (in Costs, Rules, Knowledge, Limits or a skill), the same skill and its file, the same Costs period. It always
+  reopened on the tab's first view. Back from the Limits tab returns to the skill, the file and the place in the
+  page it was opened from.
+- On a phone, the Limits tab reads from the left: what a limit is, then its value, then who is told. The sentence
+  was pushed to the right edge under a label.
+- A limit that tells nobody shows "Nobody is told" in grey. It was red, the colour of something that needs attention.
+- The Costs tab's figures are never cut in two ("US$ 10.68" stays on one line); on a phone they stand two a row.
+- A scheduled job's time is picked, not typed: how often (each day, each week, each month, each hour), the day,
+  then the hour and the minutes. A job the VESTA UI's "Next check" follows runs every day, so it offers its hour
+  only.
+- A skill's "(file)" beside its tab answers a press over the tab's whole height: it was a few letters wide and easy
+  to miss on a phone.
+- The page says "VESTA UI" wherever it said "VESTA Kiosk" (the Limits tab's sentences, Knowledge › Asleep devices,
+  the set-up page).
+
 ## 0.12.499
 
 - On the Agent's page, a list that is not in time's order turns its pages with "‹ Previous" and "Next ›": the Limits
