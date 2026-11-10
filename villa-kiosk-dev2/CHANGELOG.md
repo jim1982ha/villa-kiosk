@@ -1,3 +1,15 @@
+## 2.496.765
+
+What you will see:
+- Every "choose one of several" is now one control with one look: a soft track, the chosen one tinted green. The
+  Cockpit's tabs (Inbox, Tickets, Schedule…) and Settings' tabs were solid green rectangles; the Inbox's Issues,
+  Notifications and Reports were outlined pills; a schedule's "How often" and a device's modes and speeds (air
+  conditioner, fan) were buttons of their own; the weather's and the energy's periods another kind. They are all
+  the same control as Settings' choices now, so a change to its look changes all of them at once.
+- The Inbox's filters say their count as the tabs do: "Issues (6)", and "Notifications" in full on every phone.
+- A window with nothing to save closes with the same button shape as Save and Cancel: "✕ Close" on a wide screen,
+  the round ✕ on a phone (the Cockpit had a word pill where Settings had round buttons).
+
 ## 2.496.764
 
 What you will see:
