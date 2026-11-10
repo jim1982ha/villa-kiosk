@@ -59,7 +59,7 @@ export function SearchEmpty({ query, noun, offer, onAdd }: {
     <div className="search-empty">
       <p className="muted body-text">No {noun} has “{query.trim()}”.</p>
       {add && offer && onAdd && (
-        <button type="button" className="btn ghost" onClick={() => onAdd(add.id)}>{offer.exactWords(add.name)}</button>
+        <button type="button" className="btn" onClick={() => onAdd(add.id)}>{offer.exactWords(add.name)}</button>
       )}
     </div>
   );

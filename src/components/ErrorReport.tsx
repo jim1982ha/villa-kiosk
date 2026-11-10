@@ -70,7 +70,7 @@ export default function ErrorReport({ title, hint, detail, actions }: Props) {
       )}
 
       <button
-        className="btn ghost"
+        className="btn"
         onClick={() => setDetailsOpen((o) => !o)}
         style={{ alignSelf: "flex-start", display: "inline-flex", alignItems: "center", gap: 8 }}
         aria-expanded={detailsOpen}

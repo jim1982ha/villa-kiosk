@@ -26,7 +26,7 @@ export function useDeviceWarning(): { open: () => void; severity: AttentionSever
 /** The device window's warning (header, top right, owner 2026-10-24): the Cockpit's own sign in the colour of the
  *  most serious issue its Overview lists for the device (attention severity: .cockpit-attention-danger red, -warn
  *  amber, -lost grey, as the Overview's cards). Pure: a check draws it. */
-export function FaultsButton({ onOpen, severity, className = "btn ghost icon-only" }: {
+export function FaultsButton({ onOpen, severity, className = "btn icon-only" }: {
   onOpen: () => void; severity: AttentionSeverity; className?: string;
 }) {
   return (
@@ -39,7 +39,7 @@ export function FaultsButton({ onOpen, severity, className = "btn ghost icon-onl
 
 /** Edit: this device's row in Advanced Settings, for a profile that may edit devices. The card window words it; the
  *  camera's chrome, all icons, draws the pencil (`icon`). */
-export function EditButton({ className = "btn ghost", icon = false }: { className?: string; icon?: boolean }) {
+export function EditButton({ className = "btn", icon = false }: { className?: string; icon?: boolean }) {
   const { may, onEdit } = usePanelActions();
   if (!may.edit) return null;
   return icon

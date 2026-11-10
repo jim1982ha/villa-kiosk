@@ -520,7 +520,7 @@ export default function TelemetryPanel() {
         <div className="field">
           <label className="entity-label row spread">
             Frame cost on this device, what each thing was costing
-            <button className="btn ghost" onClick={() => void copyResult(probeText, "Frame-cost probe")}><Copy size={14} /> Copy</button>
+            <button className="btn" onClick={() => void copyResult(probeText, "Frame-cost probe")}><Copy size={14} /> Copy</button>
           </label>
           <pre className="diag-report">{probeText}</pre>
         </div>
@@ -531,8 +531,8 @@ export default function TelemetryPanel() {
           <label className="entity-label row spread">
             This device, screen, viewport, WebGL, model
             <span className="row" style={{ gap: 6 }}>
-              <button className="btn ghost" onClick={() => void copyResult(selfReport, "Device report")}><Copy size={14} /> Copy</button>
-              <button className="btn ghost" onClick={() => setSelfReport(null)}>Hide</button>
+              <button className="btn" onClick={() => void copyResult(selfReport, "Device report")}><Copy size={14} /> Copy</button>
+              <button className="btn" onClick={() => setSelfReport(null)}>Hide</button>
             </span>
           </label>
           <pre className="diag-report">{selfReport}</pre>

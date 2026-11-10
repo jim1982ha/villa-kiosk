@@ -101,7 +101,7 @@ export default function GroupedDevices({ title, tip }: { title: string; tip?: Re
           title="Cannot group this entity"
           message={notice}
           confirmLabel="OK"
-          cancelLabel={null}
+          notice
           onConfirm={() => setNotice(null)}
           onCancel={() => setNotice(null)}
         />
@@ -166,7 +166,7 @@ export default function GroupedDevices({ title, tip }: { title: string; tip?: Re
             <EntityCard key={`${s.primaryEntityId}|${s.memberEntityId}`} entityId={s.primaryEntityId} also={[s.memberEntityId]}
               lead={<Sparkles size={16} aria-hidden />}
               actions={
-                <button type="button" className="btn ghost fm-bar-main" onClick={() => acceptSuggestion(s.primaryEntityId, s.memberEntityId)}>
+                <button type="button" className="btn fm-bar-main" onClick={() => acceptSuggestion(s.primaryEntityId, s.memberEntityId)}>
                   <Plus size={16} aria-hidden />Create this group
                 </button>
               } />

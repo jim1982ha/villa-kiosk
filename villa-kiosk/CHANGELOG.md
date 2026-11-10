@@ -1,3 +1,17 @@
+## 2.496.766
+
+What you will see:
+- Every worded button is now one button: a soft grey pill, green for the main answer, red for one that cannot be
+  taken back. A window's footer had pills while the same Cancel and Save in a Cockpit form, a question asked in
+  place ("Unlock Front door?") and every "Add", "Copy", "Record spend" or "Reload" were outlined boxes. A cover's
+  Open, Stop and Close are three alike, in the device's colour.
+- Cancel and the answer are the same pair everywhere: the ✕ and "Cancel", then a check and the answer's own words
+  ("Save task", "Unlock", "Send report"), on the right. In a window's footer, at the end of a Cockpit form, in a
+  question asked in place and in the question box. On a phone Cancel is the round ✕ alone.
+- The answer greys while it is on its way ("Saving…", "Sending…") everywhere, so a second press cannot send twice.
+- What went wrong is one red line, the same size everywhere. In a window it stands on its own line just above the
+  footer's buttons: a refused Save in Settings was amber words squeezed beside Cancel and Save.
+
 ## 2.496.765
 
 What you will see:

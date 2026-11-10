@@ -60,8 +60,8 @@ export default function ReadinessTab({
       {snapshot.markdown && (
         <div className="fm-stack">
           <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
-            <button className="btn ghost" onClick={snapshot.close}>Close snapshot</button>
-            <button className="btn ghost" onClick={snapshot.download}>
+            <button className="btn" onClick={snapshot.close}>Close snapshot</button>
+            <button className="btn" onClick={snapshot.download}>
               <Download size={16} /> Download .md
             </button>
           </div>
@@ -116,7 +116,7 @@ export function ReadinessChecks({ readiness, label, onOpenEntity, onOpenCheck, o
               lead={<span className={`fm-check-icon ${c.state}`}><Icon size={16} /></span>}
               title={c.label}
               actions={opens ? (
-                <button className="btn ghost" onClick={() => onOpenCheck(opens)}>
+                <button className="btn" onClick={() => onOpenCheck(opens)}>
                   {opens.label} <ChevronRight size={16} />
                 </button>
               ) : undefined}

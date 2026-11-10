@@ -29,6 +29,7 @@ import { useEvidenceUpload } from "./useEvidenceUpload";
 import NotesField from "./NotesField";
 import ModalFooter from "@/components/common/ModalFooter";
 import { useRecordPlace } from "./useRecordPlace";
+import ProblemLine from "@/components/common/ProblemLine";
 import Tip from "@/components/common/Tip";
 
 export default function GuestReportModal({
@@ -47,7 +48,6 @@ export default function GuestReportModal({
   const [title, setTitle] = useState("");
   const [note, setNote] = useState("");
   const [photoIds, setPhotoIds] = useState<string[]>([]);
-  const [busy, setBusy] = useState(false);
   const photos = useEvidenceUpload((ids) => setPhotoIds((prev) => [...prev, ...ids]));
   const photoInput = useRef<HTMLInputElement>(null);
   const [sent, setSent] = useState(false);
@@ -58,7 +58,6 @@ export default function GuestReportModal({
   const deviceLabel = entityId ? label(entityId) : undefined;
 
   const send = async () => {
-    setBusy(true);
     setSendError(null);
     const result = await addTicket({
       title: title.trim(),
@@ -67,7 +66,6 @@ export default function GuestReportModal({
       photoIds,
       reportedBy: "guest",
     });
-    setBusy(false);
     // "Thank you — reported" ONLY when it was (2.496.184): it was shown
     // whatever the write did, and a guest cannot check afterwards.
     // Offline counts as sent: it is queued and goes on its own — telling the
@@ -139,29 +137,24 @@ export default function GuestReportModal({
                   to undo is what is honestly available here. */}
               <div className="fm-chiprow">
                 {/* a button, as the operator's strip's (EvidenceRow): a label around a hidden input took no key */}
-                <button className="btn ghost" disabled={photos.busy} onClick={() => photoInput.current?.click()}>
+                <button className="btn" disabled={photos.busy} onClick={() => photoInput.current?.click()}>
                   <Camera size={16} aria-hidden /> {photos.busy ? "Adding…" : photoIds.length ? "Add another" : "Add a photo"}
                 </button>
                 <input ref={photoInput} type="file" accept="image/*" capture="environment" multiple hidden
                   onChange={(e) => { const el = e.target; void photos.add(el.files).then(() => { el.value = ""; }); }} />
                 {photoIds.length > 0 && (
-                  <button className="btn ghost" onClick={() => setPhotoIds([])}>
+                  <button className="btn" onClick={() => setPhotoIds([])}>
                     {photoIds.length} attached, remove
                   </button>
                 )}
               </div>
-              {photos.error && <div className="fm-inline-error" role="alert">{photos.error}</div>}
-              {sendError && <div className="fm-inline-error" role="alert">{sendError}</div>}
+              <ProblemLine>{photos.error}</ProblemLine>
             </div>
           </div>
-          {/* The shared footer (common/ModalFooter): its two answers in one group on the right, as Settings'. */}
-          <ModalFooter onClose={onClose} actions={<>
-            <button className="btn" onClick={onClose}>Cancel</button>
-            <button className="btn primary" disabled={!title.trim() || busy || photos.busy}
-              onClick={() => void send()}>
-              {busy ? "Sending…" : "Send report"}
-            </button>
-          </>} />
+          {/* The shared footer (common/ModalFooter): Cancel and the answer, the same pair as Settings'
+              (common/Answers), one press at a time; a refusal is its line above the footer. */}
+          <ModalFooter onClose={onClose} error={sendError}
+            answer={{ label: "Send report", busy: "Sending…", disabled: !title.trim() || photos.busy, onPress: send }} />
         </>
       )}
     </Window>

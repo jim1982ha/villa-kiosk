@@ -5,7 +5,6 @@ import { register } from "node:module";
 register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 import { readFileSync, existsSync } from "node:fs";
-import { elements, parseTsx, propText } from "../consistency/jsx.mjs";
 const { footerExits, SAVED_NOTICE, CANCELLED_NOTICE } = await import("@/components/common/ModalFooter");
 
 const run = async (commit, which) => {
@@ -56,13 +55,6 @@ const src = (p) => readFileSync(new URL(`../../src/${p}`, import.meta.url), "utf
      && /const commit = \{\s*dirty: slice\.dirty,\s*saving: slice\.saving,\s*error: slice\.problem,\s*save: slice\.save,/.test(st));
 }
 
-// each footer the piece can draw (its group of buttons): the one with a Save holds Cancel and no Close; Close is the
-// exit of the footer that has nothing to save (owner, 2026-11-10: in Save's shape, its glyph and its word)
-const footers = elements(parseTsx("components/common/ModalFooter.tsx"), "div").filter((d) => propText(d, "className") === '"modal-footer-actions"')
-  .map((d) => elements(d, "button").map((b) => propText(b, "aria-label")));
-const saving = footers.filter((f) => f.some((l) => /Save/.test(l ?? "")));
-ck("the footer's buttons are Save and Cancel — no Close beside a Save", saving.length === 1 && saving[0].includes('"Cancel"') && !saving[0].includes('"Close"')
-   && footers.some((f) => f.includes('"Close"') && !f.includes('"Cancel"')), footers);
 ck("Settings' Escape and backdrop are the same Cancel, and no question is asked any more",
    /const closeModal = footerExits\(commit, onClose, notice\)\.cancel;/.test(src("components/settings/SettingsModal.tsx"))
    && !existsSync(new URL("../../src/components/common/UnsavedChanges.tsx", import.meta.url))
@@ -81,6 +73,19 @@ ck("the notice is the villa view's own passing notice (AppNotice), provided by t
   ck("with Save · Cancel: no Back (Cancel is the way out)", !withCancel.includes("Back to Settings") && withCancel.includes("Cancel"), withCancel);
   const alone = labels({ actions: h("span") });
   ck("with nothing to save: Back, named for where it returns", alone.includes("Back to Settings"), alone);
+
+  // each footer the piece draws, by its buttons: the one with a Save holds Cancel and no Close; Close is the exit of
+  // the footer that has nothing to save (owner, 2026-11-10: in Save's shape, its glyph and its word); a window that
+  // asks one thing ends in the same Cancel and its answer (common/Answers)
+  const { text } = await import("../consistency/screen.mjs");
+  const drawn = (props) => draw(h(ModalFooter, { onClose: () => {}, ...props }));
+  const names = (html) => [...html.matchAll(/<button[^>]*aria-label="([^"]+)"/g)].map((m) => m[1]);
+  const save = names(drawn({ commit: { dirty: true, save: () => {}, discard: () => {} } }));
+  const plain = names(drawn({}));
+  ck("the footer's buttons are Cancel and Save, no Close beside a Save", save.join() === "Cancel,Save" && plain.join() === "Close", [save, plain]);
+  const asks = drawn({ answer: { label: "Send report", onPress: () => {} }, error: "The villa's system did not answer." });
+  ck("a window that asks one thing: what went wrong, then Cancel and its answer, the same pair",
+     text(asks) === "|The villa's system did not answer.|[icon]|Cancel|[icon]|Send report|" && names(asks).join() === "Cancel", text(asks));
 }
 
 done("✅ Save saves and closes; Cancel undoes and closes; the notice says which; Back only where there is no Cancel");

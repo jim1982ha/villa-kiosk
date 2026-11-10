@@ -4,12 +4,14 @@
 // forms wrote the error line and the `modal-actions` pair out themselves;
 // only one of them carried the icons the app pairs with every action word.
 //
-// ⚠️ ONE SAVE AT A TIME, HERE (UI scan, 2026-11-10): only the Today form greyed its button while its save was on its
-// way; a second press on the Spend, Schedule, Ticket and Spend settings forms sent the record twice. A save that
-// returns a promise greys the button and says "Saving…" until it settles.
+// ⚠️ THE PAIR AND THE LINE ARE THE APP'S (owner, 2026-11-10: one definition): the buttons are common/Answers, the
+// same Cancel and answer a window's footer and a question draw, and one press at a time is theirs ("Saving…" until
+// the save settles); the refusal is common/ProblemLine.
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Check, X } from "lucide-react";
+import type { ReactNode } from "react";
+
+import Answers from "@/components/common/Answers";
+import ProblemLine from "@/components/common/ProblemLine";
 
 export default function FormActions({ error, onCancel, onSave, saveLabel, disabled = false, extra }: {
   /** The refusal to show above the buttons, or null. */
@@ -21,26 +23,12 @@ export default function FormActions({ error, onCancel, onSave, saveLabel, disabl
   saveLabel: ReactNode;
   disabled?: boolean;
 }) {
-  const [saving, setSaving] = useState(false);
-  const shown = useRef(true);
-  useEffect(() => { shown.current = true; return () => { shown.current = false; }; }, []);
-  const save = () => {
-    if (saving) return;
-    const sent = onSave();
-    if (!(sent instanceof Promise)) return;
-    setSaving(true);
-    // a form that closed on its save is gone by now: nothing left to un-grey
-    void sent.finally(() => { if (shown.current) setSaving(false); });
-  };
   return (
     <>
-      {error && <div className="fm-inline-error" role="alert">{error}</div>}
-      <div className="modal-actions" style={{ marginTop: 8 }}>
-        {extra}
-        <button className="btn ghost" onClick={onCancel}><X size={16} aria-hidden /> Cancel</button>
-        <button className="btn primary" disabled={disabled || saving} onClick={save}>
-          <Check size={16} aria-hidden /> {saving ? "Saving…" : saveLabel}
-        </button>
+      <ProblemLine>{error}</ProblemLine>
+      <div className="btn-row end below">
+        <Answers extra={extra} onCancel={onCancel}
+          answer={{ label: saveLabel, busy: "Saving…", disabled, onPress: onSave }} />
       </div>
     </>
   );

@@ -114,7 +114,7 @@
 .vesta-notice .photo-tile:only-child .photo-tile-open img { max-height: 160px; object-fit: cover; }
 /* the buttons a ring offers (the doorbell's Unlock), under its words; they wrap on a narrow phone */
 .vesta-notice-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px; margin-top: 8px; }
-.vesta-notice-action { pointer-events: auto; min-height: var(--touch-min); padding: 0 16px; }
+.vesta-notice-action { pointer-events: auto; }
 .vesta-notice-said { color: var(--text-secondary); }
 .vesta-notice.tappable { pointer-events: auto; cursor: pointer; min-height: var(--touch-min); }
 .vesta-notice-dismiss {
@@ -215,9 +215,8 @@ body:has(.camera-fullscreen) .vesta-notice.below-camera { display: none; }
 .messages-card, .messages-toolbar ~ .fm-form { scroll-margin-top: 72px; }
 .messages-toolbar-actions { display: flex; align-items: stretch; gap: 6px; margin-left: auto; }
 /* ⚠️ ONE SHAPE FOR THE LINE (owner, 2026-10-31: "the corners are not the same: style them all the same"): the filters
-   are the one choice control (SegmentedGroup), so the button beside them takes its track's round ends, and its
-   height by standing on its line (the line stretches it: no height written here). tests/oracles/live_issues.mjs */
-.messages-toolbar-actions .btn { padding: 0 12px; border-radius: var(--radius-pill); font-size: var(--text-sm); }
+   are the one choice control (SegmentedGroup) and the button beside them the one worded button (.btn, a pill as its
+   track is): nothing about it is written here. tests/oracles/live_issues.mjs */
 .messages-empty { padding: 8px 0; }
 /* an open notification or report is the Cockpit's one card (RecordCard, owner 2026-10-29): its words as an issue's
    lines, its "To:" and Status as an issue's story; the full-screen ring keeps its large text (.announcement-full-text) */
@@ -419,44 +418,29 @@ body:has(.camera-fullscreen) .vesta-notice.below-camera { display: none; }
 }
 .pager-controls { display: inline-flex; align-items: center; gap: 8px; }
 
-/* ── Shared modal footer (ModalFooter.tsx) ─────────────────────────────────
-   ⚠️ THE PAIR READS AS ONE CONTROL GROUP. Equal minimum sizes so Save and
-   Close look like two answers to one question rather than two buttons that
-   happen to be adjacent. */
-.modal-footer-actions {
-  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
-  justify-content: flex-end;
-}
-.modal-footer-actions > button {
-  min-height: var(--touch-min); min-width: var(--touch-min);
-  justify-content: center;
-}
-/* The word beside the glyph. ⚠️ A CLASS, NOT THE `hidden` ATTRIBUTE — an
+/* ── A button's word that hides on a phone (.btn-label) ───────────────────
+   The word beside the glyph (the button's own gap spaces them). ⚠️ A CLASS, NOT THE `hidden` ATTRIBUTE — an
    author has to be able to hide the word at the phone tier without leaving the
    control unnamed to a screen reader. */
-.btn-label { margin-left: 8px; }
-/* A footer button's progress on its icon (an upload's "42%"), only where its word is hidden: the phone tier below
+/* A button's progress on its icon (an upload's "42%"), only where its word is hidden: the phone tier below
    (architecture review K, 2026-10-24: a phone saw a bare icon for the whole upload). */
 .btn-mark { display: none; }
 
-/* Used by the footer's error line, and by anything else that has to say
-   "this is a warning" in text rather than in a badge. */
-.sev-warning { color: var(--status-warning); }
+/* ⚠️ THE ONE LINE THAT SAYS SOMETHING WENT WRONG (common/ProblemLine; owner, 2026-11-10: one definition). It was red
+   at three sizes, amber in two places and a paragraph with its own margins in a fourth. Red: it did not happen.
+   Amber (.warn): it happened, with a reservation. Where it stands is its place's business, never its look. */
+.problem-line { font-size: var(--text-base); line-height: 1.4; color: var(--status-danger); min-width: 0; overflow-wrap: anywhere; }
+.problem-line.warn { color: var(--status-warning); }
 
 @media (max-width: 640px) {
   /* ⚠️ ICON-ONLY AT THE PHONE TIER, where two labelled buttons plus a hint do
      not fit a 360px footer — the row wraps, and a wrapped footer is what makes
      a dialog look broken. Square, --touch-min on both axes. 640px is the
      layout's phone tier (05-layout.css); a 641-720px screen — a tablet in
-     portrait — has room for the words, and showed bare glyphs (2.496.257).
-     ⚠️ `.modal-footer` IN THE SELECTOR IS LOAD-BEARING: `.modal-footer .btn`
-     (04-modals.css, padding 10px 20px) outranks a bare
-     `.modal-footer-actions > button`, so its side padding would stay in a
-     44px button and squeeze the icon to a 4px speck wherever nothing else
-     trims it — which is what the 641-720px screens showed. */
-  /* only a button that HAS a hideable word goes square (a plain "Close" keeps its word); the header's too (Advanced
-     Settings' "Upload Model" and "Log Out All", owner 2026-10-25: no words where there is no room) */
-  .modal-footer .btn:has(> .btn-label) { width: var(--touch-min); padding: 0; }
+     portrait — has room for the words, and showed bare glyphs (2.496.257). */
+  /* only a button that HAS a hideable word goes square (a plain "Close" keeps its word), wherever it stands: a
+     footer, a form's end, a question in place */
+  .btn:has(> .btn-label) { width: var(--touch-min); padding: 0; }
   .btn-label { display: none; }
   .btn:has(> .btn-mark) { position: relative; }
   .btn-mark { display: block; top: auto; bottom: 1px; right: 1px; background: var(--accent); }

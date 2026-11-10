@@ -93,7 +93,7 @@ export default function TodayTab({ onOpenEntity }: { onOpenEntity: (id: string) 
             data.schedules.length, not board.length: the board only shows ENABLED tasks (scheduleBoard filters paused
             ones out), but removeAllSchedules clears every schedule regardless — the confirm count must match what
             actually gets deleted. */}
-        <AskFirstButton className="btn ghost" confirmLabel={`Delete all ${data.schedules.length} tasks?`}
+        <AskFirstButton className="btn" confirmLabel={`Delete all ${data.schedules.length} tasks?`}
           onConfirm={removeAllSchedules}>
           <Trash2 size={16} /> Delete all
         </AskFirstButton>
@@ -105,7 +105,7 @@ export default function TodayTab({ onOpenEntity }: { onOpenEntity: (id: string) 
           {/* THE task's card, the Schedule tab's too (TaskCard): Log and the bin in its bar */}
           <TaskCard status={s} room={roomOf(s.schedule)} onRemove={() => removeSchedule(s.schedule.id)}
             actions={
-              <button className="btn ghost" onClick={() => (log.editing === s.schedule.id ? log.close() : log.edit(s.schedule.id))}>
+              <button className="btn" onClick={() => (log.editing === s.schedule.id ? log.close() : log.edit(s.schedule.id))}>
                 <Check size={16} /> Log
               </button>
             } />

@@ -221,7 +221,7 @@ export default function SummaryGroupPanel({
               <button
                 key={s.entityId}
                 type="button"
-                className="btn ghost"
+                className="btn"
                 disabled={!canControl}
                 // ⚠️ THE SAME HOOK THE SUMMARY BAR USES. A scene run from a
                 // room panel and one run from the bar are the same act with

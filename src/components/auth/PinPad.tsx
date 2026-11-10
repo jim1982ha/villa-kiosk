@@ -16,6 +16,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useInterval } from "@/hooks/useInterval";
 import { fmtDuration } from "@/components/panels/chartUtils";
 import { ArrowLeft, Delete } from "lucide-react";
+import ProblemLine from "@/components/common/ProblemLine";
 
 const KEYS = ["1", "2", "3", "4", "5", "6", "7", "8", "9"];
 
@@ -128,11 +129,9 @@ export default function PinPad({
 
       <div className="pinpad-status" role="status">
         {locked ? (
-          <span className="danger-text">
-            {`Too many attempts, locked for ${fmtDuration(lockedFor * 1000)}`}
-          </span>
+          <ProblemLine>{`Too many attempts, locked for ${fmtDuration(lockedFor * 1000)}`}</ProblemLine>
         ) : error ? (
-          <span className="danger-text">{error}</span>
+          <ProblemLine>{error}</ProblemLine>
         ) : busy ? (
           <span className="muted">Checking…</span>
         ) : (

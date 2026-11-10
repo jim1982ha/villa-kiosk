@@ -72,7 +72,6 @@
 .modal label { display: block; font-size: var(--text-sm); color: var(--text-secondary); margin: 14px 0 6px; }
 .modal input { width: 100%; padding: 12px 14px; border-radius: 10px; background: var(--bg-input); color: var(--text-primary); border: 1px solid var(--hairline); font-size: var(--field-text); font-weight: 400; }
 .modal input:focus { border-color: var(--accent); outline: none; }
-.modal-actions { display: flex; gap: 12px; margin-top: 24px; justify-content: flex-end; }
 
 /* ── THE MODAL SHELL: header · body · footer ─────────────────────────────
    ⚠️ ONE DEFINITION FOR EVERY DIALOG (2.496.175). There were three: the
@@ -167,35 +166,13 @@
 .modal-footer { flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 28px; background: var(--bg-overlay); }
 /* The footer is ALWAYS two slots, space-between: the left one (a control that
    leaves or a hint — or an empty <span /> spacer) and the right one (the
-   answer). Several buttons in one slot sit in a group. */
-.modal-footer-group { display: flex; align-items: center; gap: 8px; }
-/* Another tablet replaced a change of this dialog's own (components/settings/RemoteReplacedNote): one plain line per
-   device, just above the footer, on the footer's own background. */
-.modal-remote-note { flex: 0 0 auto; display: flex; align-items: flex-start; gap: 8px; padding: 12px 28px 0; background: var(--bg-overlay); }
-.modal-remote-note-lines { flex: 1 1 auto; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-.modal-remote-note-close { width: 30px; height: 30px; flex: 0 0 auto; }
-/* Every footer button is a soft pill — the look the Energy/Weather footer had
-   and the owner chose for all of them (Settings' "Advanced Settings" was an
-   outlined box). The primary action keeps the accent. */
-/* ONE size for every footer button — Close, Save, Cancel and Settings' Advanced Settings alike (owner, 2026-10-22:
-   Settings' footer "differs from the other modals"). */
-.modal-footer .btn {
-  border: none; background: var(--bg-input); border-radius: 999px;
-  min-height: var(--touch-min); display: inline-flex; align-items: center; justify-content: center;
-  padding: 10px 20px; font-weight: 500; color: var(--text-secondary);
-  transition: background 0.15s ease, color 0.15s ease;
-}
-@media (hover: hover) {
-  .modal-footer .btn:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent);
-}
-}
-.modal-footer .btn.primary { background: var(--accent); color: var(--text-on-accent); }
-.modal-footer .btn.danger { background: var(--status-danger); color: #fff; }
-@media (hover: hover) {
-  .modal-footer .btn.primary:hover:not(:disabled) { background: var(--accent); color: var(--text-on-accent); filter: brightness(1.06); }
-}
-
+   answer). Several buttons in one slot sit in a group (.btn-row, 01-base.css). */
+/* What a window says just above its footer, on the footer's own background (common/FooterNote): why its answer was
+   refused, or what became of a change already made (another device replaced it, it is kept on this device alone).
+   One plain line each (.problem-line). */
+.modal-footer-note { flex: 0 0 auto; display: flex; align-items: flex-start; gap: 8px; padding: 12px 28px 0; background: var(--bg-overlay); }
+.modal-footer-note-lines { flex: 1 1 auto; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.modal-footer-note-close { width: 30px; height: 30px; flex: 0 0 auto; }
 /* Section headings inside Settings — quiet, uppercase group labels. */
 .settings-section-title { font-size: var(--text-xs); text-transform: uppercase; letter-spacing: var(--tracking-eyebrow); color: var(--text-secondary); margin: 24px 0 12px; font-weight: 600; }
 /* ⚠️ `.settings-section-toggle` WENT WITH `CollapsibleSection`. Advanced
@@ -292,10 +269,9 @@
    name in its aria-label and title. Nothing is "selected" in it: a tool is pressed, never chosen. */
 .tool-group { flex: 0 0 auto; }
 .tool-group > button, .tool-group > div > button { flex: 0 0 auto; min-width: 44px; padding: 0 14px; color: var(--text-primary); }
-.tool-group .btn-label { margin-left: 0; }
 
 :is(.tool-group > button, .tool-group > div > button):disabled { opacity: 0.4; cursor: not-allowed; }
-.tool-group .modal-actions { gap: 4px; }
+.tool-group .btn-row { gap: 4px; }
 @media (max-width: 640px) {
   .tool-group > button, .tool-group > div > button { padding: 0 10px; }
 }

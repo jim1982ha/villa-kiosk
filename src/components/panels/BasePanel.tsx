@@ -245,7 +245,7 @@ export default function BasePanel({ title, entityId, icon, className, headerActi
       {/* The shared footer (ModalFooter): the left group is always there,
           empty or not, so Close sits right as in every dialog. */}
       <ModalFooter onClose={onClose} leading={
-        <div className="modal-footer-group">
+        <div className="btn-row">
           {footerLeading}
           <EditButton />
           <OpenTicketButton />

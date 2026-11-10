@@ -31,7 +31,7 @@ export default function CoverPanel({ entity, mapping, onClose }: PanelProps) {
         <button className="btn" style={{ flex: 1 }} onClick={() => HAServices.openCover(ws, mapping.entityId)}>
           <ChevronUp size={20} /> Open
         </button>
-        <button className="btn ghost" style={{ flex: 1 }} onClick={() => HAServices.stopCover(ws, mapping.entityId)}>
+        <button className="btn" style={{ flex: 1 }} onClick={() => HAServices.stopCover(ws, mapping.entityId)}>
           <Square size={16} /> Stop
         </button>
         <button className="btn" style={{ flex: 1 }} onClick={() => HAServices.closeCover(ws, mapping.entityId)}>

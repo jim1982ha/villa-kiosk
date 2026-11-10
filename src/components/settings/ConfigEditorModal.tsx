@@ -33,6 +33,7 @@ import RemoteReplacedNote, { SaveProblemNote } from "./RemoteReplacedNote";
 import { useAppNotice } from "@/components/hud/AppNotice";
 import { useDraftedSlice } from "@/hooks/useDraftedSlice";
 import { ADVANCED_SETTINGS_KEYS } from "@/config/configSlice";
+import ProblemLine from "@/components/common/ProblemLine";
 
 /** ⚠️ EVERY TAB CARRIES TWO PANELS, AND THAT IS A RULE RATHER THAN AN
  *  ACCIDENT. This screen was a stack of six collapsible sections and read as
@@ -145,7 +146,7 @@ function NorthOffset({ viewHeadingDeg }: { viewHeadingDeg?: () => number | null 
         onChange={(northOffsetDeg) => update({ northOffsetDeg })}
         before={
           // One control in two forms: the button measures it from the view, the slider sets it by hand.
-          <button className="btn ghost" disabled={!viewHeadingDeg}
+          <button className="btn" disabled={!viewHeadingDeg}
             onClick={() => {
               const h = viewHeadingDeg?.();
               if (h != null) update({ northOffsetDeg: northOffsetFacing(h) });
@@ -210,9 +211,7 @@ function LogoutAll() {
 
   return (
     <>
-      {failed && (
-        <span className="body-text sev-warning" role="alert">Could not reach the server, no session was signed out.</span>
-      )}
+      {failed && <ProblemLine>Could not reach the server, no session was signed out.</ProblemLine>}
       <AskFirstButton confirmLabel="Log out every device?" title="Log Out All" aria-label="Log Out All"
         onConfirm={async () => setFailed(!(await logoutAll()))}>
         <LogOut size={18} aria-hidden /><span className="btn-label">Log Out All</span>

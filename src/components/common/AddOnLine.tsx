@@ -46,7 +46,7 @@ export default function AddOnLine({ title, label, words, children }: {
         </div>
       ) : (
         <Tip text={label}>
-          <button ref={button} type="button" className="btn ghost add-line-button" aria-label={label}
+          <button ref={button} type="button" className="btn add-line-button" aria-label={label}
             onClick={() => setOpen(true)}>
             <Plus size={16} aria-hidden /> {words}
           </button>

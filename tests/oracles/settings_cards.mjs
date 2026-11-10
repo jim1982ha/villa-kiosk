@@ -244,7 +244,7 @@ console.log("\n  one field per list (owner, 2026-11-06): it narrows the list and
   ck("  ...one in no group \"Create a group\"; no group left: \"No group has '…'\" with the create offer",
      offers(pool).every((o) => o.endsWith(" / Create a group")) && offers(pool).length === 2
      && !names(pool).includes("Kitchen Temperature") && /No group has “pool”\./.test(text(pool))
-     && /<button type="button" class="btn ghost">Create a group with Pool Pump Power<\/button>/.test(inside(pool, "search-empty")), [offers(pool), text(inside(pool, "search-empty"))]);
+     && /<button type="button" class="btn">Create a group with Pool Pump Power<\/button>/.test(inside(pool, "search-empty")), [offers(pool), text(inside(pool, "search-empty"))]);
   const exact = groups("switch.example_pool_pump");
   ck("  ...the exact id of a real device in no group: its own row first, \"Create a group with <id>\" (Enter picks it), not repeated",
      offers(exact)[0] === "! Create a group with switch.example_pool_pump / Pool Pump" && offers(exact).filter((o) => o.includes("switch.example_pool_pump")).length === 1

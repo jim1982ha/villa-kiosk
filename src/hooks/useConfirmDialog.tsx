@@ -44,7 +44,6 @@ export function useConfirmDialog(): ConfirmDialog {
         title={pending.title}
         message={pending.message}
         confirmLabel={pending.confirmLabel}
-        cancelLabel="Cancel"
         onConfirm={() => {
           // ⚠️ THE HAPTIC FIRES ON THE CONFIRM, NOT ON THE FIRST TAP. It is the
           // acknowledgement that something was actually sent; on the opening

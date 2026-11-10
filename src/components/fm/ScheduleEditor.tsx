@@ -22,6 +22,7 @@ import FormActions from "./FormActions";
 import TaskCard from "./TaskCard";
 import FmForm from "./FmForm";
 import { useListEditor } from "./ListEditor";
+import ProblemLine from "@/components/common/ProblemLine";
 
 export default function ScheduleEditor() {
   const { data, addSchedule, updateSchedule, removeSchedule } = useFmData();
@@ -90,7 +91,7 @@ export default function ScheduleEditor() {
       </label>
 
       {!write.ok && draft.everyDays.trim() !== "" && days === null && (
-        <div className="fm-inline-error" role="alert">{write.problem}</div>
+        <ProblemLine>{write.problem}</ProblemLine>
       )}
       <FormActions error={formError} onCancel={editor.close} onSave={save} disabled={!valid}
         saveLabel={editingId ? "Save changes" : "Add task"} />
@@ -102,7 +103,7 @@ export default function ScheduleEditor() {
       {/* the description and "Add a task" on one line (owner, 2026-10-14) */}
       <div className="fm-desc-row">
         {editor.addButton && (
-          <button className="btn ghost" onClick={startAdd}><Plus size={16} /> Add a task</button>
+          <button className="btn" onClick={startAdd}><Plus size={16} /> Add a task</button>
         )}
         <InfoTip label="About the tasks">
           Each task repeats at the interval you set. It becomes overdue when its interval has passed since it was last
@@ -125,7 +126,7 @@ export default function ScheduleEditor() {
             // THE task's card, the Today tab's too (TaskCard): its state, due day and who last did it on both
             <TaskCard key={s.id} status={due} room={roomOf(s)} onRemove={() => removeSchedule(s.id)}
               actions={<>
-                <button className="btn ghost" onClick={() => void updateSchedule(s.id, { enabled: !s.enabled })}>
+                <button className="btn" onClick={() => void updateSchedule(s.id, { enabled: !s.enabled })}>
                   {s.enabled ? "Pause" : "Resume"}
                 </button>
                 <button className="icon-btn" onClick={() => startEdit(s)} aria-label={`Edit ${s.title}`}>

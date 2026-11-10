@@ -30,8 +30,9 @@ import type { ReactNode } from "react";
 import { Save as SaveIcon, X } from "lucide-react";
 
 import { useAppNotice } from "@/components/hud/AppNotice";
-import Tip from "./Tip";
+import Answers, { type Answer } from "./Answers";
 import BackButton from "./BackButton";
+import FooterNote from "./FooterNote";
 
 /** An editable draft a dialog can commit. ⚠️ THE DIALOG OWNS IT, NOT THIS
  *  COMPONENT: a draft that lives in the footer would be lost the moment a tab
@@ -48,7 +49,7 @@ interface ModalCommit {
   /** Is there anything to save? Drives the whole footer. */
   dirty: boolean;
   saving?: boolean;
-  /** Shown in place of the note, as an alert. */
+  /** Why the last Save was refused: a line above the footer (common/FooterNote). */
   error?: string | null;
   /** Commit. ⚠️ RESOLVE `false` TO SAY IT FAILED — anything else (including
    *  `undefined`) is taken as success and CLOSES the dialog. A refused write
@@ -60,7 +61,7 @@ interface ModalCommit {
 }
 
 export default function ModalFooter({
-  note, leading, back, commit, onClose, busy = false, closeLabel, actions,
+  note, leading, back, commit, answer, error, onClose, busy = false, closeLabel, actions,
 }: {
   /** The left-hand hint. Yields its width to the buttons. */
   note?: ReactNode;
@@ -80,6 +81,11 @@ export default function ModalFooter({
    *  `<span />` spacer until 2.496.263. `null` keeps Save · Cancel with Save
    *  explaining that changes apply as they are made. */
   commit?: ModalCommit | null;
+  /** A window that asks ONE thing (a question box, "Open a ticket", "Report a problem"): Cancel (`onClose`) and this
+   *  answer, the same pair as Save · Cancel (common/Answers). */
+  answer?: Answer;
+  /** Why that answer was refused: a line above the footer (common/FooterNote). */
+  error?: ReactNode;
   onClose: () => void;
   busy?: boolean;
   /** The one exit's word in a nothing-to-save footer ("Got it, thanks"). */
@@ -97,9 +103,7 @@ export default function ModalFooter({
   // so the right-hand group renders on the LEFT without a first child to push
   // against — a bug CockpitModal shipped and every other single-button footer
   // worked around by hand.
-  const left = commit?.error
-    ? <span className="body-text sev-warning" role="alert">{commit.error}</span>
-    : back && commit === undefined
+  const left = back && commit === undefined && !answer
     ? <BackButton onClick={back.go} label={back.to} footer />
     : leading !== undefined && leading !== null && leading !== false
     ? leading
@@ -107,64 +111,41 @@ export default function ModalFooter({
       ? <span className="muted body-text" style={{ fontSize: "var(--text-xs)" }}>{note}</span>
       : <span />;
 
-  if (commit === undefined) {
-    // the one exit in the same group, at the same size, as Settings' Save and Cancel (owner, 2026-10-22: one footer),
-    // and in their shape (owner, 2026-11-10: the Cockpit's "Close" was a word pill beside Settings' round buttons on
-    // the same phone): its glyph and its word, the glyph alone on a phone. A window's own word stays words.
-    return (
-      <div className="modal-footer">
-        {left}
-        <div className="modal-footer-actions">
-          {actions ?? (closeLabel
-            ? <button className="btn primary" onClick={onClose}>{closeLabel}</button>
-            : <button className="btn primary" aria-label="Close" onClick={onClose}>
-                <X size={18} aria-hidden /><span className="btn-label">Close</span>
-              </button>)}
-        </div>
-      </div>
-    );
-  }
+  // ⚠️ ONE GROUP, ONE PAIR (owner, 2026-10-22: one footer; 2026-11-10: one definition): every footer's buttons sit in
+  // the same group at the right, and whatever asks for an answer draws the same Cancel and answer (common/Answers).
+  const right = answer
+    ? <Answers answer={answer} onCancel={onClose} />
+    : commit === undefined
+    // nothing to save: the one exit, in the answers' shape (owner, 2026-11-10: the Cockpit's "Close" was a word pill
+    // beside Settings' round buttons on the same phone): its glyph and its word, the glyph alone on a phone. A
+    // window's own word stays words.
+    ? actions ?? (closeLabel
+      ? <button type="button" className="btn primary" onClick={onClose}>{closeLabel}</button>
+      : <button type="button" className="btn primary" aria-label="Close" onClick={onClose}>
+          <X size={18} aria-hidden /><span className="btn-label">Close</span>
+        </button>)
+    // ⚠️ THE PRIMARY ANSWER ON THE RIGHT, WHERE EVERY OTHER WINDOW'S Close IS (owner, 2026-10-22: Settings' footer
+    // "differs from the other modals"): Cancel, then Save. ⚠️ A TOOLTIP AND A NAME ON BOTH, INDEPENDENTLY OF THE
+    // VISIBLE WORD: the word is hidden on a phone, and the tooltip (common/Tip) explains the CONSEQUENCE, which the
+    // one-word label deliberately does not.
+    : <Answers extra={actions} onCancel={cancel}
+        cancelTip={dirty ? "Cancel, undoes every change made here, on every tab, and closes" : "Cancel, closes"}
+        answer={{
+          label: "Save", icon: <SaveIcon size={18} aria-hidden />, terse: true, onPress: save,
+          disabled: busy || saving || !dirty, name: dirty ? "Save" : "Nothing to save",
+          tip: commit
+            ? (dirty ? "Save, stores your changes, applies them and closes" : "Nothing has been changed yet")
+            : "Everything in this dialog applies as you change it, there is nothing waiting to be saved",
+        }} />;
 
   return (
-    <div className="modal-footer">
-      {left}
-
-      {/* ⚠️ A TOOLTIP AND ARIA-LABEL ON BOTH, INDEPENDENTLY OF THE VISIBLE LABEL.
-          The text is hidden at the phone tier, so a name that came from the
-          text would vanish exactly where the control is hardest to identify —
-          and the tooltip (common/Tip, the Kiosk's own card) explains the
-          CONSEQUENCE, which the one-word label deliberately does not. */}
-      <div className="modal-footer-actions">
-        {actions}
-        {/* ⚠️ THE PRIMARY ANSWER ON THE RIGHT, WHERE EVERY OTHER WINDOW'S Close IS (owner, 2026-10-22: Settings' footer
-            "differs from the other modals"): Cancel, then Save. */}
-        <Tip text={dirty ? "Cancel, undoes every change made here, on every tab, and closes" : "Cancel, closes"}>
-          <button
-            className="btn"
-            aria-label="Cancel"
-            onClick={cancel}
-          >
-            <X size={18} aria-hidden />
-            <span className="btn-label">Cancel</span>
-          </button>
-        </Tip>
-        <Tip text={commit
-          ? (dirty ? "Save, stores your changes, applies them and closes"
-                   : "Nothing has been changed yet")
-          : "Everything in this dialog applies as you change it, there is "
-            + "nothing waiting to be saved"}>
-          <button
-            className="btn primary"
-            disabled={busy || saving || !dirty}
-            aria-label={dirty ? "Save" : "Nothing to save"}
-            onClick={save}
-          >
-            <SaveIcon size={18} aria-hidden />
-            <span className="btn-label">Save</span>
-          </button>
-        </Tip>
+    <>
+      <FooterNote lines={[commit?.error ?? error]} />
+      <div className="modal-footer">
+        {left}
+        <div className="btn-row end">{right}</div>
       </div>
-    </div>
+    </>
   );
 }
 

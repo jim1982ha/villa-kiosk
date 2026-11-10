@@ -76,7 +76,7 @@ export default function BadgeColorModal({ current, categoryColor, onChange, onCl
             />
             <span>Custom…</span>
           </label>
-          <button className="btn ghost" onClick={() => pickAndClose(null)} style={{ marginLeft: "auto" }}>
+          <button className="btn" onClick={() => pickAndClose(null)} style={{ marginLeft: "auto" }}>
             <RotateCcw size={16} /> Category default
           </button>
         </div>

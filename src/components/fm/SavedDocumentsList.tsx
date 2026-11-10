@@ -62,7 +62,7 @@ export function SavedDocumentRows({ kind, docs: all, onOpen, onRemove }: {
             bin={{ label: `Delete saved ${noun} for ${title(doc)}`, question: `Delete this saved ${noun}?`,
               confirmLabel: "Delete", run: () => onRemove(doc.id) }}
             actions={
-              <button className="btn ghost" onClick={() => onOpen(doc)}>
+              <button className="btn" onClick={() => onOpen(doc)}>
                 <Eye size={16} /> Reopen
               </button>
             } />

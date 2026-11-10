@@ -15,6 +15,7 @@ import { Camera, X } from "lucide-react";
 import { evidenceUrl } from "@/fm/fmApi";
 import PhotoLightbox from "./PhotoLightbox";
 import { useEvidenceUpload } from "./useEvidenceUpload";
+import ProblemLine from "@/components/common/ProblemLine";
 
 export default function EvidenceRow({
   photoIds, onChange, disabled,
@@ -84,7 +85,7 @@ export default function EvidenceRow({
         hidden
         onChange={(e) => void pick(e.target.files)}
       />
-      {error && <div className="fm-inline-error">{error}</div>}
+      <ProblemLine>{error}</ProblemLine>
       {viewing !== null && (
         <PhotoLightbox
           photos={photoIds.map((id) => ({ src: evidenceUrl(id) }))}

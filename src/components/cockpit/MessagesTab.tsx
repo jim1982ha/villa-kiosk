@@ -137,7 +137,7 @@ export default function MessagesTab({ onOpenEntity, doors, onRaiseTicket, onEdit
         {/* only while the issues are listed, as when it sat over Open issues */}
         {showsIssues && !canManage && canReport && (
           <div className="messages-toolbar-actions">
-            <button type="button" className="btn ghost" onClick={onReportProblem}><Plus size={16} /> Report a problem</button>
+            <button type="button" className="btn" onClick={onReportProblem}><Plus size={16} /> Report a problem</button>
           </div>
         )}
       </div>

@@ -514,21 +514,18 @@ ck("  ...and no figures above them (in progress, mean resolution, closed with no
      && /label: withCount\(f\.label, f\.count\)/.test(msg) && withCount("Issues", 6) === "Issues (6)" && withCount("Reports", 0) === "Reports"
      && withCount("Reports", null) === "Reports" && !!notesSection && JSX.propText(notesSection, "title") === '"Notifications"', FILTERS);
   // owner, 2026-10-31: "the corners are not the same: style them all the same"; 2026-11-10: one definition for every
-  // choice. The filters have NO look of their own in any stylesheet; the button beside them is shaped by ONE rule, the
-  // track's round ends, and takes its height from the line (no height written)
+  // choice and every button. Neither the filters nor the button beside them has a look of its own in any stylesheet:
+  // the one choice control and the one worded button, standing on a line that stretches them
   const postcss = (await import("postcss")).default;
   const styles = readdirSync(new URL("../../src/styles/", import.meta.url)).filter((f) => f.endsWith(".css"))
     .map((f) => readFileSync(new URL(`../../src/styles/${f}`, import.meta.url), "utf8"));
-  const own = [], button = [];
+  const own = [];
   for (const css of styles) postcss.parse(css).walkRules((r) => {
-    if (/\.messages-filter/.test(r.selector)) own.push(r.selector);
-    if (r.selectors.some((x) => x.trim() === ".messages-toolbar-actions .btn")) button.push(r);
+    if (/\.messages-filter|\.messages-toolbar-actions \S/.test(r.selector)) own.push(r.selector);
   });
-  const shape = button.length === 1 ? Object.fromEntries(button[0].nodes.filter((n) => n.type === "decl").map((d) => [d.prop, d.value])) : {};
-  ck("  ...the filters have no look of their own (the one choice control's); the button beside them: ONE rule, the track's round ends, its height the line's",
-     own.length === 0 && button.length === 1 && shape["border-radius"] === "var(--radius-pill)" && !("min-height" in shape) && !("height" in shape)
-     && /\.messages-toolbar \{[^}]*align-items: stretch;/.test(shared) && /\.messages-toolbar-actions \{[^}]*align-items: stretch;/.test(shared),
-     { own, button: button.map((r) => `${r.selector} { ${r.nodes.map(String).join("; ")} }`) });
+  ck("  ...the filters and the button beside them have no look of their own (the one choice control, the one button); the line gives them its height",
+     own.length === 0
+     && /\.messages-toolbar \{[^}]*align-items: stretch;/.test(shared) && /\.messages-toolbar-actions \{[^}]*align-items: stretch;/.test(shared), own);
   {
     // The three filters hold a 360 px phone's line (the screen less 36 px) with the whole word "Notifications" and a
     // two-figure count. Measured in headless Firefox with the real control at its 14 px: the words' own widths
@@ -571,8 +568,8 @@ console.log("\n  the buttons, drawn — ONE close-with-confirm for both tabs:");
     : /<span class="work-short">[^<]*<\/span>/g, "")).replace(/\[icon\]\|?/g, "[icon] ");
   // owner, 2026-11-05 ("Status on top"): each a segment of the card's bar, the main action first, in green
   ck("an issue card: Done, Not a problem, Open Ticket, then Need help (owner, 2026-11-05), each with its icon, in the card's bar, Done first and green, named for a screen reader",
-     /^<button type="button" class="btn ghost fm-bar-main"[^>]*><svg[^>]*lucide-check/.test(drawButtons(ovActs, null, { name: "Pump" }))
-     && (drawButtons(ovActs).match(/fm-bar-main/g) ?? []).length === 1 && /^<button type="button" class="btn ghost fm-bar-main"/.test(drawButtons(tkActs))
+     /^<button type="button" class="btn fm-bar-main"[^>]*><svg[^>]*lucide-check/.test(drawButtons(ovActs, null, { name: "Pump" }))
+     && (drawButtons(ovActs).match(/fm-bar-main/g) ?? []).length === 1 && /^<button type="button" class="btn fm-bar-main"/.test(drawButtons(tkActs))
      && !/fm-bar-main/.test(drawButtons(W.closedActions({ id: "r", stage: "closed" }, true)))
      && seen(drawButtons(ovActs, null, { name: "Pump" })) === "|[icon] Done|[icon] Not a problem|[icon] Open Ticket|[icon] Need help|"
      && /aria-label="Done “Pump”"/.test(drawButtons(ovActs, null, { name: "Pump" })) && /aria-label="Open Ticket"/.test(drawButtons(ovActs)), seen(drawButtons(ovActs)));
@@ -625,7 +622,7 @@ console.log("\n  the buttons, drawn — ONE close-with-confirm for both tabs:");
   ck("  ...the button pressed asks ITS question in place of the buttons: the ticket's No action needed; Done and Not a problem have none (owner, 2026-11-07)",
      seen(drawButtons(ovActs, asked("done"))) === "|[icon] Done|[icon] Not a problem|[icon] Open Ticket|[icon] Need help|"
      && seen(drawButtons(ovActs, asked("notAProblem"))) === "|[icon] Done|[icon] Not a problem|[icon] Open Ticket|[icon] Need help|"
-     && /^<div class="fm-record-ask"><svg[\s\S]*?<\/svg><span>Close this ticket\?[^<]*<\/span><\/div><button type="button" class="btn ghost fm-bar-main">No action needed<\/button><button type="button" class="btn ghost">Cancel<\/button>$/.test(drawButtons(tkActs, asked("closeTicket")))
+     && /^<div class="fm-record-ask"><svg[\s\S]*?<\/svg><span>Close this ticket\?[^<]*<\/span><\/div><button type="button" class="btn fm-bar-main">No action needed<\/button><button type="button" class="btn">Cancel<\/button>$/.test(drawButtons(tkActs, asked("closeTicket")))
      && seen(drawButtons(tkActs, asked("closeTicket"))) === "|[icon] Close this ticket? Nothing was done, no cost is recorded.|No action needed|Cancel|",
      [seen(drawButtons(ovActs, asked("done"))), seen(drawButtons(ovActs, asked("notAProblem"))), seen(drawButtons(tkActs, asked("closeTicket")))]);
   {

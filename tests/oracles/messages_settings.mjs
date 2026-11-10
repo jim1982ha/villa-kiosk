@@ -104,7 +104,7 @@ console.log("\n  the rows, drawn:");
   // heading holds its columns' words only: "Time" over the time, nothing over the ✕; the time and its unit joined, "15s"
   const before = html.slice(0, html.indexOf('<div class="fm-list'));
   ck("  ...the add on the list's title line above the card, a worded \"+ Add\" (no search box until it is pressed)",
-     /<div class="add-line"><span class="add-line-title"><span class="settings-list-title">On every device<\/span><\/span>[\s\S]*<button[^>]*class="btn ghost add-line-button"[^>]*aria-label="Add an announcement"[^>]*><svg[\s\S]*?<\/svg> Add<\/button>/.test(before)
+     /<div class="add-line"><span class="add-line-title"><span class="settings-list-title">On every device<\/span><\/span>[\s\S]*<button[^>]*class="btn add-line-button"[^>]*aria-label="Add an announcement"[^>]*><svg[\s\S]*?<\/svg> Add<\/button>/.test(before)
      && !/placeholder="Add an announcement…"/.test(html), before.slice(-600));
   // owner, 2026-11-06: each announcement the Cockpit's card (RecordCard): its title in the strip, its time on screen its
   // one field, its bin at its strip's right (no bar left); no table heading any more

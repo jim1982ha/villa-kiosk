@@ -71,11 +71,11 @@ export function Pager<T>({ paged, unit, children }: {
         {children}
         {many && (
           <>
-            <button className="btn ghost" disabled={pageNo === 0}
+            <button className="btn" disabled={pageNo === 0}
                     onClick={() => go(pageNo - 1)} aria-label="Previous page">
               <ChevronLeft size={16} aria-hidden />
             </button>
-            <button className="btn ghost" disabled={pageNo >= lastPage}
+            <button className="btn" disabled={pageNo >= lastPage}
                     onClick={() => go(pageNo + 1)} aria-label="Next page">
               <ChevronRight size={16} aria-hidden />
             </button>

@@ -47,7 +47,7 @@ export function DataWindow({ title, icon, live, picker, className, onClose, now,
       onClose={onClose}
       headerActions={view === "now" ? live : picker}
       footerLeading={view === "now" && (
-        <button type="button" className="btn ghost" onClick={() => setView("history")}>
+        <button type="button" className="btn" onClick={() => setView("history")}>
           <LineChartIcon size={18} /> History and trends
         </button>
       )}

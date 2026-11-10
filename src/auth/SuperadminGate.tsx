@@ -47,6 +47,7 @@ import { useModalA11y } from "@/hooks/useModalA11y";
 import { requestElevation } from "./elevation";
 import type { PinOutcome } from "./pinOutcome";
 import DialogLayer from "@/components/common/DialogLayer";
+import ProblemLine from "@/components/common/ProblemLine";
 
 export interface ElevationIntent {
   /** What is about to be destroyed, in the operator's words: "Delete fault". */
@@ -150,10 +151,10 @@ function SuperadminPrompt({
         {intent.detail && <p className="superadmin-prompt-detail">{intent.detail}</p>}
         {unconfigured ? (
           <>
-            <p className="superadmin-prompt-note danger-text">
+            <ProblemLine className="superadmin-prompt-note">
               No superadmin code is set for this installation, so records
               cannot be erased. It is set in the VESTA app&apos;s options, in the villa&apos;s system.
-            </p>
+            </ProblemLine>
             <button className="btn" onClick={onCancel}>Close</button>
           </>
         ) : (

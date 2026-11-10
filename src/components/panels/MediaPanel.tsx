@@ -18,7 +18,7 @@ export default function MediaPanel({ entity, mapping, onClose }: PanelProps) {
           {title && <p className="body-text center mt">Now playing: {title}</p>}
 
           <div className="row-buttons mt">
-            <button className="btn ghost" style={{ flex: 1 }} onClick={() => HAServices.mediaPlayPause(ws, mapping.entityId)}>
+            <button className="btn" style={{ flex: 1 }} onClick={() => HAServices.mediaPlayPause(ws, mapping.entityId)}>
               <Play size={18} /> Play / Pause
             </button>
           </div>

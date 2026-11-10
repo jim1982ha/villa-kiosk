@@ -172,8 +172,8 @@ export function CardAsk({ question, icon, confirmLabel, onConfirm, onCancel }: {
   return (
     <>
       <div className="fm-record-ask">{icon}<span>{question}</span></div>
-      <button type="button" className="btn ghost fm-bar-main" onClick={() => { void onConfirm(); }}>{confirmLabel}</button>
-      <button type="button" className="btn ghost" onClick={onCancel}>Cancel</button>
+      <button type="button" className="btn fm-bar-main" onClick={() => { void onConfirm(); }}>{confirmLabel}</button>
+      <button type="button" className="btn" onClick={onCancel}>Cancel</button>
     </>
   );
 }

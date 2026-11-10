@@ -135,7 +135,7 @@
 }
 .fm-record-actions .fm-bar-main { color: var(--accent); font-weight: 600; }
 /* what a button did or why it did not land, a standing Need help: a line of its own above the segments */
-.fm-record-actions :is(.fm-work-asked, .fm-inline-error, .vesta-notice-said) { flex: 1 1 100%; min-width: 0; margin: 0;
+.fm-record-actions :is(.fm-work-asked, .problem-line, .vesta-notice-said) { flex: 1 1 100%; min-width: 0; margin: 0;
   padding: 8px 16px; background: var(--bg-card); }
 .fm-record-actions .fm-work-asked { order: -1; }
 /* A CARD'S QUESTION TAKES ITS BAR: the question on a line of its own, then [the main action][Cancel] */
@@ -220,7 +220,6 @@
 /* A row's own "sure?" (the fault's one-step close): a line of its own under
    the record, its question and buttons wrapping on a phone. */
 .fm-row-confirm { flex: 1 1 100%; }
-.fm-row-confirm .modal-actions { flex-wrap: wrap; align-items: center; }
 .fm-row-sub { font-size: var(--text-xs); }
 /* A record that opens for editing when tapped. The cursor and hover lift are
    the whole affordance — a per-row "Edit" button would compete with the status
@@ -484,7 +483,6 @@
   color: var(--text-primary);
   border: 1px solid var(--status-warning);
 }
-.fm-inline-error { font-size: var(--text-xs); color: var(--status-danger); }
 
 /* Spend-vs-cap meter. The bar fill IS the state indicator — a number alone
    doesn't convey "how close am I" at a glance, and that proximity is the

@@ -66,7 +66,6 @@ export default function FaultStageModal({
   // push this surface onto the dismissal stack twice.
   const { who, setWho, note, setNote, photoIds, setPhotoIds, amount, setAmount, work } = useWorkFields();
   const [category, setCategory] = useState<"minor" | "major">("minor");
-  const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState<string | null>(null);
 
   const copy = STAGE_COPY[to];
@@ -76,7 +75,6 @@ export default function FaultStageModal({
   const amountIdr = asksCost ? parseAmount(amount) : 0;
 
   const submit = async () => {
-    setBusy(true);
     setFailed(null);
     const result = await advanceTickets(
       tickets.map((t) => t.id), to,
@@ -93,7 +91,6 @@ export default function FaultStageModal({
           }
         : undefined,
     );
-    setBusy(false);
     // Closes when saved or queued; stays, with the reason, only when refused.
     const { done, note: why } = result;
     if (done) onClose(); else setFailed(why);
@@ -135,14 +132,9 @@ export default function FaultStageModal({
           <CostFields amount={amount} onAmount={setAmount} category={category} onCategory={setCategory} optional />
         )}
       </div>
-      {failed && <div className="fm-inline-error" role="alert" style={{ margin: "0 28px 8px" }}>{failed}</div>}
-      {/* The shared footer (common/ModalFooter): its two answers in one group on the right, as Settings'. */}
-      <ModalFooter onClose={onClose} actions={<>
-        <button className="btn" onClick={onClose}>Cancel</button>
-        <button className="btn primary" disabled={busy} onClick={() => void submit()}>
-          {busy ? "Saving…" : copy.cta}
-        </button>
-      </>} />
+      {/* The shared footer (common/ModalFooter): Cancel and the answer, the same pair as Settings' (common/Answers),
+          one press at a time; a refusal is its line above the footer. */}
+      <ModalFooter onClose={onClose} error={failed} answer={{ label: copy.cta, busy: "Saving…", onPress: submit }} />
     </Window>
   );
 }

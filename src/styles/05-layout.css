@@ -47,7 +47,6 @@
 /* --- Central .sh3d background-refresh failure banner --- */
 
 .muted { color: var(--text-secondary); }
-.danger-text { color: var(--status-danger); }
 .row { display: flex; align-items: center; gap: 10px; }
 .spread { justify-content: space-between; }
 .mt { margin-top: 16px; }
@@ -414,8 +413,7 @@
     padding: 12px calc(18px + env(safe-area-inset-right, 0px)) max(12px, var(--safe-bottom)) calc(18px + env(safe-area-inset-left, 0px));
     flex-wrap: nowrap;
   }
-  .modal-footer .btn { padding-left: 12px; padding-right: 12px; }
-  .modal-remote-note {
+  .modal-footer-note {
     padding: 12px calc(18px + env(safe-area-inset-right, 0px)) 0 calc(18px + env(safe-area-inset-left, 0px));
   }
   /* a window's tab band (common/ModalTabs) sits between the header and the body: the same safe-area gutters */
