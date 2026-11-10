@@ -97,6 +97,23 @@ class Visits:
             self._sheets.pop(next(iter(self._sheets)))
         return self._sheets[int(iid)][1]
 
+    def more_line(self, iid: int) -> dict | None:
+        """The Status's last line of visit `iid` when its picture leaves photos out ("+2 more photos in the VESTA UI",
+        result.seen with `last`), None when it shows them all or the desk gave no words for it (result.sheet `more`).
+
+        ⚠️ COUNTED WHERE EVERY PHOTO IS KNOWN (architecture review of 2026-11-10, card 1): the desk counted the villa's
+        photos only, before the siren snapped its cameras; the snapshots, the newest, pushed villa photos off the
+        picture and the line said nothing of them."""
+        rec = self.state.visit_photos(iid)
+        words = rec.get("more") or {}
+        n = visit_state.off_sheet(visit_state.ordered(list(rec.get("photos") or []) + self.state.visit_snaps(iid),
+                                                      int(rec.get("shown") or 1)))
+        if not n or not words.get("label"):
+            return None
+        return {"incident_id": int(iid), "key": "photos", "note": str(words["label"]).replace("{n}", str(n)),
+                "note_in": {k: str(t).replace("{n}", str(n)) for k, t in (words.get("labels") or {}).items()},
+                "last": True}
+
     async def picture(self, iid: int) -> int:
         """The visit's sheet (`sheet`) on every copy of incident `iid` that does not carry it yet (a copy this result
         just sent with it does). How many copies show it now."""
@@ -225,6 +242,8 @@ class Visits:
                                                                   "own": True}]
             n += 1
         self.state.set_visit_snaps(iid, kept)
+        if n and (line := self.more_line(iid)):
+            self.notices.observe(iid, [line])           # every copy drawn with it by the question that follows (offered)
         return n
 
     async def offered(self, iid: int, aid: str, said: str, said_in: dict | None = None, *, chats=(),

@@ -296,13 +296,16 @@ def redraw(incident: int, body: str | None = None) -> dict:
     return {"action": REDRAW, "incident_id": int(incident), **({"body": str(body)} if body is not None else {})}
 
 
-def sheet(incident: int, photos: list[dict], shown: int, button=None) -> dict:
+def sheet(incident: int, photos: list[dict], shown: int, button=None, more=None) -> dict:
     """The picture of every copy of `incident` becomes ONE sheet of the visit's photos (`photos`: [{path, label, at,
     strongest?}], the strongest first), at most `shown` tiles; the tablet's card carries them all. `button`: the words
     of the button that sends every photo in the chat pressed (its English; `.langs` its other languages), under a card
-    whose visit has two photos or more."""
+    whose visit has two photos or more. `more`: the words of the Status's last line when the picture leaves photos out,
+    "{n}" for how many ("+{n} more photos in the VESTA UI"): the engine counts them, the siren's snapshots with them
+    (visit.Visits.more_line)."""
     return {"action": SHEET, "incident_id": int(incident), "photos": list(photos), "shown": int(shown),
-            **({"button": {"label": str(button), **_in("labels", getattr(button, "langs", None))}} if button else {})}
+            **({"button": {"label": str(button), **_in("labels", getattr(button, "langs", None))}} if button else {}),
+            **({"more": {"label": str(more), **_in("labels", getattr(more, "langs", None))}} if more else {})}
 
 
 def tell_villa(incident: int, script: str, fields: dict) -> dict:

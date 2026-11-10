@@ -178,16 +178,24 @@ class Outcome:
                                                              self.incidents.name(vid) if self.incidents else "")
                     except Exception as e:  # noqa: BLE001 — the villa takes the visit back itself after its wait
                         log.warning("Incident #%s: its step could not be told to the villa (%s)", vid, type(e).__name__)
-        # a visit's story lines FIRST: every copy this result draws or posts lists them (notice.Notices.observe); the
-        # heading each copy shows then, for a quiet redraw (result.redraw)
-        heads: dict[int, dict] = {}
+        # a visit's story lines FIRST: every copy this result draws or posts lists them (notice.Notices.observe)
         story: dict[int, list[dict]] = {}
         for ln in res.get("seen") or []:
             if isinstance(ln, dict) and str(ln.get("incident_id") or "").isdigit() and ln.get("key") and ln.get("note"):
                 story.setdefault(int(ln["incident_id"]), []).append(ln)
+        if self.visits is not None:
+            for a in res.get("actions") or []:
+                if isinstance(a, dict) and a.get("action") == SHEET and str(a.get("incident_id") or "").isdigit():
+                    # kept before any copy is sent: its "All photos" button (alert_buttons.keyboard) and its press, and
+                    # the count of the photos its picture leaves out, a line of its story (visit.Visits.more_line)
+                    iid = int(a["incident_id"])
+                    self.state.set_visit_photos(iid, {"photos": list(a.get("photos") or []), "button": a.get("button") or {},
+                                                      "more": a.get("more") or {}, "shown": int(a.get("shown") or 1)})
+                    if line := self.visits.more_line(iid):
+                        story.setdefault(iid, []).append(line)
         if self.notices:
             for iid, lines in story.items():
-                heads[iid] = self.notices.observe(iid, lines)
+                self.notices.observe(iid, lines)
         # (an alert's fault follows its copies in the tablet's push of its record: kiosk_messages.KioskMessages.fault)
         route = Routing(self.policy())
         items = list(res.get("send") or []) + self.unkept_backups(res)
@@ -216,10 +224,6 @@ class Outcome:
         if self.visits is not None:
             for a in res.get("actions") or []:
                 if isinstance(a, dict) and a.get("action") == SHEET and str(a.get("incident_id") or "").isdigit():
-                    # kept before any copy is sent: its "All photos" button (alert_buttons.keyboard) and its press
-                    self.state.set_visit_photos(int(a["incident_id"]), {"photos": list(a.get("photos") or []),
-                                                                        "button": a.get("button") or {},
-                                                                        "shown": int(a.get("shown") or 1)})
                     if got := await self.visits.sheet(int(a["incident_id"])):
                         sheets[int(a["incident_id"])] = got
             # ⚠️ A VISIT'S CARD SENT AGAIN KEEPS ITS PICTURE (owner's screenshot, 2026-11-08, live #154 at 09:35): a step
@@ -407,10 +411,13 @@ class Outcome:
                     if await self.tickets.create(a.get("summary", ""), a.get("entity_id") or None, a.get("note") or None):
                         done["tickets"] += 1
                 elif kind == REDRAW and str(a.get("incident_id") or "").isdigit() and self.thread is not None:
-                    # a visit's step no stronger than the ones before: every copy edited, no sound
+                    # a visit's step no stronger than the ones before: every copy edited, no sound, with its story as
+                    # it stands NOW (⚠️ architecture review of 2026-11-10: the headings taken before the siren's
+                    # question drew the card again without its siren line and with the photos counted before its
+                    # snapshots)
                     iid = int(a["incident_id"])
                     done["edited"] += await self.thread.reheaded(
-                        iid, heads.get(iid) or (self.notices.observe(iid, []) if self.notices else {}), a.get("body"))
+                        iid, self.notices.observe(iid, []) if self.notices else {}, a.get("body"))
                 elif kind == SHEET and str(a.get("incident_id") or "").isdigit() and self.visits is not None:
                     iid = int(a["incident_id"])
                     if iid in sheets:

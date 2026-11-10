@@ -5,8 +5,8 @@ from __future__ import annotations
 
 import re
 
-from test_visit_story import (ENTRANCE, FM, LOCK, OWNER, PARKING, WATERWALL, Visit, copy, lines, play, send, tick,
-                              villa)
+from test_visit_story import (DOOR_MOTION, ENTRANCE, FM, LOCK, OWNER, PARKING, WATERWALL, Visit, copy, lines, play, send,
+                              tick, villa)
 from test_visit_story import kiosk, media  # noqa: F401 — its fixtures
 from vesta_agent import button_data
 from telegram_fake import BOT
@@ -65,7 +65,8 @@ def test_the_more_photos_line_is_the_last_status_line_whatever_comes_after(tmp_p
     vi.add("lock", LOCK, "18:40:00", how="lock")                     # a later step: its line comes after, by time
     play(v, send(vi.event()))
     shown = lines(copy(v, OWNER)["text"])
-    assert shown[-2] == "- +1 more photos in the VESTA UI", shown
+    # the siren the lock asked for snapped a camera: its snapshot counted too (architecture review of 2026-11-10)
+    assert shown[-2] == f"- +{len(v.visits.every_photo(1)) - 9} more photos in the VESTA UI", shown
     # the tablet shows every photo: the line is Telegram's alone (owner's screenshot, 2026-11-08, #154)
     tablet = kiosk.messages["incident:1"]["status"]
     assert not [ln for ln in tablet if "more photos" in ln] and tablet[-2] == shown[-3], tablet
@@ -83,3 +84,25 @@ def test_the_tablets_state_is_the_stage_alone_its_words_a_status_line_above(tmp_
     assert re.fullmatch(r"\S+( \S+)? Reminder sent (\d\d/\d\d )?\d\d:\d\d", tablet[-1]), tablet
     words = bottom[bottom.index("No answer after"):]
     assert tablet[-2] == f"- {words}", (tablet, words)
+
+
+def test_the_more_photos_line_counts_the_cameras_the_siren_snapped(tmp_path, kiosk, media):
+    # architecture review of 2026-11-10, card 1: the desk counted the villa's photos only, before the siren snapped its
+    # cameras; the snapshots, the newest, pushed villa photos off the picture and the line never said so
+    v = villa(tmp_path, kiosk)
+    vi = Visit(media=media)
+    vi.add("motion", PARKING, "18:20:16", photo=True)
+    play(v, send(vi.event("opened")))
+    vi.add("motion", PARKING, "18:33:50")                          # seen with no photo: the siren snaps its camera
+    vi.add("motion", ENTRANCE, "18:34:00", photo=True)
+    for i in range(7):
+        vi.add("motion", WATERWALL, f"18:34:1{i}", photo=True)
+    vi.add("lock", LOCK, "18:35:40", how="lock")
+    vi.add("motion", DOOR_MOTION, "18:35:41", photo=True)
+    play(v, send(vi.event()))
+    assert v.state.approvals_in("pending") and v.state.visit_snaps(1), "the siren asked, a camera snapped"
+    every = v.visits.every_photo(1)
+    assert len(every) == 10 + len(v.state.visit_snaps(1))
+    for chat in (OWNER, FM):
+        (line,) = [ln for ln in lines(copy(v, chat)["text"]) if "more photos" in ln]
+        assert line == f"- +{len(every) - 9} more photos in the VESTA UI", (chat, line)

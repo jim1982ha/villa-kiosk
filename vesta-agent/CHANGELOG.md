@@ -1,3 +1,9 @@
+## 0.12.494
+
+- A visit's "+N more photos in the VESTA UI" line counts the cameras the siren snapped too: before, the photos those
+  snapshots pushed off the Telegram picture were never mentioned. A card redrawn after the siren's question keeps
+  its "Siren offered" line.
+
 ## 0.12.493
 
 - In chats that read another language, a message's Status lines are in italics and an older line is struck, as in

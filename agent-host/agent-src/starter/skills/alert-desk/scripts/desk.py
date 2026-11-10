@@ -1614,11 +1614,9 @@ def visit_intake(store: Store, ev: dict, now: datetime, params: VillaParams | No
     shown = int(limit("visit.sheet_tiles", 9, unit="photos", group="text", lo=1, hi=9,
                       says="How many of a visit's photos its Telegram picture shows: the strongest step's, then the latest.",
                       reached="The others are on the alert's card in the VESTA UI; the Status says how many.", told="person"))
-    # the visit's photos, in the one order and with the ones the picture shows marked (visit_state.ordered)
+    # the visit's photos, in the one order and with the ones the picture shows marked (visit_state.ordered); how many
+    # it leaves out is the engine's count, the siren's snapshots with them (result.sheet `more`)
     photos = VS.ordered(VS.photos_of(v), shown)
-    if VS.off_sheet(photos):
-        # its Status's last line, whatever came after (owner, 2026-11-07): a count of the card, never a moment
-        lines.append(("photos", say("visit_more_photos", n=VS.off_sheet(photos)), now.isoformat(), None))
     ans = v.get("answered") if away and isinstance(v.get("answered"), dict) else None
     if ans and ans.get("option") in BUTTONS and (v.get("closed") or {}).get("why") != "answered":
         # (an answer that closed the visit is said by its close: visit_close)
@@ -1629,10 +1627,11 @@ def visit_intake(store: Store, ev: dict, now: datetime, params: VillaParams | No
     news = [ln for ln in lines if was.get(ln[0]) != str(ln[1])]
     if news:
         _faults_follow(out)                            # the Kiosk fault's story follows at once (tickets.repair)
-    out["seen"] = [R.seen(iid, k, str(said), said.langs, at, since=first, last=k == "photos") for k, said, at, first in news]
+    out["seen"] = [R.seen(iid, k, str(said), said.langs, at, since=first) for k, said, at, first in news]
     store.note(iid, {VISIT_LINES: {**was, **{k: str(said) for k, said, _at, _first in news}}})
     if photos and not away:
-        out["actions"].append(R.sheet(iid, photos, shown, button=say("visit_all_photos")))
+        out["actions"].append(R.sheet(iid, photos, shown, button=say("visit_all_photos"),
+                                      more=say("visit_more_photos", n="{n}")))
     if away:
         # the tablet's card carries the villa's photos (its announcement taken); the close is the villa's, at once.
         # ⚠️ NOT ONLY ON ITS "RESOLVED" (owner's drill, 2026-11-07, #140): Done pressed on the villa's card while VESTA
