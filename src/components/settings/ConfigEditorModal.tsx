@@ -26,7 +26,7 @@ import TelemetryPanel from "./TelemetryPanel";
 import GroupedDevices from "./GroupedDevices";
 import UnavailableByDesign from "./UnavailableByDesign";
 import EntityPicker from "./EntityPicker";
-import InlineConfirm from "@/components/common/InlineConfirm";
+import AskFirstButton from "@/components/common/AskFirstButton";
 import MaintenanceMode from "./MaintenanceMode";
 import ModalFooter, { footerExits } from "@/components/common/ModalFooter";
 import RemoteReplacedNote, { SaveProblemNote } from "./RemoteReplacedNote";
@@ -206,7 +206,6 @@ function RecordsKept() {
  *  header's right since 2026-10-24 (owner: Back took its footer place, where Settings' "Advanced Settings" opener is). */
 function LogoutAll() {
   const { logoutAll } = useProfile();
-  const [confirming, setConfirming] = useState(false);
   const [failed, setFailed] = useState(false);
 
   return (
@@ -214,19 +213,10 @@ function LogoutAll() {
       {failed && (
         <span className="body-text sev-warning" role="alert">Could not reach the server, no session was signed out.</span>
       )}
-      {confirming ? (
-        <InlineConfirm confirmLabel="Log out every device?"
-          onConfirm={async () => {
-            const ok = await logoutAll();
-            setFailed(!ok);
-            setConfirming(false);
-          }}
-          onCancel={() => setConfirming(false)} />
-      ) : (
-        <button type="button" onClick={() => setConfirming(true)} title="Log Out All" aria-label="Log Out All">
-          <LogOut size={18} aria-hidden /><span className="btn-label">Log Out All</span>
-        </button>
-      )}
+      <AskFirstButton confirmLabel="Log out every device?" title="Log Out All" aria-label="Log Out All"
+        onConfirm={async () => setFailed(!(await logoutAll()))}>
+        <LogOut size={18} aria-hidden /><span className="btn-label">Log Out All</span>
+      </AskFirstButton>
     </>
   );
 }

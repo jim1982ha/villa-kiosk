@@ -18,8 +18,7 @@ import { scheduleStatus } from "@/fm/fmEngine";
 import type { FmSchedule } from "@/fm/fmTypes";
 import { EMPTY_SCHEDULE_DRAFT as EMPTY, scheduleToDraft as toDraft, draftDays, scheduleWrite, SCHEDULE_PRESETS, type ScheduleDraft as Draft } from "@/fm/scheduleDraft";
 import FormActions from "./FormActions";
-import BinButton from "@/components/common/BinButton";
-import TaskCard, { REMOVE_TASK_TIP } from "./TaskCard";
+import TaskCard from "./TaskCard";
 import FmForm from "./FmForm";
 import { useListEditor } from "./ListEditor";
 
@@ -130,7 +129,7 @@ export default function ScheduleEditor() {
           const due = scheduleStatus(s, data.completions);
           return editor.inPlace(s.id, (
             // THE task's card, the Today tab's too (TaskCard): its state, due day and who last did it on both
-            <TaskCard key={s.id} status={due} room={roomOf(s)}
+            <TaskCard key={s.id} status={due} room={roomOf(s)} onRemove={() => removeSchedule(s.id)}
               actions={<>
                 <button className="btn ghost" onClick={() => void updateSchedule(s.id, { enabled: !s.enabled })}>
                   {s.enabled ? "Pause" : "Resume"}
@@ -138,7 +137,6 @@ export default function ScheduleEditor() {
                 <button className="icon-btn" onClick={() => startEdit(s)} aria-label={`Edit ${s.title}`}>
                   <Pencil size={16} />
                 </button>
-                <BinButton label={`Remove ${s.title}`} tip={REMOVE_TASK_TIP} onPress={() => void removeSchedule(s.id)} />
               </>} />
           ), () => form);
         })}

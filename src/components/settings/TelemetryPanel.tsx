@@ -17,6 +17,7 @@ import { RefreshCw, Trash2, Copy, Check, Download, Stethoscope, Activity, Chevro
 import { ingressPath } from "@/ha/ingress";
 import { momentText } from "@/utils/dateText";
 import ToolGroup from "@/components/common/ToolGroup";
+import AskFirstButton from "@/components/common/AskFirstButton";
 import { buildReport } from "@/utils/diagnostics";
 import { copyText } from "@/utils/clipboard";
 import { runRegisteredProbe, probeAvailable, formatProbe } from "@/babylon/perfProbe";
@@ -481,10 +482,11 @@ export default function TelemetryPanel() {
           title="Save every event as a .json file" aria-label="Download">
           <Download size={16} aria-hidden /><span className="btn-label">Download</span>
         </button>
-        <button type="button" onClick={() => void load(true)} disabled={busy}
+        {/* it erases what nothing brings back: it asks first, as every such button (owner, 2026-11-10) */}
+        <AskFirstButton confirmLabel="Erase every event?" onConfirm={() => load(true)} disabled={busy}
           title="Erase every event the server keeps. Copy or Download first if you want to keep them." aria-label="Clear">
           <Trash2 size={16} aria-hidden /><span className="btn-label">Clear</span>
-        </button>
+        </AskFirstButton>
         {/* THIS device, right now, and the frame-cost probe — one "Diagnose" menu (owner, 2026-10-14), each result
             copied where the button was pressed.
             The device report is the one ErrorReport shows after a crash — same builder, so the two cannot describe

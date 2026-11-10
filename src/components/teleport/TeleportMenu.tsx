@@ -14,8 +14,10 @@
 import { X, MapPin, Plus, Trash2 } from "lucide-react";
 import { Axis } from "@babylonjs/core/Maths/math.axis";
 import { useState } from "react";
-import { useBackToClose } from "@/hooks/useBackToClose";
+import { useModalA11y } from "@/hooks/useModalA11y";
 import { useConfig } from "@/config/ConfigContext";
+import { useProfile } from "@/auth/ProfileContext";
+import { roleCan } from "@/auth/permissions";
 import AskDialog from "@/components/common/AskDialog";
 import { addRoom, removeRoom as roomRemoved } from "@/config/mappingEdits";
 import type { TeleportPoint, Vec3 } from "@/types/scene.types";
@@ -34,7 +36,13 @@ export default function TeleportMenu({ manager, currentFloor, onClose, onTelepor
   /** Which in-app dialog is open, if any — see AskDialog for why these are not
    *  `prompt`/`confirm`/`alert`. `null` means none. */
   const [ask, setAsk] = useState<{ kind: "add" } | { kind: "remove"; name: string } | null>(null);
-  useBackToClose(onClose);
+  // ⚠️ THE ROOMS ARE THE OWNER'S TO ADD AND REMOVE (owner, 2026-11-10: "only for the owner"): the list is shared by
+  // every screen, and only a profile that may change the shared setup sends it (config/DeviceConfigSync's own gate).
+  // Anyone else's "Add room here" stayed on that one device and was replaced at the next sync with no word, so the two
+  // buttons are not drawn for them.
+  const mayEdit = roleCan(useProfile().role, "editConfig");
+  // a dialog as every other: Escape and Back close it, the keyboard stays inside it (it answered Back alone)
+  const dialog = useModalA11y(onClose);
 
   /**
    * "Where am I standing" — captured from whichever camera is ACTUALLY
@@ -118,7 +126,7 @@ export default function TeleportMenu({ manager, currentFloor, onClose, onTelepor
         onCancel={() => setAsk(null)}
       />
     )}
-    <div className="teleport-grid">
+    <div className="teleport-grid" ref={dialog} role="dialog" aria-modal="true" aria-label="Rooms">
       <button
         className="icon-btn"
         style={{
@@ -143,6 +151,7 @@ export default function TeleportMenu({ manager, currentFloor, onClose, onTelepor
           >
             <div className="scrim" />
             {p.floor !== currentFloor && <span className="floor-tag">F{p.floor}</span>}
+            {mayEdit && (
             <span
               role="button"
               tabIndex={-1}
@@ -156,14 +165,17 @@ export default function TeleportMenu({ manager, currentFloor, onClose, onTelepor
             >
               <Trash2 size={16} />
             </span>
+            )}
             <span>{p.name}</span>
           </button>
         ))}
 
+        {mayEdit && (
         <button className="tp-card tp-add" onClick={() => setAsk({ kind: "add" })} title="Add current viewpoint as a room">
           <Plus size={26} />
           <span>Add room here</span>
         </button>
+        )}
       </div>
       <p className="muted center mt body-text">
         <MapPin size={16} /> Tap a room to fly there, the view is framed to that room automatically.
