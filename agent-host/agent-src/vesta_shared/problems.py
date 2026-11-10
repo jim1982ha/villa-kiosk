@@ -459,12 +459,19 @@ class Problems:
 
         ⚠️ AN OCCURRENCE OF ITS OWN (architecture review 23): reopened as it was, it kept its first day (listed "still
         open since the 5th", never "again") and the task a person closed the time before — which hid it from every
-        reader while the Kiosk showed it open. A person's close counts only after the latest reopening."""
+        reader while the Kiosk showed it open. A person's close counts only after the latest reopening.
+
+        ⚠️ BACK THE SAME DAY IS BACK (architecture review, 2026-11-10): only a finding opened on an EARLIER day counted.
+        A critical device the 5-minute check found offline at 10:12, back at 10:50 and offline again at 15:12 was opened
+        again in silence (store.raise_finding: that day's row, "not new") — no message, no "2nd time", its first
+        message still on "Cleared" — and one opened after midnight then found by the night check (whose day is the
+        one before) got a second finding, "New". Found while closed in the last AGAIN_DAYS days is back, whatever the
+        days: a day stands in `occurrences` once for each time."""
         if not may:
             return None
         from datetime import date, timedelta
         since = (date.fromisoformat(day) - timedelta(days=again_days())).isoformat()
-        last = self.store.last_closed_finding(f.rule_id, f.entity_id, since, day)
+        last = self.store.last_closed_finding(f.rule_id, f.entity_id, since)
         if not last:
             return None
         runs = json.loads(last.get("occurrences") or "null") or [last["opened_day"]]

@@ -164,6 +164,33 @@ def test_a_critical_device_gone_offline_tells_the_facility_manager_at_once(tmp_p
     assert msg["title"] == "Example Villa, devices offline on 17/10/2026 21:58.", msg["title"]
 
 
+def test_a_critical_device_offline_a_second_time_the_same_day_is_told_as_back_again(tmp_path):
+    # architecture review, 2026-11-10: offline at 10:00, back at 10:20, offline again at 15:00 — the second outage was
+    # told to no one before the night check (the fault opened again in silence, without its "2nd time"), and the first
+    # message stayed on "Cleared". The same outage on the NEXT day was told "Back again … (2nd time in 7 days)"
+    day = datetime(2026, 10, 17, 10, 0, tzinfo=timezone.utc)
+    door = lambda state, at: {"lock.example_door": {"state": state, "attributes": {}, "last_changed": at.isoformat()}}
+    (first,) = _run_engine(tmp_path, door("unavailable", day), day + timedelta(minutes=12))["send"]
+    back = _run_engine(tmp_path, door("locked", day + timedelta(minutes=20)), day + timedelta(minutes=50))
+    assert back["send"] == [] and _open_tasks(tmp_path) == []
+    (cleared,) = back["edits"]
+    assert cleared["key"] == first["key"] and "Cleared on 17/10/2026 10:50" in cleared["text"]
+    again = day + timedelta(hours=5)
+    out = _run_engine(tmp_path, door("unavailable", again), again + timedelta(minutes=12))
+    (msg,) = out["send"]
+    assert msg["to"] == "fm" and msg["title"] == "Example Villa, devices offline on 17/10/2026 15:12."
+    assert msg["text"].startswith("Back again:\n- Example door has been offline for 12min. (2nd time in 7 days)"), msg["text"]
+    # its fault in the VESTA UI is open again, and the first message says so: its watch is over
+    assert out["actions"] == MOVED and [t["entity_id"] for t in _open_tasks(tmp_path)] == ["lock.example_door"]
+    (edit,) = out["edits"]
+    assert edit["key"] == first["key"] and edit["title"] == first["title"]
+    assert "Cleared on 17/10/2026 10:50" in edit["text"] and edit["text"].endswith("\nBack at 17/10/2026 15:12 (to: FM)")
+    assert len(Store(str(tmp_path / "s.sqlite")).findings()) == 1                         # the same problem, not a second one
+    # told once: the checks that follow say nothing more
+    quiet = _run_engine(tmp_path, door("unavailable", again), again + timedelta(minutes=17))
+    assert quiet["send"] == [] and quiet["edits"] == []
+
+
 def test_maintenance_mode_holds_a_device_gone_offline_and_the_next_check_after_it_takes_it_up(tmp_path):
     """The Kiosk's promise (MaintenanceMode.tsx): while maintenance mode is on, a new problem below P1 is not taken up —
     no message, no fault — and audited; still there when the mode ends, the next 5-minute check takes it up as usual.

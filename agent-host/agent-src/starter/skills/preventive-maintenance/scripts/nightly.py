@@ -979,12 +979,13 @@ def _watching(store, key: str, on: bool) -> None:
     store.cache_put(WATCHING, keys + ([key] if on else []))
 
 
-def _told_mark(store, changes: dict[int, dict]) -> dict[str, list[str]]:
-    """Each finding's step (`changes`: finding id → how it moved on) added to the story of the message that told it:
-    {key: the ids marked}. A finding never told (a P3, a message not kept) is left out."""
+def _told_mark(store, changes: dict[int, dict], on: str | None = None) -> dict[str, list[str]]:
+    """Each finding's step (`changes`: finding id → how it moved on) added to the story of the message that told it
+    last — or of the message `on`, for the end of a watch that message itself holds: {key: the ids marked}. A finding
+    never told (a P3, a message not kept) is left out."""
     keys: dict[str, list[str]] = {}
     for fid, st in changes.items():
-        key = store.cache_get(f"{TOLD}of:{int(fid)}")
+        key = on or store.cache_get(f"{TOLD}of:{int(fid)}")
         rec = _told_rec(store, key)
         if not rec:
             continue
@@ -1094,21 +1095,53 @@ def told_closes(store, zone: str, settings: dict) -> list[dict]:
     return _told_edits(store, _told_mark(store, changes), settings) if changes else []
 
 
-def told_watch_over(store, at: datetime, zone: str, settings: dict) -> list[dict]:
-    """At the night check, after its findings are recorded: each told item still watched is over — closed ({time}: now)
-    when its finding stayed closed, back when the night found it again. The messages rewritten,
-    no reply: nothing new to act on, as an alert whose watch ends."""
-    keys = store.cache_get(WATCHING) or []
-    if not keys:
-        return []
-    when, changes = moment_label(at, zone or "UTC"), {}
-    for key in keys:
+def _watches_over(store, settings: dict, how: Callable[[str, str], dict | None]) -> list[dict]:
+    """The rewrites of the messages still watching an item, each watch ended as `how(key, finding id)` says (a step of
+    TOLD_STATES; None: still watched). No reply: nothing new to act on, as an alert whose watch ends.
+
+    ⚠️ A WATCH ENDS ON THE MESSAGE THAT HOLDS IT (architecture review, 2026-11-10): the end was written on the message
+    that told the finding LAST. A problem back again, told in a second message, left the first one on "Cleared …:
+    watched until 02:00." with "All back to normal." for ever, still listed as watching — and each night after, the
+    second one gained a line for that watch: "Back at …" while the problem was simply still there, then "Closed on …:
+    it did not come back." night after night once it had cleared."""
+    marked: dict[str, list[str]] = {}
+    for key in store.cache_get(WATCHING) or []:
         rec = _told_rec(store, key)
-        for i, st in (_latest(rec) if rec else {}).items():
-            if st.get("kind") == "watch":
-                row = store.finding(int(i))
-                changes[int(i)] = {"kind": "back" if row and row.get("status") == "open" else "closed", "time": when}
-    return _told_edits(store, _told_mark(store, changes), settings) if changes else []
+        if not rec:
+            _watching(store, key, False)                                   # a message no longer kept: nothing to end
+            continue
+        ends = {int(i): how(key, i) for i, st in _latest(rec).items() if st.get("kind") == "watch"}
+        marked.update(_told_mark(store, {i: st for i, st in ends.items() if st}, on=key))
+    return _told_edits(store, marked, settings) if marked else []
+
+
+def _told_since(store, key: str, fid: str, zone: str) -> dict | None:
+    """The step of an item of the message `key` that a later message told again ("Back again", told_now): back, at that
+    message's moment. None while `key` is the message that told it last."""
+    later = store.cache_get(f"{TOLD}of:{int(fid)}")
+    if not later or later == key:
+        return None
+    return {"kind": "back", "time": moment_label(datetime.fromisoformat(later.removeprefix(TOLD)), zone or "UTC")}
+
+
+def told_back_again(store, zone: str, settings: dict) -> list[dict]:
+    """The messages whose watched item came back and was told in a new message: the watch is over at once — "Back at
+    {the moment of that new message}", its "Cleared" line struck, the title no longer all back to normal. Asked after
+    told_now by a run that may tell a problem again (the 5-minute check; the night's told_watch_over does it itself)."""
+    return _watches_over(store, settings, lambda key, fid: _told_since(store, key, fid, zone))
+
+
+def told_watch_over(store, at: datetime, zone: str, settings: dict) -> list[dict]:
+    """At the night check, after its findings are recorded and told: each told item still watched is over — back when a
+    newer message told it again (as told_back_again) or this night found it again, else closed ({time}: now): its
+    finding stayed closed."""
+    when = moment_label(at, zone or "UTC")
+
+    def ended(key, fid):
+        row = store.finding(int(fid))
+        return _told_since(store, key, fid, zone) or {
+            "kind": "back" if row and row.get("status") == "open" else "closed", "time": when}
+    return _watches_over(store, settings, ended)
 
 
 def told_again(store, tasks: list[dict], kind: str, zone: str, settings: dict) -> tuple[list[dict], set[int]]:

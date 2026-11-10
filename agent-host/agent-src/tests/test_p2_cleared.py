@@ -276,6 +276,59 @@ def test_the_night_ends_each_watch_closed_or_back_on_the_same_message(tmp_path):
     assert nightly.told_watch_over(store, night, "Asia/Makassar", words) == []         # each watch ends once
 
 
+def test_a_problem_told_again_ends_its_watch_on_the_first_message_and_each_message_says_each_thing_once(tmp_path):
+    # architecture review, 2026-11-10: a problem back again is told in a second message. The first one stayed on
+    # "Cleared …: watched until 02:00." with "All back to normal." for ever; the second one gained a line every night:
+    # "Back at …" while the problem was simply still there, then "Closed on …: it did not come back." again and again
+    from vesta_shared import skill_settings
+    from vesta_shared.store import Store
+    store, words = Store(str(tmp_path / "s.sqlite")), skill_settings.load(PM, "settings.yaml")
+    zone, night = "Asia/Makassar", lambda day: datetime(2026, 10, day, 18, 0, tzinfo=timezone.utc)   # 02:00 the day after
+    (a,) = [store.raise_finding("PM-UNAVAILABLE", "switch.example_pool", "power", "2026-10-19", "P2", "Pool relay offline", {})[0]]
+    told = lambda label, at: nightly.told_now({"villa": "Example", "as_of": "2026-10-19", "new_findings": [], "again": [],
+                                               label: [{"id": a, "severity": "P2", "summary": "Pool relay offline"}]},
+                                              store=store, at=at)[0]
+    first = told("new_findings", AT)
+    store.close_finding("PM-UNAVAILABLE", "switch.example_pool", "2026-10-20")
+    nightly.told_cleared(store, [a], AT, zone, words)                                      # cleared at 12:30, watched
+    # the night finds it again and tells it in a new message, then ends the watches (nightly.run's order)
+    store.reopen_finding(a, "P2", "Pool relay offline", {}, "2026-10-21", ["2026-10-19", "2026-10-21"])
+    second = told("again", night(20))
+    (e,) = nightly.told_watch_over(store, night(20), zone, words)
+    assert e["key"] == first["key"] and e["title"] == first["title"]                       # no longer all back to normal
+    assert e["text"] == ("New:\n- Pool relay offline\nStatus:\nCleared on 20/10/2026 12:30: watched until 02:00.\n"
+                         "Back at 21/10/2026 02:00 (to: FM)")
+    assert _struck(titled(first["title"], "FM", e["text"])) == ["Cleared on 20/10/2026 12:30: watched until 02:00."]
+    # still there the two nights after: nothing more to say, on either message
+    assert nightly.told_watch_over(store, night(21), zone, words) == []
+    assert nightly.told_watch_over(store, night(22), zone, words) == []
+    # it clears on the 23rd: said on the second message, closed there the night after, once
+    store.close_finding("PM-UNAVAILABLE", "switch.example_pool", "2026-10-23")
+    (c,) = nightly.told_cleared(store, [a], datetime(2026, 10, 23, 4, 30, tzinfo=timezone.utc), zone, words)
+    assert c["key"] == second["key"] and c["text"].endswith("Status:\nCleared on 23/10/2026 12:30: watched until 02:00.")
+    (e,) = nightly.told_watch_over(store, night(23), zone, words)
+    assert e["key"] == second["key"] and e["text"].endswith(
+        "Status:\nCleared on 23/10/2026 12:30: watched until 02:00.\nClosed on 24/10/2026 02:00: it did not come back.")
+    assert nightly.told_watch_over(store, night(24), zone, words) == []
+    assert nightly.told_watch_over(store, night(25), zone, words) == []
+
+
+def test_a_first_message_left_watching_by_an_earlier_version_says_back_at_the_second_ones_moment(tmp_path):
+    # format changes need migrations: before 0.12.497 the first message of a problem told again stayed listed as
+    # watching. Any later run (the 5-minute check: told_back_again) ends that watch at the moment the problem was told again
+    store, (a, b), m, words = _real(tmp_path)
+    store.close_finding("PM-UNAVAILABLE", store.finding(a)["entity_id"], "2026-10-20")
+    nightly.told_cleared(store, [a], AT, "Asia/Makassar", words)
+    store.reopen_finding(a, "P2", "Relay a offline", {}, "2026-10-21", ["2026-10-19", "2026-10-21"])
+    nightly.told_now({"villa": "Example", "as_of": "2026-10-21", "new_findings": [],
+                      "again": [{"id": a, "severity": "P2", "summary": "Relay a offline"}]},
+                     store=store, at=datetime(2026, 10, 21, 7, 12, tzinfo=timezone.utc))
+    (e,) = nightly.told_back_again(store, "Asia/Makassar", words)
+    assert e["key"] == m["key"] and e["text"].endswith("Relay a offline · Back at 21/10/2026 15:12 (to: FM)")
+    assert nightly.told_back_again(store, "Asia/Makassar", words) == []                 # said once
+    assert nightly.told_watch_over(store, datetime(2026, 10, 21, 18, 0, tzinfo=timezone.utc), "Asia/Makassar", words) == []
+
+
 def test_a_message_kept_before_the_watch_is_read_as_watched_and_closed_at_night(tmp_path):
     # format changes need migrations: a message kept by 0.12.361 holds only {cleared: {id: time}}
     store, (a, b), m, words = _real(tmp_path)

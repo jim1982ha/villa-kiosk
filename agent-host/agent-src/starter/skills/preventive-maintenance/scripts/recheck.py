@@ -570,6 +570,8 @@ def main(argv=None):
     edits = N.told_cleared(ctx.store, closed, now, ctx.zone, ctx.settings, handed=handed)
     # a person's close of a told fault, said on its message before anything that follows it (review 23, card 7)
     edits = N.told_closes(ctx.store, ctx.zone, ctx.settings) + edits
+    # a problem told again just now (gone_offline, gone_missing, recheck_open): the message still watching it says back
+    edits = edits + N.told_back_again(ctx.store, ctx.zone, ctx.settings)
     told = again["send"] + reopened_untold(ctx.store, ctx.zone, ctx.settings, edits) + still_there_untold(
         ctx.store, ctx.zone, ctx.settings, edits)
     print(json.dumps({"actions": result.moved(res["actions"] + again["actions"] + found["actions"] + miss["actions"]),

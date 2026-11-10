@@ -72,6 +72,8 @@ closure, and never raise the same thing twice.
      the item marked, the title too once all cleared (settings.yaml `told_cleared`).
      When it cannot be rewritten (Telegram refuses, deleted, two pages), ONE reply
      to it says what cleared (`told_cleared.fallback`), never twice.
+     A problem that comes back and is told again in a new message ends its watch on
+     the earlier one ("Back at …"): each message tells its own part, once.
    - The FM's morning digest (reports skill) reads the open problems themselves
      (`vesta_shared.problems`): a problem that came back within D days (the limit
      `problems.again_days`) is listed as new, "(again: N times in D days)", and so is its Kiosk fault.
