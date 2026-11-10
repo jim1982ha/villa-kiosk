@@ -1,3 +1,12 @@
+## 2.496.764
+
+What you will see:
+- The Rooms window: "Add room here" and a room's bin are the owner's alone. Anyone else sees the rooms and goes to
+  them; a room they added stayed on their device only, or was replaced later with no word.
+- A bin asks before it deletes: a task's bin on the Cockpit's Today and Schedule tabs ("Remove this task?
+  Completions already logged against it are kept."), a saved document's ("Delete this saved report?"), and
+  "Clear" in Advanced Settings' telemetry ("Erase every event?"). One press deleted, with nothing to take it back.
+
 ## 2.496.763
 
 What you will see:
