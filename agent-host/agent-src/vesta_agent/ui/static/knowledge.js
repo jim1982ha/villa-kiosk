@@ -4,15 +4,38 @@
 // Device links as the tabs of one tabbed section (places.TABBED; owner, 2026-10-31: the two cards were tabs too). Each
 // is saved where it lives, at once (no save bar): a kind and a link through the page's one writer (ui/kinds.py,
 // ui/links.py: in Page changes, undoable), the translations forgotten in the agent's memory.
-import { api, ask, card, dropdown, fill, h, inOrder, paged, place, plural, problemsBox, reasons, tabbed, tabbedIn, tell, toast, withInfo, $view } from "./core.js";
+import { api, ask, card, dropdown, fill, h, inOrder, loading, paged, place, plural, reasons, saveNow, searchBox, tabbed, tabbedIn, tell, toast, withInfo, $view } from "./core.js";
 
 // a (i) in readable sections (owner, 2026-10-30: "barely understandable and very poorly formatted"): a heading, then
 // its sentences or a list of [bold words, the rest]
 const part = (title, ...body) => [h("p", { class: "tip-head" }, title), ...body];
 const items = (pairs) => h("ul", { class: "tip-list" }, pairs.map(([b, rest]) => h("li", {}, h("b", {}, b), rest ? ` ${rest}` : "")));
 
+// ⚠️ THE TWO DEVICE LISTS ARE ONE LIST (UI scan, 2026-11-10: Device kinds and Device links each wrote its search, its
+// two empty states, its pager's words, its save and its way back to what was found): written once, here.
+const DEVICES_NAV = ["‹ Previous", "Next ›", "devices"];
+// the devices a search keeps (by name, room or id), and its box (`text`: the tab's own search, kept while the page
+// is open; `typed(text)` on every key); no box while there is no device to search
+const found = (data, text) => {
+  const q = text.trim().toLowerCase();
+  return data.rows.filter((r) => !q || `${r.name} ${r.area} ${r.slug}`.toLowerCase().includes(q));
+};
+const deviceSearch = (data, text, typed) => (data.rows.length ? searchBox("Search the devices", text, typed) : null);
+// what the list says when it has nothing to show: no device read, or none the search keeps (null: draw `shown`)
+const noDevice = (data, shown) => (shown.length ? null : h("p", { class: "muted" },
+  !data.rows.length ? (data.built ? "No device with a power or energy reading." : "The agent has not read the villa's devices yet.")
+    : "No device matches the search."));
+// a choice made here saved at once (core.saveNow): the answer is the tab's new data, the toast the line Page changes
+// keeps (the answer's `what`, ui/kinds.saved) — never a copy of it
+const saveChoice = async (data, probs, r, path, body) => {
+  const res = await saveNow(probs, () => api("PUT", path, { slug: r.slug, ...body }), (res) => `Saved: ${res.what}`, `${r.name} not saved:`);
+  if (res) Object.assign(data, res);
+};
+// the way back from a choice made here to what the agent found (a device gone from the villa: its choice removed)
+const useFound = (r, undo) => h("button", { type: "button", class: "btn ghost", onclick: undo }, r.gone ? "Remove" : "Use the one found");
+
 export async function knowledge() {
-  fill($view, h("p", { class: "muted" }, "Loading…"));
+  loading();
   const v = await api("GET", "api/knowledge");           // the tab in one answer (server.knowledge_view)
   const probs = h("div");
   const cards = {
@@ -68,20 +91,8 @@ export function kindsCard(data, probs) {
   // (knowledge_pack.kind_and_why); a device a linked schedule made a motor read "Found by name"
   const from = (r) => (r.source === "system" ? "From the villa's system" : r.source === "link" ? `From its link: ${r.link} linked on Device links` : "Found by name");
   const fromShort = (r) => (r.source === "system" ? "the villa's system" : r.source === "link" ? `its ${r.link} link` : "found by name");
-  // ⚠️ THE SENTENCE RECORDED, NEVER A COPY (architecture review 20, card 6): the toast is the line Page changes keeps
-  // (the answer's `what`, ui/kinds.saved)
-  const save = async (r, kind) => {
-    try {
-      const res = await api("PUT", "api/kinds", { slug: r.slug, kind });
-      Object.assign(data, res);
-      fill(probs);
-      toast(`Saved: ${res.what}`);
-    } catch (e) {
-      fill(probs, problemsBox(reasons(e), `${r.name} not saved:`));
-      probs.scrollIntoView?.({ behavior: "smooth", block: "center" });
-    }
-    draw();
-  };
+  // ⚠️ THE SENTENCE RECORDED, NEVER A COPY (architecture review 20, card 6): saveChoice's toast
+  const save = async (r, kind) => { await saveChoice(data, probs, r, "api/kinds", { kind }); draw(); };
   const row = (r) => [
     [h("b", {}, r.name), r.area ? h("span", { class: "muted" }, ` ${r.area}`) : null,
       r.parts ? h("span", { class: "muted" }, ` · ${r.parts}`) : null],
@@ -89,23 +100,17 @@ export function kindsCard(data, probs) {
     h("span", { class: "chips" },
       r.gone ? h("span", { class: "chip warn" }, "No longer found")
         : h("span", { class: r.chosen ? "chip" : "chip gray" }, r.chosen ? "Set by you" : from(r)),
-      r.chosen ? h("button", { type: "button", class: "btn ghost", onclick: () => save(r, null) }, r.gone ? "Remove" : "Use the one found") : null),
+      r.chosen ? useFound(r, () => save(r, null)) : null),
   ];
   const draw = () => {
-    const q = KIND_SEARCH.trim().toLowerCase();
-    const shown = data.rows.filter((r) => !q || `${r.name} ${r.area} ${r.slug}`.toLowerCase().includes(q));
-    fill(list, data.rows.length
-      ? (shown.length ? paged(["Device", "Kind", "Set by"], shown.map(row), 10,
-          { cls: "kinds", widths: ["44%", "26%", "30%"], nav: ["‹ Previous", "Next ›", "devices"] })
-        : h("p", { class: "muted" }, "No device matches the search."))
-      : h("p", { class: "muted" }, data.built ? "No device with a power or energy reading." : "The agent has not read the villa's devices yet."));
+    const shown = found(data, KIND_SEARCH);
+    fill(list, noDevice(data, shown) || paged(["Device", "Kind", "Set by"], shown.map(row), 10,
+      { cls: "kinds", widths: ["44%", "26%", "30%"], nav: DEVICES_NAV }));
   };
-  const search = h("input", { type: "search", placeholder: "Search the devices", value: KIND_SEARCH, "aria-label": "Search the devices",
-    oninput: (e) => { KIND_SEARCH = e.target.value; draw(); } });
   draw();
   // which devices, said on the card itself too (owner, 2026-10-30: "where the device list is coming from?")
   const which = h("p", { class: "muted" }, `${data.rows.length} devices that measure their own power or energy.`);
-  const c = card(place("kinds"), info, which, data.rows.length ? h("div", { class: "limits-search" }, search) : null, list);
+  const c = card(place("kinds"), info, which, deviceSearch(data, KIND_SEARCH, (text) => { KIND_SEARCH = text; draw(); }), list);
   c.id = "knowledge-kinds";
   return c;
 }
@@ -150,17 +155,9 @@ export function linksCard(data, probs) {
         if (editing) draw(); else { if (was && rowOf(was)) show(rowOf(was)); show(r); } } },
       editing ? "Done" : r.links.schedule?.value || r.gone ? "Change" : "Set"));
   };
-  // the toast is the line Page changes keeps (ui/kinds.saved), as on Device kinds
+  // saved as on Device kinds (saveChoice)
   const save = async (r, role, value) => {
-    try {
-      const res = await api("PUT", "api/links", { slug: r.slug, role, value });
-      Object.assign(data, res);
-      fill(probs);
-      toast(`Saved: ${res.what}`);
-    } catch (e) {
-      fill(probs, problemsBox(reasons(e), `${r.name} not saved:`));
-      probs.scrollIntoView?.({ behavior: "smooth", block: "center" });
-    }
+    await saveChoice(data, probs, r, "api/links", { role, value });
     const now = rowOf(r.slug);
     if (now) show(now); else { LINK_EDITING = null; draw(); }       // a gone device's last link removed: its row goes
   };
@@ -182,10 +179,10 @@ export function linksCard(data, probs) {
     return h("div", { class: "link-cell" },
       r.gone ? readCell(r, role) : dropdown(opts, l.value || "", (v) => save(r, role.k, v), `${r.name}, ${role.name}`),
       l.source === "chosen" ? h("span", { class: "chips" }, h("span", { class: "chip" }, "Set by you"),
-        h("button", { type: "button", class: "btn ghost", onclick: () => save(r, role.k, null) }, r.gone ? "Remove" : "Use the one found")) : null);
+        useFound(r, () => save(r, role.k, null))) : null);
   };
   const row = (r) => {
-    const b = { links: roles.map(() => h("div")), button: h("div", { class: "link-action" }) };
+    const b = { links: roles.map(() => h("div")), button: h("div") };
     boxes.set(r.slug, b);
     show(r);
     return [[h("b", {}, r.name), r.area ? h("span", { class: "muted" }, ` ${r.area}`) : null,
@@ -195,29 +192,22 @@ export function linksCard(data, probs) {
   const group = (title, rows, open) => rows.length
     ? h("details", { class: "tool-group link-group", open },
         h("summary", {}, h("b", {}, `${title} (${rows.length})`)),
-        paged(head, rows.map(row), 10, { cls: "links", widths: ["24%", null, null, null, "88px"], nav: ["‹ Previous", "Next ›", "devices"] }))
+        paged(head, rows.map(row), 10, { cls: "links", widths: ["24%", null, null, null, "88px"], nav: DEVICES_NAV }))
     : null;
   const draw = () => {
     boxes.clear();
-    const q = LINK_SEARCH.trim().toLowerCase();
-    const shown = data.rows.filter((r) => !q || `${r.name} ${r.area} ${r.slug}`.toLowerCase().includes(q));
+    const shown = found(data, LINK_SEARCH);
     // ⚠️ GROUPED BY THE NIGHT CHECK'S OWN VERDICT (architecture review 20, card 2): a linked schedule filed a device under
     // "Schedule linked" while the night check had its run-hours check off; ui/links.py serves its run_hours
     // (vesta_shared.run_hours), the why under each line that is off
     const off = shown.filter((r) => !r.gone && !r.run_hours.on);
-    fill(list, data.rows.length
-      ? (shown.length
-          ? [group("Run-hours check off", off, true),
-             group("Schedule linked", shown.filter((r) => !r.gone && r.run_hours.on), !off.length),
-             group("No longer found", shown.filter((r) => r.gone), true)]
-          : h("p", { class: "muted" }, "No device matches the search."))
-      : h("p", { class: "muted" }, data.built ? "No device with a power or energy reading." : "The agent has not read the villa's devices yet."));
+    fill(list, noDevice(data, shown) || [group("Run-hours check off", off, true),
+      group("Schedule linked", shown.filter((r) => !r.gone && r.run_hours.on), !off.length),
+      group("No longer found", shown.filter((r) => r.gone), true)]);
   };
-  const search = h("input", { type: "search", placeholder: "Search the devices", value: LINK_SEARCH, "aria-label": "Search the devices",
-    oninput: (e) => { LINK_SEARCH = e.target.value; draw(); } });
   draw();
   const which = h("p", { class: "muted" }, `${data.rows.length} devices, and the helpers of the villa's system that belong to each.`);
-  const c = card(place("links"), info, which, data.rows.length ? h("div", { class: "limits-search" }, search) : null, list);
+  const c = card(place("links"), info, which, deviceSearch(data, LINK_SEARCH, (text) => { LINK_SEARCH = text; draw(); }), list);
   c.id = "knowledge-links";
   return c;
 }

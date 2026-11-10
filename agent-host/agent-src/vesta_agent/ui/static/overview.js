@@ -1,16 +1,10 @@
 // VESTA Agent page — the Overview tab: the agent's state, the changes made on these pages, copying the setup.
-import { api, ask, card, fileBase64, fill, go, h, jobsBanner, paged, place, plural, problemsBox, reasons, setting, tabbed, tell, toast, $view, where } from "./core.js";
+import { api, ask, card, fileBase64, fill, go, h, jobsBanner, loading, paged, place, plural, problemsBox, reasons, setting, tabbedCard, tell, toast, $view, when, where } from "./core.js";
 
 // ---------------------------------------------------------------- overview
 export async function overview() {
-  fill($view, h("p", { class: "muted" }, "Loading…"));
+  loading();
   const o = await api("GET", "api/overview");
-  // Short, on the title's line (owner, 2026-10-03): the app's version, and the
-  // channel when it is not the released one. The whole statement stays one
-  // hover/long-press away.
-  const ver = document.getElementById("ver");
-  ver.textContent = `v${o.app_version || o.version}${o.instance && o.instance !== "prod" ? ` · ${o.instance}` : ""}`;
-  ver.title = `${o.app_version ? `app ${o.app_version} · ` : ""}agent ${o.version} · ${o.instance}`;
   const off = o.skills.filter((s) => !s.ok && !s.off);
   const r = o.last_24h;
   const kids = [
@@ -30,7 +24,7 @@ export async function overview() {
     kids.push(card(place("last_day", { hours: lh.value }), h("span", {}, "The scheduled jobs the agent ran in the last ",
       setting(`${lh.value} hours`, lh.ref), ", from its own records."),
       r.scheduled_jobs.length
-        ? paged(["Job", "Ran at", "Outcome"], [...r.scheduled_jobs].reverse().map((j) => [j.label || j.job, new Date(j.at).toLocaleString(), j.words]))
+        ? paged(["Job", "Ran at", "Outcome"], [...r.scheduled_jobs].reverse().map((j) => [j.label || j.job, when(j.at), j.words]))
         : h("p", { class: "muted" }, `No scheduled job ran in the last ${lh.value} hours.`)));
   } else {
     kids.push(card(place("last_day", { hours: (o.last_hours || { value: 24 }).value }), "The agent has not recorded anything yet."));
@@ -52,7 +46,7 @@ export async function historyCard() {
     setting(`${kept.value} days`, kept.ref), "), and trimmed with them every night. Undo writes the previous version back through the same checks as a save, and is itself recorded here.");
   return card(place("changes"), lead,
     changes.length ? paged(["When", "Where", "What changed", ""], changes.map((c) => [
-      new Date(c.at).toLocaleString([], { dateStyle: "short", timeStyle: "short" }),
+      when(c.at),
       h("span", { class: "chip " + c.chip }, c.place),                   // its colour: history.CHIPS
       c.what,
       // the server says which changes Undo handles (server.undoable): the page kept its own list and left out the instructions
@@ -85,8 +79,8 @@ export function exportCard(offer) {
 
 // Overview › Copy the setup: Download and Import, two tabs of one card (owner, 2026-10-06: a cleaner overview)
 export function setupCard(offer) {
-  const t = tabbed("setup", [["out", place("setup_out"), null, () => exportCard(offer)], ["in", place("setup_in"), null, importCard]]);
-  return card(place("setup"), "The skills and the shareable part of the agent rules, in one file, and that file read on another villa. People, chats, devices, keys and records never leave a villa.", t.bar, t.body);
+  return tabbedCard(place("setup"), "setup", [["out", place("setup_out"), null, () => exportCard(offer)], ["in", place("setup_in"), null, importCard]],
+    "The skills and the shareable part of the agent rules, in one file, and that file read on another villa. People, chats, devices, keys and records never leave a villa.");
 }
 
 export function importCard() {

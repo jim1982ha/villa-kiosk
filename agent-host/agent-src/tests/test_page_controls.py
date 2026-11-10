@@ -230,7 +230,7 @@ def test_rules_tools_are_served_from_the_agents_list(ui):
                                         {"name": "ha_restart", "annotations": {"destructiveHint": True}}], "ha-mcp 8.6.0")
 
     async def fn(c):
-        return await (await c.get("/api/tools")).json()
+        return (await (await c.get("/api/rules")).json())["tools"]
     t = call(ui, fn)
     assert t["server"] == "ha-mcp 8.6.0" and t["groups"][0]["tools"][0]["title"] == "Get Entity State"
     assert [x["name"] for x in t["never"]] == ["ha_restart"]
@@ -283,7 +283,7 @@ def test_add_them_sets_every_missing_ai_job_with_its_starter_values_in_one_recor
         st, body = await _json(c, "post", "/api/jobs/missing", json={})
         st2, again = await _json(c, "post", "/api/jobs/missing", json={})
         hist = (await (await c.get("/api/history")).json())["changes"]
-        jobs = (await (await c.get("/api/jobs")).json())["jobs"]
+        jobs = (await (await c.get("/api/rules")).json())["jobs"]
         return st, body, st2, again, hist, jobs
     st, body, st2, again, hist, jobs = call(ui, fn)
     s = yaml.safe_load(open(ui.policy_path))["settings"]
@@ -338,7 +338,7 @@ def test_a_broken_policy_file_still_opens_every_tab_and_names_its_problem(ui):
 
     async def fn(c):
         out = {}
-        for p in ("/api/policy", "/api/rules", "/api/jobs", "/api/overview", "/api/skills", "/api/tools", "/api/costs?days=7"):
+        for p in ("/api/policy", "/api/rules", "/api/overview", "/api/skills", "/api/costs?days=7"):
             r = await c.get(p, headers=HDR)
             out[p] = (r.status, await r.json())
         return out
@@ -367,7 +367,7 @@ def test_an_older_files_ai_jobs_are_read_and_moved_to_their_skill_by_the_next_sa
         f.write("# the villa's own note\n" + yaml.safe_dump(raw))
 
     async def fn(c):
-        before = (await (await c.get("/api/jobs")).json())["jobs"]
+        before = (await (await c.get("/api/rules")).json())["jobs"]
         doc = await (await c.get("/api/policy")).json()
         r = await c.put("/api/policy/form", json={"form": doc["form"], "rev": doc["rev"]}, headers=HDR)
         doc2 = await (await c.get("/api/policy")).json()
@@ -388,7 +388,7 @@ def test_an_older_files_ai_jobs_are_read_and_moved_to_their_skill_by_the_next_sa
         doc = await (await c.get("/api/policy")).json()
         doc["form"]["settings"]["skill_ai"]["reports"] = {"brain": "economy", "limit_usd": 3}
         r = await c.put("/api/policy/form", json={"form": doc["form"], "rev": doc["rev"]}, headers=HDR)
-        return r.status, (await (await c.get("/api/jobs")).json())["jobs"]
+        return r.status, (await (await c.get("/api/rules")).json())["jobs"]
     status, jobs = call(ui, change)
     assert status == 200
     assert {j["name"]: (j["skill_ai"]["brain"], j["skill_ai"]["limit_usd"]) for j in jobs if j["skill"] == "reports"} == {

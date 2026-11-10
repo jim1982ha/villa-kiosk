@@ -35,29 +35,8 @@
   --touch-min: 44px;
   --text-xs: 12px; --text-sm: 13px; --text-base: 14px; --text-md: 15px; --text-lg: 18px; --text-xl: 20px;
 }
-/* the theme (owner, 2026-10-01): Auto follows the device; Light or Dark, chosen in the header, is kept
-   in this browser and set as data-theme on <html> */
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --bg-base: #101311;
-    --bg-card: rgba(26, 31, 27, 0.88);
-    --bg-input: rgba(240, 238, 230, 0.10);
-    --accent: #62B584;
-    --accent-strong: #4C9A5E;
-    --accent-soft: rgba(98, 181, 132, 0.16);
-    --text-primary: #F1EFE8;
-    --text-secondary: #A5AAA3;
-    --text-dim: #6C726B;
-    --text-on-accent: #0B1710;
-    --status-on: #4FC07E;
-    --status-warning: #E0A93A;
-    --status-danger: #E2685A;
-    --hairline: rgba(241, 239, 232, 0.12);
-    --hairline-strong: rgba(241, 239, 232, 0.24);
-    --shadow: rgba(0, 0, 0, 0.55);
-  
-  }
-}
+/* the theme (owner, 2026-10-01): Light, Dark or Auto (the device's), chosen in the header and kept in this browser.
+   theme.js always writes the one in force as data-theme on <html>, so the dark palette is written once. */
 :root[data-theme="dark"] {
     --bg-base: #101311;
     --bg-card: rgba(26, 31, 27, 0.88);
@@ -75,12 +54,11 @@
     --hairline: rgba(241, 239, 232, 0.12);
     --hairline-strong: rgba(241, 239, 232, 0.24);
     --shadow: rgba(0, 0, 0, 0.55);
-  
 }
 
 [hidden] { display: none !important; }
 * { box-sizing: border-box; }
-button, input, select, textarea { font-family: inherit; font-size: inherit; color: inherit; }
+button, input, textarea { font-family: inherit; font-size: inherit; color: inherit; }
 html, body { margin: 0; background: var(--bg-base); color: var(--text-primary); font-family: var(--font-ui); font-size: var(--text-base); }
 body { min-height: 100vh; padding-bottom: 96px; }
 
@@ -106,6 +84,7 @@ main { max-width: var(--page-width); margin: 0 auto; padding: 16px 20px; }
 .card h2 { font-family: var(--font-display); font-weight: 500; font-size: var(--text-lg); margin: 0 0 4px; }
 .card .lead { color: var(--text-secondary); font-size: var(--text-sm); margin: 0 0 14px; line-height: 1.45; }
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; }
+.grid > * { min-width: 0; }
 /* A set of figures (core.js figures()): as many to a row as fit, two on a phone (min 120px each:
    two fit a 320px screen's card). min(…, 100%) keeps one from overflowing a very narrow card. */
 .figures { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(120px, 100%), 1fr)); gap: 16px 12px; }
@@ -117,12 +96,11 @@ main { max-width: var(--page-width); margin: 0 auto; padding: 16px 20px; }
 /* ---- form controls */
 .field { display: flex; flex-direction: column; gap: 6px; font-size: var(--text-sm); color: var(--text-secondary); }
 .field .hint { color: var(--text-dim); font-size: var(--text-xs); }
-/* A field whose label sits BESIDE its control (the Costs' Period): one line, the control its natural width. */
-input[type=text], input[type=number], input[type=search], select, textarea {
+input[type=text], input[type=number], input[type=search], textarea {
   background: var(--bg-input); border: 1px solid var(--hairline); border-radius: var(--radius);
   padding: 10px 12px; min-height: var(--touch-min); color: var(--text-primary); width: 100%;
 }
-input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+input:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
 textarea { font-family: var(--font-mono); font-size: 13px; line-height: 1.5; resize: vertical; tab-size: 2; }
 /* Long lines WRAP on screen (owner, 2026-10-06): no sideways scrolling to read a skill or the rules.
    Display only — a soft wrap adds no newline to what is saved, so YAML indentation is untouched.
@@ -193,8 +171,6 @@ table.rows td.x { width: 44px; }
 .divided { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--hairline); }
 .push-right { margin-left: auto; }
 
-/* AI jobs: the same fields and grid as "AI brains and limits", one block per job */
-/* a switch and a field side by side on one line; they stack when the screen is too narrow */
 /* ⚠️ EDITABLE TABLES HAVE FIXED COLUMNS (owner, 2026-10-04, a phone screenshot: the services table ran off the
    screen). An automatic table sizes a column to its longest unbreakable text, so one long rule's words
    widened the whole table and squeezed the service ids to
@@ -204,24 +180,27 @@ table.rows td .dropdown, table.rows td input:not([type=checkbox]):not([type=radi
 table.rows.ai td { vertical-align: top; padding-top: 10px; padding-bottom: 10px; border-top: 1px solid var(--hairline); }
 table.rows.ai td.tools-got { padding-top: 20px; }
 table.rows.ai td:first-child { padding-top: 12px; }
+table.rows.ai td.with-caption .dropdown { max-width: 260px; }
+/* a device picker inside an editable table (the services' devices): top-aligned with the line's other fields */
+table.rows.edit td { vertical-align: top; }
+table.rows.edit td > .muted.small { display: block; padding-top: 12px; }
 /* on a phone each AI row puts the work on its own line, its brain and limit below it */
 @media (max-width: 600px) {
   table.rows.ai thead, table.rows.ai colgroup { display: none; }
   table.rows.ai tr { display: grid; grid-template-columns: 1fr 88px 44px; gap: 6px 8px; padding: 10px 0; border-top: 1px solid var(--hairline); }
   table.rows.ai tr:first-child { border-top: 0; }
-  table.rows.ai td { padding: 0; min-width: 0; }   /* a long brain name ("Performance (Opus)") pushed the × off the card */
-  table.rows.ai td:first-child { grid-column: 1 / -1; }
+  table.rows.ai td { padding: 0; min-width: 0; border-top: 0; }   /* a long brain name ("Performance (Opus)") pushed the × off the card */
+  table.rows.ai td:first-child { grid-column: 1 / -1; grid-row: 1; }
   table.rows.ai td[colspan] { grid-column: span 2; }
+  table.rows.ai td.x { grid-row: 2; grid-column: 3; }             /* beside the brain and the limit */
+  table.rows.ai td.tools-got, table.rows.ai td.with-caption { grid-column: 1 / -1; grid-row: 3; }
+  table.rows.ai td.tools-got { padding: 2px 0 0; }
   /* an editable table (core.js editTable): each column says where it goes, the remove button ends line one */
   table.rows.edit thead, table.rows.edit colgroup { display: none; }
   table.rows.edit tr { display: grid; grid-template-columns: 1fr 1fr 44px; gap: 6px 8px; padding: 10px 0; border-top: 1px solid var(--hairline); }
   table.rows.edit tr:first-child { border-top: 0; }
   table.rows.edit td { padding: 0; min-width: 0; }
-  table.rows.edit td.ph-a { grid-area: 1 / 1; }
-  table.rows.edit td.ph-b { grid-area: 1 / 2; }
   table.rows.edit td.ph-ab { grid-area: 1 / 1 / 2 / 3; }
-  table.rows.edit td.ph-c { grid-area: 2 / 1; }
-  table.rows.edit td.ph-d { grid-area: 2 / 2 / 3 / 4; }
   table.rows.edit td.ph-cd { grid-area: 2 / 1 / 3 / 4; }
   table.rows.edit td.ph-ef { grid-area: 3 / 1 / 4 / 4; }
   table.rows.edit td.ph-ef:has(> .na) { display: none; }
@@ -233,7 +212,6 @@ table.rows.ai td:first-child { padding-top: 12px; }
 table.data td, table.data th { padding: 8px 10px 8px 0; border-bottom: 1px solid var(--hairline); }
 table.data .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .pager { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 10px; }
-.pager .btn[disabled] { opacity: .4; cursor: default; }
 /* the cost per day */
 svg.bars { width: 100%; height: auto; display: block; }
 svg.bars .bar { fill: var(--accent); }
@@ -250,8 +228,6 @@ svg.bars .base { stroke: var(--text-dim); }
 .themes button, .seg button { border: 0; background: none; color: var(--text-secondary); font-size: var(--text-xs); padding: 4px 10px; border-radius: 999px; cursor: pointer; min-height: 28px; }
 .themes button.on, .seg button.on { background: var(--accent-soft); color: var(--text-primary); }
 /* a device picker: a box like a menu (what is chosen), opening a list with a search and a checkbox each */
-.grid > * { min-width: 0; }
-.picker { position: relative; }
 .picker-box { width: 100%; min-height: var(--touch-min); display: flex; align-items: center; gap: 8px; text-align: left; cursor: pointer;
   padding: 6px 12px; border-radius: var(--radius); border: 1px solid var(--hairline); background: var(--bg-input); color: var(--text-primary); font: inherit; }
 .picker-box .caret { margin-left: auto; color: var(--text-dim); }
@@ -307,7 +283,6 @@ td.nowrap { white-space: nowrap; }
 }
 table.data tr:has(+ tr.row-more:not([hidden])) td { border-bottom: 0; }
 table.data tr.row-more td { padding-top: 0; }
-table.data tr.row-more[hidden] { display: none; }   /* over the phone's card rows (display: block), which outrank [hidden] */
 
 /* A paged data table (core.js paged) on a phone (owner, 2026-10-05: columns overlapped): each row a card,
    each value on its own line with its column's name; an empty value (a row's last chip column) takes no line. */
@@ -459,10 +434,6 @@ ol.steps code.step-sum { font-family: var(--font-mono); font-size: var(--text-xs
 .banner.warnbox { display: block; }
 .banner.warnbox ul { margin: 6px 0 0; padding-left: 18px; }
 @media (max-width: 600px) {
-  table.rows.ai td { border-top: 0; padding: 0; }
-  table.rows.ai td:first-child { grid-row: 1; }
-  table.rows.ai td.x { grid-row: 2; grid-column: 3; }             /* beside the brain and the limit */
-  table.rows.ai td.tools-got { grid-column: 1 / -1; grid-row: 3; padding: 2px 0 0; }
   .compare-head, .compare-row { grid-template-columns: 1fr; }
   .compare-row pre + pre { border-left: 0; border-top: 1px dashed var(--hairline); }
 }
@@ -492,9 +463,6 @@ button.info.alert, button.info.alert:hover, button.info.alert[aria-expanded="tru
 .card-title-right .dropdown { width: auto; }
 .tooltip { overflow: auto; padding: 10px 12px; border-radius: var(--radius); background: var(--text-primary); color: var(--bg-base);
   font-size: var(--text-sm); line-height: 1.45; box-shadow: 0 8px 24px var(--shadow); pointer-events: auto; }
-/* a device picker inside an editable table (the services' devices): top-aligned with the line's other fields */
-table.rows.edit td { vertical-align: top; }
-table.rows.edit td > .muted.small { display: block; padding-top: 12px; }
 a.jump { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
 .card.flash { outline: 2px solid var(--accent); outline-offset: 2px; transition: outline-color .4s; }
 /* ⚠️ A VALUE A PERSON CAN CHANGE (owner, 2026-10-23): one look wherever the page shows one (core.setting), a press opens
@@ -532,8 +500,6 @@ th button.info, .field button.info { font-size: 1em; }
 .title-switch { min-height: 0; }
 .row-inline { flex-direction: row; align-items: center; gap: 8px; }
 .row-inline input[type=number] { width: 80px; }
-table.rows.ai td.with-caption .dropdown { max-width: 260px; }
-@media (max-width: 600px) { table.rows.ai td.with-caption { grid-column: 1 / -1; grid-row: 3; } }
 /* a chip after a name in a table cell keeps its distance (Skills › When the skill runs: "fm-daily  AI job") */
 table.rows td > * + .chip, table.rows td .cell-v > * + .chip { margin-left: 8px; }
 /* the tools by role on a phone: "Facility manager" ran into "Guest" — its column wider there, the heads tighter */
@@ -546,7 +512,6 @@ table.rows td > * + .chip, table.rows td .cell-v > * + .chip { margin-left: 8px;
 /* Skills › Files: a Markdown file formatted (markdown.js), its switch to the raw text on the legend's line */
 .file-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 4px 0 10px; }
 .file-bar .legend { margin: 0; }
-.editor[hidden], .file-view[hidden] { display: none; }
 /* a YAML file formatted (viewer.yamlView): as written, each kind of piece in its colour */
 .yaml-box { border: 1px solid var(--hairline); border-radius: var(--radius); background: var(--bg-input); min-height: 30vh; }
 .yaml-view { margin: 0; padding: 12px 14px; font-family: var(--font-mono); font-size: var(--text-sm); line-height: 1.6;
@@ -576,9 +541,10 @@ table.rows td > * + .chip, table.rows td .cell-v > * + .chip { margin-left: 8px;
 .md-meta { display: grid; grid-template-columns: max-content 1fr; gap: 4px 14px; margin: 0 0 12px; padding-bottom: 10px; border-bottom: 1px solid var(--hairline); font-size: var(--text-sm); }
 .md-meta dt { color: var(--text-dim); } .md-meta dd { margin: 0; }
 
+/* a card's search (core.searchBox) */
+.search-box { margin: 4px 0 12px; }
+.search-box input { width: 100%; max-width: 420px; }
 /* the Limits tab (limits.js) */
-.limits-search { margin: 4px 0 12px; }
-.limits-search input { width: 100%; max-width: 420px; }
 table.limits td { vertical-align: top; padding-top: 6px; padding-bottom: 6px; }
 .limit-what { line-height: 1.3; }
 .limit-what .muted, .limit-reached { margin-top: 1px; }

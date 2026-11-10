@@ -1,5 +1,5 @@
 // VESTA Agent page — the Skills tab.
-import { api, ask, dropdown, field, fileBase64, fill, go, guard, h, infoButton, markDirty, page, paged, place, plural, popup, problemsBox, reasons, saveWith, setBar, setting, showBar, subTabs, tabbed, tell, tileCard, titleWithInfo, toast, toggleCard, $view, where } from "./core.js";
+import { api, ask, dropdown, field, fileBase64, fill, guard, h, infoButton, loading, measured, page, paged, place, plural, popup, problemsBox, reasons, setBar, setting, subTabs, tabbed, tell, tileCard, titleWithInfo, toast, toggleCard, $view, where } from "./core.js";
 import { openTools } from "./rules.js";
 import { fileEditor } from "./viewer.js";
 
@@ -28,7 +28,7 @@ export function skillSwitch(name, on, select) {
 }
 
 export async function skills(select = null, at = undefined) {
-  fill($view, h("p", { class: "muted" }, "Loading…"));
+  loading();
   const { skills: list } = await api("GET", "api/skills");
   const side = h("div", { class: "card" },
     titleWithInfo("Skills", "Each skill is a folder of files. A change counts at the agent's next use, no restart. The switch beside a skill turns it on or off for this villa."),
@@ -58,11 +58,6 @@ export async function skills(select = null, at = undefined) {
 export async function setCommand(skill, script, command, on, box) {
   try { await api("PUT", `api/skills/${encodeURIComponent(skill)}/commands`, { script, command, on }); toast(`${command || script} switched ${on ? "on" : "off"} for the AI.`); }
   catch (e) { box.checked = !on; box.closest(".tool-card")?.classList.toggle("is-on", !on); tell("Not changed", reasons(e)); }
-}
-
-// 2C's one-press fix: the agent switches the tool on where its switch is (tool_access.switch_on), same checks as a save
-export async function switchTool(b) {
-  await api("POST", "api/tools/on", { tool: b.tool });
 }
 
 // A command's Offline Test: run by the agent on the live villa, exactly as the AI would — nothing is sent.
@@ -141,7 +136,7 @@ export function tryPanel(name, d, script, command = null) {
     } catch (e) { fill(out, problemsBox(reasons(e), "Not run:")); }
   }
   draw();
-  return h("div", { class: "skill-sec try" },
+  return h("div", { class: "skill-sec" },
     opts,
     h("div", { class: "actions" }, h("button", { class: "btn primary", onclick: run }, "Run")),
     out);
@@ -269,7 +264,8 @@ export async function openSkill(name, pane, info, path = ABOUT) {
     h("p", { class: "muted" }, "Its reports still run and the AI works without it; switch it on for the whole skill."),
     h("div", { class: "actions" },
       ...fixes.map((b) => h("button", { class: "btn primary", onclick: async () => {
-        try { await switchTool(b); toast(`${b.label} switched on.`); skills(name); } catch (err) { tell("Not changed", reasons(err)); }
+        // 2C's one-press fix: the agent switches the tool on where its switch is (tool_access.switch_on), same checks as a save
+        try { await api("POST", "api/tools/on", { tool: b.tool }); toast(`${b.label} switched on.`); skills(name); } catch (err) { tell("Not changed", reasons(err)); }
       } }, `Switch ${b.label} on`)),
       h("button", { class: "btn ghost", onclick: async () => { if (await guard()) openTools(); } }, `Open ${where("tools")}`))) : null;
   const notLoaded = info && !info.ok && !d.off ? problemsBox([info.problem], "The agent does not use this skill:") : null;
@@ -330,11 +326,7 @@ export async function openSkill(name, pane, info, path = ABOUT) {
     more.hidden = !filesOpen && !overflow;
     more.textContent = filesOpen ? "Fewer" : `All ${files.length} files`;
   };
-  // measured after layout and on a window resize (a ResizeObserver here loops: the button changes the width it watches)
-  requestAnimationFrame(fits);
-  document.fonts?.ready.then(() => fileList.isConnected && fits());   // the file names' font widens them once it loads
-  const onResize = () => (fileList.isConnected ? fits() : window.removeEventListener("resize", onResize));
-  window.addEventListener("resize", onResize);
+  measured(fileList, fits);              // on the page (core.measured): the file names' font widens them once it loads
   const save = () => ed.save(`${path} saved.`);
   const newFile = async () => {
     const p = await ask({ title: "New file", text: `In ${name}. A folder may be part of the name.`, ok: "Create",

@@ -1,5 +1,5 @@
 // VESTA Agent page — the Rules tab (policy.yaml): the forms, the file, and AI tools.
-import { api, card, dropdown, editTable, field, fill, floating, go, h, infoButton, inOrder, jobsBanner, jump, markDirty, page, pagedBlock, place, plural, problemsBox, reasons, saveWith, setBar, tabbed, table, tableRow, tell, titleWithInfo, toast, toggleCard, $view, where, withInfo } from "./core.js";
+import { api, card, cardWith, dropdown, editTable, field, fill, floating, go, h, infoButton, inOrder, jobsBanner, jump, loading, markDirty, measured, page, pagedBlock, place, plural, problemsBox, reasons, saveWith, setBar, tabbed, table, tableRow, tell, toast, toggleCard, $view, when, where, withInfo } from "./core.js";
 import { fileEditor } from "./viewer.js";
 
 // ---------------------------------------------------------------- rules (policy.yaml)
@@ -23,7 +23,7 @@ export function openTools() {
 }
 
 export async function rules(sub = "forms") {
-  fill($view, h("p", { class: "muted" }, "Loading…"));
+  loading();
   page.dirty = false;
   // the forms are "Rules", the raw file is "Rules (file)": two tabs at the top, no sub-menu (owner, 2026-10-01).
   // ⚠️ THE FILE ASKS FOR THE FILE ONLY (architecture review 9): it is where a broken policy.yaml is repaired, and it
@@ -84,7 +84,7 @@ export function rulesForms(doc, jobs = [], tools = null) {
   const pairOf = (skill) => f.settings.skill_ai[skill] ?? jobs.find((j) => j.skill === skill).skill_ai;
   // a change writes the skill's pair (an older file's moves to it on save)
   const own = (skill) => (f.settings.skill_ai[skill] ??= { ...pairOf(skill) });
-  // how often a job runs, in words and per month: the scheduler's answer (/api/jobs), not re-parsed here
+  // how often a job runs, in words and per month: the scheduler's answer (api/rules' jobs), not re-parsed here
   // the month's ceiling: computed when the (i) of "Limit (US$)" opens, from the limits as they are on the page
   const limitNote = () => {
     const n = jobs.reduce((s, j) => s + ((pairOf(j.skill) || {}).limit_usd || 0) * j.runs_per_month, 0);
@@ -238,8 +238,7 @@ export function rulesForms(doc, jobs = [], tools = null) {
     h("input", { type: "number", ...bounds("approval_ttl_minutes"), value: f.approval_ttl_minutes, "aria-label": W("approval_ttl_minutes"),
                  oninput: on((t) => (f.approval_ttl_minutes = num(t.value))) }), h("span", {}, "min"),
     infoButton(W("approval_ttl_minutes"), "An Approve or Refuse button older than this does nothing: the person asks again."))
-  const services = h("section", { class: "card" },
-    titleWithInfo(place("actions"), "One line per service of the villa's system, and who decides. Anything not listed is refused. Restarts, shell commands, toggles and the like are refused whatever this says. For \"Only the devices chosen beside it\", choose the devices on the same line: the agent may act only on those, and still asks for approval.", "h2", ttl),
+  const services = cardWith(ttl, place("actions"), "One line per service of the villa's system, and who decides. Anything not listed is refused. Restarts, shell commands, toggles and the like are refused whatever this says. For \"Only the devices chosen beside it\", choose the devices on the same line: the agent may act only on those, and still asks for approval.",
     ...editTable(svcRows, {
       cls: "svc", add: "Add a service", blank: () => ["", "any"], per: 10,      // 10 lines a page (owner, 2026-10-06)
       changed: () => { f.allowed_services = Object.fromEntries(svcRows.filter(([k]) => k)); },
@@ -279,8 +278,6 @@ export function rulesForms(doc, jobs = [], tools = null) {
 // Three switches in policy.yaml (tool_access.py on the agent's side): the Home Assistant tools it may read with
 // (ha_read_tools), the agent's own tools a villa may switch off (agent_tools; web search is settings.web_search),
 // and what the facility manager may make it use (tool_access.fm). Saved with the rest of the form.
-
-
 export function toolsCard(f, t, reload) {
   f.ha_read_tools = f.ha_read_tools || []; f.agent_tools = f.agent_tools || {}; f.tool_access = f.tool_access || {};
   let draw = () => {};                 // the open tab drawn again (core.tabbed's redraw, once the tabs exist)
@@ -295,7 +292,7 @@ export function toolsCard(f, t, reload) {
   const haInfo = () => {
     const on = new Set(f.ha_read_tools);
     return (t.count ? `${[...on].filter((n) => t.groups.some((g) => g.tools.some((x) => x.name === n))).length} of ${t.count} tools on. ` : "The list is not read yet. ")
-      + (t.read_at ? `From the villa's system${t.server ? " (" + t.server + ")" : ""}, read ${new Date(t.read_at).toLocaleString()}.` : "The agent reads it when it starts.");
+      + (t.read_at ? `From the villa's system${t.server ? " (" + t.server + ")" : ""}, read ${when(t.read_at)}.` : "The agent reads it when it starts.");
   };
   const ha = () => {
     const on = new Set(f.ha_read_tools);
@@ -375,18 +372,14 @@ export function toolsCard(f, t, reload) {
 }
 
 /** A pill that says `long` while it fits on one line, else `short`: measured against its own one-line height (the short
- *  words), after layout, when the fonts arrive and on every resize; a pill gone from the page stops listening. */
+ *  words), on the page (core.measured). */
 function fitWords(pill, long, short) {
   if (!short || short === long) return pill;
-  const fit = () => {
-    if (!pill.isConnected) { window.removeEventListener("resize", fit); return; }
+  measured(pill, () => {
     pill.textContent = short;
     const one = pill.offsetHeight;
     pill.textContent = long;
     if (pill.offsetHeight > one) pill.textContent = short;
-  };
-  requestAnimationFrame(fit);
-  document.fonts?.ready.then(() => pill.isConnected && fit());
-  window.addEventListener("resize", fit);
+  });
   return pill;
 }

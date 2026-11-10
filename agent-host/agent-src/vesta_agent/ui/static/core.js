@@ -23,13 +23,12 @@ export const page = {
   here: null,               // how to draw the current place again exactly (a tab sets it when it has more than its tab)
   back: null,               // where a press on a value came from: {tab, here, y} — the Limits tab's Back (goBack)
   views: {},                // the tabs, by name: filled by app.js
+  fileView: null,           // a file shown formatted or raw (viewer.js): one choice for every file, while the page is open
 };
 
-
 export const $view = document.getElementById("view");
-export const $bar = document.getElementById("savebar");
-export const $toast = document.getElementById("toast");
-
+const $bar = document.getElementById("savebar");
+const $toast = document.getElementById("toast");
 
 // ---------------------------------------------------------------- helpers
 export function h(tag, attrs = {}, ...kids) {
@@ -139,7 +138,7 @@ export function dropdown(options, value, pick, label) {
 // own tbody, redraw, remove button, Add button, markDirty — and their phone layouts were CSS keyed by
 // nth-child to the column order written here, so moving a column broke the phone silently. Each column now
 // says its width (a <col>, which the page's CSP allows where a style attribute is blocked) and where it goes
-// on a phone: "a" / "b" the first line's two halves, "ab" both, "c" / "d" the second line's, "cd" all of it.
+// on a phone, a line of its own each: "ab" the first, "cd" the second, "ef" the third (app.css .ph-*).
 // The remove button is always at the end of the first line. Returns [table, its Add button].
 export function editTable(rows, { cls, columns, cell: draw, blank, add, changed = () => {}, per = PER_PAGE }) {
   const body = h("tbody");
@@ -151,8 +150,6 @@ export function editTable(rows, { cls, columns, cell: draw, blank, add, changed 
   return [table([...columns.map((c) => c.title), ""], body, { cls: `edit ${cls}`, widths: [...columns.map((c) => c.width), "44"] }), pager.nav, h("div", { class: "actions" }, h("button", { class: "btn ghost", onclick: () => { rows.push(blank()); pager.last(); touched(); } }, add))];
 }
 
-// `file`: the answer is a file to save ({blob, name}); its refusal still comes as reasons (the export used its own
-// fetch and its own error handling, architecture review 9)
 // A file the person picked, as base64 for a JSON body (an imported setup, a .skill file): read in slices, so a large
 // file never overflows String.fromCharCode's arguments.
 export async function fileBase64(file) {
@@ -161,16 +158,13 @@ export async function fileBase64(file) {
   return btoa(bin);
 }
 
+// `file`: the answer is a file to save ({blob, name}); its refusal still comes as reasons (the export used its own
+// fetch and its own error handling, architecture review 9)
 export async function api(method, path, body, { file = false } = {}) {
   const opts = { method, headers: {} };
-  if (body !== undefined) {
-    opts.headers["Content-Type"] = "application/json";
-    opts.headers["X-Vesta-UI"] = "1";
-    opts.body = JSON.stringify(body);
-  } else if (method !== "GET") {
-    opts.headers["Content-Type"] = "application/json";
-    opts.headers["X-Vesta-UI"] = "1";
-    opts.body = "{}";
+  if (body !== undefined || method !== "GET") {          // a write: the page's header, and a body (an empty one too)
+    opts.headers = { "Content-Type": "application/json", "X-Vesta-UI": "1" };
+    opts.body = JSON.stringify(body !== undefined ? body : {});
   }
   // ⚠️ EVERY FAILURE SAYS WHY (architecture review 7): a dropped connection (an Ingress session ended, the agent
   // restarting) threw an error with no reasons, and the page showed an empty box or a "Not changed" with no words
@@ -191,27 +185,48 @@ export async function api(method, path, body, { file = false } = {}) {
   return data;
 }
 
-export const UNREACHABLE = "The VESTA Agent could not be reached (the connection dropped, or the app is restarting). Reload the page, then try again.";
+const UNREACHABLE = "The VESTA Agent could not be reached (the connection dropped, or the app is restarting). Reload the page, then try again.";
 
 // The reasons of any error, in words: a refusal's own, or what went wrong.
 export const reasons = (e) => (e && Array.isArray(e.problems) && e.problems.length ? e.problems : [String(e || "Something went wrong.")]);
 
-// ⚠️ ONE SAVE (review 7: three copies): send it, then mark the page clean, clear the problems and say so — or show
-// why it was not saved, in view.
-export async function saveWith(probs, send, okText) {
+// ⚠️ ONE SAVE (review 7: three copies; UI scan 2026-11-10: three more, the rows saved at once): send it, clear the
+// problems and say so — or show why it was not saved, in view. `okText`: the words, or (answer) => the words;
+// `title`: the refusal's heading. Returns the answer, null when it was refused.
+export async function saveNow(probs, send, okText, title = "Not saved:") {
   try {
     const res = await send();
-    page.dirty = false; fill(probs); showBar(); toast(okText);
+    fill(probs); toast(typeof okText === "function" ? okText(res) : okText);
     return res;
   } catch (e) {
-    fill(probs, problemsBox(reasons(e)));
+    fill(probs, problemsBox(reasons(e), title));
     probs.scrollIntoView?.({ behavior: "smooth", block: "center" });
     return null;
   }
 }
+// the save bar's save: the same, and the page is clean again
+export async function saveWith(probs, send, okText) {
+  const res = await saveNow(probs, send, okText);
+  if (res !== null) { page.dirty = false; showBar(); }
+  return res;
+}
 
 // replaceChildren() prints a null as the text "null": the optional parts are filtered first.
 export function fill(el, ...kids) { el.replaceChildren(...kids.flat().filter((k) => k !== null && k !== undefined && k !== false)); }
+
+// what every tab shows while its answer is on the way
+export const loading = () => fill($view, h("p", { class: "muted" }, "Loading…"));
+
+// ⚠️ ONE WAY TO WRITE A MOMENT (UI scan, 2026-11-10: Overview's "Ran at" and the tools' "read" showed the seconds,
+// Changes and Every run did not): the device's own short date and time
+export const when = (at) => new Date(at).toLocaleString([], { dateStyle: "short", timeStyle: "short" });
+
+// The search over a list (Limits, Knowledge's two device lists): `words` its placeholder and its name, `typed(text)`
+// on every key.
+export function searchBox(words, value, typed) {
+  return h("div", { class: "search-box" }, h("input", { type: "search", placeholder: words, value, "aria-label": words,
+    oninput: (e) => typed(e.target.value) }));
+}
 
 export function toast(text) {
   $toast.textContent = text; $toast.hidden = false;
@@ -232,7 +247,12 @@ export function card(title, lead, ...kids) {
   return h("section", { class: "card" }, titleWithInfo(title, lead), ...kids);
 }
 
-// A title, its (i), and an optional control on the same line, right-aligned (the Costs' period).
+// A card whose title's line holds a control, on the right: Costs' period, Allowed actions' Approve time, Limits' Back.
+export function cardWith(right, title, lead, ...kids) {
+  return h("section", { class: "card" }, titleWithInfo(title, lead, "h2", right), ...kids);
+}
+
+// A title, its (i), and an optional control on the same line, right-aligned (cardWith).
 // ⚠️ THE TEXT IS A TOOLTIP, NEVER INSERTED IN THE PAGE (owner, 2026-10-06): it floats over the page on hover or
 // keyboard focus, and on a tap (a phone has no hover); a second tap, a tap elsewhere, Escape or scrolling closes it.
 export function titleWithInfo(title, text, tag = "h2", right = null) {
@@ -286,8 +306,8 @@ export function infoButton(about, text) {
   return btn;
 }
 
-export let openTip = null;
-export function infoTip(btn, text, kind = "") {
+let openTip = null;
+function infoTip(btn, text, kind = "") {
   let float = null, pinned = false;
   const close = () => { if (float) float.close(); };
   const open = () => {
@@ -365,7 +385,7 @@ export function moreButton(label) {
 // the AI's work and the tools by role (Rules). `head`: the column titles; `body`: rows of cells, or a <tbody> its caller
 // fills; `widths`: one <col> each (the page's CSP blocks a style attribute). A cell is a node, a text, or {v, cls, colspan}.
 const isCell = (c) => !!c && typeof c === "object" && !(c instanceof Node) && "v" in c;
-export function cell(c, tag = "td", { cls = null, label = null } = {}) {
+function cell(c, tag = "td", { cls = null, label = null } = {}) {
   const v = isCell(c) ? c.v : c;
   // ⚠️ SEVERAL PIECES ARE ONE VALUE (owner, 2026-10-08, a phone: "fm-daily" sat mid-card, its "AI job" chip at the
   // edge): a labelled cell becomes "label … value" on a phone, and the card spread the pieces apart; held together
@@ -419,10 +439,17 @@ export function tabbed(id, items) {
   return { bar, body, redraw: () => show(page.tabs[id]) };
 }
 
+// A card of tabs (subTabs, each tab's own (i)): [key, label, what it is about, draw()]; `lead`: the card's own (i).
+// Its tab is kept in page.tabs, so Costs' period changed keeps the tab you were on.
+export function tabbedCard(title, id, tabs, lead = null) {
+  const t = tabbed(id, tabs);
+  return card(title, lead, t.bar, t.body);
+}
+
 // Pages of at most `per` lines for an editable list (owner, 2026-10-06: "max 15 lines, so the UI stays consistent").
 // `draw(slice, offset)` fills the page; returns [box, nav, api]: api.redraw() after a change, api.last() to show the
 // last page (after Add).
-export const PER_PAGE = 15;
+const PER_PAGE = 15;
 export function pagedBlock(count, draw, per = PER_PAGE, [prev, next, unit] = ["‹ Previous", "Next ›", "lines"]) {
   const nav = h("div", { class: "pager" });
   let page = 0;
@@ -497,7 +524,7 @@ export async function guard() {
 }
 window.addEventListener("beforeunload", (e) => { if (page.dirty) { e.preventDefault(); e.returnValue = ""; } });
 
-export let barState = null;
+let barState = null;
 export function setBar(state) { barState = state; showBar(); }
 export function showBar() {
   $bar.replaceChildren();
@@ -512,15 +539,11 @@ export function showBar() {
 // A job policy.yaml does not name does not run (owner, 2026-10-01): say so where it is seen, and add them
 // with the starter values their skill offers, in one press.
 // written by the agent (POST api/jobs/missing): the page no longer reads, changes and writes the whole form for it
-export async function addMissingJobs() {
-  await api("POST", "api/jobs/missing", {});
-}
-
 export function jobsBanner(names, after) {
   if (!names || !names.length) return null;
   const btn = h("button", { class: "btn primary", onclick: async () => {
     btn.disabled = true;
-    try { await addMissingJobs(); toast("AI jobs added. Change their skill's brain or limit under Rules."); after(); }
+    try { await api("POST", "api/jobs/missing", {}); toast("AI jobs added. Change their skill's brain or limit under Rules."); after(); }
     catch (e) { btn.disabled = false; tell("Not added", e.problems); }
   } }, "Add them");
   return h("div", { class: "banner" },
@@ -560,7 +583,7 @@ export function setting(text, ref) {
 // ⚠️ BACK WHERE THE VALUE WAS PRESSED (owner, 2026-10-24: "a back button, so that I can come back to the same page I
 // clicked from, after having edited or not the value"): the tab, its own place in it (a skill and its file: `here`) and
 // the scroll, as they were; null when the Limits tab was not opened from a value
-export async function goBack() {
+async function goBack() {
   const b = page.back;
   if (!b || !(await guard())) return;
   page.back = null;
@@ -574,8 +597,18 @@ export async function goBack() {
 export function backButton() {
   if (!page.back) return null;
   const label = document.querySelector(`.tabs button[data-tab="${page.back.tab.replace("-file", "")}"]`)?.textContent?.trim();
-  return h("button", { type: "button", class: "btn ghost back-btn", title: label ? `Back to ${label}` : "Back",
+  return h("button", { type: "button", class: "btn ghost", title: label ? `Back to ${label}` : "Back",
     "aria-label": label ? `Back to ${label}` : "Back", onclick: goBack }, "‹ Back");
+}
+
+// ⚠️ ONE "MEASURED ON THE PAGE" (UI scan, 2026-11-10: a role's pill and a skill's line of files each wired it): `fit`
+// runs after layout, when the fonts arrive (they widen the words) and on every resize; a node gone from the page stops
+// listening. (A ResizeObserver loops where `fit` changes the width it would watch.)
+export function measured(node, fit) {
+  const again = () => (node.isConnected ? fit() : window.removeEventListener("resize", again));
+  requestAnimationFrame(again);
+  document.fonts?.ready.then(again);
+  window.addEventListener("resize", again);
 }
 
 // a link to another card of the Rules page: scrolls to it and outlines it a moment

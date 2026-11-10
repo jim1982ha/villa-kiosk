@@ -143,6 +143,18 @@ def test_the_page_and_its_files_are_served_with_a_strict_policy(ui):
     assert "http://" not in html and "https://" not in html                         # nothing from the internet
 
 
+def test_the_header_says_the_version_whichever_tab_the_page_opens_on(ui, monkeypatch):
+    # the Overview tab wrote it once its data had arrived: a page opened or reloaded on another tab had an empty header
+    from dataclasses import replace
+    monkeypatch.setenv("VESTA_APP_VERSION", "9.8.7")
+
+    async def fn(c):
+        return await (await c.get("/")).text()
+    header = lambda s: call(s, fn).split("<header", 1)[1].split("</header>", 1)[0]   # noqa: E731
+    assert ">v9.8.7<" in header(replace(ui, instance="prod"))                        # the villa's own: the app's version
+    assert ">v9.8.7 · dev<" in header(replace(ui, instance="dev"))                   # another one says which
+
+
 def test_the_rules_choose_devices_from_the_villas_own_by_name(ui):
     # owner, 2026-10-01: "free form text inputs are not suitable" — the pickers list the pack's entities
     import json
@@ -156,7 +168,7 @@ def test_the_rules_choose_devices_from_the_villas_own_by_name(ui):
                    "unclassified": ["sensor.example_unknown"], "retention": {}}, f)
 
     async def fn(c):
-        return await (await c.get("/api/entities")).json(), await (await c.get("/api/policy")).json()
+        return await (await c.get("/api/rules")).json(), await (await c.get("/api/policy")).json()
     ents, doc = call(ui, fn)
     assert ents["entities"] == [{"id": "scene.example_evening", "name": "Evening", "area": ""},
                                 {"id": "lock.example_door", "name": "Front door", "area": "Entrance"}]

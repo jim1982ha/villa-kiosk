@@ -1,3 +1,12 @@
+## 0.12.498
+
+- The version beside "VESTA AGENT" at the top of the Agent's page shows on every tab. It was empty when the page
+  opened or was reloaded on a tab other than Overview.
+- Every date on the Agent's page is written the same way, without seconds. Overview's "Ran at" column and the
+  Rules tab's "read …" line for the villa's tools still showed the seconds.
+- Nothing else changes in what the page shows. Its repeated pieces (a save and its answer, a search box, a card of
+  tabs, the light and dark colours) are now written once, and code that nothing used is removed.
+
 ## 0.12.497
 
 - A problem that comes back on the same day is told as back. A critical device offline a second time in one day

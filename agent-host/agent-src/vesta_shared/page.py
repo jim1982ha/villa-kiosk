@@ -32,7 +32,7 @@ def templates(skill_dir: str) -> Environment:
 
 # ---------------------------------------------------------------- the charts
 # Drawn as inline SVG: nothing fetched, nothing run in the reader's browser, and they print as they
-# show. Colours are the page's custom properties (templates/report.html).
+# show. Colours are the page's custom properties (templates/page_head.html).
 W, H, PAD_L, PAD_R, PAD_T, PAD_B = 400, 150, 34, 12, 14, 22
 
 
@@ -78,9 +78,6 @@ def number(v, unit: str | None = None, *, whole: bool = False) -> str:
     if s == "-0":
         s = "0"
     return s if not unit else (s + unit if unit == "%" else f"{s} {unit}")
-
-
-_nice = number  # the charts' own name for it, kept for their lines (number is the one rule)
 
 
 def _tip(x: float, y: float, x0: float, x1: float, top: float, bottom: float, label: str, w_: float = W) -> str:
@@ -165,11 +162,11 @@ def line(series: list, unit: str = "", ref: float | None = None, area: bool = Fa
     out += [f'<path d="{path}" fill="none" stroke="{colour}" stroke-width="2"/>',
             f'<circle cx="{lx:.1f}" cy="{ly:.1f}" r="3.5" fill="{colour}"/>',
             f'<text x="{lx - 6:.1f}" y="{ly - 8:.1f}" font-size="11" font-weight="600" text-anchor="end" fill="var(--ink)">'
-            f'{_nice(pts[-1][1])}{(" " + _esc(unit)) if unit else ""}</text>',
+            f'{number(pts[-1][1])}{(" " + _esc(unit)) if unit else ""}</text>',
             f'<text x="{PAD_L}" y="{H - 6}" font-size="10" fill="var(--ink2)">{_esc(_day(pts[0][0]))}</text>',
             f'<text x="{W - PAD_R}" y="{H - 6}" font-size="10" text-anchor="end" fill="var(--ink2)">{_esc(_day(pts[-1][0]))}</text>']
     u = f" {unit}" if unit else ""
-    out += [_tip(x, yy, x - step / 2, x + step / 2, PAD_T, H - PAD_B, f"{_day(d)} · {_nice(v)}{u}")
+    out += [_tip(x, yy, x - step / 2, x + step / 2, PAD_T, H - PAD_B, f"{_day(d)} · {number(v)}{u}")
             for (d, v), (x, yy) in zip(pts, xy)]
     out.append("</svg>")
     return _framed("".join(out))
@@ -194,11 +191,11 @@ def bars(items: list, highlight_last: bool = True) -> str:
                        f'fill="{"var(--acc)" if last else "var(--c3)"}"/>')
             if last:
                 out.append(f'<text x="{x + w / 2:.1f}" y="{y(b["value"]) - 4:.1f}" font-size="10" text-anchor="middle" '
-                           f'fill="var(--ink)">{_nice(b["value"])}</text>')
+                           f'fill="var(--ink)">{number(b["value"])}</text>')
         out.append(f'<text x="{x + w / 2:.1f}" y="{H - 6}" font-size="9" text-anchor="middle" fill="var(--ink2)">{_esc(str(b["label"]))}</text>')
         if b.get("value") is not None:
             out.append(_tip(x + w / 2, y(b["value"]), PAD_L + i * slot, PAD_L + (i + 1) * slot, PAD_T, H - PAD_B,
-                            f"{b['label']} · {_nice(b['value'])}"))
+                            f"{b['label']} · {number(b['value'])}"))
     out.append("</svg>")
     return _framed("".join(out))
 
@@ -222,12 +219,12 @@ def pairs(rows: list) -> str:
             x = x0 + k * w
             out.append(f'<rect x="{x:.1f}" y="{y(v):.1f}" width="{w - 1:.1f}" height="{y(0) - y(v):.1f}" rx="2" fill="{fill}"/>')
             if k == 1:
-                out.append(f'<text x="{x + w / 2:.1f}" y="{y(v) - 4:.1f}" font-size="10" text-anchor="middle" fill="var(--ink)">{_nice(v)}</text>')
+                out.append(f'<text x="{x + w / 2:.1f}" y="{y(v) - 4:.1f}" font-size="10" text-anchor="middle" fill="var(--ink)">{number(v)}</text>')
         out.append(f'<text x="{x0 + w:.1f}" y="{h - 6}" font-size="10" text-anchor="middle" fill="var(--ink2)">{_esc(r["day"])}</text>')
         now_, prev_ = r.get("kwh"), r.get("prev_kwh")
         if now_ is not None or prev_ is not None:
-            words = " · ".join(t for t in ((f"{_nice(now_)} kWh" if now_ is not None else ""),
-                                           (f"before {_nice(prev_)}" if prev_ is not None else "")) if t)
+            words = " · ".join(t for t in ((f"{number(now_)} kWh" if now_ is not None else ""),
+                                           (f"before {number(prev_)}" if prev_ is not None else "")) if t)
             top_v = max(v for v in (now_, prev_) if v is not None)
             out.append(_tip(x0 + w, y(top_v), PAD_L + i * slot, PAD_L + (i + 1) * slot, PAD_T, h - PAD_B,
                             f"{r['day']} · {words}", w_))
@@ -237,7 +234,7 @@ def pairs(rows: list) -> str:
 
 # ---------------------------------------------------------------- charts by time (the investigation's)
 # ⚠️ ONE CHART MODULE (owner, 2026-10-19): these three were the investigate skill's page.py, built on six private
-# names of this module (_axis, _framed, _scale, _ticks, _tip, _nice). Their colours and words are the caller's
+# names of this module (_axis, _framed, _scale, _ticks, _tip, number). Their colours and words are the caller's
 # (parameters): a chart knows how to draw, the investigation what its bands and lanes mean (vesta_shared.periods).
 READINGS, USUAL = "var(--acc)", "var(--c3)"           # a device's own line, and its usual: the defaults
 

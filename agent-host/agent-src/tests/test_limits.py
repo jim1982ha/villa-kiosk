@@ -211,6 +211,6 @@ def test_a_choice_is_said_in_its_words_and_a_share_stays_within_0_and_1(ui):
     assert any(w == "settings.conversation_reset: Every day at 04:00 → After 8h of silence" for w in whats), whats
     assert any(" → 0.5" in w and ": → 0.5" not in w for w in whats), whats            # a skill's save says its value before
     js = (Path(__file__).resolve().parents[1] / "vesta_agent" / "ui" / "static" / "limits.js").read_text()
-    assert "toast(`Saved: ${r.name} = ${said(r, value)}`)" in js
+    assert "`Saved: ${r.name} = ${said(r, value)}`" in js
 
 

@@ -11,19 +11,6 @@ import { skills } from "./skills.js";
 
 page.views = { overview, rules, "rules-file": () => rules("file"), knowledge, skills, costs, limits };
 
-// ---------------------------------------------------------------- theme (Light / Auto / Dark)
-export function setTheme(mode) {
-  if (mode === "light" || mode === "dark") document.documentElement.setAttribute("data-theme", mode);
-  else document.documentElement.removeAttribute("data-theme");
-  try { localStorage.setItem("vesta-agent-theme", mode); } catch (e) { /* kept for this visit only */ }
-  document.querySelectorAll("[data-theme-set]").forEach((b) => {
-    b.classList.toggle("on", b.dataset.themeSet === mode);
-    b.setAttribute("aria-checked", String(b.dataset.themeSet === mode));
-  });
-}
-document.querySelectorAll("[data-theme-set]").forEach((b) => b.addEventListener("click", () => setTheme(b.dataset.themeSet)));
-setTheme(document.documentElement.getAttribute("data-theme") || "auto");
-
 // ---------------------------------------------------------------- tabs
 // one "Rules (file)" tab (owner, 2026-10-01): "Rules" opens the forms, "(file)" the file itself
 document.querySelectorAll(".tabs button").forEach((b) => b.addEventListener("click", async (e) => {

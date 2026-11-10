@@ -617,8 +617,8 @@ then fixed with the probe's scenarios as the tests. Decided:
   SKILL.md's example for the AI's own rows all read it. `timeutil.said(value, zone, weekday=, day=)` is the one reader
   of a stored ISO day or moment on a report page (playbook `_fill`, compose `day()` / `when()`); facts.json keeps ISO.
   `month_label`, `day_label(short=True)` replace the last two strftime calls (test_one_day_format forbids "%d").
-- **One number rule**: `vesta_shared.page.number(v, unit=None, *, whole=False)` — compose.num, the charts' `_nice`
-  (an alias) and roi-energy's headline. Decided: one decimal from 10 on (the composer's "12.3"), two under 10 (the
+- **One number rule**: `vesta_shared.page.number(v, unit=None, *, whole=False)` — compose.num, the charts
+  and roi-energy's headline. Decided: one decimal from 10 on (the composer's "12.3"), two under 10 (the
   charts' "0.15"), whole from 100 on and for a tile. A chart tip reads "12.5 kWh" where it read "12".
 - **The agreement's words are read from the file, never typed**: `kiosk.KINDS`, `kiosk.AGENT_BY`, `kiosk.taken_step`
   (`ticket.takenStep`: status, kind null, `byNot` the stamp), `problems.agreed(field, word)` (`ticket.origins`,
@@ -1344,3 +1344,21 @@ An alert's Kiosk fault travels with its tablet record: each push of `incident:<n
 before it (`KioskMessages.fault` = `Tickets.follow`, its own time limit; a failure never holds the words), so the
 card's name and "monitoring until" change with its words (owner's drill, 2026-11-07 10:56: 15s behind Telegram). The
 repairs after the result stay for what only they do (a new fault, the story's lines once recorded).
+
+## The page's shared pieces, each written once (owner's UI scan, 2026-11-10, 0.12.498)
+
+What a tab's module no longer writes itself (`static/core.js` owns it): a save and its answer (`saveNow`: the toast,
+or the reasons in the row's red box; `saveWith` for a card's Save button), the "Loading…" line (`loading`), a moment
+(`when`: one format, no seconds), a card's search (`searchBox`, class `search-box`), a card with something on its
+title's line (`cardWith`), a card of tabs (`tabbedCard`), and a fit measured again when the width changes
+(`measured`: Rules' role words, Skills' file line).
+
+| Job | One owner |
+|---|---|
+| The theme: the stored choice, Auto following the device, the header's three buttons | `static/theme.js` (always writes `data-theme` on `<html>`; `app.css` holds the dark palette once, under `:root[data-theme="dark"]`) |
+| The version beside the title, on every tab | `server.index` (`{ver}`, `{ver_title}` in `index.html`); the Overview's answer no longer carries it |
+| The jobs, devices and tools the Rules tab lists | `server.rules_view` (the routes `/api/jobs`, `/api/entities`, `/api/tools` had no caller and are removed) |
+| A sent page's two palettes | `templates/page_head.html` (`{% set light %}` / `{% set dark %}`, each written once and used by the five theme selectors) |
+
+Kept on purpose: the sent pages' style classes no shipped template uses (`btn`, `btns`, `faint`, `p3`, `p4`, `sw`): a
+skill edited on a villa is kept by updates and may still write them.

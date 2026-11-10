@@ -23,6 +23,7 @@ import json
 import logging
 import os
 from datetime import datetime, timezone
+from html import escape
 
 import yaml
 from aiohttp import web
@@ -123,10 +124,8 @@ class UI:
         r.add_get("/api/policy", self.policy_get)
         r.add_put("/api/policy/form", self.policy_form)
         r.add_put("/api/policy/text", self.policy_text)
-        r.add_get("/api/jobs", self.jobs)
         r.add_post("/api/jobs/missing", self.jobs_add_missing)
         r.add_post("/api/translations/forget", self.translations_forget)
-        r.add_get("/api/entities", self.entities)
         r.add_get("/api/costs", self.costs)
         r.add_get("/api/knowledge", self.knowledge_view)
         r.add_put("/api/kinds", self.kinds_put)
@@ -142,7 +141,6 @@ class UI:
         r.add_put("/api/skills/{name}/file", self.file_put)
         r.add_delete("/api/skills/{name}/file", self.file_delete)
         # 0.6.42: what the AI can use, a fuller Skills tab, copying a setup, the changes and their Undo
-        r.add_get("/api/tools", self.tools)
         r.add_post("/api/tools/refresh", self.tools_refresh)
         r.add_post("/api/tools/on", self.tool_on)
         r.add_get("/api/skills/{name}", self.skill_detail)
@@ -188,6 +186,13 @@ class UI:
             html = f.read().replace("{static}", f"static/{__version__}").replace("{places}", PLACES_JSON)
         for key, name in TABS.items():                  # the top tabs' names (places.TABS)
             html = html.replace("{tab:%s}" % key, name)
+        # The header's version. Short, on the title's line (owner, 2026-10-03): the app's version, and the channel
+        # when it is not the released one; the whole statement stays one hover/long-press away. Written here so
+        # every tab shows it: the Overview tab filled it, and a page opened on another tab had none.
+        app = os.environ.get("VESTA_APP_VERSION", "")
+        ver = f"v{app or __version__}" + (f" · {self.s.instance}" if self.s.instance and self.s.instance != "prod" else "")
+        title = (f"app {app} · " if app else "") + f"agent {__version__} · {self.s.instance}"
+        html = html.replace("{ver_title}", escape(title, quote=True)).replace("{ver}", escape(ver))
         log.info("UI: page opened (agent %s)", __version__)
         return web.Response(text=html, content_type="text/html")
 
@@ -209,9 +214,7 @@ class UI:
                 report = status.report(st, self.s.store_path, last_day_hours(), label=lambda k: job_label(k, skills))
             except Exception as e:  # noqa: BLE001 — the overview shows what it can
                 log.warning("UI: the agent's records could not be read (%s)", type(e).__name__)
-        return web.json_response({"version": __version__, "app_version": os.environ.get("VESTA_APP_VERSION", ""),
-                                  "instance": self.s.instance,
-                                  "policy_problems": pol, "skills": self._skill_rows(), "last_24h": report,
+        return web.json_response({"policy_problems": pol, "skills": self._skill_rows(), "last_24h": report,
                                   # how far back Overview's scheduled jobs go: a setting, its value said with its link
                                   "last_hours": {"value": last_day_hours(), "ref": limits_ref({"src": "code", "key": "page.last_day_hours"})},
                                   "unreachable": unreachable,
@@ -273,9 +276,6 @@ class UI:
         log.info("UI: %d alert card translations forgotten (%s)", n, lang or "every language")
         return web.json_response({"forgot": n, "kept": st.translations_kept()})
 
-    async def jobs(self, _request):
-        return web.json_response({"jobs": self._jobs()})
-
     async def jobs_add_missing(self, _request):
         """The banner's "Add them": every skill whose AI jobs policy.yaml does not set gets its starter brain and limit
         per run (skill.yaml jobs_default) — written here, through the same checks as a save."""
@@ -317,9 +317,6 @@ class UI:
                                   "profiles": profile_labels()})
 
     # ------------------------------------------------------------------ the villa's devices
-    async def entities(self, _request):
-        return web.json_response(self._entities())
-
     def _entities(self) -> dict:
         """Every entity of the knowledge pack (id, name, area), for the pickers of the rules: chosen by name, not
         typed as ids. The UI has no Home Assistant token: the pack is what the agent last read (nightly)."""
@@ -597,9 +594,6 @@ class UI:
             return status.tool_usage(State(self.s.state_path), tool_usage_days())
         except Exception:  # noqa: BLE001 — the switches show without their counts
             return {}
-
-    async def tools(self, _request):
-        return web.json_response(self._tools())
 
     def _tools(self) -> dict:
         """Rules › AI tools: Home Assistant's tools as the agent last read them, with this file's

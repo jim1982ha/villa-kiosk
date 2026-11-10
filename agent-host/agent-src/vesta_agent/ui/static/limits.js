@@ -1,7 +1,7 @@
 // VESTA Agent page — the Limits tab: every limit on what the agent reads, says and keeps, on one page.
 // ⚠️ SAVED WHERE IT LIVES (owner, 2026-10-20): a limit of the code in limits.yaml, a skill's number in the skill's
 // settings, a rule in policy.yaml (ui/limits_tab.py) — so Rules and Skills show the same value, and this tab can go.
-import { api, backButton, dropdown, fill, h, infoButton, page, paged, problemsBox, reasons, tabbed, titleWithInfo, toast, $view } from "./core.js";
+import { api, backButton, cardWith, dropdown, fill, h, infoButton, loading, page, paged, problemsBox, saveNow, searchBox, tabbed, $view } from "./core.js";
 
 let SEARCH = "", FILTER = "";       // the search as typed, and as matched
 
@@ -33,15 +33,12 @@ function input(r, set) {
 
 function row(r, probs, again) {
   let value = r.value;
+  // the page's one save (core.saveNow): saved, the tab is drawn again; refused, the row keeps what was typed
   const save = h("button", { class: "btn", disabled: true, onclick: async () => {
     save.disabled = true;
-    try {
-      await api("PUT", "api/limits", { id: r.id, value });
-      fill(probs); toast(`Saved: ${r.name} = ${said(r, value)}`); again();
-    } catch (e) {
-      fill(probs, problemsBox(reasons(e), `${r.name} not saved:`)); save.disabled = false;
-      probs.scrollIntoView?.({ behavior: "smooth", block: "center" });
-    }
+    if (await saveNow(probs, () => api("PUT", "api/limits", { id: r.id, value }),
+                      `Saved: ${r.name} = ${said(r, value)}`, `${r.name} not saved:`)) again();
+    else save.disabled = false;
   } }, "Save");
   const field = input(r, (v) => { value = v; save.disabled = same(v, r.value) || v === null; });
   if (r.kind === "measured") save.hidden = true;
@@ -62,7 +59,7 @@ function row(r, probs, again) {
 }
 
 export async function limits() {
-  fill($view, h("p", { class: "muted" }, "Loading…"));
+  loading();
   const data = await api("GET", "api/limits");
   // ⚠️ OPENED ON ONE LIMIT (owner, 2026-10-23: a value shown elsewhere links "to the Limits dashboard focusing directly
   // on the specific contextual limit value"): a press on a .setting (core.setting) leaves its row's ref; the search
@@ -96,13 +93,12 @@ export async function limits() {
     bar.replaceChildren(tabs.bar); body.replaceChildren(tabs.body);
   };
   draw();
-  const search = h("input", { type: "search", placeholder: "Search the limits", value: SEARCH, "aria-label": "Search the limits",
-    oninput: (e) => { SEARCH = e.target.value; FILTER = SEARCH.trim().toLowerCase(); draw(); } });
+  const search = searchBox("Search the limits", SEARCH, (text) => { SEARCH = text; FILTER = SEARCH.trim().toLowerCase(); draw(); });
   // opened from a value elsewhere (core.setting): Back on the title's line, to that place as it was (core.goBack)
   const lead = `Every limit on what the agent reads, tells and keeps, in one place: ${data.rows.length} in all. Each value is saved where the agent reads it, a limit of the agent's code in ${data.file}, a skill's setting in that skill's files, an agent rule in policy.yaml, so the Rules and Skills tabs show the same value. A change counts from the next answer or the next run.`;
-  fill($view, h("section", { class: "card" }, titleWithInfo("Limits", lead, "h2", backButton()),
+  fill($view, cardWith(backButton(), "Limits", lead,
     data.problems.length ? problemsBox(data.problems, "Limits the page could not read:") : null,
-    h("div", { class: "limits-search" }, search), probs, bar, body));
+    search, probs, bar, body));
   const lit = focus && [...$view.querySelectorAll("[data-ref]")].find((el) => el.dataset.ref === focus.ref)?.closest("tr");
   if (lit) {
     lit.scrollIntoView?.({ behavior: "smooth", block: "center" });

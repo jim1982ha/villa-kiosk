@@ -1,5 +1,5 @@
 // VESTA Agent page — the Costs tab.
-import { alertButton, api, card, dropdown, figures, fill, h, infoButton, moreButton, page, paged, place, plural, svg, tabbed, titleWithInfo, $view, where } from "./core.js";
+import { alertButton, api, card, cardWith, dropdown, figures, fill, h, infoButton, loading, moreButton, paged, place, plural, svg, tabbedCard, $view, when, where } from "./core.js";
 
 // ---------------------------------------------------------------- costs
 export const usd = (v) => "US$ " + (v || 0).toFixed((v || 0) > 0 && v < 0.01 ? 4 : 2);
@@ -43,7 +43,7 @@ export function runMore(r) {
 // ⚠️ EVERYTHING ON THIS TAB FOLLOWS THE PERIOD CHOSEN, 7 DAYS UNLESS ANOTHER IS (owner, 2026-10-06): the figures,
 // the chart, by job, by model, every run and the tools.
 export async function costs(days = 7) {
-  fill($view, h("p", { class: "muted" }, "Loading…"));
+  loading();
   const c = await api("GET", `api/costs?days=${days}`);
   PROFILES = c.profiles || {};
   if (c.none) return fill($view, card("Costs", "The agent has not recorded anything yet (it has not run in agent mode)."));
@@ -83,7 +83,7 @@ export async function costs(days = 7) {
     { v: "Cost", cls: "num" }, { v: "Per run", cls: "num" }], rows.map((g) => [g.name.replace(/^claude-/, ""), { v: g.runs, cls: "num" },
     { v: g.recorded ? ktok(g.tokens_in) : "—", cls: "num" }, { v: g.recorded ? ktok(g.tokens_out) : "—", cls: "num" }, { v: usd(g.cost), cls: "num" }, { v: usd(g.cost / g.runs), cls: "num" }]));
   const runRows = c.runs.map((r) => ({ more: (r.steps || []).length || r.asked ? runMore(r) : null, cells: [
-    { v: new Date(r.at).toLocaleString([], { dateStyle: "short", timeStyle: "short" }), cls: "nowrap" },
+    { v: when(r.at), cls: "nowrap" },
     runWhat(r),
     r.without_ai ? "Without the AI" : r.no_result ? "—" : brain(r.profile, r.model),
     usedSkills(r.skills),
@@ -100,8 +100,7 @@ export async function costs(days = 7) {
   fill($view,
     // the period's selector on the title's line, on the right (owner, 2026-10-06); the figures straight under it, no
     // line between (owner, 2026-10-22: the separator under the title row went); the chart below its own separator
-    h("section", { class: "card" },
-      titleWithInfo(place("cost"), "As the Anthropic API reported it for each run: a chat reply, or a run of an AI job. Tokens in count what the agent re-read from its cache too. Everything on this tab follows the period chosen here.", "h2", period),
+    cardWith(period, place("cost"), "As the Anthropic API reported it for each run: a chat reply, or a run of an AI job. Tokens in count what the agent re-read from its cache too. Everything on this tab follows the period chosen here.",
       kpis, h("div", { class: "divided" }, h("h2", {}, place("cost_day")), chart)),
     // ⚠️ TWO CARDS OF TWO TABS (owner, 2026-10-08): "By job" and "By model" are one question asked two ways, and so
     // are "Every run" and the tools those runs used — each pair is one card, its tab kept when the period changes
@@ -119,13 +118,6 @@ export async function costs(days = 7) {
         () => (c.tools && c.tools.length ? paged(["Tool", { v: "Runs", cls: "num" }, { v: "Calls", cls: "num" }],
           c.tools.map((t) => [h("code", {}, t.tool), { v: t.runs, cls: "num" }, { v: t.calls, cls: "num" }]))
           : h("p", { class: "muted" }, "No tool recorded in this period yet."))]]));
-}
-
-
-// A card of tabs (subTabs, each tab's own (i)): [key, label, what it is about, draw()]. Only the open tab is drawn.
-export function tabbedCard(title, id, tabs) {
-  const t = tabbed(id, tabs);          // its tab kept in page.tabs, so changing the period keeps the tab you were on
-  return card(title, null, t.bar, t.body);
 }
 
 // A job its code steps made when the AI could not run (owner, 2026-10-07): the figures and charts were sent, said
