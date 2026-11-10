@@ -20,7 +20,7 @@
 // villa's whole fault history, including what it cost to fix things, is not
 // something a report button should hand out.
 
-import Window from "@/components/common/Window";
+import Window, { FormBody } from "@/components/common/Window";
 import { useRef, useState } from "react";
 import { Camera, Check, Wrench } from "lucide-react";
 import { useEntityLabel } from "@/hooks/useEntityLabel";
@@ -98,7 +98,7 @@ export default function GuestReportModal({
         </>
       ) : (
         <>
-          <div className="modal-body fm-stack">
+          <FormBody className="fm-stack">
             {deviceLabel && (
               <div className="fm-field">
                 <span>Device</span>
@@ -150,7 +150,7 @@ export default function GuestReportModal({
               </div>
               <ProblemLine>{photos.error}</ProblemLine>
             </div>
-          </div>
+          </FormBody>
           {/* The shared footer (common/ModalFooter): Cancel and the answer, the same pair as Settings'
               (common/Answers), one press at a time; a refusal is its line above the footer. */}
           <ModalFooter onClose={onClose} error={sendError}

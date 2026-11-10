@@ -83,9 +83,9 @@ export default function CockpitModal({
   const { opened } = useAnnouncements();
   useEffect(() => { opened(); }, []);
   // ⚠️ THE RECORD'S STATE IS SAID OVER EVERY TAB, THE OVERVIEW'S TOO (architecture review H, 2026-10-23): unread, its
-  // faults are missing from "Open issues" as much as from Tickets; and a save's problem ("This fault was just changed on
-  // another device") follows a button pressed on an Overview card. They were the Facility tabs' alone.
-  const { data, ready, unreachable, saveError, heldFor } = useFmData();
+  // faults are missing from "Open issues" as much as from Tickets. A save's problem ("This fault was just changed on
+  // another device") is said where every save that did not happen is (hud/ProblemNotices), over this window.
+  const { data, ready, unreachable, heldFor } = useFmData();
   // the tickets in progress, counted on the Tickets tab's name as its cards are (openCounts: one per device)
   const { deviceOfRecord } = useDeviceIdentity();
   const ticketsOpen = useMemo(() => openCounts(data.tickets, deviceOfRecord).tickets, [data.tickets, deviceOfRecord]);
@@ -124,7 +124,6 @@ export default function CockpitModal({
         counts={{ tickets: ticketsOpen }} />}
 
       <div className="modal-body">
-        {saveError && <div className="fm-banner warn">{saveError}</div>}
         {recordLine && <p className="muted body-text">{recordLine}</p>}
         {held && <p className="muted body-text">{held}</p>}
         {shownTab !== "messages" ? (

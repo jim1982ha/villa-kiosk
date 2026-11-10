@@ -25,7 +25,7 @@ const focus = new Set();
 globalThis.addEventListener = (type, fn) => { if (type === "focus") focus.add(fn); };
 globalThis.removeEventListener = (type, fn) => { if (type === "focus") focus.delete(fn); };
 
-const { storeSaveResult, saveProblemLine, UNSAVED_LINE } = await import("@/utils/storeSave");
+const { storeSaveResult, saveProblemLine, UNSAVED_LINE, NOT_STORED_LINE } = await import("@/utils/storeSave");
 const { landPush } = await import("@/utils/syncedDocument");
 const D = await import("@/config/deviceConfig");
 const F = await import("@/fm/fmApi");
@@ -86,10 +86,16 @@ const { ProfileProvider } = await import("@/auth/ProfileContext");
 const { ConfigProvider, useConfig } = await import("@/config/ConfigContext");
 const { default: DeviceConfigSync } = await import("@/config/DeviceConfigSync");
 const E = await import("@/config/mappingEdits");
+const { default: ProblemNotices } = await import("@/components/hud/ProblemNotices");
 let cfg;
 const Probe = () => { cfg = useConfig(); return null; };
 const h = React.createElement;
-await render(h(ProfileProvider, null, h(ConfigProvider, null, h(DeviceConfigSync), h(Probe))));
+// the red notices of the villa view (hud/ProblemNotices), read as drawn: each one's words and its ✕
+let notices = [], raised = [];
+const Said = () => { notices = React.Children.toArray(ProblemNotices({ raised, onDrop: (line) => { raised = raised.filter((l) => l !== line); } }).props.children); return null; };
+const said = () => notices.map((n) => n.props.line);
+const tree = () => h(ProfileProvider, null, h(ConfigProvider, null, h(DeviceConfigSync), h(Probe), h(Said)));
+await render(tree());
 await act(() => sleep(40));
 const label = (id) => cfg.config.entityMap[id]?.label;
 const refresh = async () => { await act(async () => { for (const fn of focus) fn(); await sleep(40); }); };
@@ -103,6 +109,10 @@ console.log("\n  Advanced Settings, the add-on refusing the change:");
   ck("the refused relabel is undone on this tablet (the store's copy)", label("light.a") === "Hall" && srv.puts === 1,
      { shows: label("light.a"), puts: srv.puts });
   ck("  ...and said, with the add-on's reason", cfg.saveProblem === `The server refused this change: ${NO}`, cfg.saveProblem);
+  ck("  ...as one red notice of the villa view, over whatever window is open (it was a line in Advanced Settings only)",
+     JSON.stringify(said()) === JSON.stringify([`The server refused this change: ${NO}`]), said());
+  await act(async () => { notices[0].props.onGone(); });
+  ck("  ...which its ✕ closes", cfg.saveProblem === null && said().length === 0, said());
   srv.config = { entityMap: { ...srv.config.entityMap, "light.b": { entityId: "light.b", type: "light", label: "Pool lamp" } } };
   srv.rev++;
   await refresh();
@@ -118,11 +128,57 @@ console.log("\n  Advanced Settings, the add-on out of reach:");
   await act(() => sleep(PUSHED));                    // the push is scheduled once the edit has rendered
   ck("the relabel stays on this tablet, and the Facility's words say it is only here",
      label("light.a") === "Hall light" && cfg.saveProblem === UNSAVED_LINE, { shows: label("light.a"), said: cfg.saveProblem });
+  raised = [UNSAVED_LINE, '"Latitude" needs a number: the one before was kept.'];
+  await render(tree());
+  ck("  ...one notice for it, however many say the same words, beside any other problem",
+     JSON.stringify(said()) === JSON.stringify([UNSAVED_LINE, '"Latitude" needs a number: the one before was kept.']), said());
+  ck("  ...a line raised by name passes by itself, one a store holds stands while it is true",
+     notices[0].props.passes === false && notices[1].props.passes === true, notices.map((n) => n.props.passes));
+  raised = [];
+  await render(tree());
   srv.put = 200;
   await refresh();
   await act(() => sleep(60));
   ck("the add-on back: the next refresh sends it, and the line goes",
-     srv.config.entityMap["light.a"].label === "Hall light" && cfg.saveProblem === null, { store: srv.config.entityMap["light.a"].label, said: cfg.saveProblem });
+     srv.config.entityMap["light.a"].label === "Hall light" && cfg.saveProblem === null && said().length === 0,
+     { store: srv.config.entityMap["light.a"].label, said: cfg.saveProblem, notices: said() });
+}
+
+console.log("\n  this device's own settings, its storage refusing them:");
+{
+  const set = localStorage.setItem;
+  ck("nothing is said for the copy written as the page opens", cfg.storeProblem === null);
+  localStorage.setItem = (k, v) => { if (k === "villa-kiosk:config:v2") throw new Error("QuotaExceededError"); set(k, v); };
+  await act(async () => { cfg.update({ walkSpeed: cfg.config.walkSpeed + 1 }); });
+  ck("a change it could not keep is said (it was a line in the console)", said().includes(NOT_STORED_LINE), said());
+  await act(async () => { notices.find((n) => n.props.line === NOT_STORED_LINE).props.onGone(); });
+  await act(async () => { cfg.update({ walkSpeed: cfg.config.walkSpeed + 1 }); });
+  ck("  ...once while it lasts: not again at every change after its ✕", !said().includes(NOT_STORED_LINE), said());
+  localStorage.setItem = set;
+  await act(async () => { cfg.update({ walkSpeed: cfg.config.walkSpeed - 2 }); });
+  localStorage.setItem = (k, v) => { if (k === "villa-kiosk:config:v2") throw new Error("QuotaExceededError"); set(k, v); };
+  await act(async () => { cfg.update({ walkSpeed: cfg.config.walkSpeed + 1 }); });
+  ck("  ...stored again, then refused again: said again", said().includes(NOT_STORED_LINE), said());
+  localStorage.setItem = set;
+  await act(async () => { cfg.update({ walkSpeed: cfg.config.walkSpeed - 1 }); });
+  ck("  ...and the line goes with the next change that is stored", cfg.storeProblem === null && !said().includes(NOT_STORED_LINE), said());
+  await act(() => sleep(PUSHED));
+}
+
+console.log("\n  what the page is asked to say (hud/AppNotice): news passes, a problem is kept beside it");
+{
+  const { useRaisedNotices } = await import("@/components/hud/AppNotice");
+  let page;
+  const Page = () => { page = useRaisedNotices(); return null; };
+  await render(h(Page));
+  const LINE = "Not deleted: the server could not be reached, nothing was changed. Try again.";
+  await act(async () => { page.raise({ text: LINE, tone: "alert" }); page.raise({ text: "Saved", tone: "info" }); page.raise({ text: LINE, tone: "alert" }); });
+  ck("news said after a problem never replaces it, and the same problem said twice is one line",
+     page.passing?.text === "Saved" && JSON.stringify(page.problems) === JSON.stringify([LINE]), page);
+  await act(async () => { page.expire(); });
+  ck("  ...the news passes, the problem stays for its own time", page.passing === null && page.problems.length === 1, page);
+  await act(async () => { page.drop(LINE); });
+  ck("  ...and leaves at its ✕", page.problems.length === 0, page);
 }
 
 console.log("\n  the wiring:");
@@ -139,8 +195,6 @@ console.log("\n  the wiring:");
        // a delete under its single-use code is the write that cannot be sent again (landPush `once`)
        && /once: elevation \? \{ undo, what: "deleted" \} : undefined,/.test(src("fm/FmDataContext.tsx"))
        && ![src("config/DeviceConfigSync.tsx"), src("fm/FmDataContext.tsx")].some((t) => /saveProblemLine|refused by the add-on|outcome\.takeBack/.test(t)));
-  ck("Advanced Settings shows it above its footer",
-     /<SaveProblemNote line=\{saveProblem\} onDismiss=\{\(\) => setSaveProblem\(null\)\} \/>\s*<ModalFooter/.test(src("components/settings/ConfigEditorModal.tsx")));
 }
 
 console.log("\n  what a save's answer means for a screen, decided once for both stores (landPush, architecture review O)");
@@ -169,7 +223,7 @@ console.log("\n  what a save's answer means for a screen, decided once for both 
   const del = run({ ok: false, reason: "transport" }, true);
   ck("a delete under its single-use code, not reached: put back and said with its TRUE cause, never 'refused'",
      del.verdict === "undone" && JSON.stringify(del.calls) === '[["undo"]]'
-       && del.line === "Not deleted: the add-on could not be reached, nothing was changed. Try again." && !/refused/.test(del.line), del);
+       && del.line === "Not deleted: the server could not be reached, nothing was changed. Try again." && !/refused/.test(del.line), del);
   const clash = run({ ok: false, reason: "conflict-retries-exhausted" }, true);
   ck("  ...another tablet saving at the same moment: said so", clash.verdict === "undone"
      && clash.line === "Not deleted: another device was saving at the same moment, nothing was changed. Try again.", clash.line);

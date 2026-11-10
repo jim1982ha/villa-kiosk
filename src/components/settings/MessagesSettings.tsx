@@ -4,8 +4,9 @@
 // has announced, each with its own seconds (owner, 2026-11-03). Settings draws it under this tablet's own switch, for a
 // profile that may edit the villa's setup, and owns its writes (its one draft: Save keeps them, Cancel puts them back).
 
-import { FIELD_COMMIT_MS, usePendingField } from "@/hooks/usePendingField";
+import { FIELD_COMMIT_MS, typedNumber, usePendingField } from "@/hooks/usePendingField";
 import { FULL_SCREEN_S_DEFAULT, fullScreenSecondsOk, type AppConfig, type FullScreenAnnouncement } from "@/config/AppConfig";
+import { FULL_SCREEN_SECONDS } from "@/config/villaSettings";
 import { announcedTitles } from "@/messages/announcements";
 import { useAnnouncements } from "@/messages/AnnouncementsContext";
 import SearchPicker from "@/components/common/SearchPicker";
@@ -76,13 +77,9 @@ function FullScreenCard({ item, onRemove }: { item: FullScreenAnnouncement; onRe
           {/* the seconds and their unit joined, "10s" (owner, 2026-11-06: a box and a separate "s"; rules: durations
               are joined), in one field (common/UnitField) */}
           <UnitField unit="s">
-            <input
-              inputMode="numeric" aria-label={`Seconds ${item.title} fills the screen`}
-              value={field.shown ?? String(item.seconds)}
-              onChange={(e) => field.draft(e.target.value, secondsWrite(item.title, e.target.value))}
-              onBlur={field.flush}
-              onKeyDown={(e) => e.key === "Enter" && field.flush()}
-            />
+            <input inputMode="numeric" aria-label={`Seconds ${item.title} fills the screen`}
+              {...typedNumber(field, String(item.seconds), (text) => secondsWrite(item.title, text), "On screen",
+                `a whole number of seconds from ${FULL_SCREEN_SECONDS.min} to ${FULL_SCREEN_SECONDS.max}`)} />
           </UnitField>
         </CardField>
       }

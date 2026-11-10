@@ -35,10 +35,12 @@ export interface Answer {
   tip?: string;
 }
 
-export default function Answers({ answer, onCancel, cancelTip, extra }: {
+export default function Answers({ answer, onCancel, cancelLabel = "Cancel", cancelTip, extra }: {
   answer: Answer;
   /** None: a box that only tells (the question box's "OK"). */
   onCancel?: () => void;
+  /** Its word, where "Cancel" would not say what is kept (a question that discards: "Keep"). */
+  cancelLabel?: string;
   cancelTip?: string;
   /** A form's own button, on the left of Cancel (Spend settings' "Remove cap"). */
   extra?: ReactNode;
@@ -59,8 +61,8 @@ export default function Answers({ answer, onCancel, cancelTip, extra }: {
       {extra}
       {onCancel && (
         <Tip text={cancelTip}>
-          <button type="button" className="btn" aria-label="Cancel" onClick={onCancel}>
-            <X size={18} aria-hidden /><span className="btn-label">Cancel</span>
+          <button type="button" className="btn" aria-label={cancelLabel} onClick={onCancel}>
+            <X size={18} aria-hidden /><span className="btn-label">{cancelLabel}</span>
           </button>
         </Tip>
       )}

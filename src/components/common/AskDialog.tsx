@@ -46,6 +46,8 @@ interface Props {
   /** Present → a text field is shown, and its value is passed to `onConfirm`. */
   input?: { label: string; placeholder?: string; initial?: string };
   confirmLabel?: string;
+  /** The other answer's word when "Cancel" would not say what it keeps ("Keep"). */
+  cancelLabel?: string;
   /** It only tells: one button and no Cancel — that is the `alert()` shape. */
   notice?: boolean;
   /** Paints the confirm button as destructive (`.btn.danger`). */
@@ -59,7 +61,7 @@ interface Props {
 }
 
 export default function AskDialog({
-  title, message, input, confirmLabel = "OK", notice = false,
+  title, message, input, confirmLabel = "OK", cancelLabel, notice = false,
   danger = false, onConfirm, onCancel,
 }: Props) {
   const [value, setValue] = useState(input?.initial ?? "");
@@ -113,7 +115,7 @@ export default function AskDialog({
       {/* ⚠️ THE APP'S ONE FOOTER (owner, 2026-11-10: one definition): the box wrote its own, with its own Cancel. */}
       {notice
         ? <ModalFooter onClose={submit} closeLabel={confirmLabel} />
-        : <ModalFooter onClose={onCancel} error={error} answer={{ label: confirmLabel, danger, onPress: submit }} />}
+        : <ModalFooter onClose={onCancel} closeLabel={cancelLabel} error={error} answer={{ label: confirmLabel, danger, onPress: submit }} />}
     </Window>
   );
 }

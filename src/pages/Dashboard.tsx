@@ -17,7 +17,8 @@ import AnnouncementNotice from "@/components/hud/AnnouncementNotice";
 import { AnnouncementsProvider } from "@/messages/AnnouncementsContext";
 import { ConversationProvider } from "@/messages/ConversationContext";
 import VestaWindow from "@/components/messages/VestaThread";
-import AppNotice, { AppNoticeContext, type AppNoticeMessage } from "@/components/hud/AppNotice";
+import AppNotice, { AppNoticeContext, useRaisedNotices } from "@/components/hud/AppNotice";
+import ProblemNotices from "@/components/hud/ProblemNotices";
 import { NoticeStack } from "@/components/hud/Notice";
 import FirstRunTips from "@/components/hud/FirstRunTips";
 import SummaryBar from "@/components/hud/SummaryBar";
@@ -193,7 +194,9 @@ export default function Dashboard() {
   // General app notices (e.g. "this floor isn't modelled yet") — themed,
   // replaces a native alert() that used to break out of the kiosk's own
   // dark/light chrome entirely. See AppNotice.
-  const [notice, setNotice] = useState<AppNoticeMessage | null>(null);
+  // What did not happen (a save refused, a number that was none) is raised the same way and drawn apart
+  // (ProblemNotices), so news never replaces it.
+  const { passing: notice, problems, raise: raiseNotice, expire: expireNotice, drop: dropProblem } = useRaisedNotices();
   // First-ever login on this device — see FirstRunTips/utils/viewPrefs'
   // hasSeenFirstRunTips docstring. Checked once, lazily, so it reflects
   // whatever was in localStorage when this component first mounted rather
@@ -364,9 +367,9 @@ export default function Dashboard() {
       // append "— {label}" whenever a room WAS known too (a plain device
       // occupancy sensor's label, e.g. "Motion4 Occupancy"), so the identical
       // event read differently depending only on which entity fired it.
-      setNotice({ text: room ? `Motion detected · ${room}` : `Motion detected · ${label}`, tone: "active" });
+      raiseNotice({ text: room ? `Motion detected · ${room}` : `Motion detected · ${label}`, tone: "active" });
     });
-  }, [subscribeAll]);
+  }, [subscribeAll, raiseNotice]);
 
   // The panel an entity opens to LOOK: the category decides (the same gate,
   // without control); the panel's own controls enforce RBAC for any action
@@ -484,10 +487,10 @@ export default function Dashboard() {
         setCurrentFloor(floor);
       } else {
         // Floor not modelled yet.
-        setNotice({ text: `Floor ${floor} isn't modelled yet, coming soon.`, tone: "info" });
+        raiseNotice({ text: `Floor ${floor} isn't modelled yet, coming soon.`, tone: "info" });
       }
     },
-    [manager],
+    [manager, raiseNotice],
   );
 
   // Picking a floor chip in the Rooms dial. The dial reveals that floor's room
@@ -705,7 +708,7 @@ export default function Dashboard() {
 
   return (
     <VillaModelProvider value={villa}>
-    <AppNoticeContext.Provider value={setNotice}>
+    <AppNoticeContext.Provider value={raiseNotice}>
     {/* the page's one watch on the villa's announcements: the notice and the Cockpit's Notifications read it */}
     <AnnouncementsProvider>
     {/* ...and on this profile's conversation with VESTA: the robot, Messages' pinned thread and "Ask VESTA" read it */}
@@ -734,14 +737,15 @@ export default function Dashboard() {
 
       {/* EVERY notice of the villa view, in one column under the top bar, drawn by one piece (Notice) — the most
           lasting first: the connection (the only signal that survives the phone tier, where the top bar's dot is
-          hidden), a new version, a failed tap, what the villa announced, then what just happened. The 3D canvas's
-          own joins it. */}
+          hidden), a new version, a failed tap, a save that did not happen, what the villa announced, then what just
+          happened. The 3D canvas's own joins it. */}
       <NoticeStack>
         <ConnectionBanner />
         <UpdateBanner />
         <ServiceErrorToast />
+        <ProblemNotices raised={problems} onDrop={dropProblem} />
         <AnnouncementNotice />
-        <AppNotice message={notice} onExpire={() => setNotice(null)} />
+        <AppNotice message={notice} onExpire={expireNotice} />
       </NoticeStack>
 
       <HUD

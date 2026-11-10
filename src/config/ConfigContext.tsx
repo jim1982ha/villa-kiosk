@@ -10,6 +10,7 @@ import type { ConfigEdit } from "./mappingEdits";
 import { applyRemoteChange, type RemoteChange } from "./deviceConfig";
 import { resolveEffectiveTheme } from "@/utils/themeTime";
 import { beginSpan } from "@/utils/perfSpans";
+import { NOT_STORED_LINE } from "@/utils/storeSave";
 
 interface ConfigContextType {
   config: AppConfig;
@@ -31,10 +32,14 @@ interface ConfigContextType {
   mergeRemote: (change: RemoteChange) => void;
   /** Hear every such change; returns the unsubscribe. */
   onRemoteChange: (listener: (change: RemoteChange) => void) => () => void;
-  /** Why the device setup's last save did not reach the store (utils/storeSave saveProblemLine), or null: said where it
-   *  is edited (Advanced Settings), as the Facility screens say theirs. Set by DeviceConfigSync. */
+  /** Why the device setup's last save did not reach the store (utils/storeSave saveProblemLine), or null: said where
+   *  every save that did not happen is (components/hud/ProblemNotices). Set by DeviceConfigSync. */
   saveProblem: string | null;
   setSaveProblem: (line: string | null) => void;
+  /** This device could not store its own settings (utils/storeSave NOT_STORED_LINE), or null: said in the same place,
+   *  once while it lasts. */
+  storeProblem: string | null;
+  setStoreProblem: (line: string | null) => void;
   /** entity_id -> room name, live-computed (HA's own Area assignment, falling
    *  back to GLB geometric detection — see Dashboard.tsx's resolution effect
    *  and config/devicePlace.ts's resolveEntityRoom) rather than stored/edited
@@ -55,6 +60,8 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
   const [config, setConfig] = useState<AppConfig>(() => loadConfig());
   const [resolvedRooms, setResolvedRooms] = useState<Record<string, string>>({});
   const [saveProblem, setSaveProblem] = useState<string | null>(null);
+  const [storeProblem, setStoreProblem] = useState<string | null>(null);
+  const storing = useRef({ opening: true, said: false });
 
   const update = useCallback((change: Partial<AppConfig> | ConfigEdit) => {
     // EVERY patch is completed (defaults, bounds — cheap), so no reader ever
@@ -117,8 +124,15 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
     // still blocks the main thread when it runs — so it belongs in the set of
     // candidates a freeze record can name. See perfSpans.
     const end = beginSpan("saveConfig");
-    saveConfig(config);
+    const stored = saveConfig(config);
     end();
+    // ⚠️ SAID, ONCE WHILE IT LASTS (owner, 2026-11-10: a save that did not happen says so; it was a line in the
+    // console). Not for the copy written as the page opens (nothing was changed yet: a private window would open on a
+    // warning), and not again at every change after its ✕: the next one that is stored clears it.
+    const { opening, said } = storing.current;
+    storing.current = { opening: false, said: !stored && (said || !opening) };
+    if (stored) setStoreProblem(null);
+    else if (!opening && !said) setStoreProblem(NOT_STORED_LINE);
   }, [config]);
 
   // Reflect the chosen theme onto the document root so the CSS variable
@@ -151,9 +165,9 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
   const value = useMemo(
     () => ({
       config, update, editByDialog, onDialogEdit, mergeRemote, onRemoteChange, saveProblem, setSaveProblem,
-      resolvedRooms, setResolvedRooms,
+      storeProblem, setStoreProblem, resolvedRooms, setResolvedRooms,
     }),
-    [config, update, editByDialog, onDialogEdit, mergeRemote, onRemoteChange, saveProblem, resolvedRooms],
+    [config, update, editByDialog, onDialogEdit, mergeRemote, onRemoteChange, saveProblem, storeProblem, resolvedRooms],
   );
   return <ConfigContext.Provider value={value}>{children}</ConfigContext.Provider>;
 }

@@ -20,7 +20,7 @@
 // progress until it is filled in gets satisfied with junk, or the fault is
 // left where it is — both worse than a thin but honest record.
 
-import Window from "@/components/common/Window";
+import Window, { FormBody } from "@/components/common/Window";
 import ModalFooter from "@/components/common/ModalFooter";
 import { useState } from "react";
 
@@ -103,7 +103,7 @@ export default function FaultStageModal({
       <div className="modal-header">
         <h2>{copy.title}</h2>
       </div>
-      <div className="modal-body fm-stack">
+      <FormBody className="fm-stack">
         {/* the fault as its card names it (fmEngine.faultTitle: "#5 · …", a duration worded now) — not the stored title */}
         {tickets.map((t) => <div key={t.id} className="fm-banner">{faultTitle(t)}</div>)}
         {/* the name typed, never offered (WorkerName) */}
@@ -131,7 +131,7 @@ export default function FaultStageModal({
         {asksCost && (
           <CostFields amount={amount} onAmount={setAmount} category={category} onCategory={setCategory} optional />
         )}
-      </div>
+      </FormBody>
       {/* The shared footer (common/ModalFooter): Cancel and the answer, the same pair as Settings' (common/Answers),
           one press at a time; a refusal is its line above the footer. */}
       <ModalFooter onClose={onClose} error={failed} answer={{ label: copy.cta, busy: "Saving…", onPress: submit }} />

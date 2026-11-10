@@ -33,6 +33,7 @@ import { useAppNotice } from "@/components/hud/AppNotice";
 import Answers, { type Answer } from "./Answers";
 import BackButton from "./BackButton";
 import FooterNote from "./FooterNote";
+import { useWindowLeave } from "./Window";
 
 /** An editable draft a dialog can commit. ⚠️ THE DIALOG OWNS IT, NOT THIS
  *  COMPONENT: a draft that lives in the footer would be lost the moment a tab
@@ -88,8 +89,9 @@ export default function ModalFooter({
   error?: ReactNode;
   onClose: () => void;
   busy?: boolean;
-  /** The one exit's word in a nothing-to-save footer ("Got it, thanks"). */
-  closeLabel?: ReactNode;
+  /** The exit's own word: the one exit's in a nothing-to-save footer ("Got it, thanks"), Cancel's beside an `answer`
+   *  ("Keep"). */
+  closeLabel?: string;
   /** Controls on the right, before Cancel and Save. ⚠️ IN A NOTHING-TO-SAVE FOOTER THEY REPLACE ITS Close: the
    *  window's way out is then its header's Back (common/BackButton; owner, 2026-10-24, Advanced Settings). */
   actions?: ReactNode;
@@ -98,6 +100,8 @@ export default function ModalFooter({
   const saving = commit?.saving === true;
   const notice = useAppNotice();
   const { save, cancel } = footerExits(commit ?? null, onClose, notice);
+  // the one exit of a window with nothing to save is no answer to a form drawn in it: it asks first (common/Window)
+  const leave = useWindowLeave()(onClose);
 
   // ⚠️ THE EMPTY SPACER IS LOAD-BEARING. `.modal-footer` is `space-between`,
   // so the right-hand group renders on the LEFT without a first child to push
@@ -114,14 +118,14 @@ export default function ModalFooter({
   // ⚠️ ONE GROUP, ONE PAIR (owner, 2026-10-22: one footer; 2026-11-10: one definition): every footer's buttons sit in
   // the same group at the right, and whatever asks for an answer draws the same Cancel and answer (common/Answers).
   const right = answer
-    ? <Answers answer={answer} onCancel={onClose} />
+    ? <Answers answer={answer} onCancel={onClose} cancelLabel={closeLabel} />
     : commit === undefined
     // nothing to save: the one exit, in the answers' shape (owner, 2026-11-10: the Cockpit's "Close" was a word pill
     // beside Settings' round buttons on the same phone): its glyph and its word, the glyph alone on a phone. A
     // window's own word stays words.
     ? actions ?? (closeLabel
-      ? <button type="button" className="btn primary" onClick={onClose}>{closeLabel}</button>
-      : <button type="button" className="btn primary" aria-label="Close" onClick={onClose}>
+      ? <button type="button" className="btn primary" onClick={leave}>{closeLabel}</button>
+      : <button type="button" className="btn primary" aria-label="Close" onClick={leave}>
           <X size={18} aria-hidden /><span className="btn-label">Close</span>
         </button>)
     // ⚠️ THE PRIMARY ANSWER ON THE RIGHT, WHERE EVERY OTHER WINDOW'S Close IS (owner, 2026-10-22: Settings' footer

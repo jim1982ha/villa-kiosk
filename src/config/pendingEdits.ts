@@ -30,6 +30,8 @@ interface Entry {
   shown: unknown;
   /** What it writes; null: nothing (a half-typed number) — the field then falls back to the stored value. */
   write: PendingWrite | null;
+  /** What is said when it is let go with nothing to write ("Latitude" needs a number: the one before was kept.). */
+  unwritable?: string;
   /** A held change's send (`hold`): no timer, sent by Save only. */
   send?: VillaSend;
   timer?: ReturnType<typeof setTimeout>;
@@ -40,6 +42,11 @@ export class PendingEdits {
   private readonly listeners = new Set<() => void>();
   /** How a waiting value is written when its pause ends, or on flush (the dialog's own write). */
   write: (w: PendingWrite) => void;
+
+  /** How the dialog says a value it could not take (the villa view's notice: hooks/useDraftedSlice).
+   *  ⚠️ IT WAS SILENT (owner, 2026-11-10: a save that did not happen says so): a latitude, a number of days or of
+   *  seconds that was no number went back to the one before with no word, and Save closed the window as if kept. */
+  say: (line: string) => void = () => {};
 
   constructor(write: (w: PendingWrite) => void) {
     this.write = write;
@@ -67,12 +74,20 @@ export class PendingEdits {
   /** The write waiting under `key`, if any. */
   writeOf(key: string): PendingWrite | null | undefined { return this.entries.get(key)?.write; }
 
-  /** A value typed: shown at once, written after `delayMs` of quiet (a further value for the key restarts the wait). */
-  stage(key: string, shown: unknown, write: PendingWrite | null, delayMs: number): void {
+  /** A value typed: shown at once, written after `delayMs` of quiet (a further value for the key restarts the wait).
+   *  `unwritable`: what to say if it is let go with nothing to write (`write` null). */
+  stage(key: string, shown: unknown, write: PendingWrite | null, delayMs: number, unwritable?: string): void {
     const was = this.entries.get(key);
     if (was) clearTimeout(was.timer);
-    this.entries.set(key, { shown, write, timer: setTimeout(() => this.commit(key), delayMs) });
+    this.entries.set(key, { shown, write, unwritable, timer: setTimeout(() => this.commit(key), delayMs) });
     this.changed();
+  }
+
+  /** `e` is let go: whether it had something to write; said when it had not and has words for it. */
+  private writable(e: Entry): e is Entry & { write: PendingWrite } {
+    if (e.write) return true;
+    if (!e.send && e.unwritable) this.say(e.unwritable);
+    return false;
   }
 
   /** A change to send to the villa on Save, shown at once (`shown`): never on a timer, Cancel drops it. */
@@ -103,7 +118,7 @@ export class PendingEdits {
     if (!e) return;
     clearTimeout(e.timer);
     this.entries.delete(key);
-    if (e.write) this.write(e.write);
+    if (this.writable(e)) this.write(e.write);
     if (e.send) void e.send();
     this.changed();
   }
@@ -115,17 +130,20 @@ export class PendingEdits {
   }
 
   /** Take every value waiting its pause out without writing it, for Save to write as kept (held changes stay: Save
-   *  sends them, `held`). */
-  take(): PendingWrite[] {
+   *  sends them, `held`). `whole` false: one of them had nothing to write and was said (`say`), so Save's window
+   *  stays for the line to be read. */
+  take(): { writes: PendingWrite[]; whole: boolean } {
     const writes: PendingWrite[] = [];
+    let whole = true;
     for (const [key, e] of [...this.entries]) {
       if (e.send) continue;
       clearTimeout(e.timer);
-      if (e.write) writes.push(e.write);
+      if (this.writable(e)) writes.push(e.write);
+      else if (e.unwritable) whole = false;
       this.entries.delete(key);
     }
     this.changed();
-    return writes;
+    return { writes, whole };
   }
 
   /** Cancel: every waiting value and every held change dropped, timers with them (a timer left would write it back

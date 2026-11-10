@@ -57,9 +57,12 @@ export function cardErase(card: CardView, removeTicket: (id: string, token: stri
   if (ids.length === 0 && told.length === 0) return undefined;
   return {
     title: "Erase this record", detail: [card.lines[0]?.alertLabel, card.title].filter(Boolean).join(" "),
+    // a message's erase that did not happen is its line (announcements eraseMessage), handed on to be said
     run: async (token) => {
       for (const id of ids) await removeTicket(id, token);
-      for (const a of told) await removeMessage(a, token);
+      let said: unknown = null;
+      for (const a of told) said = (await removeMessage(a, token)) ?? said;
+      return said;
     },
   };
 }

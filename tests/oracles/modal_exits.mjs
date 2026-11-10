@@ -59,8 +59,6 @@ ck("Settings' Escape and backdrop are the same Cancel, and no question is asked 
    /const closeModal = footerExits\(commit, onClose, notice\)\.cancel;/.test(src("components/settings/SettingsModal.tsx"))
    && !existsSync(new URL("../../src/components/common/UnsavedChanges.tsx", import.meta.url))
    && !/UnsavedChanges|pendingTab/.test(src("components/common/ModalTabs.tsx")));
-ck("the notice is the villa view's own passing notice (AppNotice), provided by the page",
-   /<AppNoticeContext\.Provider value=\{setNotice\}>/.test(src("pages/Dashboard.tsx")));
 
 // ⚠️ THE FOOTER OWNS ITS EXITS (architecture review K, 2026-10-24): a Back beside Save · Cancel was a third way out
 // that said nothing of the changes. Drawn: Back only where there is no Cancel.

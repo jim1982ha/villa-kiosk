@@ -5,7 +5,8 @@
 //
 // The dialog puts its store around its fields (PendingFields); a field outside one is a mistake, said at once.
 
-import { createContext, createElement, useCallback, useContext, useSyncExternalStore, type ReactNode } from "react";
+import { createContext, createElement, useCallback, useContext, useSyncExternalStore, type ChangeEvent, type KeyboardEvent,
+  type ReactNode } from "react";
 import type { PendingEdits, PendingWrite } from "@/config/pendingEdits";
 
 const PendingContext = createContext<PendingEdits | null>(null);
@@ -18,8 +19,9 @@ export function PendingFields({ pending, children }: { pending: PendingEdits; ch
 export interface PendingField<T> {
   /** The value typed and not yet written; undefined when nothing waits (the field shows the stored value). */
   shown: T | undefined;
-  /** Show `value` at once and write `write` after the pause (null: write nothing, a half-typed number). */
-  draft: (value: T, write: PendingWrite | null) => void;
+  /** Show `value` at once and write `write` after the pause (null: write nothing, a half-typed number, and say
+   *  `unwritable` when it is let go so). */
+  draft: (value: T, write: PendingWrite | null, unwritable?: string) => void;
   /** Write it now (leaving the field, Enter, a drag released). */
   flush: () => void;
 }
@@ -45,8 +47,25 @@ export function usePendingField<T>(key: string, delayMs: number): PendingField<T
   const read = () => pending.shown(key);
   // the same read on a server render (the oracles draw a dialog's fields to a string)
   const shown = useSyncExternalStore(pending.subscribe, read, read) as T | undefined;
-  const draft = useCallback((value: T, write: PendingWrite | null) => pending.stage(key, value, write, delayMs),
-    [pending, key, delayMs]);
+  const draft = useCallback((value: T, write: PendingWrite | null, unwritable?: string) =>
+    pending.stage(key, value, write, delayMs, unwritable), [pending, key, delayMs]);
   const flush = useCallback(() => pending.commit(key), [pending, key]);
   return { shown, draft, flush };
+}
+
+/** A NUMBER TYPED IN ONE OF THE DIALOG'S FIELDS, what its `<input>` takes: the text as typed while it waits (else
+ *  `stored`), written after the pause, at once on leaving the field or Enter. `write`: what the text writes, null while
+ *  it is no accepted number; the field then goes back to the stored one and says so, naming itself (`name`) and what
+ *  it takes (`needs`: "a number", "a whole number from 0 to 3650").
+ *  ⚠️ ONE DEFINITION (owner, 2026-11-10): the coordinates, the days records are kept and a full-screen announcement's
+ *  seconds each wrote these four lines out, and each went back to the old value with no word. */
+export function typedNumber(field: PendingField<string>, stored: string, write: (text: string) => PendingWrite | null,
+  name: string, needs: string) {
+  return {
+    value: field.shown ?? stored,
+    onChange: (e: ChangeEvent<HTMLInputElement>) =>
+      field.draft(e.target.value, write(e.target.value), `"${name}" needs ${needs}: the one before was kept.`),
+    onBlur: field.flush,
+    onKeyDown: (e: KeyboardEvent<HTMLInputElement>) => { if (e.key === "Enter") field.flush(); },
+  };
 }
