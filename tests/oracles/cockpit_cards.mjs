@@ -76,7 +76,7 @@ ck("  ...its name opens the device, no line says it again", /fm-title-link/.test
 // owner, 2026-10-22: a refresh icon, not "Next check:"; 2026-11-06: a pill (the app's), on the card's first line, at its
 // right under the strip's time, never on the quiet line
 const stateLine = (html) => inside(html, "fm-record-state");
-const PILL = /<span class="fm-entity-chip fm-chip-static fm-record-check" aria-label="Next check: within 5min \([^"]+\)"><svg[^>]*lucide-refresh-cw[\s\S]*?<\/svg>next check within 5min<\/span><\/div>$/;
+const PILL = /<span class="fm-entity-chip fm-chip-static fm-record-check" aria-label="Next check: within 5min \([^"]+\)"[^>]*><svg[^>]*lucide-refresh-cw[\s\S]*?<\/svg>next check within 5min<\/span><\/div>$/;
 ck("  ...its next check a pill, the last thing of its first line (after its state), never on its quiet line",
    PILL.test(stateLine(issue)) && stateLine(issue).indexOf("fm-record-status") < stateLine(issue).indexOf("fm-record-check")
    && !/fm-record-check|next check/.test(meta(issue)), [stateLine(issue), meta(issue)]);
@@ -172,7 +172,7 @@ ck("  ...and hovering it says when: the nightly check's next run, the Agent's ne
   const drawn = (items) => draw(h(AttentionCard, { card: cockpitCard(groupAttention(items)[0], CADENCE), onOpenEntity: () => {} }));
   const alone = drawn([liveItem]);
   ck("  ...drawn: a live-only card has the pill at the right of its first line, saying \"checked live\"",
-     /<span class="fm-entity-chip fm-chip-static fm-record-check" aria-label="The VESTA UI watches it all the time[^"]*"><svg[^>]*lucide-refresh-cw[\s\S]*?<\/svg>checked live<\/span><\/div>$/.test(stateLine(alone)), stateLine(alone));
+     /<span class="fm-entity-chip fm-chip-static fm-record-check" aria-label="The VESTA UI watches it all the time[^"]*"[^>]*><svg[^>]*lucide-refresh-cw[\s\S]*?<\/svg>checked live<\/span><\/div>$/.test(stateLine(alone)), stateLine(alone));
   // a live state and a fault of another problem on one card: the card's pill is the fault's (the later check, the one
   // to wait for); the live part its own "checked live" on its header, before its time
   const fault = { id: "fault:f9", kind: "fault", title: "Storage camera storage full", detail: "Fault", entityId: "sensor.example_storage_card", ticketId: "f9",

@@ -23,7 +23,7 @@ export default function ViewControls({ viewMode, onToggleViewMode, className }: 
     <button
       className={`icon-btn ${className}`}
       onClick={onToggleViewMode}
-      title={overviewActive ? "Switch to first-person view" : "Switch to overview (bird's-eye) view"}
+      data-tip={overviewActive ? "Switch to first-person view" : "Switch to overview (bird's-eye) view"}
       aria-label={overviewActive ? "Switch to first-person view" : "Switch to overview (bird's-eye) view"}
     >
       {overviewActive ? <PersonStanding size={19} /> : <Map size={18} />}

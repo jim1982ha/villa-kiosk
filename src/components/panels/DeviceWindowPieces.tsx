@@ -31,7 +31,7 @@ export function FaultsButton({ onOpen, severity, className = "btn icon-only" }: 
 }) {
   return (
     <button type="button" className={`${className} panel-faults-btn cockpit-attention-${severity}`} onClick={onOpen}
-      title="Open this device's issues in the Cockpit" aria-label="Open this device's issues in the Cockpit">
+      data-tip="Open this device's issues in the Cockpit" aria-label="Open this device's issues in the Cockpit">
       <TriangleAlert size={18} aria-hidden="true" />
     </button>
   );
@@ -43,7 +43,7 @@ export function EditButton({ className = "btn", icon = false }: { className?: st
   const { may, onEdit } = usePanelActions();
   if (!may.edit) return null;
   return icon
-    ? <button type="button" className={className} onClick={onEdit} title="Edit this device" aria-label="Edit this device">
+    ? <button type="button" className={className} onClick={onEdit} data-tip="Edit this device" aria-label="Edit this device">
         <Pencil size={16} aria-hidden="true" /></button>
     : <button type="button" className={className} onClick={onEdit}>Edit</button>;
 }

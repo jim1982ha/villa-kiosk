@@ -53,7 +53,7 @@ export default function SegmentedGroup<K extends string>({
           <button key={o.key} type="button" className={on ? "active" : ""} disabled={o.disabled}
             aria-disabled={o.disabled || undefined} role={tabs ? "tab" : undefined}
             {...(tabs ? { "aria-selected": on } : { "aria-pressed": on })}
-            onClick={() => { if (!o.disabled) onChange(o.key); }} title={o.title} aria-label={o.title}>
+            onClick={() => { if (!o.disabled) onChange(o.key); }} data-tip={o.title} aria-label={o.title}>
             {o.label}
           </button>
         );

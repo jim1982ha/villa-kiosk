@@ -615,7 +615,7 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
             controls the user is about to reach for (prev/next/fullscreen/
             close) while they're mid-gesture on the feed. */}
         {zoom.zoomed && (
-          <button className="media-btn worded camera-zoom-pill" onClick={zoom.reset} title="Reset zoom" aria-label="Reset zoom">
+          <button className="media-btn worded camera-zoom-pill" onClick={zoom.reset} data-tip="Reset zoom" aria-label="Reset zoom">
             <ZoomOut size={16} /> Zoomed in, tap to reset
           </button>
         )}
@@ -625,7 +625,7 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
           {warning && <FaultsButton onOpen={warning.open} severity={warning.severity} className="media-btn" />}
           {readings && readings.length > 0 && (
             <button type="button" className={`media-btn${readingsOpen ? " on" : ""}`} onClick={() => setReadingsOpen((o) => !o)}
-              title="Also on this device" aria-label="Also on this device" aria-expanded={readingsOpen}>
+              data-tip="Also on this device" aria-label="Also on this device" aria-expanded={readingsOpen}>
               <ListTree size={16} aria-hidden="true" />
             </button>
           )}
@@ -752,7 +752,7 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
           {/* the linked sensor (a noise or door sensor): its state over the same day, named on hover — the strip the
               other windows draw as a band under the device's own (LinkedSensorRow) */}
           {linkedSensor && linkedId && (
-            <div className="camera-linked-strip" title={`${linkedSensor.label} (linked entity)`}>
+            <div className="camera-linked-strip" data-tip={`${linkedSensor.label} (linked entity)`}>
               <StateTimeline
                 data={barStates?.s[linkedId] ?? []}
                 status={statusFetch}
@@ -779,7 +779,7 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
               <button
                 className={`media-btn camera-sound-btn${soundOn ? " on" : ""}`}
                 onClick={toggleSound}
-                title={soundOn ? "Mute" : "Sound on"}
+                data-tip={soundOn ? "Mute" : "Sound on"}
                 aria-label={soundOn ? "Mute" : "Sound on"}
                 aria-pressed={soundOn}
                 style={vOrder(11)}
@@ -804,7 +804,7 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
               className={`media-btn camera-linked-btn${linked.isOn ? " on" : ""}`}
               {...linkedSwitchProps(linked)}
               // its word as the card windows say it (linkedStateWords: Unavailable only when lost, else Unknown)
-              title={`${linked.label}: ${linkedStateWords(linked)}${linked.known ? `, ${linked.isOn ? "turn off" : "turn on"}` : ""}`}
+              data-tip={`${linked.label}: ${linkedStateWords(linked)}${linked.known ? `, ${linked.isOn ? "turn off" : "turn on"}` : ""}`}
               style={vOrder(5)}
             >
               <Power />
@@ -821,7 +821,7 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
               <button
                 className="media-btn"
                 onClick={() => stepCamera(-1)}
-                title="Previous camera"
+                data-tip="Previous camera"
                 aria-label="Previous camera"
                 style={vOrder(4)}
               >
@@ -832,7 +832,7 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
                 {...pickerHold}
                 onContextMenu={(e) => e.preventDefault()}
                 onClick={() => onCycleBtnClick(1)}
-                title="Next camera, hold to pick a camera"
+                data-tip="Next camera, hold to pick a camera"
                 aria-label="Next camera, hold to pick a camera"
                 style={vOrder(3)}
               >
@@ -844,7 +844,7 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
             <button
               className="media-btn"
               onClick={toggleFullscreen}
-              title={isFs ? "Exit fullscreen" : "Fullscreen"}
+              data-tip={isFs ? "Exit fullscreen" : "Fullscreen"}
               aria-label={isFs ? "Exit fullscreen" : "Fullscreen"}
               style={vOrder(2)}
             >
@@ -852,12 +852,12 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
             </button>
           )}
           {back && (
-            <button className="media-btn" onClick={back.go} title={`Back to ${back.label}`}
+            <button className="media-btn" onClick={back.go} data-tip={`Back to ${back.label}`}
               aria-label={`Back to ${back.label}`} style={vOrder(1)}>
               <ArrowLeft />
             </button>
           )}
-          <button className="media-btn" onClick={onClose} title="Close" aria-label="Close" style={vOrder(1)}>
+          <button className="media-btn" onClick={onClose} data-tip="Close" aria-label="Close" style={vOrder(1)}>
             <X />
           </button>
         </div>

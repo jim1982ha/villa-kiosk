@@ -130,7 +130,7 @@ export default function BasePanel({ title, entityId, icon, className, headerActi
         <button
           className="panel-badge-btn"
           onClick={() => setColorOpen(true)}
-          title="Change icon colour"
+          data-tip="Change icon colour"
           aria-label="Change icon colour"
         >
           {badgeImg}
@@ -167,7 +167,7 @@ export default function BasePanel({ title, entityId, icon, className, headerActi
                 open drew the phone's own focus ring round it — an amber border
                 that read as a device state (owner, 2026-10-05). The heading is the
                 conventional dialog-open target; tabIndex={-1} keeps it out of Tab. */}
-            <h2 title={title} tabIndex={-1} data-autofocus>{title}</h2>
+            <h2 data-tip={title} tabIndex={-1} data-autofocus>{title}</h2>
             {room && <div className="room">{room}</div>}
           </div>
         </div>
@@ -198,12 +198,12 @@ export default function BasePanel({ title, entityId, icon, className, headerActi
             <button
               className={`summary-entity-toggle${linked.isOn ? " on" : ""}`}
               {...linkedSwitchProps(linked)}
-              title={linked.isOn ? "Turn off" : "Turn on"}
+              data-tip={linked.isOn ? "Turn off" : "Turn on"}
             >
               <span className="knob" />
             </button>
             <div style={{ minWidth: 0 }}>
-              <div className="panel-linked-label" title={linked.label}>{linked.label}</div>
+              <div className="panel-linked-label" data-tip={linked.label}>{linked.label}</div>
               <div className="muted" style={{ fontSize: "var(--text-2xs)" }}>
                 {linkedStateWords(linked)} · linked entity
               </div>

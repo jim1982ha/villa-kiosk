@@ -112,7 +112,7 @@ console.log("\n  the rows, drawn:");
   ck("  ...each announcement a card: its title in its strip, its bin at the strip's right, its time its one field, no bar",
      inside(firstCard, "fm-record-name").includes("🔔 Visitor") && !/settings-list"|settings-list-(head|row)|fs-row/.test(html)
      && /<span class="card-field-label">On screen<\/span><span class="unit-field"><input[^>]*value="15"[^>]*\/><span class="unit-field-unit" aria-hidden="true">s<\/span><\/span>/.test(firstCard)
-     && /aria-label="Delete the announcement [^"]+"><svg[^>]*lucide-trash-2[\s\S]*?<\/svg><\/button><\/div>/.test(inside(firstCard, "fm-record-strip"))
+     && /aria-label="Delete the announcement [^"]+"[^>]*><svg[^>]*lucide-trash-2[\s\S]*?<\/svg><\/button><\/div>/.test(inside(firstCard, "fm-record-strip"))
      && !/fm-record-actions/.test(firstCard), firstCard);
   ck("  ...no \"Ring shown for\" anywhere", !/Ring shown for/i.test(html));
 }

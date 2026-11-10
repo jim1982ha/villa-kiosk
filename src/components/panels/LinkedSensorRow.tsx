@@ -33,7 +33,7 @@ export default function LinkedSensorRow({ entityId, label, role }: {
   const reading = readingOf(entityId, entity, "binary_sensor");
   return (
     <div className="field panel-linked-history">
-      <div className="panel-linked-label" title={`${label} (${role})`}>{label} <span className="muted">({role})</span></div>
+      <div className="panel-linked-label" data-tip={`${label} (${role})`}>{label} <span className="muted">({role})</span></div>
       <StateTimeline
         data={data}
         status={status}

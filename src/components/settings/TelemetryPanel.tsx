@@ -322,7 +322,7 @@ export function TelemetryRow({ e }: { e: TelemetryEvent }) {
     /* Layout lives in styles.css (.telemetry-row), NOT inline: the
        phone tier has to re-flow this row onto two lines, and a media
        query cannot override an inline style prop. */
-    <div className="telemetry-row" title={e.ua}>
+    <div className="telemetry-row" data-tip={e.ua}>
       {/* the app's one moment, on the villa's clock, with its seconds (owner, 2026-11-06: it was the store's
           "2026-11-05 17:55:13Z") */}
       <span className="muted telemetry-time">{telemetryTime(e.at)}</span>
@@ -337,7 +337,7 @@ export function TelemetryRow({ e }: { e: TelemetryEvent }) {
             way. Older events predate the field and just show nothing. */}
         {shortUA(e.ua)}{e.role ? ` · ${e.role}` : ""}{e.v ? ` · v${e.v}` : ""}
       </span>
-      <span className="telemetry-summary" title={summarise(e)}>{summarise(e)}</span>
+      <span className="telemetry-summary" data-tip={summarise(e)}>{summarise(e)}</span>
     </div>
   );
 }
@@ -471,15 +471,15 @@ export default function TelemetryPanel() {
           in the header): Advanced Settings' header's look (.tool-group), each word hidden on a phone. */}
       <ToolGroup label="Device telemetry" className="telemetry-actions">
         <button type="button" onClick={() => void load()} disabled={busy}
-          title="Re-read the events from the server" aria-label="Refresh">
+          data-tip="Re-read the events from the server" aria-label="Refresh">
           <RefreshCw size={16} aria-hidden /><span className="btn-label">Refresh</span>
         </button>
         <button type="button" onClick={() => void copyAll()} disabled={busy || !events?.length}
-          title="Copy every event, every field, as JSON" aria-label="Copy">
+          data-tip="Copy every event, every field, as JSON" aria-label="Copy">
           {copied ? <Check size={16} aria-hidden /> : <Copy size={16} aria-hidden />}<span className="btn-label">{copied ? "Copied" : "Copy"}</span>
         </button>
         <button type="button" onClick={downloadAll} disabled={busy || !events?.length}
-          title="Save every event as a .json file" aria-label="Download">
+          data-tip="Save every event as a .json file" aria-label="Download">
           <Download size={16} aria-hidden /><span className="btn-label">Download</span>
         </button>
         {/* it erases what nothing brings back: it asks first, as every such button (owner, 2026-11-10) */}
@@ -495,7 +495,7 @@ export default function TelemetryPanel() {
             has a console — nor, inside the companion app or an installed PWA, a URL `?debug` can be added to. */}
         <div className="telemetry-diag" ref={diagRef}>
           <button type="button" aria-haspopup="menu" aria-expanded={diagOpen} disabled={probing}
-            onClick={() => setDiagOpen((o) => !o)} title="This device's report, or the frame-cost probe"
+            onClick={() => setDiagOpen((o) => !o)} data-tip="This device's report, or the frame-cost probe"
             aria-label="Diagnose">
             <Stethoscope size={16} aria-hidden /><span className="btn-label">{probing ? "Measuring…" : "Diagnose"}</span>
             <ChevronDown size={14} aria-hidden />
@@ -503,12 +503,12 @@ export default function TelemetryPanel() {
           {diagOpen && (
             <div className="hud-menu telemetry-diag-menu" role="menu">
               <button role="menuitem" className="hud-menu-item" onClick={runDevice}
-                title="This device right now, screen, viewport, WebGL caps, loaded model">
+                data-tip="This device right now, screen, viewport, WebGL caps, loaded model">
                 <Stethoscope size={18} /> <span>This device</span>
               </button>
               <button role="menuitem" className="hud-menu-item" onClick={() => void runProbe()}
                 disabled={!probeAvailable()}
-                title="Re-times the frame with the badges, lights, image-based lighting and geometry removed one at a time. About 15 seconds, during which the villa will look wrong.">
+                data-tip="Re-times the frame with the badges, lights, image-based lighting and geometry removed one at a time. About 15 seconds, during which the villa will look wrong.">
                 <Activity size={18} /> <span>Frame-cost probe</span>
               </button>
             </div>

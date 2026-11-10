@@ -84,18 +84,9 @@
   background: var(--bg-card); border: var(--card-border);
   box-shadow: 0 10px 30px var(--shadow);
 }
-.pinpad-back {
-  position: absolute; top: 14px; left: 14px;
-  display: inline-flex; align-items: center; gap: 6px;
-  background: none; border: none; cursor: pointer;
-  color: var(--text-secondary); font-size: var(--text-base); padding: 8px;
-  min-height: var(--touch-min);
-}
-.pinpad-back:focus-visible { color: var(--text-primary); }
-@media (hover: hover) {
-  .pinpad-back:hover { color: var(--text-primary); }
-}
-.pinpad-title { font-family: var(--font-display); font-size: var(--text-2xl); margin: 26px 0 2px; }
+/* its way back: the worded button (.btn), here only placed */
+.pinpad-back { position: absolute; top: 14px; left: 14px; }
+.pinpad-title { font-family: var(--font-display); font-size: var(--text-2xl); margin: 40px 0 2px; }
 .pinpad-sub { color: var(--text-secondary); margin: 0 0 18px; font-size: var(--text-base); }
 
 .pinpad-dots { display: flex; gap: 14px; justify-content: center; margin-bottom: 8px; }

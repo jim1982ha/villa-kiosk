@@ -43,7 +43,7 @@ export function RangeChip({ range, step, unit, state, kept, onClear }: {
   const note = state === "loading" ? ", loading the detail" : state === "failed" ? ", couldn't load the detail: shown in full" : "";
   return (
     <button type="button" className={`chart-range-chip${state === "ready" ? "" : ` ${state}`}`} onClick={onClear}
-      aria-busy={state === "loading" || undefined} aria-label={`Only ${words}${kept ? `, ${kept}` : ""}${note}. Tap to show all`} title="Show all">
+      aria-busy={state === "loading" || undefined} aria-label={`Only ${words}${kept ? `, ${kept}` : ""}${note}. Tap to show all`} data-tip="Show all">
       {state === "failed" ? <AlertTriangle size={11} aria-hidden /> : <Filter size={11} aria-hidden />}
       <span className="chart-range-chip-words">{words}</span>
       {kept && <span className="chart-range-chip-kept">· {kept}</span>}

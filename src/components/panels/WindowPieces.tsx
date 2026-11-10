@@ -5,8 +5,9 @@
 // (round-6 candidate 6, 2.496.119; the window shell round 9, 2.496.145).
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { ChevronLeft, LineChart as LineChartIcon } from "lucide-react";
+import { LineChart as LineChartIcon } from "lucide-react";
 import BasePanel from "./BasePanel";
+import BackButton from "@/components/common/BackButton";
 import type { Observation } from "@/config/observation";
 
 /**
@@ -33,11 +34,7 @@ export function DataWindow({ title, icon, live, picker, className, onClose, now,
   const [view, setView] = useState<"now" | "history">("now");
   const topRef = useRef<HTMLDivElement>(null);
   useEffect(() => { topRef.current?.closest(".modal-body")?.scrollTo({ top: 0 }); }, [view]);
-  const back = (
-    <button type="button" className="data-window-back" onClick={() => setView("now")} aria-label={`Back to ${title}`}>
-      <ChevronLeft size={22} />
-    </button>
-  );
+  const back = <BackButton onClick={() => setView("now")} label={title} wordless />;
   return (
     <BasePanel
       title={view === "now" ? title : "History and trends"}

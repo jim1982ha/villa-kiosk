@@ -97,7 +97,7 @@ export default function MappingFields({ entryKey, entityId, mapping, entity, cel
       ))}
       {cell("label", "Label", (
         // Saved half a second after typing stops, or at once on leaving the field.
-        <input placeholder={named.placeholder} title="Display name, leave empty to use the device's own name"
+        <input placeholder={named.placeholder} data-tip="Display name, leave empty to use the device's own name"
           value={label.shown ?? named.value}
           onChange={(e) => label.draft(e.target.value, patchMapping(entryKey, { label: e.target.value }))}
           onBlur={label.flush} />
@@ -111,7 +111,7 @@ export default function MappingFields({ entryKey, entityId, mapping, entity, cel
             }}
             onMouseUp={intensity.flush}
             onTouchEnd={intensity.flush}
-            title="Per-light brightness override on top of this light's live brightness and the global Light effect strength setting. 0% = no change."
+            data-tip="Per-light brightness override on top of this light's live brightness and the global Light effect strength setting. 0% = no change."
             aria-label={`Intensity override for ${entityId}`} />
           <span className="muted" style={{ fontSize: "var(--text-xs)", minWidth: 40, textAlign: "right" }}>
             {pct > 0 ? "+" : ""}{pct}%

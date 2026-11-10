@@ -61,13 +61,13 @@ export default function BadgeColorModal({ current, categoryColor, onChange, onCl
               style={{ background: hex }}
               onClick={() => pickAndClose(hex)}
               aria-label={`Set colour ${hex}`}
-              title={hex}
+              data-tip={hex}
             />
           ))}
         </div>
 
         <div className="row" style={{ gap: 12, marginTop: 16, alignItems: "center" }}>
-          <label className="badge-swatch custom" title="Custom colour">
+          <label className="badge-swatch custom" data-tip="Custom colour">
             <input
               type="color"
               value={current ?? categoryColor}

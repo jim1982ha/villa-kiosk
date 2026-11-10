@@ -108,7 +108,7 @@ function BulkToggle({ devices, looks }: { devices: HassEntity[]; looks: LookSour
     <button
       className="btn icon-only"
       onClick={() => setConfirming(true)}
-      title={words}
+      data-tip={words}
       aria-label={words}
     >
       {anyOn ? <PowerOff size={18} /> : <Power size={18} />}
@@ -193,7 +193,7 @@ export default function SummaryGroupPanel({
       {onMap.length > 0 && renderRooms(onMap)}
       {offMap.length > 0 && (
         <>
-          <div className="summary-offmap-heading" title="These devices exist but have no 3D geometry in this villa model">
+          <div className="summary-offmap-heading" data-tip="These devices exist but have no 3D geometry in this villa model">
             Not on the map
           </div>
           {renderRooms(offMap)}
@@ -203,7 +203,7 @@ export default function SummaryGroupPanel({
         <>
           <div
             className="summary-offmap-heading summary-notinha-heading"
-            title="This villa model has 3D geometry named after these devices, but no such device exists, it was removed from the villa's system, or renamed, or it was renamed. Update the model, or add the device back."
+            data-tip="This villa model has 3D geometry named after these devices, but no such device exists, it was removed from the villa's system, or renamed, or it was renamed. Update the model, or add the device back."
           >
             {NOT_IN_HA}
           </div>

@@ -233,7 +233,7 @@ export function HeaderActions({ glbUpload, logout }: {
             type="button"
             onClick={glbUpload.openPicker}
             disabled={glbUpload.uploadBusy !== null}
-            title="Upload a GLB model"
+            data-tip="Upload a GLB model"
             aria-label={glbUpload.progress.words ?? "Upload Model"}
           >
             <Upload size={18} aria-hidden />

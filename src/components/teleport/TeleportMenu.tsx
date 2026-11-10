@@ -147,7 +147,7 @@ export default function TeleportMenu({ manager, currentFloor, onClose, onTelepor
             className="tp-card"
             style={p.thumbnail ? { backgroundImage: `url(${p.thumbnail})` } : undefined}
             onClick={() => onTeleport(p)}
-            title={`Go to ${p.name}`}
+            data-tip={`Go to ${p.name}`}
           >
             <div className="scrim" />
             {p.floor !== currentFloor && <span className="floor-tag">F{p.floor}</span>}
@@ -160,7 +160,7 @@ export default function TeleportMenu({ manager, currentFloor, onClose, onTelepor
                 e.stopPropagation();
                 setAsk({ kind: "remove", name: p.name });
               }}
-              title="Remove room"
+              data-tip="Remove room"
               aria-label={`Remove room ${p.name}`}
             >
               <Trash2 size={16} />
@@ -171,7 +171,7 @@ export default function TeleportMenu({ manager, currentFloor, onClose, onTelepor
         ))}
 
         {mayEdit && (
-        <button className="tp-card tp-add" onClick={() => setAsk({ kind: "add" })} title="Add current viewpoint as a room">
+        <button className="tp-card tp-add" onClick={() => setAsk({ kind: "add" })} data-tip="Add current viewpoint as a room">
           <Plus size={26} />
           <span>Add room here</span>
         </button>

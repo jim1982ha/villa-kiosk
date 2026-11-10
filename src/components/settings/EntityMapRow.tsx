@@ -86,19 +86,19 @@ function DeviceFields({ entryKey, mapping, entity, stale, matchedRowRef, objects
   // The show-in-3D toggle is this row's own field; every other field is MappingFields'.
   const { draftField, m } = useMappingDraft(entryKey, mapping);
   return (
-    <div className="device-card" ref={matchedRowRef} title={stale ? `${m.entityId} no longer exists` : undefined}>
+    <div className="device-card" ref={matchedRowRef} data-tip={stale ? `${m.entityId} no longer exists` : undefined}>
       <div className="device-first-line">
         <input
           type="checkbox"
           checked={!m.disabled}
           onChange={(e) => draftField({ disabled: !e.target.checked })}
-          title="Show this device in the 3D view (badge, highlight, tap). Turn off for devices modelled but not yet installed."
+          data-tip="Show this device in the 3D view (badge, highlight, tap). Turn off for devices modelled but not yet installed."
           aria-label={`Show ${m.entityId} in the 3D view`}
         />
         <div className="entity-id-display">
           {/* ⚠️ ONE FIRST LINE (owner, 2026-11-05): the id, never more than 2 lines (its whole text on hover), the
               toggle at its right; its 3D objects are its "3D object" field (owner, 2026-11-06), never on this line */}
-          <span className="entity-id-text" title={m.entityId}>
+          <span className="entity-id-text" data-tip={m.entityId}>
             <IdText id={m.entityId} />
           </span>
           <span className="entity-id-confirm">

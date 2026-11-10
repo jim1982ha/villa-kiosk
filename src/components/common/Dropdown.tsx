@@ -111,7 +111,7 @@ export default function Dropdown<T extends string>({
         ref={button}
         type="button"
         className={`dropdown${open ? " is-open" : ""}${className ? ` ${className}` : ""}`}
-        title={title}
+        data-tip={title}
         disabled={disabled}
         aria-haspopup="listbox"
         aria-expanded={open}

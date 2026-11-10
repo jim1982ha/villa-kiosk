@@ -108,7 +108,7 @@ export default function ModalFooter({
   // against — a bug CockpitModal shipped and every other single-button footer
   // worked around by hand.
   const left = back && commit === undefined && !answer
-    ? <BackButton onClick={back.go} label={back.to} footer />
+    ? <BackButton onClick={back.go} label={back.to} />
     : leading !== undefined && leading !== null && leading !== false
     ? leading
     : note

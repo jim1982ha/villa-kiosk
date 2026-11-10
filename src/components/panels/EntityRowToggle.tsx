@@ -59,7 +59,7 @@ export default function EntityRowToggle({ entityId, actualOn, label, onToggle, a
       role="switch"
       aria-checked={isOn}
       aria-label={`${label}: ${isOn ? "on" : "off"}`}
-      title={isOn ? "Turn off" : "Turn on"}
+      data-tip={isOn ? "Turn off" : "Turn on"}
     >
       <span className="knob" />
     </button>
