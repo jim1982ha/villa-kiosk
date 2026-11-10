@@ -30,6 +30,26 @@ export function scheduleToDraft(s: FmSchedule): ScheduleDraft {
   return { title: s.title, clause: s.clause ?? "", everyDays: String(s.everyDays), room: s.room ?? "" };
 }
 
+/** How the obligation is usually WRITTEN, mapped to days. Anything that isn't a
+ *  whole number of days rounds DOWN (twice a week -> 3, not 4) so a genuinely
+ *  late task can never read as compliant. */
+export const SCHEDULE_PRESETS: { label: string; days: number }[] = [
+  { label: "Twice a week", days: 3 },
+  { label: "Weekly", days: 7 },
+  { label: "Twice a month", days: 15 },
+  { label: "Monthly", days: 30 },
+  { label: "Every 3 months", days: 90 },
+  { label: "Every 6 months", days: 180 },
+  { label: "Every 12 months", days: 365 },
+];
+
+/** A task's interval as a person reads it: the words it was picked with ("Monthly"), else its days ("Every 10 days").
+ *  ⚠️ ONE SET OF WORDS (UI scan, 2026-11-10): the form's chip said "Monthly", the task's card and the monthly document
+ *  "every 30 days". */
+export function everyWords(days: number): string {
+  return SCHEDULE_PRESETS.find((p) => p.days === days)?.label ?? (days === 1 ? "Every day" : `Every ${days} days`);
+}
+
 /** The interval in whole days, or null when what was typed is not one. */
 export function draftDays(everyDays: string): number | null {
   const t = everyDays.trim();

@@ -169,7 +169,7 @@ function PresenceSensor() {
         The on/off sensor that is on when the villa is empty. Shown on every screen as the presence tile under the
         floors (Occupied, Empty or Unknown); tapping it tells why.
       </>} />
-      <EntityPicker value={config.presenceSensor} domains={["binary_sensor"]} placeholder="Pick the villa's empty / occupied sensor" hideCurrentLabel
+      <EntityPicker value={config.presenceSensor} domains={["binary_sensor"]} placeholder="Pick the villa's empty / occupied sensor"
         onChange={(id) => update({ presenceSensor: id })} onClear={() => update({ presenceSensor: "" })} />
     </>
   );

@@ -111,7 +111,7 @@ export default function FaultStageModal({
         {/* the name typed, never offered (WorkerName) */}
         <div className="fm-field">
           <span>Who{asksCost ? " did the work" : "'s handling it"} (optional)</span>
-          <WorkerName value={who} onChange={setWho} placeholder="Name or company" />
+          <WorkerName value={who} onChange={setWho} />
         </div>
         <NotesField
           label={copy.note}

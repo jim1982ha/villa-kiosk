@@ -5,7 +5,7 @@
 import { onWake } from "@/utils/deviceWake";
 import type {
   EnergyInfo, EnergyPrefs, HassAreaRegistryEntry, HassDeviceRegistryEntry, HassEntity, HassEntityRegistryEntry,
-  HassFloorRegistryEntry, HassServiceTarget, StatisticIdInfo, StatisticPeriod,
+  HassFloorRegistryEntry, HassServiceTarget, StatisticPeriod,
 } from "@/types/ha.types";
 import { ingressWsUrl } from "./ingress";
 import { captureError } from "@/utils/diagnostics";
@@ -108,10 +108,6 @@ export class HAWebSocket {
       this.reconnectAttempts = 0;
       this.openSocket().catch(() => this.scheduleReconnect());
     }
-  }
-
-  getState(): ConnectionState {
-    return this.state;
   }
 
   private setState(s: ConnectionState) {
@@ -519,15 +515,6 @@ export class HAWebSocket {
    *  Energy dashboard shows (from its tariff, however it is configured). */
   async getEnergyInfo(): Promise<EnergyInfo> {
     return this.sendMessage<EnergyInfo>("energy/info");
-  }
-
-  /** Which statistic IDs actually have recorded data — an Energy Dashboard
-   *  source can reference one that no longer resolves (e.g. after an
-   *  unrelated entity rename left the OLD name as the recorded statistic_id
-   *  while the dashboard still points at the new entity_id), so callers
-   *  cross-check against this before trusting a configured source. */
-  async listStatisticIds(statisticType: "sum" | "mean" = "sum"): Promise<StatisticIdInfo[]> {
-    return this.sendMessage<StatisticIdInfo[]>("recorder/list_statistic_ids", { statistic_type: statisticType });
   }
 
   /** Pre-aggregated statistics for one or more statistic IDs — `change` is

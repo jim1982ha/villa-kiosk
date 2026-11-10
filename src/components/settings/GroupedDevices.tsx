@@ -148,7 +148,6 @@ export default function GroupedDevices({ title, tip }: { title: string; tip?: Re
                     <EntityPicker
                       onChange={(id) => addMember(group, id)}
                       placeholder="Add another entity…"
-                      hideCurrentLabel
                       compact
                     />
                   </div>

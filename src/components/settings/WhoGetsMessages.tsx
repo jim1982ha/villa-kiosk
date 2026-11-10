@@ -101,7 +101,7 @@ export default function WhoGetsMessages(props: Props) {
             {!onVilla ? <span className="body-text recipients-role-name">{who}</span> : (
               <AddOnLine title={<span className="body-text recipients-role-name">{who}</span>} words="Add"
                 label={`Add a chat or phone to ${who}`}>
-                {(done) => <EntityPicker domains={["notify"]} startOpen compact hideCurrentLabel placeholder="Add a chat or phone…"
+                {(done) => <EntityPicker domains={["notify"]} startOpen compact placeholder="Add a chat or phone…"
                   onChange={(id) => { done(); add(id); }} />}
               </AddOnLine>
             )}

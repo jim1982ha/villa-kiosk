@@ -542,9 +542,6 @@ body:has(.camera-fullscreen) .vesta-notice.below-camera { display: none; }
   background: color-mix(in srgb, var(--tone) var(--tone-fill), var(--bg-card));
   border-color: color-mix(in srgb, var(--tone) var(--tone-edge), var(--hairline));
 }
-/* a section's name in Messages, its chevron folding it (MessagesTab MessagesSection): the eyebrow title, as a button */
-.messages-section-toggle { display: inline-flex; align-items: center; gap: 6px; background: none; border: 0; padding: 0;
-  font-family: inherit; cursor: pointer; min-height: var(--touch-min); }
 .messages-section .fm-list { margin-top: 8px; }
 .messages-section .cockpit-issues-head .settings-section-title { margin: 0; }
 /* VESTA's conversation, its own window (ticket 21 of "One inbox"; owner, 2026-10-29: beside the robot, the windows' own

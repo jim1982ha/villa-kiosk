@@ -104,17 +104,15 @@ export default function InfoTip({ label, children, className, width = INFO_TIP_W
  * Settings or the Cockpit — what a section or an option is for is read in its (i), never in a paragraph under it).
  * `tip` absent: the title alone.
  */
-export function TipTitle({ title, after, tip, className = "settings-section-title", style }: {
+export function TipTitle({ title, after, tip }: {
   title: ReactNode;
   /** Between the title and its (i): the section's counts that show its lists (Devices, FoldedList.SectionViewButtons). */
   after?: ReactNode;
   tip?: ReactNode;
-  className?: string;
-  style?: CSSProperties;
 }) {
   const info = <InfoTip label={`About ${typeof title === "string" ? title : "this section"}`}>{tip}</InfoTip>;
   return (
-    <div className={`${className}${tip ? " with-tip" : ""}`} style={style}>
+    <div className={`settings-section-title${tip ? " with-tip" : ""}`}>
       {title}
       {/* the counts and the (i) one unit: on a narrow screen they go under the title together, never the (i) alone */}
       {after ? <span className="title-after">{after}{tip && info}</span> : tip && info}

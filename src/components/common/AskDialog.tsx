@@ -37,7 +37,6 @@
 
 import Window from "@/components/common/Window";
 import { useState } from "react";
-import type { LucideIcon } from "lucide-react";
 
 interface Props {
   title: string;
@@ -48,24 +47,6 @@ interface Props {
   confirmLabel?: string;
   /** null hides the cancel button entirely — that is the `alert()` shape. */
   cancelLabel?: string | null;
-  /**
-   * An optional THIRD action, between cancel and confirm.
-   *
-   * ⚠️ IT EXISTS FOR THE UNSAVED-CHANGES QUESTION, WHICH IS GENUINELY
-   * THREE-WAY: save, discard, or stay where you are. Squeezing that into two
-   * buttons forces one of the three onto Escape and the backdrop — and
-   * whichever lands there is taken by accident, which for "discard" means
-   * silently losing an edit. So the third button is explicit and `onCancel`
-   * keeps the meaning it has everywhere else in this app: the harmless one.
-   */
-  secondaryLabel?: string;
-  onSecondary?: () => void;
-  /** ⚠️ ICONS, BECAUSE A ROW OF BARE TEXT PILLS READS AS THREE UNRELATED
-   *  CONTROLS. Every other action row in this app pairs a glyph with its word.
-   *  Optional: a one-button alert shape needs none. */
-  confirmIcon?: LucideIcon;
-  secondaryIcon?: LucideIcon;
-  cancelIcon?: LucideIcon;
   /** Paints the confirm button as destructive (`.btn.danger`). */
   danger?: boolean;
   /**
@@ -78,9 +59,7 @@ interface Props {
 
 export default function AskDialog({
   title, message, input, confirmLabel = "OK", cancelLabel = "Cancel",
-  danger = false, secondaryLabel, onSecondary, onConfirm, onCancel,
-  confirmIcon: ConfirmIcon, secondaryIcon: SecondaryIcon,
-  cancelIcon: CancelIcon,
+  danger = false, onConfirm, onCancel,
 }: Props) {
   const [value, setValue] = useState(input?.initial ?? "");
   const [error, setError] = useState<string | null>(null);
@@ -139,21 +118,9 @@ export default function AskDialog({
         <span />
         <div className="modal-footer-group">
         {cancelLabel !== null && (
-          <button className="btn ghost" onClick={onCancel}>
-            {CancelIcon && <CancelIcon size={16} aria-hidden />}
-            {cancelLabel}
-          </button>
+          <button className="btn ghost" onClick={onCancel}>{cancelLabel}</button>
         )}
-        {secondaryLabel && onSecondary && (
-          <button className="btn ghost" onClick={onSecondary}>
-            {SecondaryIcon && <SecondaryIcon size={16} aria-hidden />}
-            {secondaryLabel}
-          </button>
-        )}
-        <button className={`btn ${danger ? "danger" : "primary"}`} onClick={submit}>
-          {ConfirmIcon && <ConfirmIcon size={16} aria-hidden />}
-          {confirmLabel}
-        </button>
+        <button className={`btn ${danger ? "danger" : "primary"}`} onClick={submit}>{confirmLabel}</button>
         </div>
       </div>
     </Window>

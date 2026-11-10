@@ -40,8 +40,8 @@ export type FmWriteResult = "saved" | "refused" | "offline" | "unchanged";
  */
 export interface FmSaveOutcome { result: FmWriteResult; done: boolean; note: string | null; queued: boolean }
 export function fmSaveOutcome(r: FmWriteResult): FmSaveOutcome {
-  if (r === "refused") return { result: r, done: false, note: "The add-on refused this, nothing was saved. What you typed is still here.", queued: false };
-  if (r === "offline") return { result: r, done: true, note: "Saved on this device, it will be sent automatically when the add-on can be reached.", queued: true };
+  if (r === "refused") return { result: r, done: false, note: "The server refused this, nothing was saved. What you typed is still here.", queued: false };
+  if (r === "offline") return { result: r, done: true, note: "Saved on this device, it will be sent automatically when the server can be reached.", queued: true };
   return { result: r, done: true, note: null, queued: false };
 }
 
@@ -81,5 +81,5 @@ export function removedOnAnotherDevice(kinds: string[]): string {
  */
 export function fmRecordLine(s: { ready: boolean; unreachable: boolean }): string | null {
   if (s.ready) return null;
-  return s.unreachable ? "Can't reach the add-on. Retrying." : "Loading the maintenance record…";
+  return s.unreachable ? "Can't reach the server. Retrying." : "Loading the maintenance record…";
 }

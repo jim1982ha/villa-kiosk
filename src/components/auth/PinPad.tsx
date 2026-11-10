@@ -14,6 +14,7 @@ import { PIN_LENGTH } from "@/auth/pinShape";
 import type { PinOutcome } from "@/auth/pinOutcome";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useInterval } from "@/hooks/useInterval";
+import { fmtDuration } from "@/components/panels/chartUtils";
 import { ArrowLeft, Delete } from "lucide-react";
 
 const KEYS = ["1", "2", "3", "4", "5", "6", "7", "8", "9"];
@@ -128,7 +129,7 @@ export default function PinPad({
       <div className="pinpad-status" role="alert" aria-live="polite">
         {locked ? (
           <span className="danger-text">
-            {`Too many attempts, locked for ${Math.floor(lockedFor / 60)}:${String(lockedFor % 60).padStart(2, "0")}`}
+            {`Too many attempts, locked for ${fmtDuration(lockedFor * 1000)}`}
           </span>
         ) : error ? (
           <span className="danger-text">{error}</span>
@@ -145,7 +146,7 @@ export default function PinPad({
           else to go otherwise. */}
       {!locked && failCount >= 2 && (
         <p className="pinpad-help muted body-text">
-          {helpText ?? "Don't have the code? Ask whoever manages this villa's kiosk for it."}
+          {helpText ?? "Don't have the code? Ask whoever manages VESTA for this villa."}
         </p>
       )}
 

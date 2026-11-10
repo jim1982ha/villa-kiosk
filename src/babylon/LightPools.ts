@@ -263,7 +263,6 @@ export class LightPool {
    * the treads through the furniture light (lampGlow.ts), which follows them.
    */
   private floorlessNow = false;
-  get floorless(): boolean { return this.floorlessNow; }
   /** Whether the light this pool shows is lit — remembered, so a change of
    *  `floorless` can recompute visibility BOTH ways. */
   private lit = false;

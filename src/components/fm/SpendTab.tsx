@@ -13,7 +13,7 @@ import Dropdown from "@/components/common/Dropdown";
 import { DocumentButtons } from "@/components/common/SaveButton";
 import { Plus, Sparkles } from "lucide-react";
 import { useFmData } from "@/fm/FmDataContext";
-import { budgetStatus, capNotes, parseAmount, recordsKeptNote } from "@/fm/fmEngine";
+import { budgetStatus, capNotes, monthLabel, parseAmount, recordsKeptNote } from "@/fm/fmEngine";
 import { COST_CATEGORY_NAMES } from "@/fm/fmTypes";
 import { useFmTerms } from "@/fm/useFmTerms";
 import { useProfile } from "@/auth/ProfileContext";
@@ -186,7 +186,7 @@ export default function SpendTab(
 
       <div className="fm-list">
         {b.entries.length === 0 && (
-          <p className="muted body-text">No spend recorded for {month}.</p>
+          <p className="muted body-text">No spend recorded for {monthLabel(month)}.</p>
         )}
         {b.entries.sort((a, c) => Date.parse(c.at) - Date.parse(a.at)).map((c) => editor.inPlace(c.id, (
           // THE Cockpit card (RecordCard, architecture review 2026-10-15): the amount on the right, its receipt —
@@ -225,7 +225,7 @@ export default function SpendTab(
           </InfoTip></span>
         <div style={{ minWidth: 130 }}>
           <Dropdown value={month} ariaLabel="Month" onChange={recap.setMonth}
-            options={recap.months.map((m) => ({ value: m, label: m }))} />
+            options={recap.months.map((m) => ({ value: m, label: monthLabel(m) }))} />
         </div>
         <div className="fm-statement-buttons">
           <button className="btn ghost" onClick={recap.generate}>

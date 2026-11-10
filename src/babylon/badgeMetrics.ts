@@ -188,7 +188,6 @@ export function snapToZoomLattice(v: number): number {
   return Math.pow(2, Math.ceil(Math.log2(v) * q - EPS) / q);
 }
 
-
 /**
  * How far the zoom-out shrink may take badges below their configured size.
  *
@@ -414,38 +413,6 @@ export interface BadgeMetrics {
  * fraction of --chip-gap" is the obvious-looking move and it is wrong twice
  * over.
  */
-
-/**
- * The visible clear space either side of a card's value text, as a multiple of
- * the card's own `iconPadX`.
- *
- * ⚠️ THIS IS AN OWNER-STATED ACCEPTANCE CRITERION, NOT A DERIVED ONE (2.454.0),
- * and it REVERSES 2.451.0. That release made the visible gap 2x the visible
- * right margin, reasoning from the DOM twin (`.summary-tile` runs 9-14 px of
- * padding against a 13 px gap) that a number sitting equidistant reads as
- * adrift rather than as belonging to its icon. Six attempts at this bug were
- * six numbers argued that way. The owner then stated the target directly:
- *
- *   "I want the 100% to appear centered between the end of the entity icon
- *    and the end of the badge graph"
- *
- * which is one equation — VISIBLE gap == VISIBLE right margin — and it is what
- * `?debug`'s `badge` line already prints as `gap=` and `visR=`. So the rule is
- * now checkable against a capture instead of argued, and `badge_geometry.mjs` pins
- * the equality rather than either number.
- *
- * 1.5 rather than 1 because that keeps the card's WIDTH exactly what it was:
- * the old pair summed to (2·iconPadX) + (iconPadX) = 3·iconPadX of space to the
- * right of the chip's ink, and splitting that in half moves the text without
- * resizing the badge around it. The value therefore moves LEFT — it was 4.60
- * from the ink and 2.00 from the edge, and both become 3.375.
- *
- * ⚠️ The chip's baked ink inset is subtracted from the SPACER, never from this:
- * the ink stops `BADGE_INSET_CARD` short of the glyph control's edge, so a gap
- * measured to that edge is measured from a boundary nobody can see. That
- * subtraction is what made three earlier attempts look right on paper.
- */
-export { CARD_VALUE_MARGIN_OF_ICON_PAD } from "./badgeLook";
 
 /**
  * The value text, as a fraction of the CHIP it sits beside.

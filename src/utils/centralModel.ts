@@ -6,6 +6,7 @@
 import { ingressPath } from "@/ha/ingress";
 import { devLog } from "@/utils/devLog";
 import { backendFetch } from "@/auth/sessionLost";
+import { fmtDuration } from "@/components/panels/chartUtils";
 
 
 // ── Add-on central configuration ────────────────────────────────────────────
@@ -128,7 +129,7 @@ async function postUploadOnce(
   } catch (e) {
     throw new TransientUploadError(
       (e as Error)?.name === "AbortError"
-        ? `Upload stalled, no response from the add-on within ${timeoutMs / 1000}s.`
+        ? `Upload stalled, no response from the server within ${fmtDuration(timeoutMs)}.`
         : `Upload failed: ${(e as Error)?.message || "network error"}`,
     );
   } finally {

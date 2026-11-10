@@ -68,16 +68,15 @@ export function SourceIcons({ sources, severities, size = 16 }: {
 
 /** The sources of several faults on one line ("Check the ⏾ ⚑ faults in Messages", the Recap's readiness) — side by
  *  side, each in the line's severity (a fault is a warning: amber, owner 2026-10-18), named for a screen reader. */
-export function SourceIconRow({ sources, severity, size = 15 }: {
+export function SourceIconRow({ sources, severity }: {
   sources: readonly IssueSource[];
   severity: AttentionSeverity;
-  size?: number;
 }) {
   return (
     <span className="source-icon-row" aria-label={sources.map((s) => SOURCE_WORDS[s]).join(", ")}>
       {sources.map((s) => {
         const Icon = SOURCE_ICON[s];
-        return <IconTip key={s} k={s} icon={<Icon size={size} aria-hidden className={`cockpit-attention-icon cockpit-attention-${severity}`} />} />;
+        return <IconTip key={s} k={s} icon={<Icon size={15} aria-hidden className={`cockpit-attention-icon cockpit-attention-${severity}`} />} />;
       })}
     </span>
   );

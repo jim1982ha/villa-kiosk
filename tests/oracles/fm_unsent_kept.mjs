@@ -2,7 +2,7 @@
 // spec.keep and unsentWorkHeld, fm/fmApi fmUnsentKeeper, fm/FmDataContext, utils/autoReload).
 //
 // A fault reported, or work logged, while the add-on could not be reached was told "Saved on this device, it will be
-// sent automatically when the add-on can be reached." — and lived in the page's memory alone: the tablet's 04:00
+// sent automatically when the server can be reached." — and lived in the page's memory alone: the tablet's 04:00
 // reload, iOS dropping a background tab or a pull to refresh lost it, nothing said. Now the unsent work is kept in the
 // browser's storage (the change and the records it touches, in a versioned format) until the add-on has it; the next
 // page starts from it and its first refresh sends it, merged item by item like any push (a fault changed meanwhile on
@@ -23,7 +23,7 @@ const { SyncedDocument, unsentWorkHeld } = await import("@/utils/syncedDocument"
 const { installDailyAutoReload } = await import("@/utils/autoReload");
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const OFFLINE_NOTE = "Saved on this device, it will be sent automatically when the add-on can be reached.";
+const OFFLINE_NOTE = "Saved on this device, it will be sent automatically when the server can be reached.";
 
 /** The browser's storage: it outlives the page. `broken`: every access throws (private mode, a full quota). */
 function browserStorage() {

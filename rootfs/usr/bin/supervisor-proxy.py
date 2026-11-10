@@ -2539,7 +2539,7 @@ async def _chunked_upload(request: web.Request, kind: str, dest: str,
             have = os.path.getsize(part)
         except OSError:
             return web.json_response(
-                {"error": "unknown upload_id — restart the upload"}, status=409)
+                {"error": "unknown upload_id: restart the upload"}, status=409)
         if have < offset:
             return web.json_response(
                 {"error": f"offset mismatch (server has {have}, client sent "

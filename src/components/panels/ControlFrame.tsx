@@ -27,18 +27,16 @@ interface Props {
   /** Beside the power button, in one row with a compact button (PowerToggle.PowerSection) — a light's colours and
    *  effects. Like the children, only while the device can be commanded. */
   beside?: ReactNode;
-  /** Shown whatever the state (a reading that is informative offline too). */
-  always?: ReactNode;
   children?: ReactNode;
 }
 
-export default function ControlFrame({ entity, mapping, power, beside, always, children }: Props) {
+export default function ControlFrame({ entity, mapping, power, beside, children }: Props) {
   const { ws } = useHA();
   // ⚠️ LOST CONTACT, NOT "UNKNOWN" (owner, 2026-10-18; architecture review 2026-10-19): a device whose state is
   // "unknown" is answering — it can be commanded (a toggle needs no value), so its controls stay, without the notice;
   // its power button then sits "off" until the device says (devicePower: no position). Only "unavailable" or a
   // missing entity is lost (stateColors.isOffline): no controls, and the window's frame says so (BasePanel's notice).
-  if (isOffline(entity)) return <>{always}</>;
+  if (isOffline(entity)) return null;
   return (
     <>
       {power && (() => {
@@ -52,7 +50,6 @@ export default function ControlFrame({ entity, mapping, power, beside, always, c
           />
         );
       })()}
-      {always}
       {children}
     </>
   );

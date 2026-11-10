@@ -61,10 +61,10 @@ for (const status of [200, 403, 409, 413, 502, "throw"]) {
 }
 
 console.log("\n  what a screen says:");
-ck("refused, with a reason", saveProblemLine({ ok: false, reason: "refused", message: NO }) === `The add-on refused this change: ${NO}`);
-ck("refused, none given", saveProblemLine({ ok: false, reason: "refused" }) === "The add-on refused this change, nothing was saved.");
+ck("refused, with a reason", saveProblemLine({ ok: false, reason: "refused", message: NO }) === `The server refused this change: ${NO}`);
+ck("refused, none given", saveProblemLine({ ok: false, reason: "refused" }) === "The server refused this change, nothing was saved.");
 ck("not landed: the Facility's words", saveProblemLine({ ok: false, reason: "transport" }) === UNSAVED_LINE
-   && UNSAVED_LINE === "Couldn't save to the add-on, the change is only on this device."
+   && UNSAVED_LINE === "Couldn't save to the server, the change is only on this device."
    && saveProblemLine({ ok: false, reason: "conflict-retries-exhausted" }) === UNSAVED_LINE);
 ck("saved, or nothing to send: nothing", saveProblemLine({ ok: true }) === null && saveProblemLine({ ok: false, reason: "nothing-to-push" }) === null);
 
@@ -102,7 +102,7 @@ console.log("\n  Advanced Settings, the add-on refusing the change:");
   await act(() => sleep(PUSHED));                    // the push is scheduled once the edit has rendered
   ck("the refused relabel is undone on this tablet (the store's copy)", label("light.a") === "Hall" && srv.puts === 1,
      { shows: label("light.a"), puts: srv.puts });
-  ck("  ...and said, with the add-on's reason", cfg.saveProblem === `The add-on refused this change: ${NO}`, cfg.saveProblem);
+  ck("  ...and said, with the add-on's reason", cfg.saveProblem === `The server refused this change: ${NO}`, cfg.saveProblem);
   srv.config = { entityMap: { ...srv.config.entityMap, "light.b": { entityId: "light.b", type: "light", label: "Pool lamp" } } };
   srv.rev++;
   await refresh();
@@ -163,7 +163,7 @@ console.log("\n  what a save's answer means for a screen, decided once for both 
   }
   const no = run({ ok: false, reason: "refused", message: "Not allowed for a guest", takeBack: { tickets: 1 } }, true);
   ck("refused: what was sent taken back, said with the add-on's reason", no.verdict === "refused"
-     && JSON.stringify(no.calls) === '[["takeBack",{"tickets":1}]]' && no.line === "The add-on refused this change: Not allowed for a guest", no);
+     && JSON.stringify(no.calls) === '[["takeBack",{"tickets":1}]]' && no.line === "The server refused this change: Not allowed for a guest", no);
   const wifi = run({ ok: false, reason: "transport" });
   ck("not reached: kept on this device, said as unsaved, nothing undone", wifi.verdict === "unsent" && wifi.line === UNSAVED_LINE && wifi.calls.length === 0, wifi);
   const del = run({ ok: false, reason: "transport" }, true);

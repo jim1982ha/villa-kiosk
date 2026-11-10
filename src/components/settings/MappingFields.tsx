@@ -125,7 +125,7 @@ export default function MappingFields({ entryKey, entityId, mapping, entity, cel
         <EntityPicker value={m.linkedEntityId}
           onChange={(id) => draftField({ linkedEntityId: id })}
           onClear={() => draftField({ linkedEntityId: undefined })}
-          allowCustom hideCurrentLabel
+          allowCustom
           placeholder={m.type === "camera" ? "Linked entity, its motion sensor or a switch…" : "Linked entity, a switch or a sensor…"} />
       ), { wide: true })}
     </>

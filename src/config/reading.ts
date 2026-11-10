@@ -20,14 +20,14 @@
 // ⚠️ AND THE PANEL PILLS AND THE HISTORY BAR (step 2). The lock and cover
 // windows took their pill's words and tone from stateColors and panelRules,
 // the history bar its default words and its offline colour from entityValue
-// and stateColors. They ask lockPill, coverPill, readableState and
+// and stateColors. They ask lockPill, coverPill and
 // chartColours now — same words, same tones (same oracle).
 
 import type { HassEntity } from "@/types/ha.types";
 import { readingKind, readingLevel, type AlertLevel, type ReadingKind } from "./sensorReading";
 import { binaryLook } from "./binaryLook";
 import { stateLabelFor } from "./BinarySensorClasses";
-import { deviceRowText, formatSensorParts, prettyState } from "@/utils/entityValue";
+import { deviceRowText, formatSensorParts } from "@/utils/entityValue";
 import { domainOf } from "@/utils/entityDomain";
 import { contactOf, isNoHistory, isUnavailable, NO_RECORD, NO_RECORD_WORDS, NOT_KEPT, NOT_KEPT_COLOR, NOT_KEPT_WORDS, NOT_IN_HA, paintState, statusKeyFor, STATUS_COLOR, STATUS_PILL_CLASS } from "@/utils/stateColors";
 
@@ -182,7 +182,7 @@ const pillTone = (id: string, state: string | undefined): string =>
   STATUS_PILL_CLASS[statusKeyFor(state ?? "", id)];
 
 /** Where a lock's bolt is (stateColors.lockBolt): the one reading a panel asks here, with its pill. */
-export { lockBolt, type LockBolt } from "@/utils/stateColors";
+export { lockBolt } from "@/utils/stateColors";
 
 /** The lock window's buttons, the first drawn large (owner, 2026-10-21: "why do we see the button to unlock the door
  *  as the door is already …" and "the unlock button shall look the same as this Lock button"): the ONE action its
@@ -224,12 +224,6 @@ export function lockPill(id: string, state: string | undefined): StatePill {
  *  reports none; any other state as HA sent it. */
 export function coverPill(id: string, state: string | undefined, position: number | undefined): StatePill {
   return { text: coverStateLabel(state, position), tone: pillTone(id, state) };
-}
-
-/** A state's words when nothing says how this entity words it — a history
- *  bar's tooltip by default ("not_home" → "Not home"). */
-export function readableState(state: string): string {
-  return prettyState(state);
 }
 
 /** A history bar's colours: the window's own, except that an unavailable

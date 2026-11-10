@@ -367,11 +367,11 @@ export default function TelemetryPanel() {
     try {
       const r = await backendFetch(ingressPath(`telemetry${clear ? "?clear=1" : ""}`),
         { credentials: "same-origin" });
-      if (r.status === 404) { setError("This add-on build has no telemetry endpoint yet."); setEvents([]); return; }
+      if (r.status === 404) { setError("This version of VESTA keeps no telemetry yet."); setEvents([]); return; }
       // a refusal says the add-on's own reason (utils/storeSave refusalOf), never one guessed from the status
       if (!r.ok) {
         const why = await refusalOf(r);
-        setError(why ? `The add-on refused: ${why}` : `Couldn't load telemetry (HTTP ${r.status}).`);
+        setError(why ? `The server refused: ${why}` : `Couldn't load telemetry (HTTP ${r.status}).`);
         setEvents([]);
         return;
       }
@@ -385,7 +385,7 @@ export default function TelemetryPanel() {
       // Download are next to the button for keeping it.
       setEvents(clear ? [] : Array.isArray(d.events) ? [...d.events].reverse() : []); // newest first
     } catch {
-      setError("Couldn't reach the add-on.");
+      setError("Couldn't reach the server.");
       setEvents([]);
     } finally {
       setBusy(false);
@@ -436,7 +436,7 @@ export default function TelemetryPanel() {
    *  attached/forwarded as-is. */
   const downloadAll = useCallback(() => {
     downloadFile(
-      `villa-kiosk-telemetry-${new Date().toISOString().slice(0, 10)}.json`,
+      `vesta-telemetry-${new Date().toISOString().slice(0, 10)}.json`,
       asJson(), "application/json");
   }, [asJson]);
 
@@ -472,7 +472,7 @@ export default function TelemetryPanel() {
           in the header): Advanced Settings' header's look (.tool-group), each word hidden on a phone. */}
       <ToolGroup label="Device telemetry" className="telemetry-actions">
         <button type="button" onClick={() => void load()} disabled={busy}
-          title="Re-read the events from the add-on" aria-label="Refresh">
+          title="Re-read the events from the server" aria-label="Refresh">
           <RefreshCw size={16} aria-hidden /><span className="btn-label">Refresh</span>
         </button>
         <button type="button" onClick={() => void copyAll()} disabled={busy || !events?.length}
@@ -484,7 +484,7 @@ export default function TelemetryPanel() {
           <Download size={16} aria-hidden /><span className="btn-label">Download</span>
         </button>
         <button type="button" onClick={() => void load(true)} disabled={busy}
-          title="Empty the add-on's event store. Copy or Download first if you want to keep them." aria-label="Clear">
+          title="Erase every event the server keeps. Copy or Download first if you want to keep them." aria-label="Clear">
           <Trash2 size={16} aria-hidden /><span className="btn-label">Clear</span>
         </button>
         {/* THIS device, right now, and the frame-cost probe — one "Diagnose" menu (owner, 2026-10-14), each result

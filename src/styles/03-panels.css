@@ -632,7 +632,6 @@ input[type="range"]::-moz-range-thumb {
 .weather-tile.center > .weather-eyebrow { align-self: flex-start; }
 .weather-tile-foot { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; font-size: var(--text-sm); color: var(--text-secondary); text-align: center; }
 .weather-tile-foot b { color: var(--text-primary); font-weight: 600; }
-.weather-tile-foot.spread { justify-content: space-between; }
 
 .weather-dial { width: 100%; max-width: 206px; height: auto; }
 .dial-ring { fill: none; stroke: var(--hairline-strong); stroke-width: 2; }

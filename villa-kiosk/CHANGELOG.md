@@ -1,3 +1,21 @@
+## 2.496.761
+
+What you will see:
+- The VESTA UI no longer calls itself "the kiosk" or "the add-on". The first screen asks "Who's using VESTA?"; a
+  save that did not go through says "the server" ("Couldn't save to the server, the change is only on this
+  device."); the Cockpit's table of how a problem becomes a fault says "raised in the VESTA UI".
+- Cockpit › Spend: the month is spelled out ("November 2026") in the Month list and in "No spend recorded for…".
+- Cockpit › Schedule: a task's card says how often in the words you picked ("Monthly", "Every 3 months"), no longer
+  "every 30 days"; the monthly document says the same.
+- Durations are written one way everywhere: a wrong passcode says "locked for 5min", a chart's title "5min avg",
+  the rain chart "No rain in the last 7d".
+- The first-time tips name the right buttons: hold a floor button for its rooms; on a phone the "?" is in the menu,
+  beside Label size.
+- A device that is no longer in the villa's system says "it was removed from the villa's system, or renamed".
+- Settings: the small "Interface" label and section summaries are the same grey as every other quiet text; a
+  guest's "Thank you, that's been reported" tick is the status table's green.
+- Nothing else changes on screen: about 500 lines no screen used any more were removed.
+
 ## 2.496.760
 
 What you will see:

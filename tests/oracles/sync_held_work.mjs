@@ -103,7 +103,7 @@ console.log("  j1: a change held offline, then refused by the add-on:");
   srv.down = false;
   await refresh();
   ck("the add-on back and refusing it: taken back on the screen, and said", titles() === "Pool pump noisy [open]"
-     && fm.saveError === "The add-on refused this change: title too long", { screen: titles(), said: fm.saveError });
+     && fm.saveError === "The server refused this change: title too long", { screen: titles(), said: fm.saveError });
   ck("  ...nothing kept for after a reload, nothing held", !storage.map.has(fmUnsentKey("ops")) && !unsentWorkHeld());
   for (let i = 0; i < 4; i++) await refresh();
   ck("  ...sent ONCE: later refreshes send nothing", srv.puts === 1, srv.puts);

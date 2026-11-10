@@ -16,8 +16,6 @@ export class ScenePhases {
   private listeners = new Set<(phase: ScenePhase) => void>();
   private isShown = false;
 
-  get shownYet(): boolean { return this.isShown; }
-
   /** The model is on screen. */
   shown(): void {
     this.isShown = true;

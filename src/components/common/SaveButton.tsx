@@ -7,16 +7,15 @@
 import type { ReactNode } from "react";
 import { Download, Save } from "lucide-react";
 
-export default function SaveButton({ saved, label, icon, onClick, disabled }: {
+export default function SaveButton({ saved, label, icon, onClick }: {
   saved: boolean;
   /** The verb phrase while unsaved: "Save report". */
   label: string;
   icon: ReactNode;
   onClick: () => void;
-  disabled?: boolean;
 }) {
   return (
-    <button className="btn ghost" onClick={onClick} disabled={disabled || saved}>
+    <button className="btn ghost" onClick={onClick} disabled={saved}>
       {icon} {saved ? "Saved" : label}
     </button>
   );

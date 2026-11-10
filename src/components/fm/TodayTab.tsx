@@ -185,7 +185,7 @@ function LogCompletion({
       {/* the name typed, never offered (WorkerName); `by` is the signed-in profile, stamped by the store */}
       <div className="fm-field">
         <span>Done by</span>
-        <WorkerName value={who} onChange={setWho} placeholder="Name or company" />
+        <WorkerName value={who} onChange={setWho} />
       </div>
 
       <NotesField

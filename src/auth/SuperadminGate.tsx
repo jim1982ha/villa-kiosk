@@ -152,7 +152,7 @@ function SuperadminPrompt({
           <>
             <p className="superadmin-prompt-note danger-text">
               No superadmin code is set for this installation, so records
-              cannot be erased. It is configured in the add-on&apos;s options.
+              cannot be erased. It is set in the VESTA app&apos;s options, in the villa&apos;s system.
             </p>
             <button className="btn" onClick={onCancel}>Close</button>
           </>

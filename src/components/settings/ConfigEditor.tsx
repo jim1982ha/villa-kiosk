@@ -214,7 +214,7 @@ export default function ConfigEditor({ title, tip, initialSearch }: { title: str
               // what it means is its state's (i), never a visible paragraph (owner, 2026-10-22)
               statusTip="A 3D object in the model is named after it, so it shows as missing everywhere. If the entity was renamed, point the object at its new name; otherwise rename or remove the object in the model."
               body={<EntityPicker value={repointTo[id]} onChange={(v) => setRepointTo((m) => ({ ...m, [id]: v }))}
-                hideCurrentLabel placeholder="The entity this 3D object is now…" />}
+                placeholder="The entity this 3D object is now…" />}
               actions={
                 <button type="button" className="btn ghost fm-bar-main" disabled={!repointTo[id] || repointTo[id] === id} onClick={() => repoint(id)}>
                   <Link2 size={16} aria-hidden />Point it there

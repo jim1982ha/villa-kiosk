@@ -332,13 +332,6 @@ export class RoomHighlight {
     this.requestRender();
   }
 
-  /** Whether a name matches a calibrated room or named viewpoint (lets
-   *  callers skip work for sensors whose room doesn't correspond to either). */
-  hasRoom(roomName: string): boolean {
-    const key = RoomHighlight.normalise(roomName);
-    return this.polyRooms.has(key) || this.pointRooms.has(key);
-  }
-
   private animate(): void {
     if (this.active.size === 0) return;
     // The one clock — see babylon/frameClock.
