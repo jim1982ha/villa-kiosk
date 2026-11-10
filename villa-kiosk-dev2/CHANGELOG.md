@@ -1,3 +1,18 @@
+## 2.496.767
+
+What you will see:
+- A save that did not happen says so, in one place: a red notice at the top of the screen, over any open window, with
+  its own ✕. It stays as long as it is true. Five cases were silent or said only in one window: a shared change the
+  server refuses (said in Advanced Settings, not in Settings), a Cockpit save made with no connection, this device's
+  own settings that its storage refuses, a card's delete that failed ("Not deleted: the server could not be
+  reached, nothing was changed. Try again."), and a number that is none.
+- A number that is none names its field and what it needs: letters typed in Latitude give "Latitude" needs a number:
+  the one before was kept. The same for the days records are kept and a notice's seconds. Save then keeps the window
+  open, so the field can be corrected.
+- A half-filled form is no longer lost to a touch outside. "Report a problem", "Open a ticket" and every Cockpit form
+  ask "Discard what you typed?" with Keep and Discard, on a touch outside, Escape, Back and the Cockpit's Close. A
+  form with nothing typed closes at once, and a form's own Cancel asks nothing.
+
 ## 2.496.766
 
 What you will see:
