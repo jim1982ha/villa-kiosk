@@ -1362,3 +1362,7 @@ title's line (`cardWith`), a card of tabs (`tabbedCard`), and a fit measured aga
 
 Kept on purpose: the sent pages' style classes no shipped template uses (`btn`, `btns`, `faint`, `p3`, `p4`, `sw`): a
 skill edited on a villa is kept by updates and may still write them.
+
+0.12.499, the same scan: the pager's words are "‹ Previous / Next ›" unless the caller says the list is newest first
+(`core.NEWEST_FIRST`: Overview's jobs and changes, Costs › Every run); one page size (`PER_PAGE`, ten; its unused
+fifteen is gone). The Costs chart is drawn at its own box's width and again on a width change (`core.measured`).

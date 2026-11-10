@@ -1,5 +1,5 @@
 // VESTA Agent page — the Overview tab: the agent's state, the changes made on these pages, copying the setup.
-import { api, ask, card, fileBase64, fill, go, h, jobsBanner, loading, paged, place, plural, problemsBox, reasons, setting, tabbedCard, tell, toast, $view, when, where } from "./core.js";
+import { api, ask, card, fileBase64, fill, go, h, jobsBanner, loading, NEWEST_FIRST, paged, place, plural, problemsBox, reasons, setting, tabbedCard, tell, toast, $view, when, where } from "./core.js";
 
 // ---------------------------------------------------------------- overview
 export async function overview() {
@@ -24,7 +24,7 @@ export async function overview() {
     kids.push(card(place("last_day", { hours: lh.value }), h("span", {}, "The scheduled jobs the agent ran in the last ",
       setting(`${lh.value} hours`, lh.ref), ", from its own records."),
       r.scheduled_jobs.length
-        ? paged(["Job", "Ran at", "Outcome"], [...r.scheduled_jobs].reverse().map((j) => [j.label || j.job, when(j.at), j.words]))
+        ? paged(["Job", "Ran at", "Outcome"], [...r.scheduled_jobs].reverse().map((j) => [j.label || j.job, when(j.at), j.words]), 10, { nav: NEWEST_FIRST })
         : h("p", { class: "muted" }, `No scheduled job ran in the last ${lh.value} hours.`)));
   } else {
     kids.push(card(place("last_day", { hours: (o.last_hours || { value: 24 }).value }), "The agent has not recorded anything yet."));
@@ -50,7 +50,7 @@ export async function historyCard() {
       h("span", { class: "chip " + c.chip }, c.place),                   // its colour: history.CHIPS
       c.what,
       // the server says which changes Undo handles (server.undoable): the page kept its own list and left out the instructions
-      c.undone_by ? h("span", { class: "muted" }, "undone") : c.undoable ? h("button", { class: "btn ghost", onclick: undo(c) }, "Undo") : ""]))
+      c.undone_by ? h("span", { class: "muted" }, "undone") : c.undoable ? h("button", { class: "btn ghost", onclick: undo(c) }, "Undo") : ""]), 10, { nav: NEWEST_FIRST })
     : h("p", { class: "muted" }, "No change made here yet."));
 }
 

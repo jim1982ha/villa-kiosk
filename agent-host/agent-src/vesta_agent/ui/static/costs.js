@@ -1,5 +1,5 @@
 // VESTA Agent page — the Costs tab.
-import { alertButton, api, card, cardWith, dropdown, figures, fill, h, infoButton, loading, moreButton, paged, place, plural, svg, tabbedCard, $view, when, where } from "./core.js";
+import { alertButton, api, card, cardWith, dropdown, figures, fill, h, infoButton, loading, measured, moreButton, NEWEST_FIRST, paged, place, plural, svg, tabbedCard, $view, when, where } from "./core.js";
 
 // ---------------------------------------------------------------- costs
 export const usd = (v) => "US$ " + (v || 0).toFixed((v || 0) > 0 && v < 0.01 ? 4 : 2);
@@ -61,24 +61,32 @@ export async function costs(days = 7) {
   // ⚠️ DRAWN AT THE CARD'S OWN WIDTH (owner, 2026-10-08: "taking way too much vertical space"). It was 640 units wide
   // and stretched to the card: the wider page (0.12.83) made it — and its text — half again as tall. Now one unit is
   // one pixel, so the chart is ~180 px tall at any width and its labels keep their size.
-  const W = Math.max(320, Math.round(($view.clientWidth || 684) - 44)), H = 150, L = 52, T = 8, n = c.by_day.length;
-  // the Y axis is the server's (status.costs → vesta_shared.axis, the reports' own rule): this only draws it
-  const max = c.axis.top, ticks = c.axis.ticks, slot = (W - L) / n;
-  const y = (v) => T + H - (v / max) * H;
-  const every = n <= 7 ? 1 : Math.ceil(n / 8);
-  const chart = svg("svg", { viewBox: `0 0 ${W} ${T + H + 22}`, class: "bars", role: "img", "aria-label": "Cost per day, US$" },
-    ...ticks.map((v) => svg("line", { x1: L, x2: W, y1: y(v).toFixed(1), y2: y(v).toFixed(1), class: v ? "grid" : "base" })),
-    ...ticks.map((v, i) => svg("text", { x: L - 6, y: (y(v) + 3.5).toFixed(1), class: "axis", "text-anchor": "end" }, c.axis.labels[i])),
-    ...c.by_day.map((d, i) => {
-      const bh = d.cost > 0 ? Math.max(1.5, (d.cost / max) * H) : 0;
-      return svg("rect", { x: (L + i * slot + slot * 0.18).toFixed(1), y: (T + H - bh).toFixed(1), width: (slot * 0.64).toFixed(1),
-                           height: bh.toFixed(1), rx: 2, class: "bar" }, svg("title", {}, `${d.day}: ${usd(d.cost)}`));
-    }),
-    // a date every `every` days, and the last day too unless it would sit on top of the one before
-    ...c.by_day.map((d, i) => i % every === 0 || (i === n - 1 && (n - 1) % every >= every / 2)
-      ? svg("text", { x: (L + i * slot + slot / 2).toFixed(1), y: T + H + 16, class: "axis", "text-anchor": "middle" },
-            n <= 7 ? new Date(d.day + "T12:00:00").toLocaleDateString([], { weekday: "short", day: "numeric" }) : d.day.slice(5).replace("-", "/"))
-      : null).filter(Boolean));
+  // ⚠️ AND DRAWN AGAIN WHEN THE WIDTH CHANGES (UI scan, 2026-11-10: a phone turned kept the first drawing, stretched:
+  // larger letters, a taller card). core.measured: after layout, when the fonts arrive, on every resize; its box's own
+  // width once it is on the page (the page's less the card's edges before that).
+  const chart = h("div");
+  const drawChart = () => {
+    const W = Math.max(320, chart.clientWidth || Math.round(($view.clientWidth || 684) - 44)), H = 150, L = 52, T = 8, n = c.by_day.length;
+    // the Y axis is the server's (status.costs → vesta_shared.axis, the reports' own rule): this only draws it
+    const max = c.axis.top, ticks = c.axis.ticks, slot = (W - L) / n;
+    const y = (v) => T + H - (v / max) * H;
+    const every = n <= 7 ? 1 : Math.ceil(n / 8);
+    return svg("svg", { viewBox: `0 0 ${W} ${T + H + 22}`, class: "bars", role: "img", "aria-label": "Cost per day, US$" },
+      ...ticks.map((v) => svg("line", { x1: L, x2: W, y1: y(v).toFixed(1), y2: y(v).toFixed(1), class: v ? "grid" : "base" })),
+      ...ticks.map((v, i) => svg("text", { x: L - 6, y: (y(v) + 3.5).toFixed(1), class: "axis", "text-anchor": "end" }, c.axis.labels[i])),
+      ...c.by_day.map((d, i) => {
+        const bh = d.cost > 0 ? Math.max(1.5, (d.cost / max) * H) : 0;
+        return svg("rect", { x: (L + i * slot + slot * 0.18).toFixed(1), y: (T + H - bh).toFixed(1), width: (slot * 0.64).toFixed(1),
+                             height: bh.toFixed(1), rx: 2, class: "bar" }, svg("title", {}, `${d.day}: ${usd(d.cost)}`));
+      }),
+      // a date every `every` days, and the last day too unless it would sit on top of the one before
+      ...c.by_day.map((d, i) => i % every === 0 || (i === n - 1 && (n - 1) % every >= every / 2)
+        ? svg("text", { x: (L + i * slot + slot / 2).toFixed(1), y: T + H + 16, class: "axis", "text-anchor": "middle" },
+              n <= 7 ? new Date(d.day + "T12:00:00").toLocaleDateString([], { weekday: "short", day: "numeric" }) : d.day.slice(5).replace("-", "/"))
+        : null).filter(Boolean));
+  };
+  fill(chart, drawChart());
+  measured(chart, () => fill(chart, drawChart()));
   const groupTable = (rows, title) => paged([title, { v: "Runs", cls: "num" }, { v: "Tokens in", cls: "num" }, { v: "Tokens out", cls: "num" },
     { v: "Cost", cls: "num" }, { v: "Per run", cls: "num" }], rows.map((g) => [g.name.replace(/^claude-/, ""), { v: g.runs, cls: "num" },
     { v: g.recorded ? ktok(g.tokens_in) : "—", cls: "num" }, { v: g.recorded ? ktok(g.tokens_out) : "—", cls: "num" }, { v: usd(g.cost), cls: "num" }, { v: usd(g.cost / g.runs), cls: "num" }]));
@@ -113,7 +121,7 @@ export async function costs(days = 7) {
                     runRows, 10,
                     // the columns named, the row's cells at their top (a long question no longer centres the others);
                     // When on one line (owner, 2026-10-20: the Tools called column's room went to it)
-                    { cls: "runs", widths: ["14%", null, "12%", "14%", "11%", "9%", "44"] })],
+                    { cls: "runs", widths: ["14%", null, "12%", "14%", "11%", "9%", "44"], nav: NEWEST_FIRST })],
       ["tools", place("tools_called"), `Each tool the AI called, in how many runs and how many times. A tool never called is a candidate to switch off (${where("tools")}).`,
         () => (c.tools && c.tools.length ? paged(["Tool", { v: "Runs", cls: "num" }, { v: "Calls", cls: "num" }],
           c.tools.map((t) => [h("code", {}, t.tool), { v: t.runs, cls: "num" }, { v: t.calls, cls: "num" }]))

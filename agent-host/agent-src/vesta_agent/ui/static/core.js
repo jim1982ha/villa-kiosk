@@ -341,9 +341,12 @@ export function field(label, input, hint) {
 }
 
 // A table of many rows, 10 to a page (owner, 2026-10-01): `head` the column titles, `rows` arrays of cells;
-// a cell is a node, a text, or {v, cls}. Newest first is the caller's order; `nav`: the pager's words for a list in
-// another order (Knowledge › Device kinds, by name: "‹ Previous", "Next ›", "devices").
-export function paged(head, rows, per = 10, { cls = "", widths = null, nav = ["‹ Newer", "Older ›", "rows"] } = {}) {
+// a cell is a node, a text, or {v, cls}. `nav`: the pager's words, "‹ Previous", "Next ›" unless the caller says
+// otherwise: NEWEST_FIRST for a list in time's order, its own unit for one that has a name ("devices", "limits").
+// ⚠️ "NEWER / OLDER" ONLY WHERE THE LIST IS BY TIME (UI scan, 2026-11-10): it was the default, so the Limits tab, a
+// skill's "When it runs" and the Costs tab's tables by skill, by model and by tool turned to "Older" pages.
+export const NEWEST_FIRST = ["‹ Newer", "Older ›", "rows"];
+export function paged(head, rows, per = PER_PAGE, { cls = "", widths = null, nav = ["‹ Previous", "Next ›", "rows"] } = {}) {
   const body = h("tbody");
   // each cell carries its column's name: on a phone the row becomes a card, every value on its own line, its name on
   // the left (app.css; owner, 2026-10-31: no two columns sharing a line any more, their values left and right)
@@ -360,7 +363,7 @@ export function paged(head, rows, per = 10, { cls = "", widths = null, nav = ["�
     if (!made.has(r)) made.set(r, r.more ? [line(r.cells), h("tr", { class: "row-more", hidden: true }, cell({ v: r.more, colspan: head.length }))] : [line(r.cells)]);
     return made.get(r);
   };
-  // newest first: the pages go to "older" (the one pager, pagedBlock)
+  // the one pager (pagedBlock)
   const pager = pagedBlock(() => rows.length, (from, to) => body.replaceChildren(...rows.slice(from, to).flatMap(drawn)),
     per, nav);
   pager.redraw();
@@ -446,10 +449,11 @@ export function tabbedCard(title, id, tabs, lead = null) {
   return card(title, lead, t.bar, t.body);
 }
 
-// Pages of at most `per` lines for an editable list (owner, 2026-10-06: "max 15 lines, so the UI stays consistent").
+// Pages of at most `per` lines: ten, for every list of the page (owner, 2026-10-06: "so the UI stays consistent";
+// the tools' cards say 16, four rows of four).
 // `draw(slice, offset)` fills the page; returns [box, nav, api]: api.redraw() after a change, api.last() to show the
 // last page (after Add).
-const PER_PAGE = 15;
+const PER_PAGE = 10;
 export function pagedBlock(count, draw, per = PER_PAGE, [prev, next, unit] = ["‹ Previous", "Next ›", "lines"]) {
   const nav = h("div", { class: "pager" });
   let page = 0;

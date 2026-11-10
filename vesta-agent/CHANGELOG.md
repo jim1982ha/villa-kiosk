@@ -1,3 +1,12 @@
+## 0.12.499
+
+- On the Agent's page, a list that is not in time's order turns its pages with "‹ Previous" and "Next ›": the Limits
+  tab, a skill's "When it runs", and the Costs tab's tables by job, by model and by tool. They said "‹ Newer" and
+  "Older ›", which is true only of the lists that are newest first (the scheduled jobs, the changes, every AI run):
+  those keep their words.
+- The Costs tab's chart is drawn again when the screen changes width (a phone turned, a window resized). It kept
+  its first drawing, squeezed or stretched, its letters smaller or larger than the page's.
+
 ## 0.12.498
 
 - The version beside "VESTA AGENT" at the top of the Agent's page shows on every tab. It was empty when the page
