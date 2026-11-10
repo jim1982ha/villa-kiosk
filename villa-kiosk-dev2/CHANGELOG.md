@@ -1,3 +1,16 @@
+## 2.496.769
+
+What you will see:
+- "Back" is one button everywhere: the round grey button with its arrow and its word. A data window's History
+  (Weather, Energy) had a square tile with a bare arrow, a device window's header a smaller pill of its own, and the
+  PIN pad a grey text link ("← Profiles"): the PIN pad's is now the same button, top left, saying where it returns.
+- Under a mouse, every text that appears is the app's own small dark card, at once: the top bar's buttons, the
+  camera view's, a device window's, Settings' and the Rooms window's. About seventy of them were still the browser's
+  grey box that comes after a second. It also follows the keyboard's focus. A finger never brings one up.
+- A name that fits no longer repeats itself under the mouse: a window's title or a reading's name shows its tip only
+  when it is cut short.
+- Nothing else changed.
+
 ## 2.496.768
 
 What you will see:
