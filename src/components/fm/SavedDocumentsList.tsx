@@ -6,13 +6,14 @@
 // "statements" until 2.496.403).
 
 import { momentText } from "@/utils/dateText";
-import { Eye, Trash2 } from "lucide-react";
+import { Eye } from "lucide-react";
 import { useFmData } from "@/fm/FmDataContext";
 
 import { DOCUMENT_KINDS } from "@/fm/monthlyDocument";
 import type { FmSavedDocument } from "@/fm/fmTypes";
 import AgentMark from "./AgentMark";
-import Tip from "@/components/common/Tip";
+import BinButton from "@/components/common/BinButton";
+import { Pager, usePaged, PAGE_CARDS } from "@/components/common/Paged";
 import RecordCard from "./RecordCard";
 
 export default function SavedDocumentsList({
@@ -37,6 +38,8 @@ export function SavedDocumentRows({ kind, docs: all, onOpen, onRemove }: {
   const docs = all
     .filter((d) => d.kind === kind)
     .sort((a, b) => Date.parse(b.generatedAt) - Date.parse(a.generatedAt));
+  // ten a page, as every long list (the count is the title's)
+  const paged = usePaged(docs, PAGE_CARDS);
 
   if (docs.length === 0) return null;
 
@@ -52,7 +55,7 @@ export function SavedDocumentRows({ kind, docs: all, onOpen, onRemove }: {
         Saved {plural} ({docs.length})
       </div>
       <div className="fm-list">
-        {docs.map((doc) => (
+        {paged.page.map((doc) => (
           // THE Cockpit card (RecordCard), as every list (owner, 2026-10-22)
           <RecordCard key={doc.id} title={title(doc)} when={saved(doc)}
             pills={<AgentMark record={doc} />}
@@ -60,14 +63,11 @@ export function SavedDocumentRows({ kind, docs: all, onOpen, onRemove }: {
               <button className="btn ghost" onClick={() => onOpen(doc)}>
                 <Eye size={16} /> Reopen
               </button>
-              <Tip text={`Delete this saved ${noun}`}>
-                <button className="icon-btn" onClick={() => onRemove(doc.id)} aria-label={`Delete saved ${noun} for ${title(doc)}`}>
-                  <Trash2 size={16} />
-                </button>
-              </Tip>
+              <BinButton label={`Delete saved ${noun} for ${title(doc)}`} tip={`Delete this saved ${noun}`} onPress={() => onRemove(doc.id)} />
             </>} />
         ))}
       </div>
+      <Pager paged={paged} />
     </div>
   );
 }

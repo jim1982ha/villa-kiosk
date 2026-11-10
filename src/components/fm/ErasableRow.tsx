@@ -45,6 +45,20 @@ export default function ErasableRow({ intent, erase, className, onOpen, children
         onOpen();
       }}
       {...pointerHandlers}
+      // ⚠️ A SHORT ENTER OR SPACE OPENS THE ROW (UI scan, 2026-11-10): a div gets
+      // no click from the keyboard, so the row could be erased by holding a key
+      // but never opened by one. The key released before the hold fired is the
+      // tap; released after it, the hold's own prompt is up and nothing opens.
+      onKeyDown={(e) => {
+        if (e.target !== e.currentTarget) return;
+        if (e.key === " ") e.preventDefault();   // Space would scroll the list
+        pointerHandlers.onKeyDown(e);
+      }}
+      onKeyUp={(e) => {
+        pointerHandlers.onKeyUp();
+        if (e.target !== e.currentTarget || (e.key !== "Enter" && e.key !== " ")) return;
+        if (!consumeClick()) onOpen?.();
+      }}
     >
       {children}
     </div>

@@ -21,6 +21,7 @@
 // left where it is — both worse than a thin but honest record.
 
 import Window from "@/components/common/Window";
+import ModalFooter from "@/components/common/ModalFooter";
 import { useState } from "react";
 
 import { useFmData } from "@/fm/FmDataContext";
@@ -135,13 +136,13 @@ export default function FaultStageModal({
         )}
       </div>
       {failed && <div className="fm-inline-error" role="alert" style={{ margin: "0 28px 8px" }}>{failed}</div>}
-      {/* The modal shell's footer, as every dialog's (04-modals.css). */}
-      <div className="modal-footer">
+      {/* The shared footer (common/ModalFooter): its two answers in one group on the right, as Settings'. */}
+      <ModalFooter onClose={onClose} actions={<>
         <button className="btn" onClick={onClose}>Cancel</button>
         <button className="btn primary" disabled={busy} onClick={() => void submit()}>
           {busy ? "Saving…" : copy.cta}
         </button>
-      </div>
+      </>} />
     </Window>
   );
 }

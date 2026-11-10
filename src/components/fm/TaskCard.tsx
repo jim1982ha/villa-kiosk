@@ -18,6 +18,9 @@ export function taskState(st: Pick<ScheduleStatus, "schedule" | "state">): { wor
   return st.schedule.enabled ? DUE_WORDS[st.state] : { word: "Paused", tone: "warn" };
 }
 
+/** What a task's bin does, said on both tabs that draw it. */
+export const REMOVE_TASK_TIP = "Remove this task. Completions already logged against it are kept.";
+
 export default function TaskCard({ status: st, room, actions }: {
   status: ScheduleStatus; room?: string; actions: ReactNode;
 }) {

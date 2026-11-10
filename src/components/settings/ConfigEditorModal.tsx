@@ -314,7 +314,7 @@ export default function ConfigEditorModal({ onBack, withinSettings, focusEntityI
   return (
     <DialogEdits>
     <PendingFields pending={own.pending}>
-    <Window kind="content" label="Advanced settings" onClose={exit} className="settings-modal config-editor-modal">
+    <Window kind="content" label="Advanced Settings" onClose={exit} className="settings-modal config-editor-modal">
       <div className="modal-header">
         {/* tabIndex={-1} + data-autofocus: useModalA11y's default (the
             FIRST focusable descendant) would otherwise land on the header's

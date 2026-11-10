@@ -10,7 +10,7 @@
 import InfoTip from "@/components/common/InfoTip";
 import { useState } from "react";
 import Dropdown from "@/components/common/Dropdown";
-import { Plus, Pencil, Trash2 } from "lucide-react";
+import { Plus, Pencil } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
 import { useFmData } from "@/fm/FmDataContext";
 import { useCardRoom } from "@/config/VillaModel";
@@ -18,8 +18,8 @@ import { scheduleStatus } from "@/fm/fmEngine";
 import type { FmSchedule } from "@/fm/fmTypes";
 import { EMPTY_SCHEDULE_DRAFT as EMPTY, scheduleToDraft as toDraft, draftDays, scheduleWrite, SCHEDULE_PRESETS, type ScheduleDraft as Draft } from "@/fm/scheduleDraft";
 import FormActions from "./FormActions";
-import Tip from "@/components/common/Tip";
-import TaskCard from "./TaskCard";
+import BinButton from "@/components/common/BinButton";
+import TaskCard, { REMOVE_TASK_TIP } from "./TaskCard";
 import FmForm from "./FmForm";
 import { useListEditor } from "./ListEditor";
 
@@ -71,6 +71,7 @@ export default function ScheduleEditor() {
             <button
               key={p.days}
               className={`fm-entity-chip${days === p.days ? " on" : ""}`}
+              aria-pressed={days === p.days}
               onClick={() => setDraft({ ...draft, everyDays: String(p.days) })}
             >{p.label}</button>
           ))}
@@ -137,11 +138,7 @@ export default function ScheduleEditor() {
                 <button className="icon-btn" onClick={() => startEdit(s)} aria-label={`Edit ${s.title}`}>
                   <Pencil size={16} />
                 </button>
-                <Tip text="Remove this task. Completions already logged against it are kept.">
-                  <button className="icon-btn" onClick={() => void removeSchedule(s.id)} aria-label={`Remove ${s.title}`}>
-                    <Trash2 size={16} />
-                  </button>
-                </Tip>
+                <BinButton label={`Remove ${s.title}`} tip={REMOVE_TASK_TIP} onPress={() => void removeSchedule(s.id)} />
               </>} />
           ), () => form);
         })}

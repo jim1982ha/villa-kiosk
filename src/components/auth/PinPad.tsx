@@ -126,7 +126,7 @@ export default function PinPad({
         ))}
       </div>
 
-      <div className="pinpad-status" role="alert" aria-live="polite">
+      <div className="pinpad-status" role="status">
         {locked ? (
           <span className="danger-text">
             {`Too many attempts, locked for ${fmtDuration(lockedFor * 1000)}`}

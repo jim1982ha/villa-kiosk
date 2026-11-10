@@ -849,7 +849,7 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
               <ArrowLeft />
             </button>
           )}
-          <button className="icon-btn close" onClick={onClose} style={vOrder(1)}>
+          <button className="icon-btn close" onClick={onClose} title="Close" aria-label="Close" style={vOrder(1)}>
             <X />
           </button>
         </div>
