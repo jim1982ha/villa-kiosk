@@ -228,8 +228,7 @@ console.log("\n  the walker's own room is never grouped (owner, 2026-10-08: insi
   const NOT_LAYOUT = {
     setRoomPoints: "room highlight polygons only",
     setLightingMode: "lights and shadows only",
-    setCameraDirectionsOnly: "the camera beams only (rebuilt by setCameraDirections)",
-    setCameraDirections: "the camera beams only",
+    setCameraDirectionsOnly: "the camera beams only",
     setWalkFloorCost: "walk telemetry only",
     setCeilingState: "light pools only",
     setProbeCacheKey: "the floor probe's and beams' caches only",

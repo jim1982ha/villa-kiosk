@@ -30,10 +30,7 @@ export class Speaker {
   private listeners = new Set<(name: string | null) => void>();
   constructor(deps: SpeakerDeps) { this.deps = deps; }
 
-  /** The answer's sound being said now (its name), null when none: its line shows Stop in place of Listen. */
-  get playing(): string | null { return this.saying; }
-
-  /** Told each time `playing` changes; the returned function stops telling. */
+  /** Told each time the sound being said changes; the returned function stops telling. */
   watch(listener: (name: string | null) => void): () => void {
     this.listeners.add(listener);
     return () => { this.listeners.delete(listener); };

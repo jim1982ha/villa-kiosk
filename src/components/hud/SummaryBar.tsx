@@ -33,7 +33,6 @@ import { findWeatherStation } from "@/config/weatherStation";
 import WeatherPanel from "@/components/panels/WeatherPanel";
 import SummaryGroupPanel from "@/components/panels/SummaryGroupPanel";
 import EnergyPanel from "@/components/panels/EnergyPanel";
-import { useBackToClose } from "@/hooks/useBackToClose";
 import { useSceneConfirm } from "@/hooks/useSceneConfirm";
 import { useVillaModel } from "@/config/VillaModel";
 import { deriveTiles, type SummaryTile } from "@/config/summaryTiles";
@@ -97,11 +96,6 @@ function SceneMenu({ scenes, canRun, apply }: {
   apply: (s: HaSceneInfo) => void;
 }) {
   const [open, setOpen] = useState(false);
-  // Back closes the scene list, never the app: only the villa map lets a press
-  // through to the platform. Registered only WHILE open, which is what the
-  // hook's `active` argument is for — a mounted-but-closed popover must not
-  // hold a history entry, or Back on the villa would appear to do nothing.
-  useBackToClose(() => setOpen(false), open);
   useResolvedTheme(); // its tile chip is composited in JS too — see Tile
   // The pop-up is PORTALED to <body>: the summary-bar has a transform +
   // overflow, so a menu nested inside it would be clipped and mis-positioned.
@@ -110,8 +104,9 @@ function SceneMenu({ scenes, canRun, apply }: {
   const btnRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
-  // A non-modal popover: outside tap or Escape closes it (useOutsideClose
-  // says why that is not useModalA11y's contract).
+  // A non-modal popover: outside tap, Escape or Back closes it (useOutsideClose
+  // says why that is not useModalA11y's contract). Back closes the scene list,
+  // never the app: only the villa map lets a press through to the platform.
   useOutsideClose([btnRef, menuRef], open, () => setOpen(false));
 
   const toggle = () => {

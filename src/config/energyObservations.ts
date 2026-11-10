@@ -99,13 +99,13 @@ export function energyToday(
     cards.push({
       tone: "caution",
       title: "Devices overlap the meter",
-      detail: `They add up to ${fmtKwh(split.overlap)} kWh more than was used: some are set up beside the meter they are part of. Give them an upstream device in the energy settings.`,
+      detail: `They add up to ${fmtKwh(split.overlap)} kWh more than was used: some are set up beside the meter they are part of. Give them an upstream device in the villa's system, in its energy settings.`,
     });
   } else if (split.used > 0 && split.untracked / split.used > UNTRACKED_SHOWS) {
     cards.push({
       tone: "neutral",
       title: `${share(split.untracked, split.used)}% untracked`,
-      detail: `${fmtKwh(split.untracked)} of today's ${fmtKwh(split.used)} kWh has no device meter in the energy settings.`,
+      detail: `${fmtKwh(split.untracked)} of today's ${fmtKwh(split.used)} kWh has no device meter in the villa's system's energy settings.`,
     });
   }
   return {

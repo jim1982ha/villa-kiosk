@@ -7,7 +7,7 @@ import type { HistoryGap, HistorySeries, StateHistoryPoint } from "@/types/ha.ty
 import { clockTime, dayShort, docDate, momentText, monthShort } from "@/utils/dateText";
 import { NOT_KEPT_COLOR, NOT_KEPT_WORDS, STATUS_COLOR } from "@/utils/stateColors";
 import { cellBackground, nextEdge } from "@/utils/timelineCells";
-import { DAY_MS, HOUR_MS, MINUTE_MS } from "@/utils/localDay";
+import { DAY_MS, HOUR_MS } from "@/utils/localDay";
 import { PERIOD_MS } from "@/utils/statisticsSeries";
 
 export function fmtChartValue(v: number): string {
@@ -58,7 +58,7 @@ export function fmtStepStamp(t: number, stepMs: number, spanHours: number): stri
 }
 
 /** How a chart's values were made from the readings, said beside its title (owner, 2026-10-20: "show the aggregation
- *  used … avg or sum"): its step ("5-min", "hourly", "daily", "weekly", "monthly") and, for a measured value, "avg" (the
+ *  used … avg or sum"): its step ("5min", "hourly", "daily", "weekly", "monthly") and, for a measured value, "avg" (the
  *  mean over the step), for a total "sum"; an on/off band has neither — its step alone. */
 type Aggregation = "avg" | "sum" | null;
 export function stepWords(stepMs: number): string {
@@ -66,7 +66,7 @@ export function stepWords(stepMs: number): string {
   if (stepMs >= 7 * DAY_MS) return "weekly";
   if (stepMs >= DAY_MS) return "daily";
   if (stepMs >= HOUR_MS) return "hourly";
-  return `${Math.round(stepMs / MINUTE_MS)}-min`;
+  return fmtDuration(stepMs);
 }
 /** What a chart draws in each step: a measured value's mean, a device's states, or a total. */
 export type ChartShows = "average" | "states" | "total";

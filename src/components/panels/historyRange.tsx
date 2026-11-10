@@ -20,7 +20,7 @@ import { villaKeptFrom } from "@/ha/HAHistoryAPI";
 import { useStateHistory, type StateHistoryResult } from "@/hooks/useStateHistory";
 
 // The table itself is pure (utils/historyRanges): an oracle reads it by value.
-export { historyRange, RANGE_KEYS, type HistoryRange, type RangeKey } from "@/utils/historyRanges";
+export { historyRange, RANGE_KEYS, type HistoryRange } from "@/utils/historyRanges";
 import { DEFAULT_KEY, historyRange, RANGES, type HistoryRange, type RangeKey } from "@/utils/historyRanges";
 
 /**

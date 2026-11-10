@@ -31,8 +31,7 @@ import { placeLight, LIGHT_POOL_RADIUS, POOL_FLOOR_LIFT, type LightPlacement } f
 
 // Where each light stands — its floor, room, storey, the glow's floor and
 // ceiling, the pool's reach — is lightPlacement's, one answer per pool that
-// the pool AND the glow read. Its constants are re-exported for the callers.
-export { LIGHT_POOL_RADIUS, POOL_FLOOR_LIFT } from "./lightPlacement";
+// the pool AND the glow read.
 
 /** What the pools need from the floor below them. FloorProbe is the adapter. */
 export interface PoolFloorProbe {
@@ -94,8 +93,6 @@ export class LightPoolSet {
     this.readings = readings;
     this.log = log;
   }
-
-  get size(): number { return this.pools.size; }
 
   /**
    * A fixture found on the load path. `isStrip` gives it three pools instead

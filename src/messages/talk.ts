@@ -51,8 +51,6 @@ export class TalkSession {
   watch(fn: (v: TalkView) => void): () => void { this.views.add(fn); fn(this.view); return () => this.views.delete(fn); }
   /** How loud the voice is (0…1), many times a second: for the orb, never for React state. */
   hear(fn: (level: number) => void): () => void { this.levels.add(fn); return () => this.levels.delete(fn); }
-  get now(): TalkView { return this.view; }
-
   private show(v: TalkView) { this.view = v; this.views.forEach((fn) => fn(v)); }
 
   private end(p: Press) {

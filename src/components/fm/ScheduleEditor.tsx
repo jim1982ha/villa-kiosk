@@ -10,31 +10,18 @@
 import InfoTip from "@/components/common/InfoTip";
 import { useState } from "react";
 import Dropdown from "@/components/common/Dropdown";
-import { Plus, Pencil, Trash2 } from "lucide-react";
+import { Plus, Pencil } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
 import { useFmData } from "@/fm/FmDataContext";
 import { useCardRoom } from "@/config/VillaModel";
 import { scheduleStatus } from "@/fm/fmEngine";
 import type { FmSchedule } from "@/fm/fmTypes";
-import { EMPTY_SCHEDULE_DRAFT as EMPTY, scheduleToDraft as toDraft, draftDays, scheduleWrite, type ScheduleDraft as Draft } from "@/fm/scheduleDraft";
+import { EMPTY_SCHEDULE_DRAFT as EMPTY, scheduleToDraft as toDraft, draftDays, scheduleWrite, SCHEDULE_PRESETS, type ScheduleDraft as Draft } from "@/fm/scheduleDraft";
 import FormActions from "./FormActions";
-import Tip from "@/components/common/Tip";
-import TaskCard from "./TaskCard";
+import BinButton from "@/components/common/BinButton";
+import TaskCard, { REMOVE_TASK_TIP } from "./TaskCard";
 import FmForm from "./FmForm";
 import { useListEditor } from "./ListEditor";
-
-/** How the obligation is usually WRITTEN, mapped to days. Anything that isn't a
- *  whole number of days rounds DOWN (twice a week -> 3, not 4) so a genuinely
- *  late task can never read as compliant. */
-const PRESETS: { label: string; days: number }[] = [
-  { label: "Twice a week", days: 3 },
-  { label: "Weekly", days: 7 },
-  { label: "Twice a month", days: 15 },
-  { label: "Monthly", days: 30 },
-  { label: "Every 3 months", days: 90 },
-  { label: "Every 6 months", days: 180 },
-  { label: "Every 12 months", days: 365 },
-];
 
 export default function ScheduleEditor() {
   const { data, addSchedule, updateSchedule, removeSchedule } = useFmData();
@@ -80,10 +67,11 @@ export default function ScheduleEditor() {
       <div className="fm-field">
         <span>How often</span>
         <div className="fm-chiprow">
-          {PRESETS.map((p) => (
+          {SCHEDULE_PRESETS.map((p) => (
             <button
               key={p.days}
               className={`fm-entity-chip${days === p.days ? " on" : ""}`}
+              aria-pressed={days === p.days}
               onClick={() => setDraft({ ...draft, everyDays: String(p.days) })}
             >{p.label}</button>
           ))}
@@ -150,11 +138,7 @@ export default function ScheduleEditor() {
                 <button className="icon-btn" onClick={() => startEdit(s)} aria-label={`Edit ${s.title}`}>
                   <Pencil size={16} />
                 </button>
-                <Tip text="Remove this task. Completions already logged against it are kept.">
-                  <button className="icon-btn" onClick={() => void removeSchedule(s.id)} aria-label={`Remove ${s.title}`}>
-                    <Trash2 size={16} />
-                  </button>
-                </Tip>
+                <BinButton label={`Remove ${s.title}`} tip={REMOVE_TASK_TIP} onPress={() => void removeSchedule(s.id)} />
               </>} />
           ), () => form);
         })}

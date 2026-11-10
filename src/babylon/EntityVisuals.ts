@@ -512,7 +512,7 @@ const CAMERA_LOCAL_FORWARD = new Vector3(0, 0, 1);
  *  (read as "just black" at a glance). Deliberately outside every category
  *  hue (green/orange/purple/gold/blue) so a chip reads as UI chrome — a
  *  navigation affordance, not a device — rather than any category's badge. */
-const CLUSTER_BG_COLOR = "#475569"; // fallback only — see --chip-surface
+const CLUSTER_BG_COLOR = "#475569"; // until the first pass paints the idle badge's surface (renderChips)
 /**
  * ── The summaries are ONE family, built from ONE unit ────────────────────
  * A summary is never given a size of its own. Every dimension of the room
@@ -950,7 +950,7 @@ export class EntityVisuals {
 
   /** camera entity_id -> world-space unit facing direction (may include a
    *  vertical tilt component from SweetHome's `pitch`), computed by
-   *  SceneManager from the sh3d plan `angle`/`pitch` (see setCameraDirections). */
+   *  SceneManager from the sh3d plan `angle`/`pitch` (see setCameraDirectionsOnly). */
   private cameraDirections = new Map<string, { x: number; y: number; z: number }>();
   /** Camera motion-detection cones — mesh lifecycle owned by CameraBeams;
    *  this class only decides WHICH cameras get a beam and when it pulses. */
@@ -1658,7 +1658,7 @@ export class EntityVisuals {
 
     this.buildLinkedEntityIndex();
     // Rebuild the camera beams we disposed at the top of this method. Without
-    // this they were gone for good: only setCameraDirections built them, and
+    // this they were gone for good: only the calibration built them, and
     // that runs once, during calibration after the model loads. So the FIRST
     // re-index after load silently killed every beam — which is why a beam
     // would appear at startup and then never again in the same session. The
@@ -2018,11 +2018,6 @@ export class EntityVisuals {
     this.requestRender();
   }
 
-  /** The rooms currently exempt from grouping (roomKey form). */
-  focusedRoomKeys(): string[] {
-    return [...this.focus.rooms];
-  }
-
   /**
    * The closest camera radius at which every one of this room's badges is
    * drawn INDIVIDUALLY and lands FULLY on screen — the answer behind "tap a
@@ -2188,18 +2183,9 @@ export class EntityVisuals {
     this.motionPainted = lit;
   }
 
-  /** Replace camera facing directions (world-space unit vectors, may include
-   *  vertical tilt) and rebuild every beam mesh. Called by SceneManager right
-   *  after setRoomPolygons, from the same re-fit — a camera's direction
-   *  depends on the same plan→world transform the room polygons do. */
-  setCameraDirections(dirs: Map<string, { x: number; y: number; z: number }>): void {
-    this.cameraDirections = dirs;
-    this.buildCameraBeams();
-  }
-
   /** One beam per camera entity that has BOTH a resolved mesh position
    *  (byEntity, from indexMeshes) and a facing direction (from
-   *  setCameraDirections) — cameras with no sh3d angle data yet simply get no
+   *  setCameraDirectionsOnly) — cameras with no sh3d angle data yet simply get no
    *  beam, rather than guessing a direction. This class decides WHICH cameras
    *  qualify; CameraBeams owns the cone geometry and wall clipping. */
   private buildCameraBeams(): void {
@@ -2309,10 +2295,6 @@ export class EntityVisuals {
     this.beams.setActive(entityId, on);
     this.requestRender();
     return true;
-  }
-
-  hasEntity(entityId: string): boolean {
-    return this.byEntity.has(entityId);
   }
 
   /** All entity mappings resolved during the last indexMeshes call. */

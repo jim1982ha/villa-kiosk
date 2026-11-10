@@ -8,9 +8,17 @@
 // trap, Escape, focus restore, back-to-close — and a popover is not modal:
 // anchored to its trigger, no backdrop, no role="dialog". Trapping focus in a
 // thing that covers nothing is a defect (a keyboard user could not Tab out).
-// Escape and outside-tap are the whole contract here.
+// Escape, Back and outside-tap are the whole contract here.
+//
+// ⚠️ EVERY POPOVER IS ON THE ONE LIST OF WHAT IS OPEN (UI scan, 2026-11-10). A
+// device search list, an (i) and an "add" line were not: with one open in
+// Settings, Escape or a phone's Back asked the list for what is on top, got the
+// window, and cancelled every change on every tab to close a small box. The
+// hook registers the popover itself (useBackToClose), so the first Escape or
+// Back closes only it; the menus that registered by hand no longer do.
 
-import { useEffect, type RefObject } from "react";
+import { useEffect, useRef, type RefObject } from "react";
+import { useBackToClose } from "./useBackToClose";
 
 export function useOutsideClose(
   /** Everything that counts as INSIDE: the popover and the trigger that
@@ -18,7 +26,12 @@ export function useOutsideClose(
   inside: readonly RefObject<Element | null>[],
   open: boolean,
   onClose: () => void,
+  /** What Escape and Back run, when it is not the outside tap's (a list that gives the focus back to its button). */
+  onDismiss: () => void = onClose,
 ): void {
+  useBackToClose(onDismiss, open);
+  const dismiss = useRef(onDismiss);
+  dismiss.current = onDismiss;
   useEffect(() => {
     if (!open) return;
     const onDown = (e: PointerEvent) => {
@@ -26,7 +39,7 @@ export function useOutsideClose(
       if (inside.some((r) => r.current?.contains(t))) return;
       onClose();
     };
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") dismiss.current(); };
     // ⚠️ BEFORE ANYTHING (capture), so a press that something stops on its way up still closes it (2.496.719): a
     // card's bar, or a card's source icon opening its own tip, stop the press from reaching the card under them
     document.addEventListener("pointerdown", onDown, true);

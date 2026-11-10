@@ -64,11 +64,11 @@ const ROWS: Record<IssueSource, Omit<SourceRow, "source">> = {
   // ⚠️ A PERSON RAISES A FAULT OR OPENS A TICKET (owner, 2026-11-01): Done or Need help on a card with no record raises
   // a FAULT stamped with the profile (WorkButtons); only Open Ticket makes a ticket. These rows said "A ticket … already
   // in progress" for both.
-  owner: { what: `A problem the ${ROLE_LABELS.owner} raised in the Kiosk`, opens: PERSON_OPENS,
+  owner: { what: `A problem the ${ROLE_LABELS.owner} raised in the VESTA UI`, opens: PERSON_OPENS,
     goes: "When someone resolves or closes it" },
-  fm: { what: `A problem the ${ROLE_LABELS.ops} raised in the Kiosk`, opens: PERSON_OPENS,
+  fm: { what: `A problem the ${ROLE_LABELS.ops} raised in the VESTA UI`, opens: PERSON_OPENS,
     goes: "When someone resolves or closes it" },
-  person: { what: "A problem raised in the Kiosk", opens: PERSON_OPENS, goes: "When someone resolves or closes it" },
+  person: { what: "A problem raised in the VESTA UI", opens: PERSON_OPENS, goes: "When someone resolves or closes it" },
   guest: { what: "A problem a guest reported (Report a problem)", opens: "At once, as a fault",
     goes: "When someone closes it" },
   schedule: { what: "Maintenance overdue (Schedule tab)", opens: "When its due date passes",
@@ -141,7 +141,7 @@ export function faultTiming(agent: boolean, cadence: AgentCadence | null = null)
   { rows: readonly SourceRow[]; groups: readonly SourceGroup[]; note: string; confirming: ConfirmingRow | null } {
   const rows = ISSUE_SOURCES.filter((s) => agent || !AGENT_SOURCES.has(s))
     .map((source) => ({ source, ...ROWS[source], ...(source === "night" ? { opens: nightOpens(cadence), goes: nightGoes(cadence) } : {}) }));
-  const groups = [{ title: "From the Kiosk", rows: rows.filter((r) => !AGENT_SOURCES.has(r.source)) },
+  const groups = [{ title: "From the VESTA UI", rows: rows.filter((r) => !AGENT_SOURCES.has(r.source)) },
     { title: "From the VESTA Agent", rows: rows.filter((r) => AGENT_SOURCES.has(r.source)) }].filter((g) => g.rows.length);
   return {
     rows,

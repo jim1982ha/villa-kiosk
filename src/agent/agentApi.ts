@@ -18,8 +18,6 @@ export interface AgentStatus {
   state: AgentState;
   /** ISO time of the last heartbeat, or null if none was ever received. */
   lastSeen: string | null;
-  /** The agent's own one-line status, if it sent one. */
-  statusText: string | null;
   /** Its own timing, as its heartbeat says it (agent-contract.json `heartbeat`): how often it looks at its alerts and
    *  faults, and the villa time of its nightly check — null from an agent that does not say. */
   cadence: AgentCadence | null;
@@ -43,7 +41,6 @@ export function parseAgentStatus(raw: unknown): AgentStatus {
   return {
     state: oneOf(b.state, STATUS_STATES, "not_configured"),
     lastSeen: typeof b.last_seen === "string" ? b.last_seen : null,
-    statusText: typeof b.status === "string" && b.status ? b.status : null,
     cadence: parseCadence(b.cadence),
   };
 }

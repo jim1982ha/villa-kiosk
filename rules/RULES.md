@@ -50,6 +50,8 @@ Keep this file short: add a rule only when the owner states one, and remove rule
 - Work through the MCP tools only. Save blueprints and change automations directly (read the villa's copy first, read
   it back after); package files and HISTORY.md go to the owner to paste.
 - Helpers are defined in package files, never created in the UI.
+- Before removing an automation, search its id across the villa's automations and take it out of every list naming it
+  (a guarded list kept a deleted one, and every restart alerted, 2026-11-09).
 - Say what a reload resets before doing one (a template reload restarts every template's "last changed").
 - A villa message reporting a problem hands it to VESTA in the same run (`vesta_critical_event`).
 

@@ -91,7 +91,12 @@ export function createBackStack(port: HistoryPort): BackStack {
     } else if (want < pushed) {
       const drop = pushed - want;
       pushed = want;
-      unwinding += drop;
+      // ⚠️ ONE TRAVERSAL IS ONE POPSTATE, HOWEVER MANY ENTRIES IT DROPS (UI scan,
+      // 2026-11-10). This counted the entries: two surfaces closed in one commit
+      // (an "add" line and the search list in it, a window closed with its list
+      // open) left one popstate still awaited, and the next real Back was taken
+      // for it and did nothing.
+      unwinding += 1;
       port.go(-drop);
     }
   }

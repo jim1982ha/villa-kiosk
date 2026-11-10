@@ -21,11 +21,11 @@
 // something a report button should hand out.
 
 import Window from "@/components/common/Window";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Camera, Check, Wrench } from "lucide-react";
 import { useEntityLabel } from "@/hooks/useEntityLabel";
 import { useFmData } from "@/fm/FmDataContext";
-import { uploadEvidence } from "@/fm/fmApi";
+import { useEvidenceUpload } from "./useEvidenceUpload";
 import NotesField from "./NotesField";
 import ModalFooter from "@/components/common/ModalFooter";
 import { useRecordPlace } from "./useRecordPlace";
@@ -48,28 +48,14 @@ export default function GuestReportModal({
   const [note, setNote] = useState("");
   const [photoIds, setPhotoIds] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
-  const [photoError, setPhotoError] = useState<string | null>(null);
+  const photos = useEvidenceUpload((ids) => setPhotoIds((prev) => [...prev, ...ids]));
+  const photoInput = useRef<HTMLInputElement>(null);
   const [sent, setSent] = useState(false);
   /** Sent while the add-on was unreachable: queued on this device. */
   const [queued, setQueued] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
 
   const deviceLabel = entityId ? label(entityId) : undefined;
-
-  const attach = async (files: FileList | null) => {
-    if (!files?.length) return;
-    setBusy(true);
-    setPhotoError(null);
-    try {
-      const added: string[] = [];
-      for (const file of Array.from(files)) added.push(await uploadEvidence(file));
-      setPhotoIds((prev) => [...prev, ...added]);
-    } catch (e) {
-      setPhotoError(e instanceof Error ? e.message : "Couldn't attach that photo.");
-    } finally {
-      setBusy(false);
-    }
-  };
 
   const send = async () => {
     setBusy(true);
@@ -152,29 +138,30 @@ export default function GuestReportModal({
                   guest cannot be shown the picture back. A count and a way
                   to undo is what is honestly available here. */}
               <div className="fm-chiprow">
-                <label className="btn ghost" style={{ cursor: "pointer" }}>
-                  <Camera size={16} /> {photoIds.length ? "Add another" : "Add a photo"}
-                  <input type="file" accept="image/*" capture="environment" multiple hidden
-                    onChange={(e) => { void attach(e.target.files); e.target.value = ""; }} />
-                </label>
+                {/* a button, as the operator's strip's (EvidenceRow): a label around a hidden input took no key */}
+                <button className="btn ghost" disabled={photos.busy} onClick={() => photoInput.current?.click()}>
+                  <Camera size={16} aria-hidden /> {photos.busy ? "Adding…" : photoIds.length ? "Add another" : "Add a photo"}
+                </button>
+                <input ref={photoInput} type="file" accept="image/*" capture="environment" multiple hidden
+                  onChange={(e) => { const el = e.target; void photos.add(el.files).then(() => { el.value = ""; }); }} />
                 {photoIds.length > 0 && (
                   <button className="btn ghost" onClick={() => setPhotoIds([])}>
                     {photoIds.length} attached, remove
                   </button>
                 )}
               </div>
-              {photoError && <div className="fm-inline-error">{photoError}</div>}
+              {photos.error && <div className="fm-inline-error" role="alert">{photos.error}</div>}
               {sendError && <div className="fm-inline-error" role="alert">{sendError}</div>}
             </div>
           </div>
-          {/* The modal shell's footer, as every dialog's (04-modals.css). */}
-          <div className="modal-footer">
+          {/* The shared footer (common/ModalFooter): its two answers in one group on the right, as Settings'. */}
+          <ModalFooter onClose={onClose} actions={<>
             <button className="btn" onClick={onClose}>Cancel</button>
-            <button className="btn primary" disabled={!title.trim() || busy}
+            <button className="btn primary" disabled={!title.trim() || busy || photos.busy}
               onClick={() => void send()}>
               {busy ? "Sending…" : "Send report"}
             </button>
-          </div>
+          </>} />
         </>
       )}
     </Window>

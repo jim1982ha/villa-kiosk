@@ -138,7 +138,7 @@ export default function LineChart({ lines, window, height = 150, status, label, 
   const w = drawableWindow(window, ...(nothing ? [slid!.base] : lines.map((l) => l.pts)));
   const g = w ? chartGeometry(w, lines.map((l, i) => ({ pts: nothing ? slid!.base : l.pts, gaps: l.gaps ?? [], scale: l.scale ?? "shared", unit: l.unit,
     ...(i === 0 && on ? { holds: slid!.base.map((p) => p.v), limits: on } : {}) })), plot, 0.08, fit) : null;
-  const { frac, handlers } = useChartPointer<SVGSVGElement>();
+  const { frac, touchAction, handlers } = useChartPointer<SVGSVGElement>();
   const hatch = `range-hatch-${useId().replace(/[^\w-]/g, "")}`;
   if (!g) return <><ChartEmpty status={status} height={height} /><TimeAxis g={null} /></>;
 
@@ -171,7 +171,7 @@ export default function LineChart({ lines, window, height = 150, status, label, 
         <YAxis zoomable height={H} frame={H} ticks={leftAxis} cls={lines[0].cls?.split(" ")[0]} color={lines[0].color} />
         <div className="spark-wrap weather-chart-wrap">
           <svg className="weather-chart" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" role="img" aria-label={label}
-            style={{ height: H, touchAction: "none" }} {...handlers}>
+            style={{ height: H, touchAction }} {...handlers}>
             <g className="chart-grid">{leftAxis.map((t) => <line key={t.v} x1="0" y1={t.y} x2={W} y2={t.y} />)}</g>
             {/* A band per line, in its own slice of the plot: which sensor was
                 out is part of the fact. Before the lines — SVG paints in order. */}

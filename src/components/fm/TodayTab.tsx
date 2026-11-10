@@ -20,13 +20,13 @@ import RecentWorkList from "./RecentWorkList";
 import NotesField from "./NotesField";
 import InlineConfirm from "@/components/common/InlineConfirm";
 import RecordCard from "./RecordCard";
-import TaskCard from "./TaskCard";
+import TaskCard, { REMOVE_TASK_TIP } from "./TaskCard";
 import { formatMoney } from "@/utils/money";
 import CostFields from "./CostFields";
 import FormActions from "./FormActions";
 import WorkerName from "./WorkerName";
 import { useWorkFields } from "./useWorkFields";
-import Tip from "@/components/common/Tip";
+import BinButton from "@/components/common/BinButton";
 import FmForm from "./FmForm";
 import { useListEditor } from "./ListEditor";
 
@@ -119,12 +119,7 @@ export default function TodayTab({ onOpenEntity }: { onOpenEntity: (id: string) 
               <button className="btn ghost" onClick={() => (log.editing === s.schedule.id ? log.close() : log.edit(s.schedule.id))}>
                 <Check size={16} /> Log
               </button>
-              <Tip text="Remove this task. Completions already logged against it are kept.">
-                <button className="icon-btn" onClick={() => void removeSchedule(s.schedule.id)}
-                  aria-label={`Remove ${s.schedule.title}`}>
-                  <Trash2 size={16} />
-                </button>
-              </Tip>
+              <BinButton label={`Remove ${s.schedule.title}`} tip={REMOVE_TASK_TIP} onPress={() => void removeSchedule(s.schedule.id)} />
             </>} />
           {/* ⚠️ ITS LOG UNDER ITS CARD (owner, 2026-11-01: a form opened away from what it was asked on): it was drawn
               under Recent work, below every task */}
@@ -172,7 +167,6 @@ function LogCompletion({
   const { data } = useFmData();
   const schedule = data.schedules.find((s) => s.id === scheduleId);
   const { who, setWho, note, setNote, photoIds, setPhotoIds, amount, setAmount, work } = useWorkFields();
-  const [saving, setSaving] = useState(false);
   /** Why the save was refused — the form keeps what was typed (2.496.252). */
   const [saveError, setSaveError] = useState<string | null>(null);
 
@@ -185,7 +179,7 @@ function LogCompletion({
       {/* the name typed, never offered (WorkerName); `by` is the signed-in profile, stamped by the store */}
       <div className="fm-field">
         <span>Done by</span>
-        <WorkerName value={who} onChange={setWho} placeholder="Name or company" />
+        <WorkerName value={who} onChange={setWho} />
       </div>
 
       <NotesField
@@ -204,10 +198,9 @@ function LogCompletion({
       </div>
 
       <FormActions
-        error={saveError} onCancel={onCancel} disabled={saving}
-        saveLabel={saving ? "Saving…" : "Save completion"}
+        error={saveError} onCancel={onCancel}
+        saveLabel="Save completion"
         onSave={async () => {
-            setSaving(true);
             setSaveError(null);
             const refused = await onSave(
               { scheduleId, at: new Date().toISOString(), by: "", ...work() },
@@ -215,7 +208,6 @@ function LogCompletion({
                 ? { amountIdr, label: schedule?.title ?? "Maintenance", category: "minor" }
                 : undefined,
             );
-            setSaving(false);
             if (refused) setSaveError(refused);
           }}
       />

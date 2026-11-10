@@ -90,7 +90,7 @@ export default function ProfileGate({ children }: { children: ReactNode }) {
           // prefetch (auth/profileSession's signedIn).
           login(r);
         } else if (res.kind === "closed") setGateError(res.text);
-        else if (res.kind === "unavailable") setGateError("Couldn't reach the kiosk service, please try again.");
+        else if (res.kind === "unavailable") setGateError("Couldn't reach VESTA, please try again.");
         else setGateError("Couldn't start a session, please try again.");
       });
     } else {
@@ -153,7 +153,7 @@ export default function ProfileGate({ children }: { children: ReactNode }) {
             <div className="profile-select">
               <VestaMark size={52} className="profile-mark" />
               <h1 className="profile-title">{resolveSiteTitle(config)}</h1>
-              <p className="profile-sub">Who's using the kiosk?</p>
+              <p className="profile-sub">Who's using VESTA?</p>
               {gateError && (
                 <p className="profile-error" role="alert">{gateError}</p>
               )}

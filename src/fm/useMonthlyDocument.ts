@@ -20,7 +20,7 @@ export function useMonthlyDocument(kind: DocumentKind, inputs: DocumentInputs) {
   const { data, saveDocument } = useFmData();
   const { villaName } = inputs;
   const build = (month: string) => DOCUMENT_KINDS[kind].build(inputs, month);
-  const [month, setMonthState] = useState(() => defaultMonth(kind));
+  const [month, setMonthState] = useState(() => defaultMonth());
   // A snapshot, not a live useMemo: a document is a point-in-time record, and
   // its own "Generated:" time means the moment someone asked for it. Null
   // until made, and again when the month changes — June's must never keep

@@ -323,7 +323,7 @@ export async function uploadEvidence(file: Blob): Promise<string> {
   if (!r.ok) {
     // the add-on's own reason, never one guessed from the status (utils/storeSave refusalOf)
     const why = await refusalOf(r);
-    throw new Error(why ? `The add-on refused this photo: ${why}` : `Upload failed (HTTP ${r.status}).`);
+    throw new Error(why ? `The server refused this photo: ${why}` : `Upload failed (HTTP ${r.status}).`);
   }
   return id;
 }

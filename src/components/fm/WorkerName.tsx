@@ -6,15 +6,13 @@
 // Open a ticket window showed "Fab & Jm", "KosyStay", "Kazia" before anything was typed. No list, and the browser's own
 // memory of earlier entries is switched off too (autoComplete).
 
-export default function WorkerName({ value, onChange, placeholder }: {
+export default function WorkerName({ value, onChange }: {
   /** The name typed ("" for none). */
   value: string;
   onChange: (name: string) => void;
-  /** Said in the box while it is empty. */
-  placeholder: string;
 }) {
   return (
-    <input value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder}
+    <input value={value} onChange={(e) => onChange(e.target.value)} placeholder="Name or company"
       autoComplete="off" autoCorrect="off" spellCheck={false} />
   );
 }

@@ -464,7 +464,7 @@ function RainTile({ s, win, status, stepMs, unit }: {
     ? seriesBuckets({ points: s.points, window: win }, slot, { key: "rain", label: "Rain", cls: "water" })
     : [];
   const spanH = (win.to - win.from) / HOUR_MS;
-  const span = spanH > 48 ? `${Math.round(spanH / 24)} days` : `${Math.round(spanH)}h`;
+  const span = fmtDuration(win.to - win.from);
   // "No rain" only when the gauge REPORTED zero; an empty record is not a dry
   // day — it is no record (the bands say so).
   const note = barNote(buckets, `No rain readings in the last ${span}`, `No rain in the last ${span}`);

@@ -24,8 +24,7 @@ import { countOf } from "@/utils/countOf";
 // ⚠️ THE SIZES AND THE ARITHMETIC MOVED TO `paging.ts` (2.955.0), with the
 // rival module `Pager.tsx` folded in — see that file's header. Re-exported so
 // callers keep one import.
-export { PAGE_ROWS, PAGE_CARDS, PAGE_COMPACT, PAGE_SIZES } from "./paging";
-export type { PageView as Paged } from "./paging";
+export { PAGE_CARDS } from "./paging";
 
 export function usePaged<T>(rows: T[], size = PAGE_ROWS): PageView<T> & {
   go: (to: number) => void;

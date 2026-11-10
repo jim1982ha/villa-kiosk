@@ -41,14 +41,12 @@ export default function SettingRow({ icon, label, value, tip, tipLabel, classNam
 
 /** A setting set with a slider: its name and value on one line, the track under them, the whole width (SettingRow's
  *  `setting-slider`). `before`: a button that sets it another way, at the track's left (the model's "Set North"). */
-export function SettingSlider({ icon, label, value, tip, ariaLabel, min, max, step, at, onChange, before }: {
+export function SettingSlider({ icon, label, value, tip, min, max, step, at, onChange, before }: {
   icon?: ReactNode;
   label: string;
   /** The value as read, its unit joined ("1.0×", "1.70 m", "137°"). */
   value: string;
   tip?: ReactNode;
-  /** The track's name for assistive technology; the label when absent. */
-  ariaLabel?: string;
   min: number;
   max: number;
   step: number;
@@ -59,7 +57,7 @@ export function SettingSlider({ icon, label, value, tip, ariaLabel, min, max, st
   return (
     <SettingRow className="setting-slider" icon={icon} label={label} value={value} tip={tip}>
       {before}
-      <input aria-label={ariaLabel ?? label} type="range" min={min} max={max} step={step} value={at}
+      <input aria-label={label} type="range" min={min} max={max} step={step} value={at}
         onChange={(e) => onChange(Number(e.target.value))} />
     </SettingRow>
   );

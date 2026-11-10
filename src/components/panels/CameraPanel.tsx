@@ -7,7 +7,7 @@
 // camera picker and the status bar.
 
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { ArrowLeft, X, VideoOff, Maximize2, Minimize2, ZoomOut, ChevronLeft, ChevronRight, Power, Check, Video, Volume2, VolumeX, ListTree } from "lucide-react";
+import { ArrowLeft, X, VideoOff, Maximize2, Minimize2, ZoomOut, ChevronLeft, ChevronRight, Power, Check, Video, Volume2, VolumeX, ListTree, RotateCw } from "lucide-react";
 import type { PanelProps } from "@/types/panel.types";
 import { useRailLayout } from "@/utils/railLayout";
 import { linkedSwitchProps, usePanelActions } from "./PanelActionsContext";
@@ -101,11 +101,13 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
   // OLD camera's current tier for a moment — the stale request this module
   // exists to remove. So a player is used only while its camera is on screen.
   const [owned, setOwned] = useState<{ entityId: string; player: CameraPlayer } | null>(null);
+  // "Try again" on a feed that gave up: a new player, from the first tier (a player that failed stays failed).
+  const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     const p = createCameraPlayer(cameraTiers(ws, mapping.entityId), { log: tapDebug });
     setOwned({ entityId: mapping.entityId, player: p });
     return () => p.dispose();
-  }, [ws, mapping.entityId]);
+  }, [ws, mapping.entityId, attempt]);
   const player = owned?.entityId === mapping.entityId ? owned.player : null;
   const subscribeFeed = useCallback(
     (l: () => void) => (player ? player.subscribe(l) : () => {}), [player]);
@@ -557,7 +559,7 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
 
   const renderView = () => {
     if (!connected) return <Unavailable label="Not connected." />;
-    if (mode === "failed") return <Unavailable label="Camera stream unavailable." />;
+    if (mode === "failed") return null; // said over the zoom layer, where its "Try again" can be pressed
     if (!player) return null; // this camera's player is being made — the spinner shows
 
     // The tier drives the element itself (srcObject, hls.js, an <img> src);
@@ -680,6 +682,13 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
               <div className="spinner" />
             </div>
           )}
+        {/* ⚠️ A FEED THAT GAVE UP OFFERS "TRY AGAIN" (UI scan, 2026-11-10): the only way out was to close the window
+            and open it again. Outside the zoom layer, which takes every press on the picture for its gestures. */}
+        {connected && mode === "failed" && (
+          <div className="camera-loading">
+            <Unavailable label="Camera stream unavailable." onRetry={() => setAttempt((n) => n + 1)} />
+          </div>
+        )}
       </div>
 
       {/* Bottom row: status strip (green online / red motion / black gap)
@@ -849,7 +858,7 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
               <ArrowLeft />
             </button>
           )}
-          <button className="icon-btn close" onClick={onClose} style={vOrder(1)}>
+          <button className="icon-btn close" onClick={onClose} title="Close" aria-label="Close" style={vOrder(1)}>
             <X />
           </button>
         </div>
@@ -891,11 +900,18 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
   );
 }
 
-function Unavailable({ label }: { label: string }) {
+function Unavailable({ label, onRetry }: { label: string; onRetry?: () => void }) {
   return (
     <div className="center" style={{ color: "var(--text-secondary)" }}>
       <VideoOff size={48} />
       <p>{label}</p>
+      {onRetry && (
+        // the press is the button's own: it does not also reach the picture, where a tap shows or hides the controls
+        <button type="button" className="camera-zoom-pill" style={{ margin: "8px auto 0" }}
+          onPointerDown={(e) => e.stopPropagation()} onClick={onRetry}>
+          <RotateCw size={16} aria-hidden /> Try again
+        </button>
+      )}
     </div>
   );
 }

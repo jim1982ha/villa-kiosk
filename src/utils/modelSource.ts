@@ -75,7 +75,7 @@ export async function acquireModel(
     return {
       ok: false, reason: "http", status: got.status, code: `MODEL_FETCH_HTTP_${got.status}`,
       message: `Central model not found at ${url} (HTTP ${got.status}).\n`
-        + "Re-upload it from Settings → Advanced Settings (Owner profile).",
+        + "Re-upload it from Settings › Advanced Settings (Owner profile).",
     };
   }
   return { ok: true, data: got.data, cfg, source: url, prefetched: got.prefetched, kept: got.kept };

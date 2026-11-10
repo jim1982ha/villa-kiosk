@@ -97,8 +97,6 @@ export class SceneLook {
     this.set({ backdrop: c ? [c.r, c.g, c.b, c.a] : null });
   }
 
-  get current(): Look { return resolveLook(this.inputs); }
-
   /**
    * How many of the scene's materials an environment change can reach: lit,
    * and not zeroed. Logged after a model load, so a feature built on the

@@ -36,7 +36,6 @@ import { useRoomFloors } from "@/config/useRoomFloors";
 import { deviceRoom, floorOfRoom } from "@/config/devicePlace";
 
 // The group's shape is config/summaryGroups' (this screen only draws one).
-export type { SummaryGroup } from "@/config/summaryGroups";
 import type { SummaryGroup } from "@/config/summaryGroups";
 import { useVillaModel } from "@/config/VillaModel";
 import { deviceSwitch } from "@/utils/devicePower";
@@ -204,7 +203,7 @@ export default function SummaryGroupPanel({
         <>
           <div
             className="summary-offmap-heading summary-notinha-heading"
-            title="This villa model has 3D geometry named after these devices, but no such device exists, most often its integration was removed, or it was renamed. Update the model, or add the device back."
+            title="This villa model has 3D geometry named after these devices, but no such device exists, it was removed from the villa's system, or renamed, or it was renamed. Update the model, or add the device back."
           >
             {NOT_IN_HA}
           </div>

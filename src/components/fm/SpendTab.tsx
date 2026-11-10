@@ -10,10 +10,11 @@ import { momentText } from "@/utils/dateText";
 import InfoTip from "@/components/common/InfoTip";
 import { useState } from "react";
 import Dropdown from "@/components/common/Dropdown";
+import { Pager, usePaged, PAGE_CARDS } from "@/components/common/Paged";
 import { DocumentButtons } from "@/components/common/SaveButton";
 import { Plus, Sparkles } from "lucide-react";
 import { useFmData } from "@/fm/FmDataContext";
-import { budgetStatus, capNotes, parseAmount, recordsKeptNote } from "@/fm/fmEngine";
+import { budgetStatus, capNotes, monthLabel, parseAmount, recordsKeptNote } from "@/fm/fmEngine";
 import { COST_CATEGORY_NAMES } from "@/fm/fmTypes";
 import { useFmTerms } from "@/fm/useFmTerms";
 import { useProfile } from "@/auth/ProfileContext";
@@ -75,6 +76,8 @@ export default function SpendTab(
   const month = recap.month;
 
   const b = budgetStatus(data.costs, month, terms);
+  // the month's entries, newest first, ten a page as every long list
+  const entries = usePaged([...b.entries].sort((a, c) => Date.parse(c.at) - Date.parse(a.at)), PAGE_CARDS);
   const amountIdr = parseAmount(amount);
 
   /** The form's fields emptied: whenever the form closes (saved, cancelled, or its entry gone from the month). */
@@ -186,9 +189,9 @@ export default function SpendTab(
 
       <div className="fm-list">
         {b.entries.length === 0 && (
-          <p className="muted body-text">No spend recorded for {month}.</p>
+          <p className="muted body-text">No spend recorded for {monthLabel(month)}.</p>
         )}
-        {b.entries.sort((a, c) => Date.parse(c.at) - Date.parse(a.at)).map((c) => editor.inPlace(c.id, (
+        {entries.page.map((c) => editor.inPlace(c.id, (
           // THE Cockpit card (RecordCard, architecture review 2026-10-15): the amount on the right, its receipt —
           // the whole point of attaching one is that somebody can later check it
           <RecordCard key={c.id} title={c.label} when={momentText(c.at)} notes={[c.note]} photoIds={c.photoIds}
@@ -207,6 +210,7 @@ export default function SpendTab(
             </>} />
         ), () => form))}
       </div>
+      <Pager paged={entries} />
 
 
       {/* ⚠️ THE MONTHLY RECAP, A SECTION OF ITS OWN UNDER THE SPEND (owner, 2026-11-05): its title, then the Month on the
@@ -225,7 +229,7 @@ export default function SpendTab(
           </InfoTip></span>
         <div style={{ minWidth: 130 }}>
           <Dropdown value={month} ariaLabel="Month" onChange={recap.setMonth}
-            options={recap.months.map((m) => ({ value: m, label: m }))} />
+            options={recap.months.map((m) => ({ value: m, label: monthLabel(m) }))} />
         </div>
         <div className="fm-statement-buttons">
           <button className="btn ghost" onClick={recap.generate}>

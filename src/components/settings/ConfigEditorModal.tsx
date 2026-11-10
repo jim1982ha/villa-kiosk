@@ -169,7 +169,7 @@ function PresenceSensor() {
         The on/off sensor that is on when the villa is empty. Shown on every screen as the presence tile under the
         floors (Occupied, Empty or Unknown); tapping it tells why.
       </>} />
-      <EntityPicker value={config.presenceSensor} domains={["binary_sensor"]} placeholder="Pick the villa's empty / occupied sensor" hideCurrentLabel
+      <EntityPicker value={config.presenceSensor} domains={["binary_sensor"]} placeholder="Pick the villa's empty / occupied sensor"
         onChange={(id) => update({ presenceSensor: id })} onClear={() => update({ presenceSensor: "" })} />
     </>
   );
@@ -314,7 +314,7 @@ export default function ConfigEditorModal({ onBack, withinSettings, focusEntityI
   return (
     <DialogEdits>
     <PendingFields pending={own.pending}>
-    <Window kind="content" label="Advanced settings" onClose={exit} className="settings-modal config-editor-modal">
+    <Window kind="content" label="Advanced Settings" onClose={exit} className="settings-modal config-editor-modal">
       <div className="modal-header">
         {/* tabIndex={-1} + data-autofocus: useModalA11y's default (the
             FIRST focusable descendant) would otherwise land on the header's

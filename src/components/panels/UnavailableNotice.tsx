@@ -17,14 +17,11 @@ import { usePanelActions } from "./PanelActionsContext";
 import { useLastSeen } from "@/hooks/useLastSeen";
 
 interface Props {
-  /** Noun for the device kind, e.g. "light", "fan", "switch" — now used for
-   *  the hover/assistive description rather than an on-screen paragraph. */
-  device?: string;
   /** The panel's entity: when Home Assistant does not have it at all, the notice says so and what to do. */
   entityId?: string;
 }
 
-export default function UnavailableNotice({ device = "device", entityId }: Props) {
+export default function UnavailableNotice({ entityId }: Props) {
   const { entities } = useHA();
   const { mappedEntityIds } = useVillaModel();
   // a critical device that lost contact: red, as the Cockpit paints it (the header's look decides — reading.lostPillTone)
@@ -56,8 +53,7 @@ export default function UnavailableNotice({ device = "device", entityId }: Props
   // it just restated the word above it and tripled the height of an otherwise
   // tiny panel, so it survives only as the title / accessible description.
   const detail =
-    `Contact with this ${device} is lost, its real state isn't `
-    + "known, so controls are disabled until it reports in again.";
+    "Contact with this device is lost, its real state isn't known, so controls are disabled until it reports in again.";
   return (
     <div className="center" style={{ margin: "8px 0 20px" }}>
       <span className={`status-pill ${tone}`} title={detail} aria-label={detail}>

@@ -14,5 +14,13 @@ export function useChartPointer<E extends Element>(axis: "x" | "y" = "x") {
     const r = e.currentTarget.getBoundingClientRect();
     setFrac(axis === "x" ? pointerFraction(e.clientX, r.left, r.width) : pointerFraction(e.clientY, r.top, r.height));
   };
-  return { frac, handlers: { onPointerMove: on, onPointerDown: on, onPointerLeave: () => setFrac(null) } };
+  const off = () => setFrac(null);
+  return {
+    frac,
+    // ⚠️ THE CHART TAKES THE TOUCH ALONG ITS OWN AXIS ONLY (UI scan, 2026-11-10): it took all of it ("none"), so on a
+    // phone a window that is mostly chart (Weather, Energy) could not be scrolled with a thumb that landed on one.
+    // Across the chart reads it; the other way scrolls the window, and the browser's cancel takes the reading away.
+    touchAction: axis === "x" ? "pan-y" : "pan-x",
+    handlers: { onPointerMove: on, onPointerDown: on, onPointerLeave: off, onPointerCancel: off },
+  } as const;
 }

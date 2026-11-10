@@ -94,11 +94,10 @@ const ICON_STROKE_VIEWBOX = 1.5;
 const ICON_STROKE_VIEWBOX_BOLD = 2.5;
 /** Squircle corner radius as a fraction of the badge's size — exported so
  *  EntityVisuals' outline Rectangle can match this canvas's rounding exactly.
- *  Approximates --radius-badge (12px) at the classic badge's typical ~40-44px
+ *  Approximates a 12px corner at the classic badge's typical ~40-44px
  *  on-screen size; a fraction (not a fixed px) so it still looks right when
  *  the label-size stepper scales the badge up or down. */
 // The corner fraction, the inset and the dash are badgeLook's (one owner).
-export { BADGE_CORNER_FRACTION, BADGE_INSET_CARD, RING_DASH } from "./badgeLook";
 import { BADGE_CORNER_FRACTION } from "./badgeLook";
 // The CLASSIC style's ring, as a fraction of the badge (a card-style badge's
 // ring is badgeLook.badgeRing, passed in as `ringOfSize`). RING_FRACTION lands on the
@@ -110,7 +109,7 @@ const RING_FRACTION = 0.035;
 const HAIRLINE_FRACTION = 0.023;
 
 // The two pills' geometry is badgeLook's (pure, for the oracles and badgeControls): pillGeometry, PILL_MARGIN.
-export { PICTURE_SCALE, PILL_MARGIN, pillGeometry } from "./badgeLook";
+export { PICTURE_SCALE } from "./badgeLook";
 import { PICTURE_SCALE, badgeBakeBox, pillGeometry } from "./badgeLook";
 
 

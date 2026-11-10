@@ -72,7 +72,7 @@ console.log("\n  the wiring:");
   ck("Advanced Settings over Settings closes back to it; on its own, the same draft is its own Save / Cancel",
      /const own = useDraftedSlice\(ADVANCED_SETTINGS_KEYS\);/.test(adv)
      && /const commit = withinSettings \? undefined : \{ dirty: own\.dirty, save: own\.save, discard: \(\) => \{ own\.discard\(\); \} \};/.test(adv)
-     && /<ModalFooter onClose=\{back\} commit=\{commit\}/.test(adv) && /<Window kind="content" label="Advanced settings" onClose=\{exit\}/.test(adv)
+     && /<ModalFooter onClose=\{back\} commit=\{commit\}/.test(adv) && /<Window kind="content" label="Advanced Settings" onClose=\{exit\}/.test(adv)
      && /withinSettings=\{shown\("settings"\)\}/.test(db));
   ck("its controls write as the dialog (what the drafts record), the model upload's rooms do not",
      /return \(\s*<DialogEdits>\s*<PendingFields pending=\{own\.pending\}>\s*<Window\b/.test(adv)

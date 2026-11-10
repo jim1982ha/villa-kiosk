@@ -88,8 +88,6 @@ export class ResolutionGovernor implements ResolutionPort {
 
   constructor(port: ScalingPort) { this.port = port; }
 
-  /** Gaps collected in the current burst. */
-  get sampleCount(): number { return this.gaps.length; }
   /** Enough frame gaps for the valve to act on (VALVE_SAMPLE_MIN) — asked by
    *  SceneManager's calibration loop, which used to compare the count to the
    *  constant itself (2.496.262). */

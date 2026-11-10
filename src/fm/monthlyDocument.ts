@@ -80,7 +80,7 @@ export function documentFileName(kind: DocumentKind, villaName: string, month: s
 /** The month a document starts on: the month running now. ⚠️ ONE MONTH FOR THE SPEND TAB (owner, 2026-11-05: the recap
  *  and the spend statement are one document, in the Spend tab): its Month chooses the spend listed and the recap made,
  *  and the spend being recorded is this month's — the recap opened on the month before. */
-export function defaultMonth(_kind: DocumentKind, now: number = Date.now()): string {
+export function defaultMonth(now: number = Date.now()): string {
   return monthKey(now);
 }
 

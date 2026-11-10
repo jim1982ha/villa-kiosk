@@ -4,7 +4,7 @@
 // The add-on restarting (an update) or a Wi-Fi blip on opening: the first read failed, and the store set `ready` over
 // the EMPTY record all the same. The Cockpit's Open issues, every Facility tab and the map's fault badges showed no
 // fault and said nothing, while fmApi promised a failed read "must never be shown as an empty maintenance record".
-// Now: "Loading the maintenance record…" until the record is read, "Can't reach the add-on. Retrying." when the read
+// Now: "Loading the maintenance record…" until the record is read, "Can't reach the server. Retrying." when the read
 // failed; the screens wait for it; a record read once stays as it was when a later refresh fails.
 //
 // Driven by value: the real sync machine against a fake store, then the real FmDataProvider under React
@@ -46,7 +46,7 @@ console.log("  the sync machine says whether the store was ever read:");
 
 console.log("\n  what the screens say:");
 ck("reading", fmRecordLine({ ready: false, unreachable: false }) === "Loading the maintenance record…");
-ck("the read failed", fmRecordLine({ ready: false, unreachable: true }) === "Can't reach the add-on. Retrying.");
+ck("the read failed", fmRecordLine({ ready: false, unreachable: true }) === "Can't reach the server. Retrying.");
 ck("read: nothing (the record itself shows)", fmRecordLine({ ready: true, unreachable: false }) === null
    && fmRecordLine({ ready: true, unreachable: true }) === null);
 
@@ -73,7 +73,7 @@ console.log("\n  the real Facility store, the add-on down on opening, then back:
   await render(h(ProfileProvider, null, h(FmDataProvider, null, h(Probe))));
   await act(() => sleep(30));
   ck("the read failed: not ready, and the screens say the add-on cannot be reached (never an empty record)",
-     fm.ready === false && fm.unreachable === true && fmRecordLine(fm) === "Can't reach the add-on. Retrying.",
+     fm.ready === false && fm.unreachable === true && fmRecordLine(fm) === "Can't reach the server. Retrying.",
      { ready: fm.ready, unreachable: fm.unreachable });
   srv.down = false;
   await act(async () => { await fm.reload(); });

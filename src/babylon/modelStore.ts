@@ -58,10 +58,6 @@ export class ModelKeyedStore<T> {
     this.storeKey = key ? `${this.prefix}${key}` : null;
   }
 
-  get enabled(): boolean {
-    return this.storeKey !== null;
-  }
-
   /** Everything stored for the current model, or an empty map. Never throws:
    *  an unreadable or quota-evicted store is a cache miss, not an error. */
   load(): Map<string, T> {

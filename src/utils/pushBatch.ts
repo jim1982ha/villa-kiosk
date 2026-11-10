@@ -67,8 +67,6 @@ export class PushBatch<T extends { entity_id: string }> {
     this.pending.clear();
   }
 
-  get size(): number { return this.pending.size; }
-
   /** `base` with the pending states laid over it — what an imperative reader
    *  (a badge being built between two drains) must see. Allocates only while
    *  something is pending. */

@@ -19,7 +19,7 @@ import { useChartPointer } from "./useChartPointer";
 // every panel's history bar and the camera's status rail, so the drift would
 // have shown as one word spelled two ways on one screen. Its words and its
 // offline colour come from config/reading, like every other surface's.
-import { readableState, chartColours, NOT_KEPT, NOT_KEPT_WORDS, NO_RECORD, NO_RECORD_WORDS } from "@/config/reading";
+import { chartColours, NOT_KEPT, NOT_KEPT_WORDS, NO_RECORD, NO_RECORD_WORDS } from "@/config/reading";
 import { TREND_INTERVAL_MS } from "@/utils/trendInterval";
 import { bandEnd, timelineCells, timelineLegend, timelineRuns } from "@/utils/timelineCells";
 import { DAY_MS } from "@/utils/localDay";
@@ -46,8 +46,8 @@ interface Props {
   colorFor: (state: string) => string;
   /** How a state is worded in the tooltip — config/BinarySensorClasses'
    *  stateLabelFor, so it reads what the pill above it reads ("No leak", not
-   *  "Off"). Defaults to the readable raw state. */
-  labelFor?: (state: string) => string;
+   *  "Off"). */
+  labelFor: (state: string) => string;
   height?: number;
   /** false: no legend row (a band too thin to carry one: a linked sensor's row, which names its state beside it).
    *  Otherwise the band lists every state it paints, its colour and its words (timelineLegend) — never a caller's
@@ -96,7 +96,7 @@ interface Props {
 }
 
 export default function StateTimeline({
-  data, hours, end, colorFor: ownColour, labelFor = readableState, height, legend, status, vertical,
+  data, hours, end, colorFor: ownColour, labelFor, height, legend, status, vertical,
   baselineStates, grainMs,
 }: Props) {
   // Unavailable/unknown are the legend's colour on EVERY timeline, whatever
@@ -106,7 +106,7 @@ export default function StateTimeline({
   const wordsFor = (s: string) => (s === NOT_KEPT ? NOT_KEPT_WORDS : s === NO_RECORD ? NO_RECORD_WORDS : labelFor(s));
   // Where the pointer is along the bar, as a fraction (the app's one rule:
   // useChartPointer) — along whichever axis the bar runs.
-  const { frac, handlers } = useChartPointer<HTMLDivElement>(vertical ? "y" : "x");
+  const { frac, touchAction, handlers } = useChartPointer<HTMLDivElement>(vertical ? "y" : "x");
 
   const bucketMs = grainMs ?? TREND_INTERVAL_MS;
   // Joined so the memo below has a stable primitive dep rather than a new
@@ -141,7 +141,7 @@ export default function StateTimeline({
       <div className="spark-wrap">
         <div
           className={`state-timeline${vertical ? " state-timeline-vertical" : ""}`}
-          style={{ ...(height && !vertical ? { height } : undefined), touchAction: "none" }}
+          style={{ ...(height && !vertical ? { height } : undefined), touchAction }}
           {...handlers}
         >
           {/* One strip per RUN of intervals that paint the same — a 7-day bar

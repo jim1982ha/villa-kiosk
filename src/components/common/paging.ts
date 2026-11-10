@@ -32,14 +32,6 @@ export const PAGE_ROWS = 10;
  *  is a scroll with no end in sight, reported as exactly that. */
 export const PAGE_CARDS = 10;
 
-/** Rows per page inside a modal. ⚠️ THE THIRD NUMBER, AND IT WAS ALREADY REAL —
- *  it lived in the rival module as `PAGE_SIZE`. About what a phone shows above
- *  the fold of a dialog without the footer buttons leaving the screen. */
-export const PAGE_COMPACT = 5;
-
-/** Every page size this app uses. A fourth needs a reason, here, beside these. */
-export const PAGE_SIZES = [PAGE_ROWS, PAGE_CARDS, PAGE_COMPACT] as const;
-
 export interface PageView<T> {
   page: T[];
   /** 1-based index of the first row on this page, for the "n–m of N" line. */

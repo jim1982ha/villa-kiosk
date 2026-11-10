@@ -33,7 +33,7 @@ export function readPinAnswer(status: number, body: unknown): PinOutcome {
   }
   if (status === 401) return { kind: "wrong" };
   if (status === 403) {
-    return { kind: "closed", text: typeof b.error === "string" && b.error ? b.error : "This is not available on this kiosk." };
+    return { kind: "closed", text: typeof b.error === "string" && b.error ? b.error : "This is not available on this device." };
   }
   if (status < 200 || status >= 300) return { kind: "unavailable" };
   if (typeof b.token === "string" && b.token) return { kind: "accepted", token: b.token };

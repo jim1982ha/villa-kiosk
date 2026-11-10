@@ -42,13 +42,13 @@ export function saveProblemLine(outcome: { ok: true } | { ok: false; reason: str
   if (outcome.ok) return null;
   if (outcome.reason === "refused") {
     const message = outcome.message;
-    return message ? `The add-on refused this change: ${message}` : "The add-on refused this change, nothing was saved.";
+    return message ? `The server refused this change: ${message}` : "The server refused this change, nothing was saved.";
   }
   if (outcome.reason === "transport" || outcome.reason === "conflict-retries-exhausted") return UNSAVED_LINE;
   return null;
 }
 
-export const UNSAVED_LINE = "Couldn't save to the add-on, the change is only on this device.";
+export const UNSAVED_LINE = "Couldn't save to the server, the change is only on this device.";
 
 /** What a screen says when a write that cannot be sent again (a delete under its single-use superadmin code) did not
  *  land and was taken back: its true cause, never "refused" (architecture review O, 2026-10-27: a Wi-Fi drop said "The

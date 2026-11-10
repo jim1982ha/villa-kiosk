@@ -66,10 +66,9 @@ interface Props {
   /** The light's scene choice, when its device has one (panelRules.sceneSelectOf): its options, the scene it shows
    *  ("" when none — unknown), and what a pick does. It REPLACES the Effect picker (one control). */
   scene?: { options: readonly string[]; value: string; onPick: (option: string) => void };
-  disabled?: boolean;
 }
 
-export default function LightChoices({ choices, attrs, temperature, onColour, onEffect, scene, disabled }: Props) {
+export default function LightChoices({ choices, attrs, temperature, onColour, onEffect, scene }: Props) {
   const cur = currentHs(attrs);
   const effect = typeof attrs?.effect === "string" ? attrs.effect : "";
   const effectOptions = [
@@ -91,7 +90,6 @@ export default function LightChoices({ choices, attrs, temperature, onColour, on
               title={p.name}
               aria-label={p.name}
               aria-pressed={presetIsCurrent(p, cur)}
-              disabled={disabled}
               onClick={() => onColour(p.hue, p.sat)}
             />
           ))}
@@ -105,7 +103,6 @@ export default function LightChoices({ choices, attrs, temperature, onColour, on
               type="color"
               aria-label="Another colour"
               value={cur ? rgbToHex(hsToRgb(cur.hue, cur.sat)) : "#ffffff"}
-              disabled={disabled}
               onChange={(e) => { const hs = hexToHs(e.target.value); if (hs) onColour(hs.hue, hs.sat); }}
             />
           </label>
@@ -121,7 +118,6 @@ export default function LightChoices({ choices, attrs, temperature, onColour, on
           value={scene.options.includes(scene.value) ? scene.value : ""}
           options={[...(scene.options.includes(scene.value) ? [] : [{ value: "", label: "Scene" }]),
             ...scene.options.map((o) => ({ value: o, label: o }))]}
-          disabled={disabled}
           onChange={(v) => { if (v) scene.onPick(v); }}
         />
       )}
@@ -131,7 +127,6 @@ export default function LightChoices({ choices, attrs, temperature, onColour, on
           ariaLabel="Effect"
           value={choices.effects.includes(effect) ? effect : ""}
           options={effectOptions}
-          disabled={disabled}
           onChange={(v) => { if (v) onEffect(v); }}
         />
       )}

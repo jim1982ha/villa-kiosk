@@ -121,9 +121,6 @@ export class FanRigs {
     this.wake = wake;
   }
 
-  /** How many fans are turning. */
-  get spinningCount(): number { return this.spinning.size; }
-
   /** Start/stop a fan's spin from its on/off (+ percentage) state. Only true
    *  CEILING fans spin (isCeilingFan). */
   /** Start/stop a fan's spin from its on/off (+ percentage) state. Only true

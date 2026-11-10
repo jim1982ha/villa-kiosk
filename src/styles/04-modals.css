@@ -69,10 +69,9 @@
    but an accidental, UA-dependent size next to that title's deliberately
    tuned one, which read as "two different fonts" even though it never was. */
 .modal h2 { font-family: var(--font-display); font-weight: 500; font-size: var(--text-xl); margin: 0; letter-spacing: var(--tracking-tight); }
-.modal .sub { color: var(--text-secondary); margin: 0 0 22px; }
 .modal label { display: block; font-size: var(--text-sm); color: var(--text-secondary); margin: 14px 0 6px; }
-.modal input, .modal select { width: 100%; padding: 12px 14px; border-radius: 10px; background: var(--bg-input); color: var(--text-primary); border: 1px solid var(--hairline); font-size: var(--field-text); font-weight: 400; }
-.modal input:focus, .modal select:focus { border-color: var(--accent); outline: none; }
+.modal input { width: 100%; padding: 12px 14px; border-radius: 10px; background: var(--bg-input); color: var(--text-primary); border: 1px solid var(--hairline); font-size: var(--field-text); font-weight: 400; }
+.modal input:focus { border-color: var(--accent); outline: none; }
 .modal-actions { display: flex; gap: 12px; margin-top: 24px; justify-content: flex-end; }
 
 /* ── THE MODAL SHELL: header · body · footer ─────────────────────────────
@@ -139,7 +138,7 @@
    reading like the same duplicated control — see SettingsModal's note. The
    label is the fix; changing one glyph was tried first and was not enough. */
 .settings-header-control { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
-.settings-inline-label { font-size: var(--text-2xs); color: var(--text-muted); white-space: nowrap; }
+.settings-inline-label { font-size: var(--text-2xs); color: var(--text-secondary); white-space: nowrap; }
 /* Two sliders (or coordinate fields) side by side; stacks on narrow screens. */
 .slider-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 20px; align-items: start; }
 .slider-pair > div { min-width: 0; }
@@ -158,7 +157,6 @@
   display: block; color: var(--text-secondary);
   font-size: var(--field-label-size); margin: 14px 0 var(--field-label-gap);
 }
-.modal-body label.toggle { display: flex; align-items: center; gap: 12px; margin-top: 12px; cursor: pointer; font-size: var(--text-md); color: var(--text-primary); }
 /* No separator above this footer, same reasoning as .modal-footer (device
    panels) — the same visual rule applied once here since this ONE class
    already backs every settings-style modal (Settings, Advanced Settings,
@@ -508,73 +506,10 @@
 .test-result.ok { background: color-mix(in srgb, var(--status-on) 18%, transparent); color: var(--status-on); }
 .test-result.fail { background: color-mix(in srgb, var(--status-danger) 18%, transparent); color: var(--status-danger); }
 
-/* --- Themed toggle rows (used in Settings) --- */
-label.toggle {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-top: 12px;
-  cursor: pointer;
-  font-size: var(--text-md);
-  color: var(--text-primary);
-  /* ⚠️ THE ROW IS THE TARGET, AND IT WAS 22px TALL — half of --touch-min.
-     The checkbox is 22x22 and this row had no height of its own, so the whole
-     tappable strip was 22px on a wall-mounted tablet operated by finger.
-     Nothing here LOOKED wrong: the label spans the full width, so it reads as a
-     comfortable target horizontally and only measuring finds it.
-
-     ⚠️ FIXED ON THE SHARED ROW, NOT PER SCREEN — every `label.toggle` in the
-     app is this one rule, so it reaches all of them. `align-items: center` was
-     already here, so the contents stay centred and only the row grows.
-
-     Expressed as PADDING, not min-height: same 44px target (22px box +
-     2 x 11px), but the leftover is a named value a container can subtract
-     rather than a height nobody can. */
-  padding-block: var(--toggle-pad);
-}
-label.toggle input[type="checkbox"] {
-  appearance: none;
-  -webkit-appearance: none;
-  flex: 0 0 auto;
-  box-sizing: border-box;
-  /* Neutralise the asymmetric text-input padding (.modal input { padding:12px 14px })
-     that this checkbox would otherwise inherit and which makes mobile browsers grow
-     the box to fit the padding — rendering it wider than tall (not square). */
-  margin: 0;
-  padding: 0;
-  width: 22px;
-  height: 22px;
-  min-width: 22px;
-  aspect-ratio: 1 / 1;
-  border-radius: 6px;
-  background: var(--bg-input);
-  border: 1.5px solid var(--hairline-strong);
-  position: relative;
-  cursor: pointer;
-  transition: background 0.15s, border-color 0.15s;
-}
-label.toggle input[type="checkbox"]:checked {
-  background: var(--accent);
-  border-color: var(--accent);
-}
-label.toggle input[type="checkbox"]:checked::after {
-  content: "";
-  position: absolute;
-  left: 5px;
-  top: 2px;
-  width: 8px;
-  height: 13px;
-  border: 2.5px solid var(--text-on-accent);
-  border-top: none;
-  border-left: none;
-  transform: rotate(42deg);
-}
-label.toggle span { user-select: none; line-height: 1.4; }
-
 /* --- A device's card in Devices (EntityMapRow, the Cockpit's RecordCard): its decided first line, then its fields when
    opened, each a name at the left and its control at the right (.card-field). The controls' own look, inside the card. */
 .device-card { display: flex; flex-direction: column; gap: 2px; min-width: 0; font-size: var(--text-base); }
-.device-card input:not([type="checkbox"]), .device-card select {
+.device-card input:not([type="checkbox"]) {
   min-width: 0; padding: 8px; border-radius: 8px;
   background: var(--bg-input); color: var(--text-primary); border: none;
 }
@@ -793,7 +728,7 @@ label.toggle span { user-select: none; line-height: 1.4; }
 .messages-section-toggle { flex-wrap: wrap; row-gap: 0; }
 .fold-toggle-words { white-space: nowrap; }
 /* what a folded section holds, after its title, in the body's case */
-.section-summary { margin-left: 8px; font-size: var(--text-xs); font-weight: 500; text-transform: none; letter-spacing: 0; color: var(--text-muted); }
+.section-summary { margin-left: 8px; font-size: var(--text-xs); font-weight: 500; text-transform: none; letter-spacing: 0; color: var(--text-secondary); }
 .fold-body { margin-top: 8px; }
 /* A section's counts that each show their own list (FoldedList SectionViewButtons: Devices, Grouped devices): the one
    segmented control, compact (.segmented-compact), the list shown filled; in the body's case, not the title's */

@@ -100,7 +100,7 @@ export default function CockpitModal({
   const updatesAvailable = updates.length;
 
   return (
-    <Window kind="content" label="Villa Cockpit" onClose={onClose} className="settings-modal cockpit-modal">
+    <Window kind="content" label="Cockpit" onClose={onClose} className="settings-modal cockpit-modal">
       <div className="modal-header">
         <h2>Cockpit</h2>
         {/* Updates Home Assistant has waiting (firmware, add-ons — this one included): in the header, drawn like

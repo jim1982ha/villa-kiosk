@@ -12,8 +12,9 @@
 
 import { useRef, useState } from "react";
 import { Camera, X } from "lucide-react";
-import { evidenceUrl, uploadEvidence } from "@/fm/fmApi";
+import { evidenceUrl } from "@/fm/fmApi";
 import PhotoLightbox from "./PhotoLightbox";
+import { useEvidenceUpload } from "./useEvidenceUpload";
 
 export default function EvidenceRow({
   photoIds, onChange, disabled,
@@ -26,8 +27,7 @@ export default function EvidenceRow({
   disabled?: boolean;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { busy, error, add } = useEvidenceUpload((ids) => onChange?.([...photoIds, ...ids]));
   // Which photo the full-size viewer is showing, or null when closed. Lives
   // here rather than in each caller so EVERY surface that shows evidence —
   // the capture form, a saved fault, a spend entry — gets a working viewer
@@ -35,19 +35,7 @@ export default function EvidenceRow({
   const [viewing, setViewing] = useState<number | null>(null);
 
   const pick = async (files: FileList | null) => {
-    if (!files?.length) return;
-    setBusy(true);
-    setError(null);
-    const added: string[] = [];
-    for (const file of Array.from(files)) {
-      try {
-        added.push(await uploadEvidence(file));
-      } catch (e) {
-        setError(e instanceof Error ? e.message : "Couldn't add that photo.");
-      }
-    }
-    if (added.length) onChange?.([...photoIds, ...added]);
-    setBusy(false);
+    await add(files);
     if (inputRef.current) inputRef.current.value = "";
   };
 

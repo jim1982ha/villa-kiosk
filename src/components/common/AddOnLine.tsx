@@ -5,12 +5,13 @@
 // messages" and "Full-screen announcements", each search box under its list became an icon on the line of the list's
 // title). Escape, or leaving it with nothing typed, closes it back to the icon; a pick closes it too (`done`).
 //
-// ⚠️ ESCAPE IS THE BOX'S, NOT THE WINDOW'S: Settings is a dialog whose own Escape closes it (useModalA11y, a listener
-// on the dialog); a native listener here, below it, takes an Escape pressed in the open box first.
+// ⚠️ ESCAPE AND BACK ARE THE BOX'S, NOT THE WINDOW'S: Settings is a dialog whose own Escape cancels it; the open box is
+// on the list of what is open (useOutsideClose), above the window, so it closes first (its own listener, below the
+// dialog's, came too late: UI scan, 2026-11-10).
 // ⚠️ LEFT IS A TAP OUTSIDE OR THE FOCUS MOVED AWAY, NEVER A BLUR ALONE: Safari does not focus a tapped button, so a
 // tap on one of the dropdown's rows blurred the box with nowhere to go, and closing then lost the pick.
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { Plus } from "lucide-react";
 import { useOutsideClose } from "@/hooks/useOutsideClose";
 import Tip from "./Tip";
@@ -30,19 +31,8 @@ export default function AddOnLine({ title, label, words, children }: {
   const button = useRef<HTMLButtonElement>(null);
   const close = () => { setOpen(false); requestAnimationFrame(() => button.current?.focus()); };
   const typed = () => !!field.current?.querySelector("input")?.value;
-  useEffect(() => {
-    const node = field.current;
-    if (!open || !node) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      e.stopPropagation();
-      close();
-    };
-    node.addEventListener("keydown", onKey);
-    return () => node.removeEventListener("keydown", onKey);
-  }, [open]);
-  // a tap outside with nothing typed (the one outside-tap hook; its Escape never comes: the listener above takes it)
-  useOutsideClose([field], open, () => { if (!typed()) setOpen(false); });
+  // a tap outside with nothing typed; Escape and Back close it whatever is typed (the one popover hook)
+  useOutsideClose([field], open, () => { if (!typed()) setOpen(false); }, close);
   return (
     <div className="add-line">
       <span className="add-line-title">{title}</span>

@@ -7,7 +7,6 @@
 // device something else. It SHOWS the name every screen shows (labelOf), and its search finds BOTH names, the room and
 // the id (deviceRecord.deviceSearchTexts, every device search's), so renaming a device never makes it unfindable.
 
-import IdText from "@/components/common/IdText";
 import { useState } from "react";
 import { X } from "lucide-react";
 import SearchPicker, { type SearchRow } from "@/components/common/SearchPicker";
@@ -28,8 +27,6 @@ interface Props {
   placeholder?: string;
   /** Allow choosing an entity_id that doesn't exist in HA yet (free text). */
   allowCustom?: boolean;
-  /** Hide the "Bound to X" label shown when a value is selected and closed. */
-  hideCurrentLabel?: boolean;
   /** Renders a small "×" in the search box once a value is set, calling this
    *  to unset it. Omitted entirely for pickers where clearing wouldn't make
    *  sense (a mesh's own primary binding already has its own "Unbind"
@@ -48,7 +45,7 @@ interface Props {
 
 
 export default function EntityPicker({
-  value, onChange, domains, placeholder, allowCustom, hideCurrentLabel, onClear, compact, startOpen,
+  value, onChange, domains, placeholder, allowCustom, onClear, compact, startOpen,
 }: Props) {
   const { entities } = useHA();
   const { entityMap } = useConfig().config;
@@ -70,38 +67,30 @@ export default function EntityPicker({
   const selectedLabel = value && !open ? (selected ? nameOf(value) : value) : undefined;
 
   return (
-    <>
-      <SearchPicker
-        onOpenChange={setOpen}
-        rows={rows}
-        onPick={onChange}
-        compact={compact}
-        startOpen={startOpen}
-        placeholder={selectedLabel ?? placeholder ?? "Search entities…"}
-        before={(query) => (allowCustom && ENTITY_ID_RE.test(query.trim()) && !entities[query.trim()]
-          ? { key: query.trim(), label: `Use "${query.trim()}"`, sub: "entity not there yet, will activate when it appears", strong: true }
-          : null)}
-        empty={Object.keys(entities).length === 0 && !allowCustom ? "Entities show once connected." : undefined}
-        // Only when there's actually something TO clear and the caller wants that offered (the shell hides it while
-        // the list is open, where it would just sit awkwardly next to an in-progress search).
-        trailing={onClear && value && (
-          <button
-            type="button"
-            className="icon-btn entity-picker-clear"
-            onClick={(e) => { e.stopPropagation(); onClear(); }}
-            title={`Clear (was ${value})`}
-            aria-label={`Clear selection (was ${value})`}
-          >
-            <X size={16} />
-          </button>
-        )}
-      />
-
-      {!hideCurrentLabel && value && !open && (
-        <div className="muted body-text" style={{ marginTop: 6 }}>
-          Bound to <strong><IdText id={value} /></strong>
-        </div>
+    <SearchPicker
+      onOpenChange={setOpen}
+      rows={rows}
+      onPick={onChange}
+      compact={compact}
+      startOpen={startOpen}
+      placeholder={selectedLabel ?? placeholder ?? "Search entities…"}
+      before={(query) => (allowCustom && ENTITY_ID_RE.test(query.trim()) && !entities[query.trim()]
+        ? { key: query.trim(), label: `Use "${query.trim()}"`, sub: "entity not there yet, will activate when it appears", strong: true }
+        : null)}
+      empty={Object.keys(entities).length === 0 && !allowCustom ? "Entities show once connected." : undefined}
+      // Only when there's actually something TO clear and the caller wants that offered (the shell hides it while
+      // the list is open, where it would just sit awkwardly next to an in-progress search).
+      trailing={onClear && value && (
+        <button
+          type="button"
+          className="icon-btn entity-picker-clear"
+          onClick={(e) => { e.stopPropagation(); onClear(); }}
+          title={`Clear (was ${value})`}
+          aria-label={`Clear selection (was ${value})`}
+        >
+          <X size={16} />
+        </button>
       )}
-    </>
+    />
   );
 }

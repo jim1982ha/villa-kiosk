@@ -7,6 +7,7 @@
 
 import type { ReactNode } from "react";
 import { DUE_WORDS, shortDate, workedBy, type ScheduleStatus } from "@/fm/fmEngine";
+import { everyWords } from "@/fm/scheduleDraft";
 import { momentText } from "@/utils/dateText";
 import { pillClass, toneClass, type Tone } from "@/fm/tone";
 import AgentMark from "./AgentMark";
@@ -16,6 +17,9 @@ import RecordCard from "./RecordCard";
 export function taskState(st: Pick<ScheduleStatus, "schedule" | "state">): { word: string; tone: Tone } {
   return st.schedule.enabled ? DUE_WORDS[st.state] : { word: "Paused", tone: "warn" };
 }
+
+/** What a task's bin does, said on both tabs that draw it. */
+export const REMOVE_TASK_TIP = "Remove this task. Completions already logged against it are kept.";
 
 export default function TaskCard({ status: st, room, actions }: {
   status: ScheduleStatus; room?: string; actions: ReactNode;
@@ -30,7 +34,7 @@ export default function TaskCard({ status: st, room, actions }: {
       who={st.last ? `Last done by ${workedBy(st.last)}, on ${momentText(st.last.at)}` : null}
       room={room}
       pills={<>
-        <span>every {st.schedule.everyDays} days</span>
+        <span>{everyWords(st.schedule.everyDays)}</span>
         {st.schedule.clause && <span className="fm-clause">Cl. {st.schedule.clause}</span>}
         <AgentMark record={st.schedule} />
       </>}

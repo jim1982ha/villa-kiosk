@@ -224,7 +224,6 @@ export class SceneManager {
   /** Watches <html data-theme> — see handleThemeChange for why the attribute
    *  is the signal rather than config.theme. */
   private themeObserver: MutationObserver | null = null;
-  private ready = false;
   /** The scene's phases — see scenePhases.ts and onScene. */
   private readonly phases = new ScenePhases();
   /** "Draw a frame now?" — see frameScheduler.ts. Every module that asks for
@@ -2153,7 +2152,7 @@ export class SceneManager {
         if (dir) cameraDirections.set(e.entityId, dir);
       }
     }
-    // The direction MATHS above is microseconds; `setCameraDirections` is what
+    // The direction MATHS above is microseconds; building the beams is what
     // costs, because it rebuilds every beam and each beam clips itself with 9
     // raycasts against the fused structure (measured at 1000-1051ms for this
     // villa's cameras). DEFERRED for the same reason as the stair conform: a
@@ -2501,12 +2500,7 @@ export class SceneManager {
   }
 
   private markReady() {
-    this.ready = true;
     this.phases.shown();
-  }
-
-  isReady(): boolean {
-    return this.ready;
   }
 
 

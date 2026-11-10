@@ -161,15 +161,6 @@ export class BulbSet {
     this.pools = new LightPoolSet(scene, probe, () => this.poolReadings(), log);
   }
 
-  /** How many fixtures have a light. */
-  get size(): number { return this.lights.size; }
-
-  /** Whether a mesh is a bulb. */
-  isBulb(meshId: number): boolean { return this.lights.has(meshId); }
-
-  /** A bulb's PointLight. */
-  lightOf(meshId: number): PointLight | undefined { return this.lights.get(meshId); }
-
   /** Whether a lit entity casts a cube shadow map (lightingMode.lightShadows:
    *  only where the walls' shadows are not already in a bake — they cost). */
   setCastShadows(on: boolean): void {
@@ -178,9 +169,6 @@ export class BulbSet {
     if (!on) this.disposeShadows();
     else this.resync();
   }
-
-  /** How many shadow maps are live. */
-  get shadowCount(): number { return this.shadows.size; }
 
   /** A fixture mesh found on the load path: its PointLight (off until a state
    *  turns it on) and, on a baked villa, its floor pools. */

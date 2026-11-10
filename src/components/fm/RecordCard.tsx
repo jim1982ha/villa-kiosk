@@ -184,8 +184,8 @@ export function CheckPill({ pill, tip }: { pill: string; tip: string }) {
 
 /** ⚠️ ONE PILL FOR WHAT A CARD SAYS OF ITSELF (architecture review round 13, 2026-11-01): the Spend tab's device pill's
  *  look; on a card's quiet line it is quiet text (07-facility.css). */
-export function Pill({ text, className = "" }: { text: string; className?: string }) {
-  return <span className={`fm-entity-chip fm-chip-static${className ? ` ${className}` : ""}`}>{text}</span>;
+export function Pill({ text }: { text: string }) {
+  return <span className="fm-entity-chip fm-chip-static">{text}</span>;
 }
 
 /** The device a ticket names: its name, a link that opens its window; a device no longer known, its name alone. */

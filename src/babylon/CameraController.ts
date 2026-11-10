@@ -1079,23 +1079,8 @@ export class CameraController {
     });
   }
 
-  /** Nudge the camera up/down a floor (used by FloorManager). */
-  setElevation(y: number): void {
-    this.camera.position.y = y;
-    this.cb.onActivity();
-  }
-
-  isAnimating(): boolean {
-    return this.animating;
-  }
-
   getPosition(): Vector3 {
     return this.camera.position;
-  }
-
-  /** Current standing (eye) height above the floor. */
-  getEyeHeight(): number {
-    return this.eyeHeight;
   }
 
   /** World Y of the camera's FEET (floor it's standing on) — eye minus height.

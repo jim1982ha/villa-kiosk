@@ -1,3 +1,54 @@
+## 2.496.763
+
+What you will see:
+- In Settings and Advanced Settings, with a search list, an (i) or an "Add" box open, Escape or the phone's Back
+  closes only that box. It closed the window too, and in Settings that is Cancel: every change made on every tab
+  was undone by a key pressed to close a list.
+- After closing such a box, the next Back is no longer ignored (it took two presses to close the window).
+- A camera that cannot connect shows "Try again" under "Camera stream unavailable.": the only way out was to close
+  the window and open it again.
+- On a phone, a thumb that lands on a chart still scrolls the window (Weather, Energy, a device's history): up and
+  down scrolls, sideways reads the chart.
+- "Upload Model", on the screen shown when the villa's model is missing, opens Advanced Settings, where the upload
+  button is (it opened Settings on General, which has none).
+- The Energy window's notes about a device with no upstream device or no meter say where to set it: in the villa's
+  system, in its energy settings.
+
+## 2.496.762
+
+What you will see:
+- Cockpit › Spend: the month's entries are pages of ten, newest first, with the count and arrows under them; the
+  saved documents under "Monthly document" are pages of ten too.
+- A Cockpit form's Save greys and says "Saving…" while the record goes, on every form (a ticket, a task, a
+  spend entry): pressing twice can no longer save it twice.
+- "Report a problem" and a ticket's stage window have Cancel and the action grouped at the bottom right, like
+  Settings and every other window.
+- A guest adding several photos to a report keeps the ones that went through when one fails, and reads "Couldn't
+  add that photo." for the one that did not; Send waits while a photo is going.
+- With a keyboard: Enter or Space on a Cockpit card opens it (holding the key still asks for the erase code);
+  "Add photo" in a guest's report can be reached and pressed.
+- For a screen reader: the Cockpit and Advanced Settings windows are announced by the title they show, the camera
+  window's Close is named, the "How often" choices say which one is picked, the passcode screen's line is read once.
+- Nothing else changes on screen: the photo upload, the bin button and a form's "saving" are each written once.
+
+## 2.496.761
+
+What you will see:
+- The VESTA UI no longer calls itself "the kiosk" or "the add-on". The first screen asks "Who's using VESTA?"; a
+  save that did not go through says "the server" ("Couldn't save to the server, the change is only on this
+  device."); the Cockpit's table of how a problem becomes a fault says "raised in the VESTA UI".
+- Cockpit › Spend: the month is spelled out ("November 2026") in the Month list and in "No spend recorded for…".
+- Cockpit › Schedule: a task's card says how often in the words you picked ("Monthly", "Every 3 months"), no longer
+  "every 30 days"; the monthly document says the same.
+- Durations are written one way everywhere: a wrong passcode says "locked for 5min", a chart's title "5min avg",
+  the rain chart "No rain in the last 7d".
+- The first-time tips name the right buttons: hold a floor button for its rooms; on a phone the "?" is in the menu,
+  beside Label size.
+- A device that is no longer in the villa's system says "it was removed from the villa's system, or renamed".
+- Settings: the small "Interface" label and section summaries are the same grey as every other quiet text; a
+  guest's "Thank you, that's been reported" tick is the status table's green.
+- Nothing else changes on screen: about 500 lines no screen used any more were removed.
+
 ## 2.496.760
 
 What you will see:

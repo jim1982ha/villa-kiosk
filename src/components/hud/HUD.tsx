@@ -123,7 +123,6 @@ function useClock(): string {
  *  menu are both this. */
 function useHudMenu() {
   const [open, setOpen] = useState(false);
-  useBackToClose(() => setOpen(false), open);
   const ref = useRef<HTMLDivElement | null>(null);
   useOutsideClose([ref], open, () => setOpen(false));
   return { open, setOpen, ref };
@@ -455,7 +454,7 @@ export default function HUD({
                 has-hold-action dot still have somewhere to land. */}
             {/* size={null}: the rail width (--hud-rail-w) sizes it in CSS,
                 so the tile and the floor block under it are one number. */}
-            <VestaAppIcon size={null} />
+            <VestaAppIcon />
           </button>
           <span id="home-btn-hint" className="sr-only">Hold Space (or right-click) to save the current view as the default</span>
           {/* The text clips here, not on .hud-brand: the app icon beside it
