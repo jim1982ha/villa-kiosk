@@ -366,3 +366,16 @@ def test_an_older_files_people_and_languages_are_dropped_by_the_pages_save(ui):
     assert status == 200
     raw = yaml.safe_load(open(ui.policy_path))
     assert not {"languages", "people", "chats"} & set(raw)
+
+
+def test_the_page_says_a_moment_in_the_villas_time_as_the_messages_write_it(ui):
+    # owner's UI scan, 2026-11-10: the page wrote the stored (UTC) moments in the browser's own zone and country
+    # format, so a save made at 06:57 in the villa read "11/9/26, 11:57 PM" on a phone elsewhere
+    import dataclasses
+    from vesta_agent.history import History
+    s = dataclasses.replace(ui, timezone="Asia/Bangkok")
+    History(s.history_path).record("Rules", "A rule switched on", {"kind": "policy"}, None, None, at="2026-11-09T23:57:53.596569+00:00")
+
+    async def fn(c):
+        return await (await c.get("/api/history")).json()
+    assert [c["at"] for c in call(s, fn)["changes"]] == ["10/11/2026 06:57"]

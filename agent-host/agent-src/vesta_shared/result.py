@@ -182,7 +182,7 @@ def faults_changed() -> dict:
 def reopened(task_id: int, title: str, note: str = "") -> dict:
     title_max = problem_title_chars()
     note_max = limit("kiosk.update_note_chars", 500, unit="characters", group="text", lo=100, hi=5000,
-                     says="The longest note added to a fault's update in the VESTA Kiosk.",
+                     says="The longest note added to a fault's update in the VESTA UI.",
                      reached="The rest of the note is cut, with no mark.", told="")
     return {"action": "ticket.reopen", "task_id": int(task_id), "title": title[:title_max], "note": note[:note_max]}
 

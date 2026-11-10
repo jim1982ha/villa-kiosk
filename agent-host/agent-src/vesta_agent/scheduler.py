@@ -42,7 +42,7 @@ def every() -> timedelta:
     return timedelta(minutes=limit("jobs.every_minutes", 5, unit="minutes", group="run", lo=1, hi=60,
                                    says="How often the skills' frequent checks run: the alert reminders, the open "
                                         "faults read again, which devices are offline.",
-                                   reached="A longer time: those checks and the Kiosk's Next check come less often.",
+                                   reached="A longer time: those checks and the VESTA UI's Next check come less often.",
                                    told=""))
 
 

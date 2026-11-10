@@ -1,5 +1,5 @@
 // VESTA Agent page — the Costs tab.
-import { alertButton, api, card, cardWith, dropdown, figures, fill, h, infoButton, loading, measured, moreButton, NEWEST_FIRST, paged, place, plural, svg, tabbedCard, $view, when, where } from "./core.js";
+import { alertButton, api, card, cardWith, dropdown, figures, fill, h, infoButton, loading, measured, moreButton, NEWEST_FIRST, paged, place, placed, plural, svg, tabbedCard, $view, where } from "./core.js";
 
 // ---------------------------------------------------------------- costs
 export const usd = (v) => "US$ " + (v || 0).toFixed((v || 0) > 0 && v < 0.01 ? 4 : 2);
@@ -42,17 +42,21 @@ export function runMore(r) {
 
 // ⚠️ EVERYTHING ON THIS TAB FOLLOWS THE PERIOD CHOSEN, 7 DAYS UNLESS ANOTHER IS (owner, 2026-10-06): the figures,
 // the chart, by job, by model, every run and the tools.
+const PERIODS = [[7, "Last 7 days"], [30, "Last 30 days"], [90, "Last 90 days"]];
+
 export async function costs(days = 7) {
+  days = PERIODS.some(([d]) => d === Number(days)) ? Number(days) : 7;      // a period the tab has (the address may say any)
   loading();
+  placed(...(days === 7 ? [] : [String(days)]));
   const c = await api("GET", `api/costs?days=${days}`);
   PROFILES = c.profiles || {};
   if (c.none) return fill($view, card("Costs", "The agent has not recorded anything yet (it has not run in agent mode)."));
-  const period = dropdown([[7, "Last 7 days"], [30, "Last 30 days"], [90, "Last 90 days"]], days, (v) => costs(Number(v)), "Period");
+  const period = dropdown(PERIODS, days, (v) => costs(Number(v)), "Period");
   // the figures as the agent adds them up (status.costs: period, runs_count, per_run, busiest, activity), never here
   const busiest = c.busiest || { day: null, cost: 0 };
   const kpis = figures([[`Last ${days} days`, usd(c.period)], ["Runs", String(c.runs_count)],
     ["Per run", usd(c.per_run || 0)],
-    [busiest.day ? `Busiest day (${new Date(busiest.day + "T12:00:00").toLocaleDateString([], { day: "numeric", month: "short" })})` : "Busiest day", usd(busiest.cost)],
+    [busiest.day ? `Busiest day (${busiest.said})` : "Busiest day", usd(busiest.cost)],
     // then what the agent did in the same period (owner, 2026-10-22: moved here from Overview's fixed 24 hours),
     // counted by the agent (status.figures, its AI cost left out: the first figure says it), never here
     ...(c.activity || [])]);
@@ -67,7 +71,8 @@ export async function costs(days = 7) {
   const chart = h("div");
   const drawChart = () => {
     const W = Math.max(320, chart.clientWidth || Math.round(($view.clientWidth || 684) - 44)), H = 150, L = 52, T = 8, n = c.by_day.length;
-    // the Y axis is the server's (status.costs → vesta_shared.axis, the reports' own rule): this only draws it
+    // the Y axis is the server's (status.costs → vesta_shared.axis, the reports' own rule), and each day's words
+    // (server.costs: `label` under its bar, `said` on hover): this only draws them
     const max = c.axis.top, ticks = c.axis.ticks, slot = (W - L) / n;
     const y = (v) => T + H - (v / max) * H;
     const every = n <= 7 ? 1 : Math.ceil(n / 8);
@@ -77,12 +82,12 @@ export async function costs(days = 7) {
       ...c.by_day.map((d, i) => {
         const bh = d.cost > 0 ? Math.max(1.5, (d.cost / max) * H) : 0;
         return svg("rect", { x: (L + i * slot + slot * 0.18).toFixed(1), y: (T + H - bh).toFixed(1), width: (slot * 0.64).toFixed(1),
-                             height: bh.toFixed(1), rx: 2, class: "bar" }, svg("title", {}, `${d.day}: ${usd(d.cost)}`));
+                             height: bh.toFixed(1), rx: 2, class: "bar" }, svg("title", {}, `${d.said}: ${usd(d.cost)}`));
       }),
       // a date every `every` days, and the last day too unless it would sit on top of the one before
       ...c.by_day.map((d, i) => i % every === 0 || (i === n - 1 && (n - 1) % every >= every / 2)
         ? svg("text", { x: (L + i * slot + slot / 2).toFixed(1), y: T + H + 16, class: "axis", "text-anchor": "middle" },
-              n <= 7 ? new Date(d.day + "T12:00:00").toLocaleDateString([], { weekday: "short", day: "numeric" }) : d.day.slice(5).replace("-", "/"))
+              d.label)
         : null).filter(Boolean));
   };
   fill(chart, drawChart());
@@ -91,7 +96,7 @@ export async function costs(days = 7) {
     { v: "Cost", cls: "num" }, { v: "Per run", cls: "num" }], rows.map((g) => [g.name.replace(/^claude-/, ""), { v: g.runs, cls: "num" },
     { v: g.recorded ? ktok(g.tokens_in) : "—", cls: "num" }, { v: g.recorded ? ktok(g.tokens_out) : "—", cls: "num" }, { v: usd(g.cost), cls: "num" }, { v: usd(g.cost / g.runs), cls: "num" }]));
   const runRows = c.runs.map((r) => ({ more: (r.steps || []).length || r.asked ? runMore(r) : null, cells: [
-    { v: when(r.at), cls: "nowrap" },
+    { v: r.at, cls: "nowrap" },
     runWhat(r),
     r.without_ai ? "Without the AI" : r.no_result ? "—" : brain(r.profile, r.model),
     usedSkills(r.skills),

@@ -22,6 +22,7 @@ from ruamel.yaml.comments import CommentedMap, CommentedSeq
 
 from vesta_shared import limits
 from vesta_shared.daily import VILLA_WIDE
+from vesta_shared.when import PICKS, SHAPES, Spec
 
 from ..places import where
 from ..policy import DEFAULT_BEHAVIOUR, KEEP, KEEP_SAYS, NUMBERS, NUMBERS_SAYS, PROFILES, Policy, reset_words, value_words
@@ -65,7 +66,16 @@ def unit_of(key: str) -> str:
 # policy.yaml's values, the Rules tab's, and the group's (i) says so
 GROUP_TITLES = {**limits.GROUPS, SKILL_GROUP: "Skill settings", POLICY_GROUP: "Agent rules"}
 GROUP_INFO = {POLICY_GROUP: "The agent's own rules (policy.yaml), the same values the Rules tab shows: never one of the villa's automations."}
-TOLD = {"person": "The person is told", "ai": "Only the AI is told", "": "Nobody is told"}
+#: Who is told when a limit is reached: the pill's words and its look (app.css .chip: "" the page's own, "gray" quiet).
+#: ⚠️ NOBODY TOLD IS NOT A PROBLEM (owner's UI scan, 2026-11-10): the page painted that pill red, found by its words
+#: ("Nobody…"); red is for what needs attention, and the look is said here, beside the words.
+TOLD = {"person": ("The person is told", ""), "ai": ("Only the AI is told", ""), "": ("Nobody is told", "gray")}
+
+
+def told(key: str) -> dict:
+    """A row's "Who is told": {told, told_chip}; a `key` this table does not hold is shown as written."""
+    words, chip = TOLD.get(key, (key, ""))
+    return {"told": words, "told_chip": chip}
 
 
 _NAMED = re.compile(r"`([A-Za-z][\w.\-]*)`")
@@ -223,7 +233,9 @@ class LimitsTab:
                         "section": key.split(".")[0], "name": key, "label": d.says or key, "value": value,
                         "default": d.default,
                         "kind": "list" if isinstance(d.default, list) else "time" if limits.is_time(d.default) else "number",
-                        "unit": d.unit, "lo": d.lo, "hi": d.hi, "reached": d.reached, "told": TOLD.get(d.told, d.told),
+                        # a time of day is picked (limits.js timePicker): its parts, read once (when.Spec)
+                        **({"at": Spec.parse(value).picked()} if limits.is_time(d.default) else {}),
+                        "unit": d.unit, "lo": d.lo, "hi": d.hi, "reached": d.reached, **told(d.told),
                         "also": "Only here: this limit is written in the agent's code, and set on this tab.",
                         "where": [s for s in d.sites]})
         from vesta_shared.params import kept_params
@@ -386,15 +398,21 @@ class LimitsTab:
             # own description, else its script's, up to its first aside; its name only when it has neither
             script = str(job.get("run") or "").split(" ")[0]
             scripts = doc.get("scripts") if isinstance(doc.get("scripts"), dict) else {}
-            told = job.get("description") or (scripts.get(script) or {}).get("description") or ""
-            what = re.split(r" \(|, ", str(told).strip(), maxsplit=1)[0] or \
+            says = job.get("description") or (scripts.get(script) or {}).get("description") or ""
+            what = re.split(r" \(|, ", str(says).strip(), maxsplit=1)[0] or \
                 f"the {job.get('name') or script or f'job {i + 1}'} job"
             rows.append({"alias": job.get("name"),
                          "id": {"src": "skill", "skill": skill, "file": "skill.yaml", "path": ["schedule", i, "when"]},
                          "group": SKILL_GROUP, "section": skill, "name": f"skill.yaml › schedule.{i}.when",
-                         "label": f"When {what} runs, in villa time: HH:MM every day, Mon HH:MM each week, D HH:MM "
-                                  "each month.",
+                         "label": f"When {what} runs.",
                          "value": job["when"], "default": job["when"], "kind": "time", "choices": None, "unit": "villa time",
+                         # ⚠️ PICKED, NEVER TYPED (owner's UI scan, 2026-11-10: the row was a text box, its three
+                         # shapes explained in its label): how often, which day, the hour and the minute, each from a
+                         # list (limits.js timePicker). `at`: the time's parts, read once (when.Spec); none for a time
+                         # the file writes another way, which stays a text box so nothing written is lost
+                         # (a job the VESTA UI's Next check follows runs every day, skills.py: its hour only)
+                         "at": Spec.parse(job["when"]).picked() if Spec.valid(job["when"]) else None,
+                         "picks": None if job.get("kiosk") is not None else PICKS,
                          "lo": None, "hi": None, "reached": "", "told": "",
                          "also": (f"Also in Skills › {skill} › Files › skill.yaml. Saving it here makes this skill your "
                                   f"own copy: its updates then wait for you in Skills › {skill} › Compare."),
@@ -444,7 +462,7 @@ class LimitsTab:
                           "oldest change it still holds); older periods are read from its long-term figures.",
                  "value": value, "default": value, "kind": "measured", "choices": None, "unit": "", "lo": None,
                  "hi": None, "reached": "Before it, only long-term figures of measured values remain (one an hour); "
-                                        "doors, locks and switches have none.", "told": TOLD["person"],
+                                        "doors, locks and switches have none.", **told("person"),
                  "also": "Set in the villa's own configuration (recorder: purge_keep_days; 10 days when it says "
                          "nothing). The agent measures it and never changes it.",
                  "where": ["the villa's device list, refreshed each night and when the agent starts after an update"]}]
@@ -556,7 +574,6 @@ class LimitsTab:
         if path[-1] == "brain" and value not in PROFILES:
             raise Refused([f"The brain is one of: {', '.join(PROFILES)}."])
         if path[0] == "schedule" and path[-1] == "when":
-            from vesta_shared.when import SHAPES, Spec
             if not (isinstance(value, str) and Spec.valid(value)):
                 raise Refused([f"A time is {SHAPES}."])
             value = value.strip()

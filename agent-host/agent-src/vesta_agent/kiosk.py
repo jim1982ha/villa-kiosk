@@ -67,13 +67,13 @@ def fault_title_chars() -> int:
 
 def fault_note_chars() -> int:
     return limit("kiosk.fault_note_chars", 2000, unit="characters", group="text", lo=200, hi=20000,
-                 says="The longest note a fault keeps in the VESTA Kiosk (what the Facility Manager reads).",
+                 says="The longest note a fault keeps in the VESTA UI (what the Facility Manager reads).",
                  reached="The rest of the note is cut, with no mark.", told="")
 
 
 def update_note_chars() -> int:
     return limit("kiosk.update_note_chars", 500, unit="characters", group="text", lo=100, hi=5000,
-                 says="The longest note added to a fault's update in the VESTA Kiosk.",
+                 says="The longest note added to a fault's update in the VESTA UI.",
                  reached="The rest of the note is cut, with no mark.", told="")
 
 
@@ -85,7 +85,7 @@ def who_chars() -> int:
 
 def kiosk_timeout_s() -> float:
     return limit("kiosk.timeout_s", 30, unit="seconds", group="run", lo=5, hi=600,
-                 says="How long the agent waits for the VESTA Kiosk to answer.",
+                 says="How long the agent waits for the VESTA UI to answer.",
                  reached="That exchange fails: a fault not recorded is said so; the next try comes later.",
                  told="person")
 
@@ -94,22 +94,22 @@ def inbox_timeout_s() -> float:
     Kiosk's own hold (the agreement's conversation.waitSeconds), and a margin."""
     return float(agreement.section("conversation").get("waitSeconds") or 0) + limit(
         "kiosk.inbox_margin_s", 15, unit="seconds", group="run", lo=5, hi=120,
-        says="How much longer than the Kiosk's own hold the agent waits for its answer when collecting the questions "
-             "asked in the VESTA UI.",
-        reached="The read is tried again; a question is never lost (the Kiosk keeps it).", told="")
+        says="How much longer than the VESTA UI's own hold the agent waits for its answer when collecting the "
+             "questions asked in it.",
+        reached="The read is tried again; a question is never lost (the VESTA UI keeps it).", told="")
 
 
 def message_timeout_s() -> float:
     return limit("kiosk.message_timeout_s", 10, unit="seconds", group="run", lo=2, hi=120,
-                 says="How long the agent waits for the VESTA Kiosk to keep a message for the VESTA UI.",
-                 reached="That copy is not kept for the VESTA UI yet; Telegram's message is unaffected, and the copy is "
+                 says="How long the agent waits for the VESTA UI to keep a message it is sent.",
+                 reached="That copy is not kept by the VESTA UI yet; Telegram's message is unaffected, and the copy is "
                          "sent again (kiosk.message_retry_s).", told="")
 
 
 def message_retry_s() -> float:
     return limit("kiosk.message_retry_s", 300, unit="seconds", group="run", lo=30, hi=3600,
-                 says="How often a message the VESTA Kiosk did not keep for the VESTA UI (unreachable, restarting, "
-                      "refused) is sent to it again.",
+                 says="How often a message the VESTA UI did not keep (unreachable, restarting, refused) is sent to "
+                      "it again.",
                  reached="The copy is sent again; the newest copy of each message, never an older one.", told="")
 
 
@@ -644,7 +644,7 @@ class Kiosk:
         try:
             async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=limit(
                     "kiosk.document_timeout_s", 60, unit="seconds", group="run", lo=10, hi=600,
-                    says="How long the agent waits for the VESTA Kiosk to store a fault's page.",
+                    says="How long the agent waits for the VESTA UI to store a fault's page.",
                     reached="The page is not kept with the fault; the fault itself is.", told="")), headers=self.headers) as http:
                 async with http.post(f"{self.url}/agent/v1/fm-document?id={did}", data=html,
                                      headers={"Content-Type": "text/html; charset=utf-8"}) as r:

@@ -1,5 +1,5 @@
 // VESTA Agent page — the Skills tab.
-import { api, ask, dropdown, field, fileBase64, fill, guard, h, infoButton, loading, measured, page, paged, place, plural, popup, problemsBox, reasons, setBar, setting, subTabs, tabbed, tell, tileCard, titleWithInfo, toast, toggleCard, $view, where } from "./core.js";
+import { api, ask, dropdown, field, fileBase64, fill, guard, h, infoButton, loading, measured, page, paged, place, placed, plural, popup, problemsBox, reasons, setBar, setting, subTabs, tabbed, tell, tileCard, titleWithInfo, toast, toggleCard, $view, where } from "./core.js";
 import { openTools } from "./rules.js";
 import { fileEditor } from "./viewer.js";
 
@@ -30,6 +30,8 @@ export function skillSwitch(name, on, select) {
 export async function skills(select = null, at = undefined) {
   loading();
   const { skills: list } = await api("GET", "api/skills");
+  if (select && !list.some((s) => s.name === select)) select = null;      // an address kept from before the skill was deleted
+  placed();
   const side = h("div", { class: "card" },
     titleWithInfo("Skills", "Each skill is a folder of files. A change counts at the agent's next use, no restart. The switch beside a skill turns it on or off for this villa."),
     // each skill: its name and line (opens it), and its On/Off switch beside it (owner, 2026-10-06)
@@ -242,8 +244,9 @@ export async function openSkill(name, pane, info, path = ABOUT) {
   if (isFile && !files.some((x) => x.path === path)) path = files.length ? files[0].path : null;
   const rel = d.release || {};
   const goTo = async (p) => { if (p !== path && await guard()) openSkill(name, pane, info, p); };
-  // this skill and this file, drawn again as they are: where the Limits tab's Back returns (core.goBack)
-  page.here = () => skills(name, path);
+  // this skill and this file, in the address: where a reload and the Limits tab's Back return (core.go's place;
+  // About and Compare: the skill)
+  placed(name, ...(isFile && path ? path.split("/") : []));
   pane.closest(".skills")?.classList.add("has-open");
 
   // ---- the head (a phone only: the list is hidden there) and the state pill, which sits on the tabs' line

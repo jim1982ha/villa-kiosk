@@ -87,10 +87,13 @@ main { max-width: var(--page-width); margin: 0 auto; padding: 16px 20px; }
 .grid > * { min-width: 0; }
 /* A set of figures (core.js figures()): as many to a row as fit, two on a phone (min 120px each:
    two fit a 320px screen's card). min(…, 100%) keeps one from overflowing a very narrow card. */
-.figures { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(120px, 100%), 1fr)); gap: 16px 12px; }
+/* ⚠️ A FIGURE IS NEVER CUT IN TWO (owner's UI scan, 2026-11-10: on a phone "US$ 10.68" broke after "US$", the first
+   thing read on the Costs tab). A column was at least 120px whatever the figure's size; it is now as wide as an amount
+   at that size (5.5 times it: "US$ 100.00"), so a row holds as many figures as fit whole, two on a phone. */
+.figures { --figure: 28px; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(calc(var(--figure) * 5.5), 100%), 1fr)); gap: 16px 12px; }
 .figures > * { min-width: 0; }
-.kpi .n { font-family: var(--font-display); font-size: 28px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
-@media (max-width: 480px) { .kpi .n { font-size: 24px; } }
+.kpi .n { font-family: var(--font-display); font-size: var(--figure); font-variant-numeric: tabular-nums; white-space: nowrap; }
+@media (max-width: 480px) { .figures { --figure: 24px; } }
 .kpi .l { color: var(--text-secondary); font-size: var(--text-sm); }
 
 /* ---- form controls */
@@ -220,7 +223,10 @@ svg.bars .grid { stroke: var(--hairline); stroke-dasharray: 3 3; }
 svg.bars .base { stroke: var(--text-dim); }
 .tbl { overflow-x: auto; }
 /* "(file)" inside the Rules tab: its own click, opening policy.yaml itself */
-.tab-file { color: var(--text-dim); font-weight: 400; padding: 2px 2px; border-radius: 4px; }
+/* ⚠️ THE WHOLE HEIGHT OF THE TAB ANSWERS THE PRESS (owner's UI scan, 2026-11-10: the word alone did, a few millimetres
+   on a phone, and a press a little off opened Rules): its padding reaches the tab's edges and the same margin is
+   taken back, so nothing moves */
+.tab-file { color: var(--text-dim); font-weight: 400; display: inline-block; padding: 12px 14px 12px 6px; margin: -12px -14px -12px -4px; }
 .tab-file:hover { color: var(--text-primary); text-decoration: underline; }
 .tab-file.on { color: var(--accent); text-decoration: underline; }
 /* the theme switch in the header */
@@ -294,6 +300,11 @@ table.data tr.row-more td { padding-top: 0; }
   table.data td::before { content: attr(data-label); color: var(--text-dim); font-size: var(--text-xs); text-transform: uppercase; letter-spacing: .06em; text-align: left; flex: none; }
   table.data td:empty, table.data td[data-label=""]:empty { display: none; }
   table.data td[data-label=""]::before { content: none; }
+  /* ⚠️ A SENTENCE READS FROM THE LEFT, ACROSS THE CARD (owner's UI scan, 2026-11-10: a limit's words were three or four
+     lines pushed to the right edge, their left side ragged): a cell of words (core.paged, cls "words") has no name
+     beside it and takes the whole width; the short values under it keep their name left and their value right */
+  table.data td.words { display: block; text-align: left; }
+  table.data td.words::before { content: none; }
   /* ⚠️ EVERY LINE ITS NAME ON THE LEFT, ITS VALUE ON THE RIGHT (owner, 2026-10-31: Every run paired When with What and
      Tokens with Cost, each name over its value, the first value left, the second right): a value of several lines
      (Every run's What: its label and its chat) keeps to the right edge as it wraps */
@@ -556,6 +567,11 @@ table.limits .limit-value .btn, table.limits .limit-value .dropdown { min-height
 table.limits .limit-value { width: 100%; }
 table.limits .limit-value > .btn { margin-left: auto; }
 @media (max-width: 640px) { .limit-value { flex-wrap: wrap; white-space: normal; } }
+/* a job's time, picked (limits.js timePicker): how often, the day, the time; they wrap as a group, the hour and the
+   minute never apart */
+.when-pick { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; white-space: nowrap; }
+table.limits .when-pick .dropdown { width: auto; }     /* a table's dropdown fills its cell (table.rows td .dropdown) */
+.when-time { display: inline-flex; align-items: center; gap: 4px; }
 .limit-words { display: flex; flex-wrap: wrap; gap: 4px 12px; }
 .limit-word { display: inline-flex; align-items: center; gap: 4px; font-size: var(--text-xs); }
 

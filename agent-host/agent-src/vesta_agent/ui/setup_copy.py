@@ -60,7 +60,7 @@ PART_WORDS = {
 }
 PARTS = tuple(PART_WORDS)
 #: what never leaves a villa: (words, note)
-STAYS = (("Who gets the messages, and each chat's language", "each villa's own, set in its VESTA Kiosk"),
+STAYS = (("Who gets the messages, and each chat's language", "each villa's own, set in its VESTA UI"),
          ("Devices: protected, left alone, the devices each service may act on, the siren", "entity ids are this villa's"),
          ("Keys and tokens", "never in any file the page makes"), ("Records, transcripts, costs", None))
 

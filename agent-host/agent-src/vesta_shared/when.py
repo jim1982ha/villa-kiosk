@@ -23,6 +23,9 @@ DAY_NAMES = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday",
 _SPEC = re.compile(r"^(?:(Mon|Tue|Wed|Thu|Fri|Sat|Sun|[1-9]|[12][0-9]|3[01]) )?([01][0-9]|2[0-3]):([0-5][0-9])$")
 #: what a person reads when a time is refused (the skill check and the settings page say the same)
 SHAPES = "HH:MM (every day), Mon HH:MM (each week) or D HH:MM (each month)"
+#: what the page's pickers offer for a time that may repeat by the week or the month: each weekday as written and as
+#: said, each day of the month as written
+PICKS = {"weekdays": [list(p) for p in zip(WEEKDAYS, DAY_NAMES)], "days": [str(d) for d in range(1, 32)]}
 #: how far a search for the next or last slot looks: a monthly slot is never further than this
 _SEARCH_DAYS = 62
 
@@ -96,6 +99,13 @@ class Spec:
             short = ", or on the last day of a shorter month" if self.day > 28 else ""
             return f"on day {self.day} of each month at {self.time}{short}"
         return f"every day at {self.time}"
+
+    def picked(self) -> dict:
+        """Its parts as the page's pickers hold them (Limits: a job's time is picked, never typed): `every` "day", "week"
+        or "month"; `on` the weekday or the month's day as written ("" every day); `hour` and `minute` as written."""
+        on = WEEKDAYS[self.weekday] if self.weekday is not None else str(self.day) if self.day is not None else ""
+        return {"every": "week" if self.weekday is not None else "month" if self.day is not None else "day", "on": on,
+                "hour": f"{self.hour:02d}", "minute": f"{self.minute:02d}"}
 
     def per_month(self) -> float:
         """How many times it runs in a month (the page's cost of a month of runs)."""

@@ -1348,8 +1348,7 @@ repairs after the result stay for what only they do (a new fault, the story's li
 ## The page's shared pieces, each written once (owner's UI scan, 2026-11-10, 0.12.498)
 
 What a tab's module no longer writes itself (`static/core.js` owns it): a save and its answer (`saveNow`: the toast,
-or the reasons in the row's red box; `saveWith` for a card's Save button), the "Loading…" line (`loading`), a moment
-(`when`: one format, no seconds), a card's search (`searchBox`, class `search-box`), a card with something on its
+or the reasons in the row's red box; `saveWith` for a card's Save button), the "Loading…" line (`loading`), a card's search (`searchBox`, class `search-box`), a card with something on its
 title's line (`cardWith`), a card of tabs (`tabbedCard`), and a fit measured again when the width changes
 (`measured`: Rules' role words, Skills' file line).
 
@@ -1366,3 +1365,17 @@ skill edited on a villa is kept by updates and may still write them.
 0.12.499, the same scan: the pager's words are "‹ Previous / Next ›" unless the caller says the list is newest first
 (`core.NEWEST_FIRST`: Overview's jobs and changes, Costs › Every run); one page size (`PER_PAGE`, ten; its unused
 fifteen is gone). The Costs chart is drawn at its own box's width and again on a width change (`core.measured`).
+
+0.12.500, the same scan's eight leads:
+
+| Job | One owner |
+|---|---|
+| A moment's words | the server (`UI._said` → `vesta_shared.timeutil.said`, the villa's zone, the messages' format); the page prints what it is given and formats no moment (`core.when` is gone) |
+| Where the page is | the address, `#tab/place?section=tab`: written only by `core.address` (at `go`, `placed`, a `tabbed` press), read once at page open by `core.opened`; an unknown or cut address opens Overview. A tab says its own place with `core.placed(...words)` (a skill and its file, Costs' period); `page.here` is gone, Limits' Back is `go(b.tab, b.place)` |
+| The colour of "Who is told" | `limits_tab.TOLD` (words and chip together); the page no longer reads the words to pick a colour |
+| A job's time, picked | `when.PICKS` and `Spec.picked()` say what is offered and what is chosen; `limits.js` `timePicker` draws it and sends back the text the scheduler reads. A job with a `kiosk` key offers its hour only (`picks: None`): `skills.py` refuses anything but a daily time there |
+| A sentence in a table on a phone | the cell class `words` (`paged` cells `{v, cls}`): left, across the card, no label |
+| A figure's size | `--figure` on `.figures` (one value for the letters and for the column's least width, so a figure is never cut) |
+
+Not renamed on purpose: Telegram's messages and the AI's instructions still say "VESTA Kiosk" (`message_format`,
+`kiosk_told`, `villa_recipients`, `tools`, `tickets`, the starter skills); the page's own texts say "VESTA UI".

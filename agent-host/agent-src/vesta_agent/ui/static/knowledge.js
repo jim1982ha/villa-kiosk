@@ -216,7 +216,7 @@ export function linksCard(data, probs) {
 // ⚠️ THE KIOSK'S LIST, SHOWN HERE (owner, 2026-10-21): one list, kept in the VESTA Kiosk; the agent reads it
 // (vesta_shared.asleep) and never edits it, so it is shown, never offered as a field to change
 function asleepCard(rows) {
-  return card(place("asleep"), "Set in the VESTA Kiosk (Advanced Settings › Devices › Asleep between reports). The agent never reports these devices offline and reads their last real state.",
+  return card(place("asleep"), "Set in the VESTA UI (Advanced Settings › Devices › Asleep between reports). The agent never reports these devices offline and reads their last real state.",
     h("div", { class: "chips" }, rows.length
       ? rows.map((r) => h("span", { class: "chip", title: r.id }, r.name))
       : [h("span", { class: "muted" }, "None")]));

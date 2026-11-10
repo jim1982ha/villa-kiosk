@@ -528,9 +528,9 @@ FIELDS: dict[str, tuple[str, bool, str | None]] = {
     "approval_ttl_minutes": ("Approve buttons work for (minutes)", True, None),
     # an older file's chat languages, its People rows, then its one chat per role: who is who and each chat's language
     # are the VESTA Kiosk's (owner, 2026-11-03); read for nothing, dropped by the page's next save (policy_doc.kiosk_moved)
-    "languages": (f"{title('people')}: language (now set in the VESTA Kiosk)", False, None),
-    "people": (f"{title('people')} (the VESTA Kiosk's lists)", False, None),
-    "chats": ("Chats (now the VESTA Kiosk's lists)", False, None),
+    "languages": (f"{title('people')}: language (now set in the VESTA UI)", False, None),
+    "people": (f"{title('people')} (the VESTA UI's lists)", False, None),
+    "chats": ("Chats (now the VESTA UI's lists)", False, None),
     "allowed_services": (title("actions"), True, "actions"),
     "owner_only_entities": ("Only the owner may approve", True, None),
     "excluded_entities": ("Left alone", True, None),

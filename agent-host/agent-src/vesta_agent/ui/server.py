@@ -201,6 +201,22 @@ class UI:
         log.warning("UI: page error: %s (%s)", str(body.get("message") or "")[:300], str(body.get("agent") or "")[:120])
         return web.json_response({"ok": True})
 
+    # ------------------------------------------------------------------ a moment, as the page shows it
+    def _said(self, value, **how):
+        """A stored moment or day in the villa's time, written as every message writes it ("10/11/2026 07:57":
+        timeutil.said, the agreement's format). None stays None.
+
+        ⚠️ SAID HERE, NEVER BY THE PAGE (owner's UI scan, 2026-11-10): the page turned the stored UTC moments into words
+        itself, in the browser's own zone and country format: a phone abroad read "11/10/26, 1:57 AM" for a job whose
+        message said "10/11/2026 07:57". An unknown zone: the moment's own (UTC), as the Costs tab's days."""
+        from zoneinfo import ZoneInfo
+        from vesta_shared.timeutil import said
+        try:
+            zone = ZoneInfo(self.s.timezone)
+        except Exception:  # noqa: BLE001 — an unknown zone: the moment as it was stored
+            zone = None
+        return said(value, zone, **how)
+
     # ------------------------------------------------------------------ overview
     async def overview(self, _request):
         pol = rules_problems(_read(self.s.policy_path).decode("utf-8", "replace"))
@@ -212,6 +228,7 @@ class UI:
                 st = State(self.s.state_path)
                 unreachable = status.unreachable(st, page_policy(self.s.policy_path, self.s.pack_path))
                 report = status.report(st, self.s.store_path, last_day_hours(), label=lambda k: job_label(k, skills))
+                report["scheduled_jobs"] = [{**j, "at": self._said(j["at"])} for j in report["scheduled_jobs"]]
             except Exception as e:  # noqa: BLE001 — the overview shows what it can
                 log.warning("UI: the agent's records could not be read (%s)", type(e).__name__)
         return web.json_response({"policy_problems": pol, "skills": self._skill_rows(), "last_24h": report,
@@ -310,10 +327,24 @@ class UI:
         # an AI job's skill, for its words (skills.job_title); an alert card's translation is the chat replies' own
         # (status.ALERT_TRANSLATION)
         owners = job_owners(self.skills.all())
-        return web.json_response({**status.costs(State(self.s.state_path), days, zone=zone,
-                                                 chat_label=lambda cid: route.label(int(cid)),
-                                                 name_of=pack.name_of if pack else None,
-                                                 skill_of=owners.get),
+        c = status.costs(State(self.s.state_path), days, zone=zone, chat_label=lambda cid: route.label(int(cid)),
+                         name_of=pack.name_of if pack else None, skill_of=owners.get)
+        # every day and moment in the messages' words (_said); under a bar: the weekday and the day for a week ("Mon
+        # 10"), the agreement's day without its year for longer ("10/11": the page wrote month/day there, "11/10")
+        from datetime import date
+        from vesta_shared.timeutil import SHORT_DAY_FORMAT, day_label
+
+        def short(day: str) -> str:
+            return date.fromisoformat(day).strftime(SHORT_DAY_FORMAT)
+
+        def under(day: str) -> str:
+            d = date.fromisoformat(day)
+            return f"{day_label(d, short=True)} {d.day}" if days <= 7 else short(day)
+
+        return web.json_response({**c, "runs": [{**r, "at": self._said(r["at"])} for r in c["runs"]],
+                                  "by_day": [{**d, "label": under(d["day"]), "said": self._said(d["day"], weekday=True)}
+                                             for d in c["by_day"]],
+                                  "busiest": {**c["busiest"], "said": short(c["busiest"]["day"]) if c["busiest"]["day"] else None},
                                   "profiles": profile_labels()})
 
     # ------------------------------------------------------------------ the villa's devices
@@ -598,8 +629,8 @@ class UI:
     def _tools(self) -> dict:
         """Rules › AI tools: Home Assistant's tools as the agent last read them, with this file's
         switches; the agent's own tools; the facility manager's groups."""
-        return {**tool_access.catalog(page_policy(self.s.policy_path, self.s.pack_path), tool_access.read_list(self.s.data_dir), self._usage()),
-                "usage_days": tool_usage_days()}
+        tools = tool_access.catalog(page_policy(self.s.policy_path, self.s.pack_path), tool_access.read_list(self.s.data_dir), self._usage())
+        return {**tools, "read_at": self._said(tools["read_at"]), "usage_days": tool_usage_days()}
 
     async def tools_refresh(self, _request):
         """"Read the list again": the agent asks HA MCP (the page itself never talks to Home Assistant)."""
@@ -759,7 +790,8 @@ class UI:
     # ------------------------------------------------------------------ changes made on these pages
     async def history_list(self, _request):
         # how long the list is kept: the agent rule's value now, linked to its row on the Limits tab
-        return web.json_response({"changes": [{**c, "undoable": undoable(c)} for c in self.history.rows(200)],
+        return web.json_response({"changes": [{**c, "undoable": undoable(c), "at": self._said(c["at"])}
+                                              for c in self.history.rows(200)],
                                   "kept_days": self.limits.policy_setting(["settings", "keep", "records_days"])})
 
     async def history_undo(self, request):

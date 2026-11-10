@@ -1,5 +1,5 @@
 // VESTA Agent page — the Rules tab (policy.yaml): the forms, the file, and AI tools.
-import { api, card, cardWith, dropdown, editTable, field, fill, floating, go, h, infoButton, inOrder, jobsBanner, jump, loading, markDirty, measured, page, pagedBlock, place, plural, problemsBox, reasons, saveWith, setBar, tabbed, table, tableRow, tell, toast, toggleCard, $view, when, where, withInfo } from "./core.js";
+import { api, card, cardWith, dropdown, editTable, field, fill, floating, go, h, infoButton, inOrder, jobsBanner, jump, loading, markDirty, measured, page, pagedBlock, place, plural, problemsBox, reasons, saveWith, setBar, tabbed, table, tableRow, tell, toast, toggleCard, $view, where, withInfo } from "./core.js";
 import { fileEditor } from "./viewer.js";
 
 // ---------------------------------------------------------------- rules (policy.yaml)
@@ -292,7 +292,7 @@ export function toolsCard(f, t, reload) {
   const haInfo = () => {
     const on = new Set(f.ha_read_tools);
     return (t.count ? `${[...on].filter((n) => t.groups.some((g) => g.tools.some((x) => x.name === n))).length} of ${t.count} tools on. ` : "The list is not read yet. ")
-      + (t.read_at ? `From the villa's system${t.server ? " (" + t.server + ")" : ""}, read ${when(t.read_at)}.` : "The agent reads it when it starts.");
+      + (t.read_at ? `From the villa's system${t.server ? " (" + t.server + ")" : ""}, read ${t.read_at}.` : "The agent reads it when it starts.");
   };
   const ha = () => {
     const on = new Set(f.ha_read_tools);

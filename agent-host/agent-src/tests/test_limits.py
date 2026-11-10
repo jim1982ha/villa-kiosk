@@ -214,3 +214,31 @@ def test_a_choice_is_said_in_its_words_and_a_share_stays_within_0_and_1(ui):
     assert "`Saved: ${r.name} = ${said(r, value)}`" in js
 
 
+
+
+def test_a_jobs_time_is_picked_and_what_is_picked_is_what_the_scheduler_reads(ui):
+    # owner's UI scan, 2026-11-10: a job's time was a text box, its three ways to write it explained in the row's
+    # words, a slip refused only after Save. Each row now carries the time's parts and the lists to pick from; a job
+    # the VESTA UI's Next check follows runs every day, so it offers its hour only
+    copy_skill("reports", ui.skills_dir)
+    jobs = [r for r in _rows(ui)["rows"] if r["id"]["src"] == "skill" and r["id"]["path"][0] == "schedule" and r["kind"] == "time"]
+    by = {r["value"]: r for r in jobs}
+    assert by["Mon 08:00"]["at"] == {"every": "week", "on": "Mon", "hour": "08", "minute": "00"}
+    assert by["1 08:00"]["at"] == {"every": "month", "on": "1", "hour": "08", "minute": "00"}
+    weekly = by["Mon 08:00"]
+    assert [d[0] for d in weekly["picks"]["weekdays"]][:2] == ["Mon", "Tue"] and weekly["picks"]["days"][-1] == "31"
+    night = next(r for r in jobs if r["id"]["skill"] == "preventive-maintenance")
+    assert night["at"]["every"] == "day" and night["picks"] is None
+    # what the pickers write for "each week, Friday, 06:30" is saved, and read back as picked
+    assert _put(ui, weekly["id"], "Fri 06:30")[0] == 200
+    again = next(r for r in _rows(ui)["rows"] if r["id"] == weekly["id"])
+    assert again["value"] == "Fri 06:30" and again["at"] == {"every": "week", "on": "Fri", "hour": "06", "minute": "30"}
+
+
+def test_a_limit_that_tells_nobody_is_not_marked_as_needing_attention(ui):
+    # owner's UI scan, 2026-11-10: 8 of the first 10 limits carried a red label and nothing was wrong with any of them.
+    # The colour comes with the words (limits_tab.TOLD): grey for nobody, the usual chip when someone is told
+    rows = [r for r in _rows(ui)["rows"] if r["told"]]
+    chips = {r["told_chip"] for r in rows}
+    assert chips == {"", "gray"}, chips
+    assert {r["told"] for r in rows if r["told_chip"] == "gray"} == {"Nobody is told"}

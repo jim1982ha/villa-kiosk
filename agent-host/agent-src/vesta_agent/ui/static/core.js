@@ -20,8 +20,9 @@ export const page = {
   current: "overview",
   tabs: {},                 // the tab each tabbed section shows, by its id (core.tabbed): kept while the page is open
   focusLimit: null,         // the Limits row a press on a value (core.setting) asked for: read once by the Limits tab
-  here: null,               // how to draw the current place again exactly (a tab sets it when it has more than its tab)
-  back: null,               // where a press on a value came from: {tab, here, y} — the Limits tab's Back (goBack)
+  place: [],                // the tab's own place in it (placed): a skill and its file, Costs' period; go() opens it again
+  shown: new Map(),         // the tabbed sections drawn since the tab was opened, each with its first tab (address)
+  back: null,               // where a press on a value came from: {tab, place, y} — the Limits tab's Back (goBack)
   views: {},                // the tabs, by name: filled by app.js
   fileView: null,           // a file shown formatted or raw (viewer.js): one choice for every file, while the page is open
 };
@@ -214,12 +215,36 @@ export async function saveWith(probs, send, okText) {
 // replaceChildren() prints a null as the text "null": the optional parts are filtered first.
 export function fill(el, ...kids) { el.replaceChildren(...kids.flat().filter((k) => k !== null && k !== undefined && k !== false)); }
 
-// what every tab shows while its answer is on the way
-export const loading = () => fill($view, h("p", { class: "muted" }, "Loading…"));
+// what every tab shows while its answer is on the way (its tabbed sections are drawn again after it: none shown yet)
+export const loading = () => { page.shown.clear(); fill($view, h("p", { class: "muted" }, "Loading…")); };
 
-// ⚠️ ONE WAY TO WRITE A MOMENT (UI scan, 2026-11-10: Overview's "Ran at" and the tools' "read" showed the seconds,
-// Changes and Every run did not): the device's own short date and time
-export const when = (at) => new Date(at).toLocaleString([], { dateStyle: "short", timeStyle: "short" });
+// ⚠️ THE ADDRESS SAYS WHERE YOU ARE (owner's UI scan, 2026-11-10: he checks each update by reloading and looking at one
+// screen, and a reload gave the tab alone: the card back on its first tab, the open skill closed). The address is
+// "#tab/place?section=tab": the tab, its own place in it (placed: a skill and its file, Costs' period) and every
+// tabbed section that is not on its first tab. Written here only, at each move; read once, when the page opens
+// (opened). A search and the page of a list are not in it: they start fresh.
+function address() {
+  const subs = [...page.shown].filter(([id, first]) => page.tabs[id] !== first).map(([id]) => [id, page.tabs[id]]);
+  history.replaceState(null, "", "#" + [page.current, ...page.place].map(encodeURIComponent).join("/")
+    + (subs.length ? "?" + new URLSearchParams(subs) : ""));
+}
+// a tab's own place in it, for the address: the words its view is opened with again (go's `place`)
+export function placed(...words) { page.place = words; address(); }
+// the address read: [tab, place]; its tabbed sections are put where core.tabbed looks for them. An address the page
+// does not have opens Overview.
+export function opened(hash) {
+  try {
+    const [path, subs] = hash.replace(/^#/, "").split("?");
+    const [tab, ...place] = path.split("/").map(decodeURIComponent);
+    if (!Object.hasOwn(page.views, tab)) return ["overview", []];
+    new URLSearchParams(subs || "").forEach((key, id) => { page.tabs[id] = key; });
+    return [tab, place];
+  } catch (e) { return ["overview", []]; }               // an address cut or typed wrong
+}
+
+// ⚠️ A MOMENT IS THE SERVER'S WORDS, NEVER WRITTEN HERE (owner's UI scan, 2026-11-10): every answer says its moments
+// and days in the villa's time, as the messages write them (server._said). The page turned the stored moments into
+// words itself, in the browser's zone and country format, so the same run read differently here and on Telegram.
 
 // The search over a list (Limits, Knowledge's two device lists): `words` its placeholder and its name, `typed(text)`
 // on every key.
@@ -435,6 +460,7 @@ export function tabbed(id, items) {
   const show = (k) => {
     const tab = list.find((t) => t[0] === k) || list[0];
     page.tabs[id] = tab[0];
+    page.shown.set(id, list[0][0]); address();
     fill(bar, subTabs(list.map(([key, label, info]) => [key, label, info]), tab[0], show));
     fill(body, tab[3]());
   };
@@ -555,15 +581,15 @@ export function jobsBanner(names, after) {
       h("div", { class: "muted" }, names.join(", "), ": their skill needs a brain and a spending limit per run.")), btn);
 }
 
-export function go(tab) {
+// `place`: the tab's own place in it, as the address keeps it (placed); none: the tab as it opens
+export function go(tab, place = []) {
   if (tab !== "limits") page.back = null;                 // left the Limits tab another way: nothing to go back to
-  page.here = null;
   page.current = tab; page.dirty = false; setBar(null);
-  history.replaceState(null, "", "#" + tab);
+  page.place = []; page.shown.clear(); address();
   document.querySelectorAll(".tabs button").forEach((b) => b.classList.toggle("on", b.dataset.tab === tab.replace("-file", "")));
   document.querySelector(".tab-file").classList.toggle("on", tab === "rules-file");
   // ⚠️ A TAB THAT FAILS SAYS WHY (architecture review 9): an error left "Loading…" on screen for good
-  Promise.resolve().then(() => page.views[tab]()).catch((e) => {          // filled by app.js: the tabs
+  Promise.resolve().then(() => page.views[tab](...place)).catch((e) => {          // filled by app.js: the tabs
     if (page.current === tab) fill($view, problemsBox(reasons(e), "This tab could not be shown:"));
   });
 }
@@ -579,20 +605,19 @@ export function setting(text, ref) {
       e.preventDefault();
       if (!(await guard())) return;
       page.focusLimit = ref;
-      page.back = { tab: page.current, here: page.here, y: window.scrollY };
+      page.back = { tab: page.current, place: page.place, y: window.scrollY };
       go("limits");
     } }, String(text));
 }
 
 // ⚠️ BACK WHERE THE VALUE WAS PRESSED (owner, 2026-10-24: "a back button, so that I can come back to the same page I
-// clicked from, after having edited or not the value"): the tab, its own place in it (a skill and its file: `here`) and
-// the scroll, as they were; null when the Limits tab was not opened from a value
+// clicked from, after having edited or not the value"): the tab, its own place in it (a skill and its file: `place`,
+// what the address keeps) and the scroll, as they were; null when the Limits tab was not opened from a value
 async function goBack() {
   const b = page.back;
   if (!b || !(await guard())) return;
   page.back = null;
-  go(b.tab);
-  if (b.here) { page.here = b.here; await b.here(); }
+  go(b.tab, b.place);
   await new Promise((r) => setTimeout(r, 300));          // the place drawn (its reads answered), then its scroll
   window.scrollTo({ top: b.y });
 }

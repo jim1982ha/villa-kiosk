@@ -11,11 +11,38 @@ const shown = (v) => (Array.isArray(v) ? v.join(", ") : v === null || v === unde
 // (review L, 2026-10-25: the save line and "Changed from its usual" said "after_8h_silence")
 const said = (r, v) => ((r.choices || []).find((c) => Array.isArray(c) && same(c[0], v)) || [null, shown(v)])[1];
 
+// ⚠️ A TIME IS PICKED, NEVER TYPED (owner's UI scan, 2026-11-10: a job's time was a text box, and its label explained
+// the three ways to write it: "HH:MM every day, Mon HH:MM each week, D HH:MM each month"). How often and which day
+// (only a time that may repeat: `r.picks`, the server's lists), then the hour and the minute, every five minutes and
+// the one it has now. `r.at`: its parts as the server read them (when.Spec.picked); what is written back is checked
+// by the same reader on save.
+function timePicker(r, set) {
+  const at = { ...r.at }, two = (n) => String(n).padStart(2, "0");
+  const hours = Array.from({ length: 24 }, (_, i) => [two(i), two(i)]);
+  const minutes = [...new Set([...Array.from({ length: 12 }, (_, i) => two(i * 5)), at.minute])].sort().map((m) => [m, m]);
+  const write = () => set(`${at.every === "day" ? "" : at.on + " "}${at.hour}:${at.minute}`);
+  const box = h("div", { class: "when-pick" });
+  const draw = () => fill(box,
+    r.picks ? dropdown([["day", "Every day"], ["week", "Each week"], ["month", "Each month"]], at.every, (v) => {
+      at.every = v; at.on = v === "week" ? r.picks.weekdays[0][0] : v === "month" ? r.picks.days[0] : "";
+      draw(); write();
+    }, `${r.name}, how often`) : null,
+    at.every === "week" ? dropdown(r.picks.weekdays, at.on, (v) => { at.on = v; write(); }, `${r.name}, day of the week`) : null,
+    at.every === "month" ? dropdown(r.picks.days.map((d) => [d, `Day ${d}`]), at.on, (v) => { at.on = v; write(); }, `${r.name}, day of the month`) : null,
+    h("span", { class: "when-time" },
+      dropdown(hours, at.hour, (v) => { at.hour = v; write(); }, `${r.name}, hour`), ":",
+      dropdown(minutes, at.minute, (v) => { at.minute = v; write(); }, `${r.name}, minute`)));
+  draw();
+  return box;
+}
+
 // the value's field: a number, a choice, or a list of words (ticked from the words it may hold)
 function input(r, set) {
   if (r.kind === "measured") return h("b", {}, String(r.value));        // the villa's own setting: shown, never set here
-  if (r.kind === "time") {                                            // a scheduled job's time (skill.yaml `when`)
-    return h("input", { type: "text", value: r.value, "aria-label": r.name, oninput: (e) => set(e.target.value.trim() || null) });
+  // a time of day, or a scheduled job's time (skill.yaml `when`): picked; one the file writes another way stays text
+  if (r.kind === "time") {
+    return r.at ? timePicker(r, set)
+      : h("input", { type: "text", value: r.value, "aria-label": r.name, oninput: (e) => set(e.target.value.trim() || null) });
   }
   if (r.kind === "choice") {
     // a choice is its stored value, or [value, its words] when the agent words it (the chat reset: "Every day at 02:00")
@@ -47,12 +74,13 @@ function row(r, probs, again) {
   // value's unit, bounds and Save sit on the value's own line. Who is told has its own column (owner, 2026-10-22: the
   // pill sat at the end of the "Reached:" sentence), still a pill, grey when nobody is
   return [
-    h("div", { class: "limit-what", "data-ref": r.ref },
+    // the limit's words: on a phone they take the card's width, read from the left (app.css, td.words)
+    { cls: "words", v: h("div", { class: "limit-what", "data-ref": r.ref },
       h("b", {}, r.label), " ", infoButton(r.name, `${r.name}, written at ${(r.where || []).join(", ")}`),
       r.reached ? h("div", { class: "limit-reached" }, `Reached: ${r.reached}`) : null,
       h("div", { class: "muted small" }, r.also,
-        same(r.value, r.default) ? "" : ` Changed from its usual ${said(r, r.default)}.`)),
-    r.told ? h("span", { class: "chip tiny" + (r.told.startsWith("Nobody") ? " off" : "") }, r.told) : h("span", { class: "muted" }, "—"),
+        same(r.value, r.default) ? "" : ` Changed from its usual ${said(r, r.default)}.`)) },
+    r.told ? h("span", { class: `chip tiny ${r.told_chip || ""}` }, r.told) : h("span", { class: "muted" }, "—"),
     h("div", { class: "limit-value" }, field, r.unit ? h("span", { class: "muted" }, r.unit) : null,
       bounds ? h("span", { class: "muted small" }, bounds) : null, save),
   ];
