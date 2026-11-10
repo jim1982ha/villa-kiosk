@@ -159,7 +159,7 @@ function NowView({ setup, costUnit, house, colourOf }: { setup: EnergyWindowSetu
         </div>
         <Flow split={split} rateKw={rateKw} house={house} colourOf={colourOf} />
         {overlapShows(split) && (
-          <div className="energy-note">The devices add up to more than the grid meter: some are set up beside the meter they belong to. In the energy settings, set each one&apos;s upstream device.</div>
+          <div className="energy-note">The devices add up to more than the grid meter: some are set up beside the meter they belong to. In the villa&apos;s system, in its energy settings, set each one&apos;s upstream device.</div>
         )}
       </div>
     </div>

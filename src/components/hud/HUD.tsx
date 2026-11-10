@@ -123,7 +123,6 @@ function useClock(): string {
  *  menu are both this. */
 function useHudMenu() {
   const [open, setOpen] = useState(false);
-  useBackToClose(() => setOpen(false), open);
   const ref = useRef<HTMLDivElement | null>(null);
   useOutsideClose([ref], open, () => setOpen(false));
   return { open, setOpen, ref };

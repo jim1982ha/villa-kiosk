@@ -42,7 +42,7 @@ export default function BarChart({ buckets, fmt, unit, stamp, ticks, typical, he
   const n = buckets.length;
   const L = barLayout(buckets, typical);
   const LL = line ? lineLayout(line.values) : null;
-  const { frac, handlers } = useChartPointer<HTMLDivElement>();
+  const { frac, touchAction, handlers } = useChartPointer<HTMLDivElement>();
   const hover = frac === null ? null : barAt(frac, n);
   const hb = hover === null ? null : buckets[hover];
   const rows = hb ? barTipRows(hb, fmt, line && { label: line.label, cls: line.cls, v: line.values[hover!], fmt: line.fmt }) : [];
@@ -50,7 +50,7 @@ export default function BarChart({ buckets, fmt, unit, stamp, ticks, typical, he
     <div className={`chart-with-axis${unit || line?.unit ? " has-unit" : ""}`}>
       <YAxis unit={unit} height={height} frame={1} ticks={L.ticks} />
       <div className="spark-wrap bar-chart-wrap">
-        <div className="bar-chart" style={{ height, touchAction: "none" }} role="img" aria-label={label}
+        <div className="bar-chart" style={{ height, touchAction }} role="img" aria-label={label}
           {...handlers}>
           {L.ticks.map((t) => <div key={`g${t.v}`} className="chart-gridline" style={{ bottom: `${(1 - t.y) * 100}%` }} />)}
           {L.bars.map((b, i) => (

@@ -100,6 +100,17 @@ console.log("\n  Escape (dismissTop) with two open:");
   ck("dismissTop with nothing open says so (a caller falls through)", empty.stack.dismissTop() === false);
 }
 
+console.log("\n  two closed in one commit (an add line and the list in it):");
+{
+  const w = world(); const log = [];
+  const a = w.open("A", log); w.settle();
+  const b = w.open("B", log); const c = w.open("C", log); w.settle();
+  b.off(); c.off(); w.settle();
+  ck("both entries are dropped in one traversal", w.gos.join() === "-2" && w.depth === 1 && a.closed === 0, { gos: w.gos, depth: w.depth });
+  w.back();
+  ck("  ...and the next real Back closes A (it was swallowed: one popstate came, two were awaited)", log.join() === "A" && w.depth === 0, { log, depth: w.depth });
+}
+
 console.log("\n  a surface re-mounted by the close (the second pass's case):");
 {
   const w = world(); const log = [];

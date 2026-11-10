@@ -23,7 +23,6 @@ import { runRegisteredProbe, probeAvailable, formatProbe } from "@/babylon/perfP
 import type { TelemetryKind } from "@/utils/telemetry";
 import { backendFetch } from "@/auth/sessionLost";
 import { refusalOf } from "@/utils/storeSave";
-import { useBackToClose } from "@/hooks/useBackToClose";
 import { useOutsideClose } from "@/hooks/useOutsideClose";
 
 interface TelemetryEvent {
@@ -420,10 +419,9 @@ export default function TelemetryPanel() {
   }, []);
   /** "Diagnose ▾": ONE button for this device's report and the frame-cost probe (owner, 2026-10-14). */
   const [diagOpen, setDiagOpen] = useState(false);
-  // the phone's Back closes it like every menu (the overlay stack); a tap elsewhere or Escape too (the popover hook)
+  // a tap elsewhere, Escape or the phone's Back closes it like every menu (the popover hook)
   const diagRef = useRef<HTMLDivElement>(null);
   const closeDiag = useCallback(() => setDiagOpen(false), []);
-  useBackToClose(closeDiag, diagOpen);
   useOutsideClose([diagRef], diagOpen, closeDiag);
   const runDevice = useCallback(() => {
     setDiagOpen(false);

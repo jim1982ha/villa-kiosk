@@ -719,7 +719,8 @@ export default function Dashboard() {
         onClusterTapped={handleClusterTapped}
         onFloorChange={(f) => setCurrentFloor(f)}
         onRoomChange={setRoom}
-        onNeedModel={() => openSurface("settings")}
+        // straight to where the upload button is (it opened Settings on General, which has none: UI scan, 2026-11-10)
+        onNeedModel={() => openSurface("configEditor")}
         onModelUploaded={() => setModelKey((k) => k + 1)}
       />
 

@@ -12,14 +12,13 @@
 // The list is portalled to <body> and positioned `fixed` under the button (or
 // above it when there is no room below): inside a scrolling modal body a
 // fixed overlay can be clipped (the ChartTip lesson). It registers on the
-// dismissal stack (useBackToClose), so Escape and a phone's Back close the
+// dismissal stack (useOutsideClose), so Escape and a phone's Back close the
 // list before the window under it. Keyboard: arrows, Home/End, Enter/Space,
 // and typing a letter jumps to the next option starting with it.
 
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { ChevronDown, Check } from "lucide-react";
-import { useBackToClose } from "@/hooks/useBackToClose";
 import { useOutsideClose } from "@/hooks/useOutsideClose";
 import { dropdownPlacement } from "./dropdownPlacement";
 
@@ -56,9 +55,8 @@ export default function Dropdown<T extends string>({
     setOpen(false);
     if (refocus) button.current?.focus();
   }, []);
-  useBackToClose(() => close(), open);
-  // A tap anywhere else closes it — the one outside-close every popover uses.
-  useOutsideClose([button, list], open, () => close(false));
+  // A tap anywhere else closes it — the one outside-close every popover uses; Escape and Back give the button the focus.
+  useOutsideClose([button, list], open, () => close(false), () => close());
 
   const place = useCallback(() => {
     const b = button.current?.getBoundingClientRect();

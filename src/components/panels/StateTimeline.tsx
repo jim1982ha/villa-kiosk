@@ -106,7 +106,7 @@ export default function StateTimeline({
   const wordsFor = (s: string) => (s === NOT_KEPT ? NOT_KEPT_WORDS : s === NO_RECORD ? NO_RECORD_WORDS : labelFor(s));
   // Where the pointer is along the bar, as a fraction (the app's one rule:
   // useChartPointer) — along whichever axis the bar runs.
-  const { frac, handlers } = useChartPointer<HTMLDivElement>(vertical ? "y" : "x");
+  const { frac, touchAction, handlers } = useChartPointer<HTMLDivElement>(vertical ? "y" : "x");
 
   const bucketMs = grainMs ?? TREND_INTERVAL_MS;
   // Joined so the memo below has a stable primitive dep rather than a new
@@ -141,7 +141,7 @@ export default function StateTimeline({
       <div className="spark-wrap">
         <div
           className={`state-timeline${vertical ? " state-timeline-vertical" : ""}`}
-          style={{ ...(height && !vertical ? { height } : undefined), touchAction: "none" }}
+          style={{ ...(height && !vertical ? { height } : undefined), touchAction }}
           {...handlers}
         >
           {/* One strip per RUN of intervals that paint the same — a 7-day bar
