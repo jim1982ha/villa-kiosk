@@ -1,3 +1,19 @@
+## 2.496.763
+
+What you will see:
+- In Settings and Advanced Settings, with a search list, an (i) or an "Add" box open, Escape or the phone's Back
+  closes only that box. It closed the window too, and in Settings that is Cancel: every change made on every tab
+  was undone by a key pressed to close a list.
+- After closing such a box, the next Back is no longer ignored (it took two presses to close the window).
+- A camera that cannot connect shows "Try again" under "Camera stream unavailable.": the only way out was to close
+  the window and open it again.
+- On a phone, a thumb that lands on a chart still scrolls the window (Weather, Energy, a device's history): up and
+  down scrolls, sideways reads the chart.
+- "Upload Model", on the screen shown when the villa's model is missing, opens Advanced Settings, where the upload
+  button is (it opened Settings on General, which has none).
+- The Energy window's notes about a device with no upstream device or no meter say where to set it: in the villa's
+  system, in its energy settings.
+
 ## 2.496.762
 
 What you will see:
