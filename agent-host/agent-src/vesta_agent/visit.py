@@ -26,6 +26,7 @@ from datetime import datetime, timezone
 from typing import Awaitable, Callable
 
 from vesta_shared import visit_state
+from vesta_shared.result import SHEET, TELL_VILLA, WITHDRAW_SIREN
 from vesta_shared.timeutil import clock
 
 from . import ringing, sheet
@@ -50,6 +51,55 @@ def photos(state, iid) -> list[dict]:
     return visit_state.ordered(list(state.visit_photos(iid).get("photos") or []) + state.visit_snaps(iid))
 
 
+def _visit_of(a) -> int | None:
+    """The incident of a visit's action (result.SHEET, TELL_VILLA, WITHDRAW_SIREN), None for another action."""
+    if isinstance(a, dict) and a.get("action") in (SHEET, TELL_VILLA, WITHDRAW_SIREN) \
+            and str(a.get("incident_id") or "").isdigit():
+        return int(a["incident_id"])
+    return None
+
+
+class Run:
+    """What one result does with its visits, in the order the villa and the chats need it (outcome.Outcome.carry_out
+    asks it at each point, knowing nothing of sheets, snapshots or the villa's tell):
+
+    1. `Visits.begin`: each step acknowledged to the villa, its photos kept and its sheet made, before any copy is drawn;
+    2. `lines`: the story lines it adds (the "+N more photos" count), and `sheets`, the picture each copy sent carries;
+    3. `after_siren`: the cameras the siren snapped in the picture of the copies drawn after;
+    4. `act`: its actions carried out once every copy is drawn (the picture in place, the villa's full tell, a siren
+       withdrawn).
+
+    ⚠️ ONE ORDER, ONE PLACE (architecture review of 2026-11-10, card 3): these were four places of the 280-line
+    carry_out, their order kept only by comments; a card sent again lost its picture (32e670e9) from one of them."""
+
+    def __init__(self, visits: Visits | None = None):
+        self.visits = visits
+        self.lines: dict[int, list[dict]] = {}
+        self.sheets: dict[int, tuple[bytes, str]] = {}
+        self._tells: dict[int, Callable[[], Awaitable[bool]]] = {}
+
+    async def after_siren(self, visit: int | None, asked: bool) -> None:
+        """The siren's question was put on visit `visit` (`asked`): the cameras it snapped are in its picture now, the
+        copies drawn after carry them (the card sent again with the question has them already)."""
+        if self.visits is not None and asked and visit in self.sheets and (got := await self.visits.sheet(visit)):
+            self.sheets[visit] = got
+
+    async def act(self, n: int, a) -> bool:
+        """Action `n` of the result (`a`), when it is a visit's: carried out; False for any other action."""
+        iid = _visit_of(a)
+        if iid is None or self.visits is None:
+            return False
+        if a["action"] == SHEET:
+            if iid in self.sheets:
+                await self.visits.picture(iid)
+        elif a["action"] == TELL_VILLA:
+            if n in self._tells:
+                await self._tells[n]()
+        else:
+            await self.visits.withdraw(iid)
+        return True
+
+
 class Visits:
     def __init__(self, *, state, thread, notices, photo: Callable[[str], Awaitable], out_dir: str, timezone_name: str,
                  tell: Callable[[str, dict], Awaitable[bool]] | None = None,
@@ -66,6 +116,36 @@ class Visits:
         self.photo, self.out_dir, self.tz, self._tell, self.keyboard = photo, out_dir, timezone_name, tell, keyboard
         self._locks: dict[int, asyncio.Lock] = {}
         self._sheets: dict[int, tuple[str, tuple[bytes, str]]] = {}   # visit → (what it was made of, its sheet)
+
+    # ------------------------------------------------------------------ one result
+    async def begin(self, res: dict, name: Callable[[int], str] = lambda iid: "") -> Run:
+        """What result `res` does with its visits, begun (Run): each step acknowledged to the villa FIRST, before its
+        sheet, any chat's message or the tablet — the villa waits for VESTA's answer a short while, then takes the visit
+        back itself (step); then each visit's photos kept (its "All photos" button and its press read them) with the
+        count its picture leaves out, and its sheet made once. `name(iid)`: the alert's "#125-P1"."""
+        run = Run(self)
+        actions = [a for a in res.get("actions") or []]
+        for n, a in enumerate(actions):
+            if (iid := _visit_of(a)) is not None and a["action"] == TELL_VILLA:
+                try:
+                    run._tells[n] = await self.step(iid, str(a.get("script") or ""), dict(a.get("fields") or {}), name(iid))
+                except Exception as e:  # noqa: BLE001 — the villa takes the visit back itself after its wait
+                    log.warning("Incident #%s: its step could not be told to the villa (%s)", iid, type(e).__name__)
+        for a in actions:
+            if (iid := _visit_of(a)) is not None and a["action"] == SHEET:
+                self.state.set_visit_photos(iid, {"photos": list(a.get("photos") or []), "button": a.get("button") or {},
+                                                  "more": a.get("more") or {}, "shown": int(a.get("shown") or 1)})
+                if line := self.more_line(iid):
+                    run.lines.setdefault(iid, []).append(line)
+                if got := await self.sheet(iid):
+                    run.sheets[iid] = got
+        # ⚠️ A VISIT'S CARD SENT AGAIN KEEPS ITS PICTURE (owner's screenshot, 2026-11-08, live #154 at 09:35): a step
+        # with no sheet of its own (a reminder, from the desk's tick) sent the card again as text, its photos lost
+        for item in res.get("send") or []:
+            iid_s = item.get("incident_id") if isinstance(item, dict) else None
+            if str(iid_s or "").isdigit() and int(iid_s) not in run.sheets and (got := await self.sheet(int(iid_s))):
+                run.sheets[int(iid_s)] = got
+        return run
 
     # ------------------------------------------------------------------ the sheet
     async def sheet(self, iid: int) -> tuple[bytes, str] | None:

@@ -334,7 +334,7 @@ def test_every_per_day_reading_marks_its_findings_and_their_card_says_the_nightl
     recheck = _recheck_module()
     fid = _night_found_a_collapse(tmp_path)
     store = Store(str(tmp_path / "s.sqlite"))
-    assert recheck.READS["PM-ENERGY-CHANGE"].per_day
+    assert recheck.R.RULES["PM-ENERGY-CHANGE"].per_day
     task = store.last_task(f"finding:{fid}")
     sk = parse_skill("preventive-maintenance", SKILL)
     assert Problems(store).card(task, set(sk.rechecks))["check"] == "nightly"

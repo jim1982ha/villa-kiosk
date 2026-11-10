@@ -27,16 +27,16 @@ from vesta_shared import automation_words as AW  # an automation named by its ow
 from vesta_shared.device_state import OFFLINE, is_offline, out_for  # "is it back": one answer
 from vesta_shared.offline import device_answers  # a device that answers is not offline
 from vesta_shared.timeutil import clock
-import rules as R  # the missing rule's id
+import rules as R  # every rule described once (rules.RULES)
 
 OFFLINE_RULE = "PM-UNAVAILABLE"
 #: The rules whose reading leaves out a device asleep between its reports (nightly.silent_findings,
 #: reconnect_findings): a fault of theirs about a device listed asleep since ends saying so. A battery is read on its
 #: last real charge (vesta_shared.asleep), so its fault is not one of them.
-ASLEEP_SKIPPED = frozenset({OFFLINE_RULE, "PM-SILENT", "PM-RECONNECT-LOOP"})
+ASLEEP_SKIPPED = R.WHOLE_DEVICE_RULES
 #: The rules whose reading needs the device answering (silent: "although it is online"): a fault of theirs whose device
 #: went offline since is followed by its offline fault, never cleared.
-NEEDS_ANSWER = frozenset({"PM-SILENT"})
+NEEDS_ANSWER = R.NEEDS_ANSWER
 
 # the sentences, each written once (the Cockpit's fault and the Telegram message read them as they are)
 GONE_NOTE = "Closed: this device no longer exists in the villa's system."

@@ -18,10 +18,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field, asdict
 from datetime import date, timedelta
 import re
-from typing import Any
+from typing import Any, NamedTuple
 
 from vesta_shared.params import VillaParams
-from vesta_shared.result import COUNTER_RESET, PARAM_MISSING  # the ids other skills read: written once
+from vesta_shared.result import COUNTER_RESET, PARAM_MISSING, WHOLE_DEVICE  # the ids other skills read: written once
 from vesta_shared.stats import med, pct_change, step_index
 from vesta_shared import occupancy  # like with like: a day's use against days in the same state
 from vesta_shared import battery  # a battery's charge, its projection and its rule ids: one owner
@@ -458,3 +458,40 @@ def hidden_in_rule_rules(rules: list[dict], hidden, name_of, gone=()) -> list[Fi
                            f"Bring {'them' if n > 1 else 'it'} back online; if a copy replaced {'them' if n > 1 else 'it'}, "
                            f"point the {kind} at the copy instead."))
     return out
+
+
+# -------------------------------------------------------- every rule of the night check, described once
+class Rule(NamedTuple):
+    """What the night check, the 5-minute recheck and a fault's ending (endings.py) know of one rule: `state` (a fault
+    that lasts while it is found, closed when it no longer is) or an event (it happened: never closed by not being found
+    again), `per_day` (judged on a finished day: marked JUDGED_DAY by nightly.day_seen, kept per day by the recheck),
+    `needs_answer` (its reading needs the device answering: offline since, it is followed by its offline fault, never
+    cleared). Whether it is about a whole device is result.WHOLE_DEVICE's (reports and the knowledge pack read it too).
+    How it is read again is recheck.READS'."""
+    state: bool
+    per_day: bool = False
+    needs_answer: bool = False
+
+
+STATE, EVENT = True, False
+#: Every rule of the night check, by its id. ⚠️ ONE PLACE PER RULE (architecture review 2026-11-10, card 2): what a rule
+#: is was kept in four lists across three files, and a day-judged fault whose reading and mark fell out of step said
+#: "Next check within 5 min" (63a062bb). The lists below, and endings' ASLEEP_SKIPPED, derive from it.
+RULES: dict[str, Rule] = {
+    "PM-POWER-CHANGE": Rule(STATE, per_day=True), "PM-ENERGY-CHANGE": Rule(STATE, per_day=True),
+    "PM-LEVEL-HIGH": Rule(STATE, per_day=True),
+    "PM-RUNHOURS": Rule(EVENT, per_day=True), "PM-RUN-SAG": Rule(EVENT, per_day=True),
+    "PM-EXPECTED-SILENT": Rule(EVENT, per_day=True), COUNTER_RESET: Rule(EVENT, per_day=True),
+    battery.LOW: Rule(STATE), battery.CRIT: Rule(STATE), PARAM_MISSING: Rule(STATE), battery.TREND: Rule(EVENT),
+    "PM-UNAVAILABLE": Rule(STATE), "PM-SILENT": Rule(STATE, needs_answer=True), "PM-RECONNECT-LOOP": Rule(STATE),
+    HIDDEN_IN_RULE: Rule(STATE), MISSING: Rule(STATE),
+}
+STATE_RULES = frozenset(r for r, d in RULES.items() if d.state)
+EVENT_RULES = frozenset(r for r, d in RULES.items() if not d.state)
+NEEDS_ANSWER = frozenset(r for r, d in RULES.items() if d.needs_answer)
+WHOLE_DEVICE_RULES = frozenset(r for r in RULES if r in WHOLE_DEVICE)
+
+
+def day_judged(rule_id: str) -> bool:
+    """Whether `rule_id` judges a finished day (Rule.per_day); a rule of no table never does."""
+    return bool((d := RULES.get(rule_id)) and d.per_day)

@@ -44,7 +44,7 @@ from datetime import datetime, timezone
 from typing import Awaitable, Callable
 
 from vesta_shared.message_format import KIOSK_UNREACHED
-from vesta_shared.result import FAULTS_CHANGED, REDRAW, SHEET, TAKE_ON, TELL_VILLA, WITHDRAW_SIREN
+from vesta_shared.result import FAULTS_CHANGED, REDRAW, SHEET, TAKE_ON, TELL_VILLA
 from vesta_shared.ha_client import error_short_chars
 
 from . import layout, ringing
@@ -53,6 +53,7 @@ from . import siren
 from .notice import stays
 from .incidents import Incidents
 from .posting import Poster
+from .visit import Run
 from .routing import Origin, Routing
 
 
@@ -165,34 +166,16 @@ class Outcome:
         done = {"sent": 0, "not_sent": 0, "tickets": 0, "resolved": 0, "unrouted": 0, "edited": 0}
         if not isinstance(res, dict) or not res:
             return done
-        # a visit's step acknowledged to the villa FIRST, before its sheet, any chat's message or the tablet: the villa
-        # waits for VESTA's answer a short while, then takes the visit back itself (visit.Visits.step); its full tell,
-        # the cards each chat shows, goes in the actions below, once they are drawn
-        to_villa: dict[int, Callable[[], Awaitable[bool]]] = {}
-        if self.visits is not None:
-            for n, a in enumerate(res.get("actions") or []):
-                if isinstance(a, dict) and a.get("action") == TELL_VILLA and str(a.get("incident_id") or "").isdigit():
-                    vid = int(a["incident_id"])
-                    try:
-                        to_villa[n] = await self.visits.step(vid, str(a.get("script") or ""), dict(a.get("fields") or {}),
-                                                             self.incidents.name(vid) if self.incidents else "")
-                    except Exception as e:  # noqa: BLE001 — the villa takes the visit back itself after its wait
-                        log.warning("Incident #%s: its step could not be told to the villa (%s)", vid, type(e).__name__)
+        # its visits begun FIRST (visit.Run: the villa told each step, its photos kept, its sheet made), before any copy
+        visits = await self.visits.begin(res, lambda iid: self.incidents.name(iid) if self.incidents else "") \
+            if self.visits is not None else Run()
         # a visit's story lines FIRST: every copy this result draws or posts lists them (notice.Notices.observe)
         story: dict[int, list[dict]] = {}
         for ln in res.get("seen") or []:
             if isinstance(ln, dict) and str(ln.get("incident_id") or "").isdigit() and ln.get("key") and ln.get("note"):
                 story.setdefault(int(ln["incident_id"]), []).append(ln)
-        if self.visits is not None:
-            for a in res.get("actions") or []:
-                if isinstance(a, dict) and a.get("action") == SHEET and str(a.get("incident_id") or "").isdigit():
-                    # kept before any copy is sent: its "All photos" button (alert_buttons.keyboard) and its press, and
-                    # the count of the photos its picture leaves out, a line of its story (visit.Visits.more_line)
-                    iid = int(a["incident_id"])
-                    self.state.set_visit_photos(iid, {"photos": list(a.get("photos") or []), "button": a.get("button") or {},
-                                                      "more": a.get("more") or {}, "shown": int(a.get("shown") or 1)})
-                    if line := self.visits.more_line(iid):
-                        story.setdefault(iid, []).append(line)
+        for iid, lines in visits.lines.items():
+            story.setdefault(iid, []).extend(lines)
         if self.notices:
             for iid, lines in story.items():
                 self.notices.observe(iid, lines)
@@ -219,19 +202,8 @@ class Outcome:
         # the villa's own messages first (its rule's alert in the group), taken over as the incident's copy there — the
         # roles it is about are the step's, else its priority's, never the chat's (notice.Notices.went_to)
         # a visit's sheet, made once: the copies this result sends carry it (a card sent again rings once, with its
-        # picture), the others get it in place (result.sheet, below)
-        sheets: dict[int, tuple[bytes, str]] = {}
-        if self.visits is not None:
-            for a in res.get("actions") or []:
-                if isinstance(a, dict) and a.get("action") == SHEET and str(a.get("incident_id") or "").isdigit():
-                    if got := await self.visits.sheet(int(a["incident_id"])):
-                        sheets[int(a["incident_id"])] = got
-            # ⚠️ A VISIT'S CARD SENT AGAIN KEEPS ITS PICTURE (owner's screenshot, 2026-11-08, live #154 at 09:35): a step
-            # with no sheet of its own (a reminder, from the desk's tick) sent the card again as text, its photos lost
-            for item in res.get("send") or []:
-                iid_s = item.get("incident_id") if isinstance(item, dict) else None
-                if str(iid_s or "").isdigit() and int(iid_s) not in sheets and (got := await self.visits.sheet(int(iid_s))):
-                    sheets[int(iid_s)] = got
+        # picture), the others get it in place (visits.act, below)
+        sheets = visits.sheets
         adopted: set[tuple[int, int, str | None]] = set()        # (incident, chat, step) shown by a taken-over copy
         for h in res.get("ha_messages") or []:
             hid, stage = int(h.get("incident_id") or 0), h.get("stage")
@@ -387,11 +359,7 @@ class Outcome:
         for c, _s, _a in posted.get(visit, []) if visit is not None else []:
             rang.shown(visit, c)
         asked_now = await self.siren.gate(gate, origin=origin, rang=rang)
-        if visit in sheets and asked_now.get("asked") and self.visits is not None:
-            # the cameras it snapped are in the sheet now (the card sent again with the question carries them): the
-            # other copies get the same picture (result.sheet, below)
-            if got := await self.visits.sheet(visit):
-                sheets[visit] = got
+        await visits.after_siren(visit, bool(asked_now.get("asked")))
         # ⚠️ ONE HAND MOVES THE CARDS (architecture review, 2026-10-15): a script's fault actions were carried out here,
         # and the repair worked the same cards out from the tasks — two routes, a 2-day "redo the close" window for when
         # the first failed, and a person's Done that could meet the agent's close. A fault about a task is now the
@@ -418,15 +386,8 @@ class Outcome:
                     iid = int(a["incident_id"])
                     done["edited"] += await self.thread.reheaded(
                         iid, self.notices.observe(iid, []) if self.notices else {}, a.get("body"))
-                elif kind == SHEET and str(a.get("incident_id") or "").isdigit() and self.visits is not None:
-                    iid = int(a["incident_id"])
-                    if iid in sheets:
-                        await self.visits.picture(iid)
-                elif kind == TELL_VILLA and str(a.get("incident_id") or "").isdigit() and self.visits is not None:
-                    if n in to_villa:
-                        await to_villa[n]()
-                elif kind == WITHDRAW_SIREN and str(a.get("incident_id") or "").isdigit() and self.visits is not None:
-                    await self.visits.withdraw(int(a["incident_id"]))
+                elif await visits.act(n, a):
+                    pass                                                    # a visit's (visit.Run.act)
                 elif kind == TAKE_ON and str(a.get("incident_id") or "").isdigit():
                     # Open Ticket on Telegram (owner, 2026-11-05): the Kiosk's own take-on, or a plain answer and the
                     # buttons back — never a press that looks taken and is not

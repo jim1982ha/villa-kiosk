@@ -735,11 +735,16 @@ Owner: "proceed with the recommended implementation", four cards.
 Owner: "simplify: remove the split, check every 5 min for all the reported issues — keep it as simple as possible, no
 useless exceptions"; "I am worried how I will judge what is a daily-check fault versus what is not". Supersedes the day
 recheck below (its times, `day_rechecks`, `kiosk: day_check`, `dayChecksAt`, the card's "day" are gone).
-- **One reading per rule, every rule**: `recheck.READS` maps every rule of `nightly.STATE_RULES | EVENT_RULES` but
+- **One reading per rule, every rule**: `recheck.READS` maps every rule of `rules.RULES` but
   PM-UNAVAILABLE (back_online's) to the night's own function over one finding's rows — battery_findings,
   silent_findings, reconnect_findings, hidden_in_rule_findings, and `nightly.asset_findings` / `level_findings`
   (extracted from run(), so the night and the tick share them). `unreadable()` non-empty stops the tick (Overview says
   which). skill.yaml `rechecks: all` → `Skill.rechecks == ["*"]` → `Problems.card` says "minutes" for every finding.
+- **Every rule described once: `rules.RULES`** (architecture review 2026-11-10, card 2): state or event, `per_day`,
+  `needs_answer`; whole-device stays `result.WHOLE_DEVICE`'s. `STATE_RULES`, `EVENT_RULES` (nightly re-exports them),
+  `endings.ASLEEP_SKIPPED` and `NEEDS_ANSWER` derive from it; `nightly.day_seen` marks JUDGED_DAY and the recheck
+  keeps a day's verdict by the same `per_day` (`rules.day_judged`), so the two cannot fall out of step (63a062bb).
+  READS keeps only how a rule is read again.
 - **A rule judged on a finished day is read over the last finished day**, settled `recheck.day_settle_minutes` (15)
   after midnight — never "today so far". Its verdict is cached per finding and day (`pm-dayread:<id>:<day>`), worked
   out again only when that day changes: a pump fault cannot close mid-day, and closes on the first tick after a clean

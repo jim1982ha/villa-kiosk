@@ -79,10 +79,7 @@ MIN_RUN_MINUTES = limit("night.min_run_minutes", 30, unit="minutes", group="dete
                         says="The shortest pump run the night check judges for losing power during the run.",
                         reached="Shorter runs are never judged for weakening; nobody is told.", told="")
 
-STATE_RULES = {"PM-POWER-CHANGE", "PM-ENERGY-CHANGE", "PM-UNAVAILABLE",
-               "PM-BATTERY-LOW", "PM-BATTERY-CRIT", "PM-SILENT", "PM-RECONNECT-LOOP", "PM-LEVEL-HIGH",
-               R.HIDDEN_IN_RULE, result.PARAM_MISSING, R.MISSING}
-EVENT_RULES = {"PM-RUNHOURS", "PM-RUN-SAG", "PM-EXPECTED-SILENT", result.COUNTER_RESET, "PM-BATTERY-TREND"}
+STATE_RULES, EVENT_RULES = R.STATE_RULES, R.EVENT_RULES     # every rule described once: rules.RULES
 
 
 def run(args) -> dict:
@@ -326,9 +323,12 @@ def asset_findings(cli, store, params, asset: dict, today: date, day_end: dateti
 
 
 def day_seen(findings: list, day_end: datetime) -> list:
-    """`findings` judged on the day ending at `day_end`, each seen from that day's start (rules.Finding.seen_at): its
-    figure holds every hour of it, so only a day begun after a person's close says the close did not fix it."""
+    """`findings` judged on the day ending at `day_end` (their rule's per_day: rules.RULES, the recheck's per-day
+    keeping too), each seen from that day's start (rules.Finding.seen_at): its figure holds every hour of it, so only a
+    day begun after a person's close says the close did not fix it."""
     for f in findings:
+        if not R.day_judged(f.rule_id):
+            continue
         f.seen_at = (day_end - timedelta(days=1)).isoformat()
         f.detail[JUDGED_DAY] = True                        # its watch after a close: Problems.confirms_by
     return findings

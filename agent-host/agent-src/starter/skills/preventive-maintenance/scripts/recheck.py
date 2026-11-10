@@ -322,13 +322,13 @@ class Tick:
 class Reading(NamedTuple):
     """How one open finding of a rule is read again: `rows` (finding → its pack rows, [] when the pack no longer lists
     it), `entities` (finding, rows → the entities whose state must have been read), `found` (tick, rows → what the
-    rule's own reading finds now), `per_day` (judged on a finished day: kept per finding and day, worked out again only
-    when the last finished day changes), `judge` (finding, found → its battery.Verdict: still seen, handed to another,
-    raised again), `readable` (its entity's state → whether it can be judged now: NOT READ IS NOT GONE)."""
+    rule's own reading finds now), `judge` (finding, found → its battery.Verdict: still seen, handed to another,
+    raised again), `readable` (its entity's state → whether it can be judged now: NOT READ IS NOT GONE). Whether it
+    judges a finished day (kept per finding and day, worked out again only when the last finished day changes) is the
+    rule's own (rules.RULES), the night's JUDGED_DAY mark's too."""
     rows: Callable
     entities: Callable
     found: Callable
-    per_day: bool = False
     judge: Callable = battery.reworded
     readable: Callable = bool
 
@@ -338,8 +338,8 @@ _battery = Reading(_battery_rows, _own, lambda t, rows: t.battery(rows), judge=b
 # a "replace" step with no value now is not judged: its close would say the battery is fine when nothing was read
 _battery_replace = _battery._replace(readable=lambda st: bool(st) and has_value(st.get("state")))
 _none = lambda pack, f, rows: []                                            # noqa: E731
-_asset = Reading(_asset_of, _none, lambda t, rows: t.asset_day(rows), per_day=True)
-#: Every rule of the night check (nightly.STATE_RULES | EVENT_RULES) but the offline one, and how it is read again
+_asset = Reading(_asset_of, _none, lambda t, rows: t.asset_day(rows))
+#: Every rule of the night check (rules.RULES) but the offline one, and how it is read again
 #: (owner, 2026-10-20: one cadence, no exception). A rule the night finds with no reading here stops the tick and
 #: Overview says which (Unreadable) — a fault never promises a check that does not run.
 READS: dict[str, Reading] = {
@@ -356,7 +356,7 @@ READS: dict[str, Reading] = {
                               lambda t, rows: t.hidden()),
     "PM-POWER-CHANGE": _asset, "PM-ENERGY-CHANGE": _asset, "PM-RUNHOURS": _asset, "PM-RUN-SAG": _asset,
     "PM-EXPECTED-SILENT": _asset, result.COUNTER_RESET: _asset,
-    "PM-LEVEL-HIGH": Reading(_level_rows, _none, lambda t, rows: t.level_day(rows), per_day=True),
+    "PM-LEVEL-HIGH": Reading(_level_rows, _none, lambda t, rows: t.level_day(rows)),
 }
 
 
@@ -366,7 +366,7 @@ class Unreadable(Exception):
 
 def unreadable() -> list[str]:
     """The night check's rules this recheck cannot read again, sorted — none, or the tick stops."""
-    return sorted((N.STATE_RULES | N.EVENT_RULES) - set(READS) - {OFFLINE_RULE, MISSING_RULE})
+    return sorted(set(R.RULES) - set(READS) - {OFFLINE_RULE, MISSING_RULE})
 
 
 def loopbook(store, client, now: datetime, days: int):
@@ -430,7 +430,8 @@ def recheck_open(store, pack, client, now: datetime, params, zone: str, settle_m
         if es and not rule.readable(st):
             continue
         key = f"pm-dayread:{int(f['id'])}:{t.day.isoformat()}"
-        was = store.cache_get(key) if rule.per_day else None
+        per_day = R.day_judged(f["rule_id"])
+        was = store.cache_get(key) if per_day else None
         if was is None or "at" not in was:                  # kept before 0.12.458 had no `at`: read again, once
             try:
                 found = rule.found(t, rows)
@@ -448,7 +449,7 @@ def recheck_open(store, pack, client, now: datetime, params, zone: str, settle_m
                 moved_step[(f["rule_id"], f["entity_id"])] = v.handed
             if v.restate is not None:
                 restated.append((int(f["id"]), v.restate))
-            if rule.per_day:
+            if per_day:
                 store.cache_put(key, was)
         read.append(f["id"])
         if was["seen"]:

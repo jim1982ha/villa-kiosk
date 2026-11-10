@@ -1,3 +1,8 @@
+## 0.12.495
+
+- Nothing changes in what you see. Each night-check rule is now described in one place, and a visit's steps (the
+  villa told, its photos, the siren's snapshots) run in one place: a fix there is made once.
+
 ## 0.12.494
 
 - A visit's "+N more photos in the VESTA UI" line counts the cameras the siren snapped too: before, the photos those
