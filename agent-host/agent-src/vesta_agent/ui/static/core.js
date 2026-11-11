@@ -10,8 +10,6 @@ const PLACES = PAGE.places || {};
 export const place = (k, names = {}) => (PLACES[k] || [k])[0].replace(/\{(\w+)\} ?/g, (_, v) => (names[v] ? `${names[v]} ` : ""));
 // a tab's sections in their order (places.ORDER): `sections` by place key → the nodes, top to bottom
 export const inOrder = (tab, sections) => (PAGE.order?.[tab] || Object.keys(sections)).map((k) => sections[k]);
-// the sections of a tab drawn as the tabs of one tabbed section (places.TABBED), in their order; none: every one a card
-export const tabbedIn = (tab) => PAGE.tabbed?.[tab] || [];
 export const where = (k) => (PLACES[k] ? `${PLACES[k][1]} › ${place(k)}` : k);
 
 // what several tabs read and change: one object (a module cannot assign another module's variables)
@@ -53,7 +51,9 @@ export function h(tag, attrs = {}, ...kids) {
 // rules); under the anchor, or above it when there is no room below; closed by a click outside, Escape, a scroll
 // of the page or a resize — placed again instead while the focus is inside it (float.afterMove: a phone's keyboard
 // opening is a resize). `width`: a fixed width (else the anchor's, at least 180 px); `center`: centred on it.
-export function floating(anchor, panel, { width = null, center = false, onClose = () => {} } = {}) {
+// `fit`: a text to read (the tooltip): when neither below nor above holds it, it takes the screen's height, over its
+// anchor, rather than a box to scroll that hides most of it (owner, 2026-11-11: "I can't see all the text")
+export function floating(anchor, panel, { width = null, center = false, fit = false, onClose = () => {} } = {}) {
   panel.classList.add("floating");
   // inside an open popup (a modal <dialog>, the top layer), a panel on the body would draw UNDER it
   (anchor.closest && anchor.closest("dialog[open]") || document.body).append(panel);
@@ -63,6 +63,10 @@ export function floating(anchor, panel, { width = null, center = false, onClose 
     const left = Math.min(Math.max(8, center ? b.left + b.width / 2 - w / 2 : b.left), vw - 8 - w);
     Object.assign(panel.style, { width: `${w}px`, left: `${left}px`, top: "", bottom: "", maxHeight: "" });
     const want = panel.scrollHeight, below = vh - b.bottom - 12, above = b.top - 12;
+    if (fit && want > Math.max(below, above)) {
+      Object.assign(panel.style, { top: `${Math.max(8, (vh - want) / 2)}px`, maxHeight: `${vh - 16}px` });
+      return;
+    }
     const up = want > below && above > below;
     panel.style.maxHeight = `${Math.max(120, Math.min(want, up ? above : below))}px`;
     if (up) panel.style.bottom = `${vh - b.top + 6}px`; else panel.style.top = `${b.bottom + 6}px`;
@@ -402,19 +406,27 @@ function tipButton(kind, label, text) {
 }
 
 let openTip = null;
+// ⚠️ 540 WIDE, AND IT STAYS OPEN UNDER THE POINTER (owner, 2026-11-11: a long (i) was cut, and it closed as soon as the
+// pointer left the (i), so its scroll could not be reached): the pointer may move from the (i) onto the text
+const TIP_WIDTH = 540;
 function infoTip(btn, text, kind = "") {
-  let float = null, pinned = false;
-  const close = () => { if (float) float.close(); };
+  let float = null, pinned = false, leaving = null;
+  const close = () => { clearTimeout(leaving); if (float) float.close(); };
+  const later = () => { clearTimeout(leaving); if (!pinned) leaving = setTimeout(close, 200); };
   const open = () => {
+    clearTimeout(leaving);
     if (float) return;
     if (openTip) openTip();
-    float = floating(btn, h("div", { class: "tooltip" + (kind ? " " + kind : ""), role: "tooltip" }, typeof text === "function" ? text() : text), { width: 360, center: true,
+    const panel = h("div", { class: "tooltip" + (kind ? " " + kind : ""), role: "tooltip" }, typeof text === "function" ? text() : text);
+    panel.addEventListener("mouseenter", () => clearTimeout(leaving));
+    panel.addEventListener("mouseleave", later);
+    float = floating(btn, panel, { width: TIP_WIDTH, center: true, fit: true,
       onClose: () => { float = null; pinned = false; btn.setAttribute("aria-expanded", "false"); if (openTip === close) openTip = null; } });
     btn.setAttribute("aria-expanded", "true");
     openTip = close;
   };
   btn.addEventListener("mouseenter", open);
-  btn.addEventListener("mouseleave", () => { if (!pinned) close(); });
+  btn.addEventListener("mouseleave", later);
   btn.addEventListener("focus", open);
   btn.addEventListener("blur", () => { if (!pinned) close(); });
   btn.addEventListener("click", (e) => { e.preventDefault(); if (pinned) close(); else { open(); pinned = true; } });
@@ -449,7 +461,7 @@ export function paged(head, rows, per = PER_PAGE, { cls = "", widths = null, nav
   const body = h("tbody");
   // each cell carries its column's name: on a phone the row becomes a card, every value on its own line, its name on
   // the left (app.css; owner, 2026-10-31: no two columns sharing a line any more, their values left and right)
-  // a heading with its (i) (withInfo: Device links' columns) is named by its words, never by the node
+  // a heading with its (i) (withInfo: Knowledge › Devices' Run hours) is named by its words, never by the node
   const label = head.map((c) => (c instanceof Node ? c.firstChild?.textContent || "" : String(isCell(c) ? c.v : c || "")));
   const line = (cells) => h("tr", {}, cells.map((c, i) => cell(c, "td", { label: label[i] })));
   // a row is its cells, or {cells, more}: `more` drawn on its own line under the row, across every column, while the

@@ -203,6 +203,9 @@ textarea.editor { min-height: 60vh; white-space: pre-wrap; overflow-wrap: anywhe
 .card-title-right .switch, table.rows td .switch, .tool-card-head .switch, .skill-switch { min-height: 0; flex: none; }
 /* a card's search (core.searchBox) */
 .search-box { margin: 4px 0 12px; }
+/* a list's search and its view switch on one line, wrapping as a group (Knowledge › Devices) */
+.toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin: 4px 0 12px; }
+.toolbar .search-box { margin: 0; flex: 1 1 260px; }
 .search-box input { width: 100%; max-width: 420px; }
 /* (i) and (!) (core.infoButton, core.alertButton): the size of the text they sit in */
 button.info { width: 1.45em; height: 1.45em; min-height: 0; padding: 0; border-radius: 50%; border: 1px solid var(--hairline-strong); background: none;
@@ -277,7 +280,7 @@ th button.info, .field button.info { font-size: 1em; }
 .tooltip { overflow: auto; padding: 10px 12px; border-radius: var(--radius); background: var(--text-primary); color: var(--bg-base);
   font-size: var(--text-sm); line-height: 1.45; box-shadow: 0 8px 24px var(--shadow); pointer-events: auto; }
 .tooltip.alert { border-left: 3px solid var(--status-danger); }
-/* a longer explanation in sections (Rules › Device kinds): a bold heading, then its words or a short list */
+/* a longer explanation in sections (Knowledge › Devices): a bold heading, then its words or a short list */
 .tooltip .tip-doc > p { margin: 0 0 8px; }
 .tooltip .tip-doc > .tip-head { margin: 10px 0 2px; font-weight: 700; }
 .tooltip .tip-doc > .tip-head:first-child { margin-top: 0; }
@@ -570,7 +573,6 @@ table.limits .when-pick .dropdown { width: auto; }     /* a table's dropdown fil
 .limit-words { display: flex; flex-wrap: wrap; gap: 6px 14px; min-width: 0; white-space: normal; }
 .limit-words .switch { gap: 6px; font-size: var(--text-sm); }
 
-/* ---- the Knowledge tab (knowledge.js): a device link's cell, its drop-down above its chip and what it means */
-.link-cell { display: flex; flex-direction: column; gap: 4px; }
-/* read first (owner, 2026-11-04): a link as what VESTA uses, its helper's name over where it comes from */
-.link-read { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+/* ---- the Knowledge tab (knowledge.js): a device's kind or link, its list above where it comes from */
+.link-cell { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+.link-cell > .picker-box { width: 100%; }

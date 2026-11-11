@@ -1,6 +1,6 @@
 """A device's run-hours check: on or off, and why, in plain words. The night check (preventive-maintenance nightly.py)
 judges by it and says it in its notes, and records each device's verdict of the night (record) for the VESTA Agent page
-(Knowledge › Device links), which groups its devices by it (vesta_agent/ui/links.py).
+(Knowledge › Devices), which shows it on each device (vesta_agent/ui/links.py).
 
 ⚠️ ONE VERDICT, NEVER A COPY (architecture review 20, card 2): the page filed a device under "Schedule linked" whenever
 a schedule was linked, while the night check had turned its run-hours check off (a lighting or a meter kind, a schedule
@@ -49,18 +49,22 @@ def verdict(asset: dict, found: bool | None, blocks: bool | None = None, unused:
         return Verdict(False, "no_reading", "It measures neither power nor energy.")
     kind = asset.get("kind", "appliance")
     if kind in NOT_JUDGED:
-        return Verdict(False, "kind", f"Its kind is {KINDS[kind][0]}: its run hours are never judged (Device kinds).")
+        return Verdict(False, "kind", f"Its kind, {KINDS[kind][0]}, is never checked.")
     schedule = asset.get("schedule")
     if not schedule:
-        return Verdict(False, "no_schedule", "No schedule linked.")
+        return Verdict(False, "no_schedule", "No schedule linked to it.")
     said = name or schedule
     if found is False:
-        return Verdict(False, "gone", f"{said} is no longer in the villa's system.")
+        return Verdict(False, "gone", f"Its schedule, {said}, is no longer in the villa's system.")
     if blocks is False:
-        return Verdict(False, "no_blocks", f"{said} has no time blocks.")
+        return Verdict(False, "no_blocks", f"Its schedule, {said}, has no time blocks.")
     if unused:
-        return Verdict(False, "unused", f"{said} is used only by {', '.join(unused)}, switched off.")
-    return Verdict(True, "on", f"Judged against {said}.")
+        # ⚠️ SAID SO THE OWNER SEES WHY (owner, 2026-11-11: "why does the Onsen pump appear in Run-hours check off?"): the
+        # automation by its name in the villa, and that it is switched off
+        users = [u.split(".", 1)[-1] for u in unused]
+        return Verdict(False, "unused", f"Its schedule, {said}, is used only by the automation{'s' if len(users) > 1 else ''} "
+                                        f"{', '.join(users)}, switched off.")
+    return Verdict(True, "on", f"Against {said}.")
 
 
 def entry(asset: dict, v: Verdict) -> dict:

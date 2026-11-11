@@ -32,7 +32,7 @@ from vesta_shared.limits import limit
 from .. import __version__, requests_box, status, tool_access
 from ..config import STARTER_DIR, Settings
 from ..history import History, file_change
-from ..places import ORDER, PLACES, TABBED, TABS
+from ..places import ORDER, PLACES, TABS
 from ..skills import FILE_NAME, REQUIRED_FILES, SKILL_NAME, TRASH, VILLA_CHOICES, Skills, switch_command, to_trash
 from ..state import State
 from . import kinds, links, setup_copy
@@ -44,7 +44,7 @@ log = logging.getLogger("vesta.ui")
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 #: the page's places (one name per place, places.py), as the page reads them: "</" escaped, so no name can close the tag
-PLACES_JSON = json.dumps({"places": PLACES, "order": ORDER, "tabbed": TABBED}).replace("</", "<\\/")
+PLACES_JSON = json.dumps({"places": PLACES, "order": ORDER}).replace("</", "<\\/")
 STATIC = os.path.join(HERE, "static")
 INGRESS_GATEWAY = "172.30.32.2"
 MAX_FILE = 512 * 1024
@@ -377,9 +377,9 @@ class UI:
         from ..policy import LANGUAGES
         pack = KnowledgePack.read(self.s.pack_path)
         return web.json_response({
-            # Knowledge › Device kinds: each device's guessed kind and the owner's choice (ui/kinds.py)
+            # Knowledge › Devices: each device's guessed kind and the owner's choice (ui/kinds.py)...
             "kinds": kinds.rows(self.s),
-            # Knowledge › Device links: each device's helpers, found by their name or chosen (ui/links.py)
+            # ...and its helpers, found by their name or chosen, and its run-hours check (ui/links.py)
             "links": links.rows(self.s),
             # the VESTA Kiosk's list, as the agent was last told it (shown, never edited here), by name
             "asleep": [{"id": i, "name": pack.name_of(i, i) if pack else i} for i in sorted(listed(self.s.pack_path))],
@@ -427,7 +427,7 @@ class UI:
 
     # ------------------------------------------------------------------ device kinds
     async def kinds_put(self, request):
-        """Knowledge › Device kinds: one device's kind chosen, or back to the guess (`kind` null)."""
+        """Knowledge › Devices: one device's kind chosen, or back to the guess (`kind` null)."""
         body = await request.json()
         slug, kind = body.get("slug"), body.get("kind")
         if not isinstance(slug, str) or not slug or not (kind is None or isinstance(kind, str)):
@@ -435,7 +435,7 @@ class UI:
         return web.json_response(kinds.save(self.s, self.files, slug, kind))
 
     async def links_put(self, request):
-        """Knowledge › Device links: one device's link chosen (`value`: a helper's id, "" for None), or back to the
+        """Knowledge › Devices: one device's link chosen (`value`: a helper's id, "" for None), or back to the
         guess (`value` null)."""
         body = await request.json()
         slug, role, value = body.get("slug"), body.get("role"), body.get("value")

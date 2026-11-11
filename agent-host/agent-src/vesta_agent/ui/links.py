@@ -1,6 +1,6 @@
-"""Knowledge › Device links: each device with the helpers of the villa's system that belong to it (its schedule, its
+"""Knowledge › Devices, its links: each device with the helpers of the villa's system that belong to it (its schedule, its
 normal power, its run hours: vesta_shared.asset_links.ROLES), each as the agent found it by its name or as the owner
-chose it, saved through the page's one writer (changes.PageFiles), as Device kinds (ui/kinds.py).
+chose it, saved through the page's one writer (changes.PageFiles), as its kind (ui/kinds.py).
 
 ⚠️ ONLY THE DEVICES A LINK SERVES: those the agent reads power or energy for (the night check's and the energy figures'
 devices), and any other that has a link found or chosen, so it can be taken back.

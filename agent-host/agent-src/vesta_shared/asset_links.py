@@ -1,5 +1,5 @@
 """Which helpers of the villa's system belong to each device (its schedule, its normal power, its run hours): guessed
-from the helpers' names, or chosen by the owner on the VESTA Agent page (Knowledge › Device links), kept in
+from the helpers' names, or chosen by the owner on the VESTA Agent page (Knowledge › Devices), kept in
 asset_links.yaml beside policy.yaml.
 
 ⚠️ A NAME WAS THE ONLY LINK (owner, 2026-10-30): a pump's schedule counted only when it was called
@@ -32,7 +32,7 @@ ROLES: dict[str, tuple[str, str, str, str]] = {
 }
 
 #: what the file says of itself, above the choices
-HEADER = ("# Which helpers belong to each device, as chosen on the VESTA Agent page (Knowledge > Device links).\n"
+HEADER = ("# Which helpers belong to each device, as chosen on the VESTA Agent page (Knowledge > Devices).\n"
           "# A link not listed keeps the helper the agent finds by its name; \"\" is None: that link off.\n"
           "# Links: " + ", ".join(ROLES) + ".\n")
 

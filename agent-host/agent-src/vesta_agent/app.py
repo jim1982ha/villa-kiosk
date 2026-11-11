@@ -504,7 +504,7 @@ class Vesta:
         from .history import History
         from .places import where
         History(self.s.history_path).record(
-            "Release", f"{where('kinds')}: {len(kinds)} set in the villa's system before, kept here", {"kind": "kinds"},
+            "Release", f"{where('devices')}: {len(kinds)} set in the villa's system before, kept here", {"kind": "kinds"},
             None, text)
         log.info("Device kinds moved from %s to %s: %s", asset_kinds.OLD_HELPER, self.s.choice_path("kinds"),
                  ", ".join(f"{k} {v}" for k, v in sorted(kinds.items())))

@@ -1,4 +1,4 @@
-"""Knowledge › Device kinds: each device the agent reads power or energy for, with the kind it guessed, and the kind the
+"""Knowledge › Devices, its kind: each device the agent reads power or energy for, with the kind it guessed, and the kind the
 owner chose instead (vesta_shared.asset_kinds), saved through the page's one writer (changes.PageFiles).
 
 ⚠️ ONLY WHERE A KIND CHANGES SOMETHING: the kind decides what the night check, the reports and the energy figures do
@@ -38,7 +38,7 @@ def _link_of(a: dict) -> str | None:
 
 
 def row_of(card: dict, slug: str) -> dict:
-    """The row of device `slug` on a choice card (this one, Device links'): refused when the card does not list it."""
+    """The row of device `slug` on a choice card (this one, or the links'): refused when the card does not list it."""
     row = next((r for r in card["rows"] if r["slug"] == slug), None)
     if row is None:
         raise Refused([f"No device {slug} in the agent's list of the villa's devices."], 404)
@@ -57,7 +57,7 @@ def rows(settings) -> dict:
     """The card's answer: {rows, kinds, built}. A row: slug, name, area, guess, kind, chosen (set by the owner), gone (a
     choice for a device the villa no longer has), parts (what the villa's system says it is made of: "light + fan"),
     source (where the guess came from, knowledge_pack.kind_and_why: "system": those parts; "link": a helper linked on
-    Device links, named by `link`; "name": its name)."""
+    Knowledge › Devices, named by `link`; "name": its name)."""
     pack = KnowledgePack.read(settings.pack_path, settings.config_dir)
     chosen = BY_KIND["kinds"].chosen(settings.config_dir)
     out = []

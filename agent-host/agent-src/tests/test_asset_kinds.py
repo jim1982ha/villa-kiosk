@@ -142,7 +142,7 @@ def test_the_old_helper_is_moved_once_at_start_and_never_read_again(tmp_path, mo
     assert KnowledgePack.load(s.pack_path).assets[SLUG]["kind"] == "meter"
     assert [(r["kind"], r["chosen"]) for r in kinds.rows(s)["rows"]] == [("meter", True)]
     (moved,) = files.history.rows(5)
-    assert moved["place"] == "Release" and moved["what"] == "Knowledge › Device kinds: 1 set in the villa's system before, kept here"
+    assert moved["place"] == "Release" and moved["what"] == "Knowledge › Devices: 1 set in the villa's system before, kept here"
 
     # every later start: the helper is not even asked for, whatever it says now
     later = _Villa('{"example_led_strip": "motor"}')

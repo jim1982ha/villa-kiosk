@@ -1,3 +1,15 @@
+## 0.12.502
+
+- **Knowledge › Devices replaces the two tabs "Device kinds" and "Device links".** One list, one line per device:
+  what it is (its kind), whether the night check compares its running hours with a schedule ("Checked" or "Not
+  checked"), and when not, why, in plain words. A switch above the list shows All, Checked or Not checked.
+- A device's **Edit** opens its kind and its three links (Schedule, Normal power, Run hours) under its line, each a
+  list to pick from, saved at once as before.
+- Why a device is not checked is said plainly, on the page and in the night's notes. For example, the Onsen pump:
+  "Its schedule, Onsen Pump Expected Runtime, is used only by the automation onsen_pump_daily_schedule, switched off."
+- **The (i) texts on the Agent's page are 50% wider**, use the screen's full height when they need it, and stay open
+  while the pointer is on them, so a long one can be read to the end.
+
 ## 0.12.501
 
 - On the Agent's page, everything that does the same job now looks the same on every tab, because each is drawn by
