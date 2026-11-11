@@ -171,7 +171,7 @@ export default function SpendTab(
           <div className="fm-cap-total"><span className="muted">{COST_CATEGORY_NAMES.major}</span><strong>{money(b.majorSpend)}</strong></div>
           <div className="fm-cap-total"><span className="muted">Total</span><strong>{money(b.totalSpend)}</strong></div>
           {editor.addButton && (
-            <button className="btn ghost fm-cap-record" onClick={editor.add}><Plus size={16} /> Record spend</button>
+            <button className="btn fm-cap-record" onClick={editor.add}><Plus size={16} /> Record spend</button>
           )}
         </div>
         {b.cap > 0 && (
@@ -232,7 +232,7 @@ export default function SpendTab(
             options={recap.months.map((m) => ({ value: m, label: monthLabel(m) }))} />
         </div>
         <div className="fm-statement-buttons">
-          <button className="btn ghost" onClick={recap.generate}>
+          <button className="btn" onClick={recap.generate}>
             <Sparkles size={16} /> {recap.markdown ? "Regenerate recap" : "Generate recap"}
           </button>
           {/* only with a recap to save or download (owner, 2026-10-22: never greyed out beside nothing) */}

@@ -92,7 +92,7 @@ const views = (html) => [...html.matchAll(/<button type="button" class="(active)
 const unescape = (t) => t.replace(/&#x27;/g, "'").replace(/&quot;/g, '"').replace(/&amp;/g, "&");
 /** A strip's remove: its icon and its words (its tooltip and aria-label are one `label`); null when it has none. */
 const removeOf = (strip) => {
-  const m = /<button type="button" class="icon-btn-sm fm-record-remove( danger)?" aria-label="([^"]*)"><svg[^>]*lucide-([a-z0-9-]+)/.exec(strip);
+  const m = /<button type="button" class="icon-quiet fm-record-remove( danger)?" aria-label="([^"]*)"[^>]*><svg[^>]*lucide-([a-z0-9-]+)/.exec(strip);
   return m ? { glyph: m[3], label: unescape(m[2]), danger: !!m[1], last: strip.endsWith("</svg></button></div>") } : null;
 };
 /** Every card drawn: its frame's whole markup, its strip's name, its bar's words, its strip's remove. */
@@ -244,7 +244,7 @@ console.log("\n  one field per list (owner, 2026-11-06): it narrows the list and
   ck("  ...one in no group \"Create a group\"; no group left: \"No group has '…'\" with the create offer",
      offers(pool).every((o) => o.endsWith(" / Create a group")) && offers(pool).length === 2
      && !names(pool).includes("Kitchen Temperature") && /No group has “pool”\./.test(text(pool))
-     && /<button type="button" class="btn ghost">Create a group with Pool Pump Power<\/button>/.test(inside(pool, "search-empty")), [offers(pool), text(inside(pool, "search-empty"))]);
+     && /<button type="button" class="btn">Create a group with Pool Pump Power<\/button>/.test(inside(pool, "search-empty")), [offers(pool), text(inside(pool, "search-empty"))]);
   const exact = groups("switch.example_pool_pump");
   ck("  ...the exact id of a real device in no group: its own row first, \"Create a group with <id>\" (Enter picks it), not repeated",
      offers(exact)[0] === "! Create a group with switch.example_pool_pump / Pool Pump" && offers(exact).filter((o) => o.includes("switch.example_pool_pump")).length === 1

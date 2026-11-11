@@ -19,8 +19,8 @@ const ann = (seq, extra = {}) => ({ seq, at: `2026-10-28T1${seq % 10}:00:00+08:0
 const J = JSON.stringify;
 
 console.log("  the filters, on one line:");
-ck("Issues · Notifications · Reports, in that order, no All (owner, 2026-10-30; 2026-11-01: \"Notifications if it fits\", else \"Notifs\"; 2026-10-28: \"Issues\" holds open, watched and closed; ticket 20: Reports)",
-   J(FILTERS.map((f) => f.label)) === J(["Issues", "Notifications", "Reports"]) && J(FILTERS.map((f) => f.short ?? null)) === J([null, "Notifs", null]));
+ck("Issues · Notifications · Reports, in that order, no All (owner, 2026-10-30; 2026-11-01: \"Notifications if it fits\": it does, so no short word is kept; 2026-10-28: \"Issues\" holds open, watched and closed; ticket 20: Reports)",
+   J(FILTERS.map((f) => f.label)) === J(["Issues", "Notifications", "Reports"]) && FILTERS.every((f) => !("short" in f)));
 const base = { open: [card("a"), card("b")], watched: [card("w", { look: "watched" })], announcements: [ann(1), ann(2), ann(3)] };
 const issues = messagesView({ ...base, filter: "issues", selected: null });
 ck("  ...Issues counts the open issues only (the watched never counted); the others no count",
@@ -272,7 +272,7 @@ ck("Messages opens where the model says, and marks nothing itself (the Cockpit's
    /useState<MessagesFilter>\(\(\) => openingFilter\(unread, opening, unreadReports\)\)/.test(tab) && !/shown\(/.test(tab)
    // ...and until a filter is chosen it follows what is unread (VESTA's feed read after the Cockpit opened)
    && /if \(!chosen\) setFilter\(\(f\) => followingFilter\(f, unread, opening, unreadReports\)\);/.test(tab)
-   && /onClick=\{\(\) => pickFilter\(f\.id\)\}/.test(tab));
+   && /onChange=\{pickFilter\}/.test(tab));
 
 console.log("\n  a report, drawn (ticket 20):");
 const { NoteDetail } = await import("@/components/cockpit/MessagesTab");

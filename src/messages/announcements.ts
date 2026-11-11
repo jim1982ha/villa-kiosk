@@ -12,6 +12,7 @@ import { CHAT_LANGUAGES } from "./recipients";
 import { ingressPath } from "@/ha/ingress";
 import { clockTime } from "@/utils/dateText";
 import { fetchFeed, type FeedRead } from "./feed";
+import { notDoneLine, storeSaveResult } from "@/utils/storeSave";
 import type { FullScreenAnnouncement } from "@/config/AppConfig";
 import AGENT_CONTRACT from "../../rootfs/usr/share/vesta/agent-contract.json" with { type: "json" };
 import HA_COMMANDS from "../../rootfs/usr/share/vesta/ha-commands.json" with { type: "json" };
@@ -527,19 +528,26 @@ export const pressVisit = (key: string, option: string,
 ): Promise<PressResult> => pressAt("visit-press", key, option, send);
 
 /** Erase kept message `a` with a one-shot superadmin authorisation (held on its row, then the code: owner,
- *  2026-10-29): whether the add-on removed it. Every page then drops it at its next read (feed `kept`). `send` is
- *  backendFetch (a check passes its own). */
+ *  2026-10-29). Null once the add-on removed it: every page then drops it at its next read (feed `kept`). Else what
+ *  the screen says, with its true cause (utils/storeSave notDoneLine, as a Facility record's delete).
+ *  ⚠️ IT ANSWERED true / false AND NOBODY READ IT (owner, 2026-11-10: a save that did not happen says so): the code
+ *  was taken, the card stayed, and nothing was said. `send` is backendFetch (a check passes its own). */
 export async function eraseMessage(
-  a: Announcement, elevation: string, send: (url: string, init: RequestInit) => Promise<Pick<Response, "ok" | "status">>,
-): Promise<boolean> {
+  a: Announcement, elevation: string,
+  send: (url: string, init: RequestInit) => Promise<Pick<Response, "ok" | "status"> & { json?: () => Promise<unknown> }>,
+): Promise<string | null> {
+  const not = (reason: "refused" | "transport", message?: string) => notDoneLine({ ok: false, reason, message }, "deleted");
   try {
     const r = await send(ingressPath("message-erase"), {
       method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ feed: a.feed === "vesta" ? "vesta" : "villa", seq: a.seq, elevation }),
     });
-    return r.ok;
+    // read as every store write's answer is (utils/storeSave): the add-on's NO with its reason, else not reached
+    const said = await storeSaveResult({ ok: r.ok, status: r.status, json: r.json ?? (async () => ({})) });
+    if (said.ok) return null;
+    return "refused" in said ? not("refused", said.message) : not("transport");
   } catch {
-    return false;
+    return not("transport");
   }
 }
 

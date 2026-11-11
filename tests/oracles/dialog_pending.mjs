@@ -22,6 +22,7 @@ const { ConfigProvider, useConfig, DialogEdits } = await import("@/config/Config
 const { useDraftedSlice } = await import("@/hooks/useDraftedSlice");
 const { PendingFields, usePendingField } = await import("@/hooks/usePendingField");
 const { useScenePreview } = await import("@/hooks/useScenePreview");
+const { AppNoticeContext } = await import("@/components/hud/AppNotice");
 const { eyeHeightOf } = await import("@/babylon/walkerSpawn");
 const { ADVANCED_SETTINGS_KEYS: ADV } = await import("@/config/configSlice");
 
@@ -59,7 +60,9 @@ function Settings({ withAdvanced }) {
   useScenePreview(target, settings.view);
   return withAdvanced ? h(Advanced) : null;
 }
-const app = (children) => h(ConfigProvider, null, h(Scene), children);
+/** What the villa view's notices are asked to say (hud/AppNotice): a number that was none is one of them. */
+const told = [];
+const app = (children) => h(AppNoticeContext.Provider, { value: (m) => told.push(m) }, h(ConfigProvider, null, h(Scene), children));
 const type = (text) => act(() => lat.draft(text, Number.isFinite(Number(text)) && text.trim() !== "" ? { latitude: Number(text) } : null));
 
 console.log("  Advanced Settings on its own, a latitude typed:");
@@ -124,6 +127,38 @@ console.log("\n  a half-typed number writes nothing:");
   ck("Save is lit while it is typed", advanced.dirty);
   await act(() => wait(PAUSE * 3));
   ck("after the pause nothing is written, and the field falls back", config.latitude === before && lat.shown === undefined && !advanced.dirty);
+  await render(app(null));
+}
+
+console.log("\n  a number that is none is said (it went back to the one before with no word):");
+{
+  const LINE = '"Latitude" needs a number: the one before was kept.';
+  const typed = (text) => act(() => lat.draft(text, null, LINE));
+  await render(app(h(Advanced)));
+  const before = config.latitude;
+  told.length = 0;
+  await typed("8.6");
+  await act(() => lat.draft("8.65", { latitude: 8.65 }, LINE));
+  await act(() => wait(PAUSE * 3));
+  ck("a number that is one says nothing", config.latitude === 8.65 && told.length === 0, told);
+  await typed("north");
+  ck("nothing is said while it is typed", told.length === 0, told);
+  await act(() => wait(PAUSE * 3));
+  ck("after the pause the field falls back, and a red notice says which field and what it needs",
+     config.latitude === 8.65 && lat.shown === undefined && JSON.stringify(told) === JSON.stringify([{ text: LINE, tone: "alert" }]), told);
+  told.length = 0;
+  await typed("north");
+  let saved;
+  await act(async () => { saved = await advanced.save(); });
+  ck("Save pressed while one waits: said the same, once, and the window stays open on it (Save answers no)",
+     saved === false && config.latitude === 8.65 && JSON.stringify(told) === JSON.stringify([{ text: LINE, tone: "alert" }]), { saved, told });
+  told.length = 0;
+  await typed("north");
+  await act(() => advanced.discard());
+  await act(() => wait(PAUSE * 3));
+  ck("Cancel drops it with no word", told.length === 0, told);
+  await act(() => lat.draft(String(before), { latitude: before }));
+  await act(() => advanced.save());
   await render(app(null));
 }
 

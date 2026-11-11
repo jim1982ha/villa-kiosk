@@ -6,7 +6,7 @@
 // faults twice). The same with or without the Agent: only where faults come from differs.
 // Where a check can draw what it is about it does (tests/consistency/screen.mjs); the source-text checks left are
 // wiring that needs the Facility data or the page to draw (said where), and stylesheet rules.
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { h, draw, text } from "../consistency/screen.mjs";
 import { ck, done } from "../consistency/check.mjs";
 import { devicesOf } from "../consistency/devices.mjs";
@@ -317,7 +317,7 @@ ck("  ...nothing open: the goal is met, and said once", allClear.state === "pass
   // owner, 2026-11-05: "always expanded (remove the capability to collapse the card)"
   ck("  ...the checks are always shown under their verdict: nothing folds",
      text(drawn).includes("|Ready, with things worth fixing|0 of 1 checks passing|") && drawn.includes("4 open faults")
-     && !/aria-expanded|fm-headline-toggle/.test(drawn.replace(/<button type="button" class="info-btn info-btn-icon"[^>]*>/g, "")), text(drawn));
+     && !/aria-expanded|fm-headline-toggle/.test(drawn.replace(/<button type="button" class="info-trigger"[^>]*>/g, "")), text(drawn));
   // owner, 2026-11-05: "show the device pills concerned by either the Ticket or Faults … never duplicate device"
   const pump = pumpBy((id) => (id.includes("pump") ? "switch.pump" : id));
   ck("  ...its devices as chips, as All devices reporting's: each device once (a pump's ticket and fault are one chip)",
@@ -489,8 +489,9 @@ ck("  ...and no figures above them (in progress, mean resolution, closed with no
   const kids = bar ? bar.children.filter((c) => JSX.tagOf(c) || (c.expression && c.getText().trim())) : [];
   const actions = bar ? JSX.elements(bar, "div").find((d) => cls(d) === '"messages-toolbar-actions"') : undefined;
   const open = actions ? JSX.elements(actions, "WorkButton") : [];
-  ck("the filters' line: the filters, then at its right a guest's Report a problem; never Open Ticket, nor its form",
-     !!bar && JSX.tagOf(kids[0]) === "div" && cls(kids[0]) === '"messages-filters"' && !!actions
+  // owner, 2026-11-10: the filters are the app's one choice control (SegmentedGroup), each segment its words' width
+  ck("the filters' line: the filters (the one choice control), then at its right a guest's Report a problem; never Open Ticket, nor its form",
+     !!bar && JSX.tagOf(kids[0]) === "SegmentedGroup" && JSX.propText(kids[0], "layout") === '"natural"' && !!actions
      && open.length === 0 && /Report a problem/.test(actions.getText()) && !/raiseTicket|<FaultForm /.test(msg),
      kids.map((k) => k.getText().slice(0, 50)));
   ck("  ...only while the issues are listed, for a profile that reports and does not manage",
@@ -503,59 +504,42 @@ ck("  ...and no figures above them (in progress, mean resolution, closed with no
      WORK_ACTIONS.raiseTicket.label === "Open Ticket" && WORK_ACTIONS.openTicket.label === WORK_ACTIONS.raiseTicket.label
      && JSX.elements(wb, "WorkButton").length === 1 && JSX.propText(JSX.elements(wb, "WorkButton")[0], "kind") === "a.kind");
   const shared = readFileSync(new URL("../../src/styles/08-shared.css", import.meta.url), "utf8");
-  // owner, 2026-10-31: on a phone (360 to 430 px) Open Ticket still dropped to its own line, 2 to 42 px short in
-  // WebKit; the filter's button says "Notifs", its section keeps "Notifications"
+  const modals = readFileSync(new URL("../../src/styles/04-modals.css", import.meta.url), "utf8");
   const { FILTERS } = await import("@/messages/messagesModel");
+  const { withCount } = await import("@/utils/countBadge");
   const notesSection = JSX.elements(tab, "ListSection").find((s) => JSX.propText(s, "onToggle") === '() => fold("notes")');
-  // owner, 2026-11-01: "Notifications if it fits": both words drawn, the toolbar's width shows one
-  ck("  ...the filters say Issues · Notifications · Reports, \"Notifs\" where the line is too narrow; drawn from that one list; the section is \"Notifications\"",
-     FILTERS.map((f) => f.label).join(" · ") === "Issues · Notifications · Reports" && FILTERS[1].short === "Notifs"
-     && /<span className="messages-filter-long">\{f\.label\}<\/span><span className="messages-filter-short">\{f\.short\}<\/span>/.test(msg)
-     && !!notesSection && JSX.propText(notesSection, "title") === '"Notifications"', FILTERS);
-  // ...and on one line with Open Ticket on every phone (owner, 2026-10-31). Measured in headless WebKit (the wider
-  // engine) with the real Cockpit: the labels' own widths Issues 9 54.1, Notifs 36.5, Reports 47.6, the wrench and Open
-  // Ticket 94.7, a 1 px border; the filters' line is the screen less 36 px. With 12 px each side it was 1 px short on a
-  // 390 px iPhone, 31 on a 360 px phone
-  // owner, 2026-10-31: "the corners are not the same: style them all the same". The four buttons' shape, read from the
-  // stylesheet's rules (postcss): every declaration of it, for either selector, anywhere (a phone's @media too), must
-  // be ONE rule naming both, with the filters' round pill
+  // owner, 2026-11-01: "Notifications if it fits". It does (below), so the short "Notifs" went with its code
+  ck("  ...the filters say Issues · Notifications · Reports, each with its count as a tab says it (\"Issues (6)\"); drawn from that one list; the section is \"Notifications\"",
+     FILTERS.map((f) => f.label).join(" · ") === "Issues · Notifications · Reports" && FILTERS.every((f) => !("short" in f))
+     && /label: withCount\(f\.label, f\.count\)/.test(msg) && withCount("Issues", 6) === "Issues (6)" && withCount("Reports", 0) === "Reports"
+     && withCount("Reports", null) === "Reports" && !!notesSection && JSX.propText(notesSection, "title") === '"Notifications"', FILTERS);
+  // owner, 2026-10-31: "the corners are not the same: style them all the same"; 2026-11-10: one definition for every
+  // choice and every button. Neither the filters nor the button beside them has a look of its own in any stylesheet:
+  // the one choice control and the one worded button, standing on a line that stretches them
   const postcss = (await import("postcss")).default;
-  const SHAPE = ["min-height", "padding", "border-radius", "border", "font-size"];
-  const FILTER = ".messages-filter", OPEN = ".messages-toolbar-actions .btn";
-  const sheet = postcss.parse(readFileSync(new URL("../../src/styles/08-shared.css", import.meta.url), "utf8"));
-  const shaping = [];
-  sheet.walkRules((r) => {
-    const sel = r.selectors.map((x) => x.trim());
-    if (!sel.includes(FILTER) && !sel.includes(OPEN)) return;
-    r.walkDecls((d) => { if (SHAPE.includes(d.prop) || d.prop.startsWith("border-") || d.prop.startsWith("padding-")) shaping.push({ r, d }); });
+  const styles = readdirSync(new URL("../../src/styles/", import.meta.url)).filter((f) => f.endsWith(".css"))
+    .map((f) => readFileSync(new URL(`../../src/styles/${f}`, import.meta.url), "utf8"));
+  const own = [];
+  for (const css of styles) postcss.parse(css).walkRules((r) => {
+    if (/\.messages-filter|\.messages-toolbar-actions \S/.test(r.selector)) own.push(r.selector);
   });
-  const rules = [...new Set(shaping.map((x) => x.r))];
-  const shape = rules.length === 1 ? Object.fromEntries(shaping.map(({ d }) => [d.prop, d.value])) : {};
-  ck("  ...the line's four buttons are ONE shape, defined once: the filters' round pill, its height, border and padding",
-     rules.length === 1 && rules[0].selectors.map((x) => x.trim()).sort().join() === [FILTER, OPEN].sort().join()
-     && shape["border-radius"] === "999px" && shape["min-height"] === "var(--touch-min)" && /^1px solid /.test(shape.border ?? "")
-     && /^0 \d+px$/.test(shape.padding ?? "") && SHAPE.every((p) => shaping.filter(({ d }) => d.prop === p).length === 1),
-     rules.map((r) => `${r.selector} { ${r.nodes.map(String).join("; ")} }`));
+  ck("  ...the filters and the button beside them have no look of their own (the one choice control, the one button); the line gives them its height",
+     own.length === 0
+     && /\.messages-toolbar \{[^}]*align-items: stretch;/.test(shared) && /\.messages-toolbar-actions \{[^}]*align-items: stretch;/.test(shared), own);
   {
-    const pad = Number(/^0 (\d+)px$/.exec(shape.padding ?? "")?.[1]);
-    const px = (re) => Number((shared.match(re) ?? [])[1]);
-    const fPad = pad, bPad = pad;
-    const fGap = px(/\.messages-filters \{[^}]*gap: (\d+)px/), tGap = px(/\.messages-toolbar \{[^}]*gap: (\d+)px/);
-    const needed = [54.1, 36.5, 47.6].reduce((w, l) => w + l + 2 * fPad + 2, 0) + 2 * fGap + tGap + 94.7 + 2 * bPad + 2;
-    const fits = [360, 375, 390, 412, 430].filter((w) => needed <= w - 36);
-    ck("  ...the filters and Open Ticket fit one line on every phone, 360 to 430 px (the filters' and the button's padding)",
-       fPad > 0 && bPad > 0 && fits.length === 5, { fPad, bPad, needed: Math.round(needed * 10) / 10, fits });
-    // "Notifications" in place of "Notifs": its width from Notifs' measure, 13 letters for 6 (an estimate, the same font)
-    const longNeeded = needed + 36.5 * (13 / 6 - 1);
-    const shows = px(/@container \(min-width: (\d+)px\)/);
-    ck("  ...\"Notifications\" shows only on a line wide enough for the four with it, and from a 412 px phone up; \"Notifs\" below, and by default",
-       shows >= longNeeded && shows <= 412 - 36 && /container-type: inline-size;/.test(shared)
-       && /\.messages-filter-long \{ display: none; \}\s*@container \(min-width: \d+px\) \{\s*\.messages-filter-long \{ display: inline; \}\s*\.messages-filter-short \{ display: none; \}/.test(shared),
-       { shows, longNeeded: Math.round(longNeeded) });
+    // The three filters hold a 360 px phone's line (the screen less 36 px) with the whole word "Notifications" and a
+    // two-figure count. Measured in headless Firefox with the real control at its 14 px: the words' own widths
+    // "Issues (99)" 72.9 (chosen, bold), "Notifications" 83.3, "Reports" 51.2. The rest is the control's own rules
+    const px = (css, re) => Number((css.match(re) ?? [])[1]);
+    const pad = px(modals, /\.segmented-natural button \{[^}]*padding: 0 (\d+)px/);
+    const gap = px(modals, /\.segmented, \.tool-group \{[^}]*gap: (\d+)px/), track = px(modals, /\.segmented, \.tool-group \{[^}]*padding: (\d+)px/);
+    const needed = [72.9, 83.3, 51.2].reduce((w, l) => w + l + 2 * pad, 0) + 2 * gap + 2 * track;
+    ck("  ...the three filters, \"Notifications\" whole, fit one line on a 360 px phone (the control's own padding and gaps)",
+       pad > 0 && gap > 0 && track > 0 && needed <= 360 - 36, { pad, gap, track, needed: Math.round(needed * 10) / 10 });
   }
-  ck("  ...the two groups wrap whole: the filters never shrink, the button keeps the right",
-     /\.messages-toolbar \{[^}]*flex-wrap: wrap;/.test(shared) && /\.messages-filters \{[^}]*flex: 0 0 auto;/.test(shared)
-     && /\.messages-toolbar-actions \{[^}]*margin-left: auto;/.test(shared));
+  ck("  ...the two groups wrap whole: the filters keep their width (sliding sideways only on a line narrower than themselves), the button keeps the right",
+     /\.messages-toolbar \{[^}]*flex-wrap: wrap;/.test(shared) && /\.segmented-natural \{[^}]*flex: 0 1 auto;[^}]*max-width: 100%;[^}]*overflow-x: auto;/.test(modals)
+     && /\.segmented-natural button \{[^}]*flex: 0 0 auto;/.test(modals) && /\.messages-toolbar-actions \{[^}]*margin-left: auto;/.test(shared));
 }
 // WHAT the buttons are, on which records, with which question: by value at the top and in "the buttons, drawn".
 // Here only the wiring a drawing cannot reach — the Overview hands cardActions to the shared buttons, and acts on
@@ -584,8 +568,8 @@ console.log("\n  the buttons, drawn — ONE close-with-confirm for both tabs:");
     : /<span class="work-short">[^<]*<\/span>/g, "")).replace(/\[icon\]\|?/g, "[icon] ");
   // owner, 2026-11-05 ("Status on top"): each a segment of the card's bar, the main action first, in green
   ck("an issue card: Done, Not a problem, Open Ticket, then Need help (owner, 2026-11-05), each with its icon, in the card's bar, Done first and green, named for a screen reader",
-     /^<button type="button" class="btn ghost fm-bar-main"[^>]*><svg[^>]*lucide-check/.test(drawButtons(ovActs, null, { name: "Pump" }))
-     && (drawButtons(ovActs).match(/fm-bar-main/g) ?? []).length === 1 && /^<button type="button" class="btn ghost fm-bar-main"/.test(drawButtons(tkActs))
+     /^<button type="button" class="btn fm-bar-main"[^>]*><svg[^>]*lucide-check/.test(drawButtons(ovActs, null, { name: "Pump" }))
+     && (drawButtons(ovActs).match(/fm-bar-main/g) ?? []).length === 1 && /^<button type="button" class="btn fm-bar-main"/.test(drawButtons(tkActs))
      && !/fm-bar-main/.test(drawButtons(W.closedActions({ id: "r", stage: "closed" }, true)))
      && seen(drawButtons(ovActs, null, { name: "Pump" })) === "|[icon] Done|[icon] Not a problem|[icon] Open Ticket|[icon] Need help|"
      && /aria-label="Done “Pump”"/.test(drawButtons(ovActs, null, { name: "Pump" })) && /aria-label="Open Ticket"/.test(drawButtons(ovActs)), seen(drawButtons(ovActs)));
@@ -611,7 +595,7 @@ console.log("\n  the buttons, drawn — ONE close-with-confirm for both tabs:");
     // its buttons, as wide as its widest label (Not a problem 98 px, a ticket's No action needed 121 px); the bar spans
     // the card edge to edge (no card padding, no icon column any more)
     const num = (re, t) => Number((t.match(re) ?? [])[1]);
-    const seg = /\.fm-record-actions :is\(\.btn, \.icon-btn, \.fm-document-link\) \{([^}]*)\}/.exec(fac)?.[1] ?? "";
+    const seg = /\.fm-record-actions :is\(\.btn, \.fm-document-link\) \{([^}]*)\}/.exec(fac)?.[1] ?? "";
     const pad = num(/padding: 0 (\d+)px/, seg), iconGap = num(/gap: (\d+)px/, seg);
     const hair = num(/\.fm-record-actions \{[^}]*gap: (\d+)px/, fac);
     const narrowBelow = num(/@container work-row \(max-width: (\d+)px\)/, fac) + 1;
@@ -638,7 +622,7 @@ console.log("\n  the buttons, drawn — ONE close-with-confirm for both tabs:");
   ck("  ...the button pressed asks ITS question in place of the buttons: the ticket's No action needed; Done and Not a problem have none (owner, 2026-11-07)",
      seen(drawButtons(ovActs, asked("done"))) === "|[icon] Done|[icon] Not a problem|[icon] Open Ticket|[icon] Need help|"
      && seen(drawButtons(ovActs, asked("notAProblem"))) === "|[icon] Done|[icon] Not a problem|[icon] Open Ticket|[icon] Need help|"
-     && /^<div class="fm-record-ask"><svg[\s\S]*?<\/svg><span>Close this ticket\?[^<]*<\/span><\/div><button type="button" class="btn ghost fm-bar-main">No action needed<\/button><button type="button" class="btn ghost">Cancel<\/button>$/.test(drawButtons(tkActs, asked("closeTicket")))
+     && /^<div class="fm-record-ask"><svg[\s\S]*?<\/svg><span>Close this ticket\?[^<]*<\/span><\/div><button type="button" class="btn fm-bar-main">No action needed<\/button><button type="button" class="btn">Cancel<\/button>$/.test(drawButtons(tkActs, asked("closeTicket")))
      && seen(drawButtons(tkActs, asked("closeTicket"))) === "|[icon] Close this ticket? Nothing was done, no cost is recorded.|No action needed|Cancel|",
      [seen(drawButtons(ovActs, asked("done"))), seen(drawButtons(ovActs, asked("notAProblem"))), seen(drawButtons(tkActs, asked("closeTicket")))]);
   {

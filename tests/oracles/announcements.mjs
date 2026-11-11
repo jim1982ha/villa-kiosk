@@ -122,9 +122,15 @@ ck("  ...the notice sends each to the notice model and keeps no memory of its ow
   const ok = await eraseMessage({ ...a(7), feed: "vesta" }, "tok", send);
   await eraseMessage(a(5), "tok2", send);
   ck("an erase names the message's feed and number with its one-shot authorisation",
-     ok === true && JSON.stringify(sent) === JSON.stringify([
+     ok === null && JSON.stringify(sent) === JSON.stringify([
        ["/message-erase", "POST", JSON.stringify({ feed: "vesta", seq: 7, elevation: "tok" })],
        ["/message-erase", "POST", JSON.stringify({ feed: "villa", seq: 5, elevation: "tok2" })]]), sent);
+  const no = await eraseMessage(a(5), "tok3", async () => ({ ok: false, status: 403, json: async () => ({ error: "Only the owner may delete." }) }));
+  const off = await eraseMessage(a(5), "tok4", async () => { throw new TypeError("Failed to fetch"); });
+  const down = await eraseMessage(a(5), "tok5", async () => ({ ok: false, status: 502 }));
+  ck("  ...one that did not happen answers with its line (it answered nobody): the server's no, or out of reach",
+     no === "The server refused this change: Only the owner may delete."
+     && off === "Not deleted: the server could not be reached, nothing was changed. Try again." && down === off, { no, off, down });
   const tab = src("components/cockpit/MessagesTab.tsx");
   ck("  ...a notification's and a report's card are held to erase them, as every record (RecordCard `erase`), the code asked first (never a button)",
      /erase=\{\{ title: "Delete message", detail: a\.title, run: \(token\) => eraseMessage\(a, token, backendFetch\) \}\}/.test(tab)
@@ -314,7 +320,7 @@ ck("a photo's words: its camera and its time, the time alone when no camera is n
      && /\.vesta-notice \.photo-tile, \.vesta-notice \.photo-tile-strongest \{ --tile-w: 88px; \}/.test(css), "08-shared.css");
 }
 ck("  ...in the column, before the passing notice (a motion notice never replaces a ring)",
-   /<ServiceErrorToast \/>\s*<AnnouncementNotice \/>\s*<AppNotice /.test(src("pages/Dashboard.tsx")));
+   /<AnnouncementNotice \/>\s*<AppNotice /.test(src("pages/Dashboard.tsx")));
 
 // the shared settings' empty defaults ("Full-screen announcements" empty), a tablet that allows full screen
 const NONE_FULL = { fullScreen: [], ringsFullScreen: true };

@@ -42,15 +42,15 @@ export default function CameraDeviceButtons({ cameraId, order }: {
       {MOVES.map(({ dir, Icon, words }, i) => {
         const id = controls.moves[dir];
         return id ? (
-          <button key={dir} type="button" className="icon-btn camera-move-btn" title={words} aria-label={words}
+          <button key={dir} type="button" className="media-btn" data-tip={words} aria-label={words}
             style={order(6 + i)} onClick={() => void callService("button", "press", {}, { entity_id: id })}>
             <Icon />
           </button>
         ) : null;
       })}
       {siren && (
-        <button type="button" className={`icon-btn camera-linked-btn camera-siren-btn${sounding ? " on alarm" : ""}`}
-          title={sounding ? "Stop the siren" : "Sound the siren"} aria-label={sounding ? "Stop the siren" : "Sound the siren"}
+        <button type="button" className={`media-btn camera-linked-btn camera-siren-btn${sounding ? " on alarm" : ""}`}
+          data-tip={sounding ? "Stop the siren" : "Sound the siren"} aria-label={sounding ? "Stop the siren" : "Sound the siren"}
           aria-pressed={sounding} style={order(10)}
           onClick={() => {
             if (sounding) { void callService("siren", "turn_off", {}, { entity_id: siren }); return; }

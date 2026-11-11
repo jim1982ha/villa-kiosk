@@ -190,7 +190,7 @@ export default function ConfigEditor({ title, tip, initialSearch }: { title: str
               They do nothing except clutter this list.
             </div>
           </div>
-          <button className="btn ghost" onClick={removeStale}>
+          <button className="btn" onClick={removeStale}>
             Remove {staleIds.length}
           </button>
         </div>
@@ -216,7 +216,7 @@ export default function ConfigEditor({ title, tip, initialSearch }: { title: str
               body={<EntityPicker value={repointTo[id]} onChange={(v) => setRepointTo((m) => ({ ...m, [id]: v }))}
                 placeholder="The entity this 3D object is now…" />}
               actions={
-                <button type="button" className="btn ghost fm-bar-main" disabled={!repointTo[id] || repointTo[id] === id} onClick={() => repoint(id)}>
+                <button type="button" className="btn fm-bar-main" disabled={!repointTo[id] || repointTo[id] === id} onClick={() => repoint(id)}>
                   <Link2 size={16} aria-hidden />Point it there
                 </button>
               } />

@@ -42,4 +42,4 @@ export const text = (html) => html.replace(/<svg[\s\S]*?<\/svg>/g, "[icon]").rep
   .replace(/&quot;/g, '"').replace(/&#x27;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
 
 /** A plain button, for a card's actions. */
-export const btn = (label) => h("button", { type: "button", className: "btn ghost" }, label);
+export const btn = (label) => h("button", { type: "button", className: "btn" }, label);

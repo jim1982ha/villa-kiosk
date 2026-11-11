@@ -24,6 +24,7 @@ import FaultStageModal from "./FaultStageModal";
 import { CardAsk } from "./RecordCard";
 import { PRESS_SAID, pressVisit } from "@/messages/announcements";
 import { backendFetch } from "@/auth/sessionLost";
+import ProblemLine from "@/components/common/ProblemLine";
 
 /** The fault a card with no record raises for its device (IssueCard.raisedFor). */
 export type RaisedFault = Omit<FmTicket, "id" | "openedAt" | "status">;
@@ -110,7 +111,7 @@ export function useCardWork(): CardWork {
 /** ⚠️ ONE LOOK FOR EVERY BUTTON ON A CARD (owner, 2026-10-30: Done · Need help were filled green beside Open Ticket ·
  *  Close outlined, on the same Inbox): a card's work buttons and its record's buttons (AnnouncementContent.ButtonRow:
  *  VESTA's Done, the doorbell's Unlock) both draw with this. */
-export const CARD_BUTTON = "btn ghost";
+export const CARD_BUTTON = "btn";
 
 /** ⚠️ EVERY WORK BUTTON CARRIES AN ICON (owner, 2026-11-04: "use 1 word label and icon in the button", on a phone,
  *  and "consistently adjust cards on laptop screens"): it had been Open Ticket's wrench (owner, 2026-10-14) and Edit
@@ -176,7 +177,7 @@ export default function WorkButtons({ actions, cardKey, work, onOpen, raised, as
   const problem = work.problemFor(cardKey);
   const staging = work.staging?.key === cardKey ? work.staging : null;
   const after = (problem || staging) && <>
-    {problem && <div className="fm-inline-error fm-row-confirm" role="alert">{problem}</div>}
+    <ProblemLine className="fm-row-confirm">{problem}</ProblemLine>
     {staging && <FaultStageModal tickets={staging.tickets} to={staging.to} onClose={work.endStaging} />}
   </>;
   if (actions.length === 0) return after || null;

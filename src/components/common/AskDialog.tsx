@@ -35,6 +35,7 @@
 // what the user typed and asks them twice. Returning a string keeps the dialog
 // open with the text intact and the reason under the field.
 
+import ModalFooter from "@/components/common/ModalFooter";
 import Window from "@/components/common/Window";
 import { useState } from "react";
 
@@ -45,20 +46,22 @@ interface Props {
   /** Present → a text field is shown, and its value is passed to `onConfirm`. */
   input?: { label: string; placeholder?: string; initial?: string };
   confirmLabel?: string;
-  /** null hides the cancel button entirely — that is the `alert()` shape. */
-  cancelLabel?: string | null;
+  /** The other answer's word when "Cancel" would not say what it keeps ("Keep"). */
+  cancelLabel?: string;
+  /** It only tells: one button and no Cancel — that is the `alert()` shape. */
+  notice?: boolean;
   /** Paints the confirm button as destructive (`.btn.danger`). */
   danger?: boolean;
   /**
    * Return a string to REJECT: the dialog stays open, the text is kept, and the
-   * string is shown under the field. Return nothing to accept and close.
+   * string is shown above the buttons. Return nothing to accept and close.
    */
   onConfirm: (value: string) => string | void;
   onCancel: () => void;
 }
 
 export default function AskDialog({
-  title, message, input, confirmLabel = "OK", cancelLabel = "Cancel",
+  title, message, input, confirmLabel = "OK", cancelLabel, notice = false,
   danger = false, onConfirm, onCancel,
 }: Props) {
   const [value, setValue] = useState(input?.initial ?? "");
@@ -79,7 +82,7 @@ export default function AskDialog({
     // small centred card on a phone. Without it these fall through to the base
     // `.modal` rules, which are written for long full-screen sheets and would
     // render a two-line question edge-to-edge with square corners.
-    <Window kind="question" label={title} onClose={onCancel} className="panel-modal ask-dialog" layer="panel-modal-backdrop"
+    <Window kind="question" label={title} onClose={onCancel} className="panel-modal" layer="panel-modal-backdrop"
       zIndex={90} style={{ maxWidth: 420 }}>
       <div className="modal-header"><div className="title"><h2>{title}</h2></div></div>
       <div className="modal-body">
@@ -108,21 +111,11 @@ export default function AskDialog({
             />
           </div>
         )}
-        {error && (
-          <p role="alert" style={{ color: "var(--status-danger)", margin: "10px 0 0" }}>
-            {error}
-          </p>
-        )}
       </div>
-      <div className="modal-footer">
-        <span />
-        <div className="modal-footer-group">
-        {cancelLabel !== null && (
-          <button className="btn ghost" onClick={onCancel}>{cancelLabel}</button>
-        )}
-        <button className={`btn ${danger ? "danger" : "primary"}`} onClick={submit}>{confirmLabel}</button>
-        </div>
-      </div>
+      {/* ⚠️ THE APP'S ONE FOOTER (owner, 2026-11-10: one definition): the box wrote its own, with its own Cancel. */}
+      {notice
+        ? <ModalFooter onClose={submit} closeLabel={confirmLabel} />
+        : <ModalFooter onClose={onCancel} closeLabel={cancelLabel} error={error} answer={{ label: confirmLabel, danger, onPress: submit }} />}
     </Window>
   );
 }

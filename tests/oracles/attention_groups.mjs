@@ -225,7 +225,8 @@ console.log("\n  the callers:");
 const src = (f) => readFileSync(new URL(`../../src/${f}`, import.meta.url), "utf8");
 const vm = src("config/VillaModel.tsx"), cockpit = (src("components/cockpit/CockpitModal.tsx") + src("components/cockpit/MessagesTab.tsx") + src("components/cockpit/IssueCard.tsx"));
 const hud = src("components/hud/HUD.tsx");
-const counted = [...hud.matchAll(/formatCountBadge\(([^)]*)\)/g)].map((m) => m[1]).filter((a) => a !== "facilityAttention");
+// the top bar's round badge (formatCountBadge) and the phone menu's "Cockpit (N)" (withCount, the one writing of a name's count)
+const counted = [...hud.matchAll(/formatCountBadge\(([^)]*)\)/g), ...hud.matchAll(/withCount\("Cockpit", ([^)]*)\)/g)].map((m) => m[1]).filter((a) => a !== "facilityAttention");
 ck("every Cockpit count in the top bar and the phone menu is the number of ROWS",
    counted.length === 2 && counted.every((a) => a === "attentionGroups.length"), counted);
 // 2.496.268: grouped ONCE, per profile — the villa model's role-blind

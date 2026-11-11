@@ -34,7 +34,7 @@ export default class ErrorBoundary extends Component<Props, State> {
         title="Something went wrong"
         hint="The app hit an unexpected error while rendering. Copy the details below and send them over so it can be diagnosed."
         detail={buildReport(captured)}
-        actions={<button className="btn ghost" onClick={() => location.reload()}>Reload</button>}
+        actions={<button className="btn" onClick={() => location.reload()}>Reload</button>}
       />
     );
   }

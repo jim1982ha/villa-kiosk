@@ -915,7 +915,7 @@ export default function BabylonCanvas({
           hint={<span style={{ whiteSpace: "pre-line" }}>{errorMsg}</span>}
           detail={report}
           actions={!addonError && canManageModel
-            ? <button className="btn ghost" onClick={() => cbRef.current.onNeedModel()}>Upload Model</button>
+            ? <button className="btn" onClick={() => cbRef.current.onNeedModel()}>Upload Model</button>
             : undefined}
         />
       )}
@@ -936,11 +936,11 @@ export default function BabylonCanvas({
           detail={report}
           actions={
             <>
-              <button className="btn ghost" onClick={() => { clearCrashLoop(); location.reload(); }}>
+              <button className="btn" onClick={() => { clearCrashLoop(); location.reload(); }}>
                 Try once more
               </button>
               {canManageModel && (
-                <button className="btn ghost" onClick={() => { clearCrashLoop(); cbRef.current.onNeedModel(); }}>
+                <button className="btn" onClick={() => { clearCrashLoop(); cbRef.current.onNeedModel(); }}>
                   Upload a lighter model
                 </button>
               )}

@@ -20,7 +20,7 @@
 // progress until it is filled in gets satisfied with junk, or the fault is
 // left where it is — both worse than a thin but honest record.
 
-import Window from "@/components/common/Window";
+import Window, { FormBody } from "@/components/common/Window";
 import ModalFooter from "@/components/common/ModalFooter";
 import { useState } from "react";
 
@@ -66,7 +66,6 @@ export default function FaultStageModal({
   // push this surface onto the dismissal stack twice.
   const { who, setWho, note, setNote, photoIds, setPhotoIds, amount, setAmount, work } = useWorkFields();
   const [category, setCategory] = useState<"minor" | "major">("minor");
-  const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState<string | null>(null);
 
   const copy = STAGE_COPY[to];
@@ -76,7 +75,6 @@ export default function FaultStageModal({
   const amountIdr = asksCost ? parseAmount(amount) : 0;
 
   const submit = async () => {
-    setBusy(true);
     setFailed(null);
     const result = await advanceTickets(
       tickets.map((t) => t.id), to,
@@ -93,7 +91,6 @@ export default function FaultStageModal({
           }
         : undefined,
     );
-    setBusy(false);
     // Closes when saved or queued; stays, with the reason, only when refused.
     const { done, note: why } = result;
     if (done) onClose(); else setFailed(why);
@@ -106,7 +103,7 @@ export default function FaultStageModal({
       <div className="modal-header">
         <h2>{copy.title}</h2>
       </div>
-      <div className="modal-body fm-stack">
+      <FormBody className="fm-stack">
         {/* the fault as its card names it (fmEngine.faultTitle: "#5 · …", a duration worded now) — not the stored title */}
         {tickets.map((t) => <div key={t.id} className="fm-banner">{faultTitle(t)}</div>)}
         {/* the name typed, never offered (WorkerName) */}
@@ -134,15 +131,10 @@ export default function FaultStageModal({
         {asksCost && (
           <CostFields amount={amount} onAmount={setAmount} category={category} onCategory={setCategory} optional />
         )}
-      </div>
-      {failed && <div className="fm-inline-error" role="alert" style={{ margin: "0 28px 8px" }}>{failed}</div>}
-      {/* The shared footer (common/ModalFooter): its two answers in one group on the right, as Settings'. */}
-      <ModalFooter onClose={onClose} actions={<>
-        <button className="btn" onClick={onClose}>Cancel</button>
-        <button className="btn primary" disabled={busy} onClick={() => void submit()}>
-          {busy ? "Saving…" : copy.cta}
-        </button>
-      </>} />
+      </FormBody>
+      {/* The shared footer (common/ModalFooter): Cancel and the answer, the same pair as Settings' (common/Answers),
+          one press at a time; a refusal is its line above the footer. */}
+      <ModalFooter onClose={onClose} error={failed} answer={{ label: copy.cta, busy: "Saving…", onPress: submit }} />
     </Window>
   );
 }

@@ -14,6 +14,7 @@ import { startModelPrefetch } from "@/utils/modelPrefetch";
 import { markBoot } from "@/utils/bootTimeline";
 import VestaMark from "@/components/VestaMark";
 import PinPad from "./PinPad";
+import ProblemLine from "@/components/common/ProblemLine";
 
 const ROLE_ICONS: Record<Role, typeof UserRound> = {
   guest: UserRound,
@@ -154,9 +155,7 @@ export default function ProfileGate({ children }: { children: ReactNode }) {
               <VestaMark size={52} className="profile-mark" />
               <h1 className="profile-title">{resolveSiteTitle(config)}</h1>
               <p className="profile-sub">Who's using VESTA?</p>
-              {gateError && (
-                <p className="profile-error" role="alert">{gateError}</p>
-              )}
+              <ProblemLine className="profile-error">{gateError}</ProblemLine>
               <div className="profile-cards">
                 {ROLE_ORDER.map((r) => {
                   const Icon = ROLE_ICONS[r];
@@ -182,7 +181,7 @@ export default function ProfileGate({ children }: { children: ReactNode }) {
               </div>
               {!access && !gateError && <div className="muted">Loading profiles…</div>}
               {cancel && (
-                <button className="btn ghost mt" onClick={cancel}>Cancel</button>
+                <button className="btn mt" onClick={cancel}>Cancel</button>
               )}
             </div>
           )}

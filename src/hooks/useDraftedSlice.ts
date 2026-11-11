@@ -27,6 +27,7 @@ import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "reac
 import type { AppConfig } from "@/config/AppConfig";
 import { useConfig } from "@/config/ConfigContext";
 import { PendingEdits } from "@/config/pendingEdits";
+import { useAppNotice } from "@/components/hud/AppNotice";
 import {
   draftedView, EMPTY_LEDGER, ledgerDirty, ledgerOnRemote, recordEdit, revertLedger, sliceOf, withReplaced,
   type DraftLedger, type ReplacedSubject, type Slice,
@@ -44,7 +45,8 @@ export interface DraftedSlice<K extends keyof AppConfig> {
   dirty: boolean;
   /** Keep the changes: write what is waiting, send what is held for the villa (pendingEdits `hold`), and forget what
    *  was changed. `true` at once with nothing held; else once every held change landed, `false` when one did not
-   *  (it stays held, said in `problem`, for Save again or Cancel). */
+   *  (it stays held, said in `problem`, for Save again or Cancel), or when a number typed was none (said as it is let
+   *  go, pendingEdits `say`: the window stays for the line to be read). */
   save: () => boolean | Promise<boolean>;
   /** A held change Save could not send, in words (the footer's error); null otherwise. */
   problem: string | null;
@@ -70,6 +72,9 @@ export function useDraftedSlice<K extends keyof AppConfig>(keys: readonly K[], d
   // the dialog's writes are its own: recorded in its ledger (and any other open draft's) as they land
   const [pending] = useState(() => new PendingEdits(editByDialog));
   pending.write = editByDialog;
+  // a number that was none is said where every problem is (the villa view's notices), whichever way it was let go
+  const notice = useAppNotice();
+  pending.say = (text) => notice({ text, tone: "alert" });
   const waitingCount = useSyncExternalStore(pending.subscribe, () => pending.size);
   // ⚠️ A VALUE STILL WAITING WHEN THE DIALOG GOES AWAY IS WRITTEN (Back from Advanced Settings over Settings, a
   // close that is not Cancel): directly, never from inside a state updater, which does not run once it is unmounted
@@ -125,12 +130,13 @@ export function useDraftedSlice<K extends keyof AppConfig>(keys: readonly K[], d
     dirty,
     save: () => {
       // what is waiting is kept, so written as such: never recorded as a change still to cancel
-      for (const write of pending.take()) update(write);
+      const { writes, whole } = pending.take();
+      for (const write of writes) update(write);
       ledger.current = EMPTY_LEDGER;
       setHeard((n) => n + 1);
       const held = pending.held();
       setProblem(null);
-      if (held.length === 0) return true;
+      if (held.length === 0) return whole;
       setSaving(true);
       return Promise.all(held.map(async ([key, send]) => {
         const said = await send().catch(() => "It could not be saved: try again.");
@@ -140,7 +146,7 @@ export function useDraftedSlice<K extends keyof AppConfig>(keys: readonly K[], d
         const problems = said.filter((s): s is string => s !== null);
         setSaving(false);
         setProblem(problems.length > 0 ? problems.join(" ") : null);
-        return problems.length === 0;
+        return problems.length === 0 && whole;
       });
     },
     problem,

@@ -4,11 +4,13 @@
 //
 // ⚠️ WRITTEN OUT FIVE TIMES (round 11, 2.496.173) — the power toggle, the
 // lock's unlock, a device group's "all on/off", "log out every device" and
-// "delete all tasks" — each its own `.modal-actions` block with the same two
-// buttons, the same classes and the same margin override in four of them.
-// AskDialog is the modal form; this is the inline one.
+// "delete all tasks" — each its own block with the same two buttons, the same
+// classes and the same margin override in four of them.
+// AskDialog is the modal form; this is the inline one. Both draw the app's one pair (common/Answers).
 
 import type { ReactNode } from "react";
+
+import Answers from "./Answers";
 
 export default function InlineConfirm({ question, confirmLabel, onConfirm, onCancel, flush = true }: {
   /** Shown before the buttons (left-aligned), when the confirm label alone
@@ -21,12 +23,9 @@ export default function InlineConfirm({ question, confirmLabel, onConfirm, onCan
   flush?: boolean;
 }) {
   return (
-    <div className="modal-actions" style={flush ? { margin: 0 } : undefined}>
-      {question !== undefined && (
-        <span className="body-text" style={{ marginRight: "auto" }}>{question}</span>
-      )}
-      <button className="btn ghost" onClick={onCancel}>Cancel</button>
-      <button className="btn danger" onClick={() => { void onConfirm(); }}>{confirmLabel}</button>
+    <div className={`btn-row end${flush ? "" : " below"}`}>
+      {question !== undefined && <span className="body-text btn-row-says">{question}</span>}
+      <Answers onCancel={onCancel} answer={{ label: confirmLabel, danger: true, onPress: onConfirm }} />
     </div>
   );
 }

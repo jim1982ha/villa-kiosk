@@ -48,7 +48,7 @@ export default function TalkButton({ place, onOpen, onTap, className, idle, chil
       <button
         type="button" role={menu ? "menuitem" : undefined}
         className={`${className} talk-btn${phase !== "idle" ? ` talk-${phase}` : ""}`}
-        title={label} aria-label={label}
+        data-tip={label} aria-label={label}
         onPointerDown={(e) => {
           // a finger that slides off while talking still sends on release
           if (talker && e.button === 0 && talker.down(place, onOpen)) {

@@ -69,14 +69,14 @@ ck("  ...its problem, then that problem's own buttons, the card's bar, its last 
   const sheets = ["07-facility.css", "08-shared.css"].map((f) => readFileSync(new URL(`../../src/styles/${f}`, import.meta.url), "utf8")).join("\n");
   ck("  ...the card is not pressed; its bar one row of equal segments, a finger tall, at every width",
      !/role="button"|fm-openable/.test(issue) && /\.fm-record-actions \{ display: flex; flex-wrap: wrap; gap: 1px;/.test(sheets)
-     && /\.fm-record-actions :is\(\.btn, \.icon-btn, \.fm-document-link\) \{\s*flex: 1 1 0; min-width: 0; min-height: var\(--touch-min\)/.test(sheets)
+     && /\.fm-record-actions :is\(\.btn, \.fm-document-link\) \{\s*flex: 1 1 0; min-width: 0; min-height: var\(--touch-min\)/.test(sheets)
      && (sheets.match(/^\s*\.fm-record-actions \{/gm) ?? []).length === 1, sheets.match(/[^\n]*\.fm-record-actions[^\n]*/g));
 }
 ck("  ...its name opens the device, no line says it again", /fm-title-link/.test(issue) && !text(meta(issue)).includes("Test lock"), issue);
 // owner, 2026-10-22: a refresh icon, not "Next check:"; 2026-11-06: a pill (the app's), on the card's first line, at its
 // right under the strip's time, never on the quiet line
 const stateLine = (html) => inside(html, "fm-record-state");
-const PILL = /<span class="fm-entity-chip fm-chip-static fm-record-check" aria-label="Next check: within 5min \([^"]+\)"><svg[^>]*lucide-refresh-cw[\s\S]*?<\/svg>next check within 5min<\/span><\/div>$/;
+const PILL = /<span class="fm-entity-chip fm-chip-static fm-record-check" aria-label="Next check: within 5min \([^"]+\)"[^>]*><svg[^>]*lucide-refresh-cw[\s\S]*?<\/svg>next check within 5min<\/span><\/div>$/;
 ck("  ...its next check a pill, the last thing of its first line (after its state), never on its quiet line",
    PILL.test(stateLine(issue)) && stateLine(issue).indexOf("fm-record-status") < stateLine(issue).indexOf("fm-record-check")
    && !/fm-record-check|next check/.test(meta(issue)), [stateLine(issue), meta(issue)]);
@@ -172,7 +172,7 @@ ck("  ...and hovering it says when: the nightly check's next run, the Agent's ne
   const drawn = (items) => draw(h(AttentionCard, { card: cockpitCard(groupAttention(items)[0], CADENCE), onOpenEntity: () => {} }));
   const alone = drawn([liveItem]);
   ck("  ...drawn: a live-only card has the pill at the right of its first line, saying \"checked live\"",
-     /<span class="fm-entity-chip fm-chip-static fm-record-check" aria-label="The VESTA UI watches it all the time[^"]*"><svg[^>]*lucide-refresh-cw[\s\S]*?<\/svg>checked live<\/span><\/div>$/.test(stateLine(alone)), stateLine(alone));
+     /<span class="fm-entity-chip fm-chip-static fm-record-check" aria-label="The VESTA UI watches it all the time[^"]*"[^>]*><svg[^>]*lucide-refresh-cw[\s\S]*?<\/svg>checked live<\/span><\/div>$/.test(stateLine(alone)), stateLine(alone));
   // a live state and a fault of another problem on one card: the card's pill is the fault's (the later check, the one
   // to wait for); the live part its own "checked live" on its header, before its time
   const fault = { id: "fault:f9", kind: "fault", title: "Storage camera storage full", detail: "Fault", entityId: "sensor.example_storage_card", ticketId: "f9",
@@ -328,7 +328,7 @@ ck("  ...a problem with no device: no chevron, nothing to tap, no buttons", !/ch
 
 console.log("\n  a scheduled task — the same card:");
 const task = draw(h(RecordCard, { title: "Pool filter clean", tone: "state-due-soon", status: { text: "Due soon", tone: "due-soon" },
-  when: "due in 3 days · every 30 days", actions: h(React.Fragment, null, btn("Log"), h("button", { className: "icon-btn", "aria-label": "Remove" })) }));
+  when: "due in 3 days · every 30 days", actions: h(React.Fragment, null, btn("Log"), h("button", { className: "btn icon-only", "aria-label": "Remove" })) }));
 ck("its name in its strip, its state its first line, Log and the bin its bar, its tint on the card",
    text(name(task)) === "|Pool filter clean|" && /fm-record-main"><div class="fm-record-state strip-neutral"><span class="fm-record-status">Due soon</.test(task) && /fm-record-actions[\s\S]*Log[\s\S]*aria-label="Remove"/.test(task)
    && /class="fm-record-card state-due-soon"/.test(task), task.slice(0, 300));

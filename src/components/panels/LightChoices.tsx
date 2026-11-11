@@ -87,7 +87,7 @@ export default function LightChoices({ choices, attrs, temperature, onColour, on
               type="button"
               className={`light-swatch${presetIsCurrent(p, cur) ? " on" : ""}`}
               style={{ background: css(p.hue, p.sat) }}
-              title={p.name}
+              data-tip={p.name}
               aria-label={p.name}
               aria-pressed={presetIsCurrent(p, cur)}
               onClick={() => onColour(p.hue, p.sat)}
@@ -96,7 +96,7 @@ export default function LightChoices({ choices, attrs, temperature, onColour, on
           <label
             className="light-swatch light-swatch-custom"
             style={{ background: cur ? css(cur.hue, cur.sat) : undefined }}
-            title="Another colour"
+            data-tip="Another colour"
           >
             <Palette size={16} aria-hidden />
             <input

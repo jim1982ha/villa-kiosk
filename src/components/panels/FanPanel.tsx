@@ -2,6 +2,7 @@
 import { Fan } from "lucide-react";
 import BasePanel from "./BasePanel";
 import ControlFrame from "./ControlFrame";
+import SegmentedGroup from "@/components/common/SegmentedGroup";
 import type { PanelProps } from "@/types/panel.types";
 import { useHA } from "@/ha/HAStateStore";
 import { HAServices } from "@/ha/HAServiceCalls";
@@ -35,35 +36,18 @@ export default function FanPanel({ entity, mapping, onClose }: PanelProps) {
       {levels.length > 0 && (
         <div className="field">
           <label className="entity-label">Speed</label>
-          <div className="row-buttons">
-            {levels.map((l) => (
-              <button
-                key={l.value}
-                className={`btn ${on && closestLevel?.value === l.value ? "active" : "ghost"}`}
-                style={{ flex: 1 }}
-                onClick={() => HAServices.setFanPercentage(ws, mapping.entityId, l.value)}
-              >
-                {l.label}
-              </button>
-            ))}
-          </div>
+          <SegmentedGroup device ariaLabel="Speed" active={on && closestLevel ? String(closestLevel.value) : null}
+            onChange={(v) => HAServices.setFanPercentage(ws, mapping.entityId, Number(v))}
+            options={levels.map((l) => ({ key: String(l.value), label: l.label }))} />
         </div>
       )}
 
       {presets.length > 0 && (
         <div className="field">
           <label className="entity-label">Preset</label>
-          <div className="row-buttons scroll">
-            {presets.map((p) => (
-              <button
-                key={p}
-                className={`btn ${currentPreset === p ? "active" : "ghost"}`}
-                onClick={() => HAServices.setFanPreset(ws, mapping.entityId, p)}
-              >
-                {p}
-              </button>
-            ))}
-          </div>
+          <SegmentedGroup device ariaLabel="Preset" active={currentPreset ?? null}
+            onChange={(p) => HAServices.setFanPreset(ws, mapping.entityId, p)}
+            options={presets.map((p) => ({ key: p, label: p }))} />
         </div>
       )}
       </ControlFrame>

@@ -15,6 +15,7 @@
 import { useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
+import IconButton from "@/components/common/IconButton";
 import { STATUS_COLOR } from "@/utils/stateColors";
 
 export type NoticeTone = "active" | "unavailable" | "alert" | "info";
@@ -61,10 +62,9 @@ export function NoticeView({ tone, icon, children, onTap, onDismiss, role = "sta
       {icon}
       <span className="vesta-notice-text">{children}</span>
       {closable && (
-        <button type="button" className="vesta-notice-dismiss" aria-label="Dismiss"
-          onClick={(e) => { e.stopPropagation(); setClosed(true); onDismiss?.(); }}>
+        <IconButton small label="Dismiss" onClick={(e) => { e.stopPropagation(); setClosed(true); onDismiss?.(); }}>
           <X size={16} />
-        </button>
+        </IconButton>
       )}
     </>
   );

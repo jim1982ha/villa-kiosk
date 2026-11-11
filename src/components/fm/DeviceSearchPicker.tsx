@@ -28,7 +28,6 @@
 // a resync problem.
 
 import { useMemo, useState } from "react";
-import { X } from "lucide-react";
 import type { EntityMapping } from "@/types/scene.types";
 import { labelOf } from "@/config/EntityMap";
 import type { VillaDevices } from "@/config/deviceGroups";
@@ -133,12 +132,7 @@ export default function DeviceSearchPicker({
         onOpenChange={setOpen}
         placeholder={placeholder ?? "Search devices, or type a description…"}
         none={(q) => `No device matches "${q}", it will be saved as free text.`}
-        trailing={value && (
-          <button type="button" className="icon-btn" style={{ width: 28, height: 28 }}
-            onClick={onClear} aria-label="Clear device">
-            <X size={16} />
-          </button>
-        )}
+        clear={!!value && { label: "Clear device", run: onClear }}
       />
       {!matchedEntityId && value.trim() && !open && (
         <div className="muted body-text field-hint">

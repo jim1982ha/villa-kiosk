@@ -114,13 +114,9 @@
 .vesta-notice .photo-tile:only-child .photo-tile-open img { max-height: 160px; object-fit: cover; }
 /* the buttons a ring offers (the doorbell's Unlock), under its words; they wrap on a narrow phone */
 .vesta-notice-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px; margin-top: 8px; }
-.vesta-notice-action { pointer-events: auto; min-height: var(--touch-min); padding: 0 16px; }
+.vesta-notice-action { pointer-events: auto; }
 .vesta-notice-said { color: var(--text-secondary); }
 .vesta-notice.tappable { pointer-events: auto; cursor: pointer; min-height: var(--touch-min); }
-.vesta-notice-dismiss {
-  pointer-events: auto; background: none; border: none; color: var(--text-secondary); cursor: pointer;
-  display: flex; padding: 2px; flex: 0 0 auto;
-}
 /* an announcement's words, photos and status, as its Inbox card and VESTA's conversation draw them (AnnouncementContent) */
 .announcement-full-title { overflow-wrap: anywhere; }
 .announcement-full-text { margin: 0; font-size: var(--text-xl); white-space: pre-line; overflow-wrap: anywhere; }
@@ -201,41 +197,22 @@ body:has(.camera-fullscreen) .vesta-notice.below-camera { display: none; }
 /* --- Cockpit page (CockpitModal) — villa-wide status report ------------- */
 /* The Cockpit's Messages (cockpit/MessagesTab): one column of cards, as Tickets (owner, 2026-11-01). */
 .cockpit-modal { max-width: 1080px; }
-/* the filters and, at the right of the same line, the Issues' "Open Ticket" (owner, 2026-10-31): two groups that wrap
-   whole, so a line too narrow for both puts the button under the filters and never squeezes or cuts them */
+/* the filters (the one choice control, SegmentedGroup) and, at the right of the same line, a guest's "Report a
+   problem" (owner, 2026-10-31): two groups that wrap whole, so a line too narrow for both puts the button under the
+   filters and never squeezes or cuts them */
 /* ⚠️ NOTHING SHOWS BEHIND IT (owner, 2026-11-06: a card's "Reopened … next check" read through above and beside the
    pills on a phone): a sticky bar stops at the body's padding, so the cards scrolled through the 8px over it and the
    gutters at its sides. It stops at the body's very top (top: minus its padding) and spans the body's whole width (its
    gutters drawn by its own padding), in the window's solid colour, in light and dark. */
-.messages-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+.messages-toolbar { display: flex; flex-wrap: wrap; align-items: stretch; gap: 6px;
   padding: 4px var(--body-right, 0px) 8px var(--body-left, 0px); margin-inline: calc(-1 * var(--body-left, 0px)) calc(-1 * var(--body-right, 0px));
-  container-type: inline-size; position: sticky; top: calc(-1 * var(--body-top, 0px)); z-index: 2; background: var(--bg-modal); }
+  position: sticky; top: calc(-1 * var(--body-top, 0px)); z-index: 2; background: var(--bg-modal); }
 /* what brings itself into view stops under that line */
 .messages-card, .messages-toolbar ~ .fm-form { scroll-margin-top: 72px; }
-/* a filter's full word where the four buttons still fit one line, its short word below that width (owner, 2026-11-01:
-   "Notifications if it fits"); the short one is the default, so a browser without container queries keeps one line */
-.messages-filter-long { display: none; }
-@container (min-width: 368px) {
-  .messages-filter-long { display: inline; }
-  .messages-filter-short { display: none; }
-}
-.messages-filters { display: flex; flex-wrap: nowrap; gap: 6px; flex: 0 0 auto; max-width: 100%; }
-.messages-toolbar-actions { display: flex; align-items: center; gap: 6px; margin-left: auto; }
-.messages-filter {
-  flex: none; white-space: nowrap; background: transparent; color: var(--text-primary); font: inherit;
-  display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
-}
-/* ⚠️ ONE SHAPE FOR THE LINE'S FOUR BUTTONS (owner, 2026-10-31: "the corners are not the same: style them all the
-   same"): the filters were round pills, Open Ticket a card button's 12px corners. Their height, round corners, border,
-   padding and size are this one rule, after each one's own (the filter's `font: inherit` would undo the size). With
-   "Notifs", 8px each side holds the three filters and Open Ticket on one line on a 360 px phone
-   (tests/oracles/live_issues.mjs) */
-.messages-filter, .messages-toolbar-actions .btn {
-  min-height: var(--touch-min); padding: 0 8px; border-radius: 999px; border: 1px solid var(--hairline);
-  font-size: var(--text-sm);
-}
-.messages-filter.on { background: var(--accent); border-color: transparent; color: var(--bg-base); font-weight: 600; }
-.messages-filter-count { font-weight: 700; }
+.messages-toolbar-actions { display: flex; align-items: stretch; gap: 6px; margin-left: auto; }
+/* ⚠️ ONE SHAPE FOR THE LINE (owner, 2026-10-31: "the corners are not the same: style them all the same"): the filters
+   are the one choice control (SegmentedGroup) and the button beside them the one worded button (.btn, a pill as its
+   track is): nothing about it is written here. tests/oracles/live_issues.mjs */
 .messages-empty { padding: 8px 0; }
 /* an open notification or report is the Cockpit's one card (RecordCard, owner 2026-10-29): its words as an issue's
    lines, its "To:" and Status as an issue's story; the full-screen ring keeps its large text (.announcement-full-text) */
@@ -244,7 +221,7 @@ body:has(.camera-fullscreen) .vesta-notice.below-camera { display: none; }
 .messages-card-body .announcement-full-to, .messages-card-body .announcement-full-status {
   font-size: var(--text-2xs); color: var(--text-dim); }
 .messages-card-body .photo-row { justify-content: center; }
-@media (max-width: 860px) { .messages-filters { overflow-x: auto; } }
+
 /* a fault the VESTA Agent is confirming: its check in the status green; its card is an open issue's (owner, 2026-10-23) */
 .fault-watched-icon { color: var(--status-on); }
 /* An open issue is THE Cockpit card (RecordCard, architecture review 2026-10-15): its own rules went with it — the
@@ -437,44 +414,29 @@ body:has(.camera-fullscreen) .vesta-notice.below-camera { display: none; }
 }
 .pager-controls { display: inline-flex; align-items: center; gap: 8px; }
 
-/* ── Shared modal footer (ModalFooter.tsx) ─────────────────────────────────
-   ⚠️ THE PAIR READS AS ONE CONTROL GROUP. Equal minimum sizes so Save and
-   Close look like two answers to one question rather than two buttons that
-   happen to be adjacent. */
-.modal-footer-actions {
-  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
-  justify-content: flex-end;
-}
-.modal-footer-actions > button {
-  min-height: var(--touch-min); min-width: var(--touch-min);
-  justify-content: center;
-}
-/* The word beside the glyph. ⚠️ A CLASS, NOT THE `hidden` ATTRIBUTE — an
+/* ── A button's word that hides on a phone (.btn-label) ───────────────────
+   The word beside the glyph (the button's own gap spaces them). ⚠️ A CLASS, NOT THE `hidden` ATTRIBUTE — an
    author has to be able to hide the word at the phone tier without leaving the
    control unnamed to a screen reader. */
-.btn-label { margin-left: 8px; }
-/* A footer button's progress on its icon (an upload's "42%"), only where its word is hidden: the phone tier below
+/* A button's progress on its icon (an upload's "42%"), only where its word is hidden: the phone tier below
    (architecture review K, 2026-10-24: a phone saw a bare icon for the whole upload). */
 .btn-mark { display: none; }
 
-/* Used by the footer's error line, and by anything else that has to say
-   "this is a warning" in text rather than in a badge. */
-.sev-warning { color: var(--status-warning); }
+/* ⚠️ THE ONE LINE THAT SAYS SOMETHING WENT WRONG (common/ProblemLine; owner, 2026-11-10: one definition). It was red
+   at three sizes, amber in two places and a paragraph with its own margins in a fourth. Red: it did not happen.
+   Amber (.warn): it happened, with a reservation. Where it stands is its place's business, never its look. */
+.problem-line { font-size: var(--text-base); line-height: 1.4; color: var(--status-danger); min-width: 0; overflow-wrap: anywhere; }
+.problem-line.warn { color: var(--status-warning); }
 
 @media (max-width: 640px) {
   /* ⚠️ ICON-ONLY AT THE PHONE TIER, where two labelled buttons plus a hint do
      not fit a 360px footer — the row wraps, and a wrapped footer is what makes
      a dialog look broken. Square, --touch-min on both axes. 640px is the
      layout's phone tier (05-layout.css); a 641-720px screen — a tablet in
-     portrait — has room for the words, and showed bare glyphs (2.496.257).
-     ⚠️ `.modal-footer` IN THE SELECTOR IS LOAD-BEARING: `.modal-footer .btn`
-     (04-modals.css, padding 10px 20px) outranks a bare
-     `.modal-footer-actions > button`, so its side padding would stay in a
-     44px button and squeeze the icon to a 4px speck wherever nothing else
-     trims it — which is what the 641-720px screens showed. */
-  /* only a button that HAS a hideable word goes square (a plain "Close" keeps its word); the header's too (Advanced
-     Settings' "Upload Model" and "Log Out All", owner 2026-10-25: no words where there is no room) */
-  .modal-footer .btn:has(> .btn-label) { width: var(--touch-min); padding: 0; }
+     portrait — has room for the words, and showed bare glyphs (2.496.257). */
+  /* only a button that HAS a hideable word goes square (a plain "Close" keeps its word), wherever it stands: a
+     footer, a form's end, a question in place */
+  .btn:has(> .btn-label) { width: var(--touch-min); padding: 0; }
   .btn-label { display: none; }
   .btn:has(> .btn-mark) { position: relative; }
   .btn-mark { display: block; top: auto; bottom: 1px; right: 1px; background: var(--accent); }
@@ -557,11 +519,9 @@ body:has(.camera-fullscreen) .vesta-notice.below-camera { display: none; }
 .vesta-turn.asked { background: var(--accent-soft); align-self: flex-end; }
 .vesta-turn-head { display: flex; align-items: baseline; gap: 10px; font-size: var(--text-xs); }
 .vesta-turn-head b { font-size: var(--text-sm); }
-/* Listen, an icon at the end of an answer's own line (owner, 2026-10-29), its touch target kept */
-.vesta-turn-head .vesta-turn-listen { margin-left: auto; align-self: center; padding: 4px; min-width: var(--touch-min);
-  min-height: var(--touch-min); margin-block: calc((var(--touch-min) - 24px) / -2);
-  /* a plain icon (owner's phone, 2026-10-29: a framed box that pushed the answer down) */
-  border: 0; background: none; box-shadow: none; color: var(--text-secondary); }
+/* Listen, the lone icon button at the end of an answer's own line (owner, 2026-10-29), inside the line's height (owner's
+   phone, 2026-10-29: a framed box pushed the answer down) */
+.vesta-turn-head .vesta-turn-listen { margin: -4px 0 -4px auto; align-self: center; }
 .vesta-turn-text { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: var(--text-base); }
 .vesta-thread-ask { display: flex; gap: 8px; align-items: flex-end; flex: 0 0 auto; padding-top: 6px;
   background: var(--bg-modal); }

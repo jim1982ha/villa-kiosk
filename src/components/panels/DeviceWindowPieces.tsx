@@ -26,12 +26,12 @@ export function useDeviceWarning(): { open: () => void; severity: AttentionSever
 /** The device window's warning (header, top right, owner 2026-10-24): the Cockpit's own sign in the colour of the
  *  most serious issue its Overview lists for the device (attention severity: .cockpit-attention-danger red, -warn
  *  amber, -lost grey, as the Overview's cards). Pure: a check draws it. */
-export function FaultsButton({ onOpen, severity, className = "btn ghost icon-only" }: {
+export function FaultsButton({ onOpen, severity, className = "btn icon-only" }: {
   onOpen: () => void; severity: AttentionSeverity; className?: string;
 }) {
   return (
     <button type="button" className={`${className} panel-faults-btn cockpit-attention-${severity}`} onClick={onOpen}
-      title="Open this device's issues in the Cockpit" aria-label="Open this device's issues in the Cockpit">
+      data-tip="Open this device's issues in the Cockpit" aria-label="Open this device's issues in the Cockpit">
       <TriangleAlert size={18} aria-hidden="true" />
     </button>
   );
@@ -39,11 +39,11 @@ export function FaultsButton({ onOpen, severity, className = "btn ghost icon-onl
 
 /** Edit: this device's row in Advanced Settings, for a profile that may edit devices. The card window words it; the
  *  camera's chrome, all icons, draws the pencil (`icon`). */
-export function EditButton({ className = "btn ghost", icon = false }: { className?: string; icon?: boolean }) {
+export function EditButton({ className = "btn", icon = false }: { className?: string; icon?: boolean }) {
   const { may, onEdit } = usePanelActions();
   if (!may.edit) return null;
   return icon
-    ? <button type="button" className={className} onClick={onEdit} title="Edit this device" aria-label="Edit this device">
+    ? <button type="button" className={className} onClick={onEdit} data-tip="Edit this device" aria-label="Edit this device">
         <Pencil size={16} aria-hidden="true" /></button>
     : <button type="button" className={className} onClick={onEdit}>Edit</button>;
 }

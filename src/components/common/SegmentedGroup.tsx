@@ -1,9 +1,12 @@
 // src/components/common/SegmentedGroup.tsx
-// THE `.segmented` button group: one control, one markup, one accessibility
-// contract (role="group", aria-pressed on each option). useSegmentedChoice
-// (historyRange) rendered it and six more sites in the Cockpit and Settings
-// hand-rolled the same markup (2.496.199). A single toggle is a one-option
-// group whose `active` is null while off.
+// THE "choose one of several" control: one track, one markup, one selected look, one accessibility contract
+// (role="group", aria-pressed on each option). A single toggle is a one-option group whose `active` is null while off.
+//
+// ⚠️ EVERY CHOICE IN THE APP IS THIS (owner, 2026-11-10: the Cockpit's tabs, its Issues | Notifications | Reports line
+// and Settings' On | Off were three looks, "the same style consistently, uniquely and centrally applied"): a window's
+// tabs (common/ModalTabs), the Inbox's filters, a task's "How often", a device's mode, speed and preset, the charts'
+// ranges, every setting's choice. Its look is `.segmented` (04-modals.css) and nothing else: a caller's `className`
+// places the group in its line, it never restyles a segment.
 
 import type { ReactNode } from "react";
 
@@ -18,27 +21,43 @@ interface SegmentedOption<K extends string> {
   disabled?: boolean;
 }
 
+/** How the group takes its line: `fill` shares it in equal segments (a grid of equal cells past four choices);
+ *  `natural` gives each segment its words' width and scrolls sideways when the line is too short (tabs, filters, a
+ *  header's control); `compact` is the small one beside a heading (the charts' ranges, a section's counts). */
+export type SegmentedLayout = "fill" | "natural" | "compact";
+
 export default function SegmentedGroup<K extends string>({
-  options, active, onChange, ariaLabel, className = "",
+  options, active, onChange, ariaLabel, layout = "fill", tabs = false, device = false, className = "",
 }: {
   options: readonly SegmentedOption<K>[];
   /** The pressed option, or null for none (a toggle that is off). */
   active: K | null;
   onChange: (key: K) => void;
   ariaLabel: string;
+  layout?: SegmentedLayout;
+  /** A window's tabs: said as a tab list to a screen reader (common/ModalTabs). */
+  tabs?: boolean;
+  /** The choice is a device's own state (its mode, its speed): selected in the device's colour, as its On button. */
+  device?: boolean;
+  /** Where the group sits in its line (a margin, a width). Never a segment's look. */
   className?: string;
 }) {
   // more than four choices wrap on a phone: a grid of equal cells, not a pill over several lines (owner, 2026-11-03)
-  const grid = options.length > 4 ? " segmented-grid" : "";
+  const shape = layout === "fill" ? (options.length > 4 ? " segmented-grid" : "") : ` segmented-${layout}`;
   return (
-    <div className={`segmented${grid}${className ? ` ${className}` : ""}`} role="group" aria-label={ariaLabel}>
-      {options.map((o) => (
-        <button key={o.key} type="button" className={o.key === active ? "active" : ""} disabled={o.disabled}
-          aria-disabled={o.disabled || undefined}
-          onClick={() => { if (!o.disabled) onChange(o.key); }} aria-pressed={o.key === active} title={o.title} aria-label={o.title}>
-          {o.label}
-        </button>
-      ))}
+    <div className={`segmented${shape}${device ? " segmented-device" : ""}${className ? ` ${className}` : ""}`}
+      role={tabs ? "tablist" : "group"} aria-label={ariaLabel}>
+      {options.map((o) => {
+        const on = o.key === active;
+        return (
+          <button key={o.key} type="button" className={on ? "active" : ""} disabled={o.disabled}
+            aria-disabled={o.disabled || undefined} role={tabs ? "tab" : undefined}
+            {...(tabs ? { "aria-selected": on } : { "aria-pressed": on })}
+            onClick={() => { if (!o.disabled) onChange(o.key); }} data-tip={o.title} aria-label={o.title}>
+            {o.label}
+          </button>
+        );
+      })}
     </div>
   );
 }

@@ -15,7 +15,7 @@ export default function SaveButton({ saved, label, icon, onClick }: {
   onClick: () => void;
 }) {
   return (
-    <button className="btn ghost" onClick={onClick} disabled={saved}>
+    <button className="btn" onClick={onClick} disabled={saved}>
       {icon} {saved ? "Saved" : label}
     </button>
   );
@@ -37,7 +37,7 @@ export function DocumentButtons({ markdown, saved, saveLabel, onSave, onDownload
   return (
     <>
       <SaveButton saved={saved} label={saveLabel} icon={<Save size={16} />} onClick={onSave} />
-      <button className="btn ghost" onClick={onDownload}>
+      <button className="btn" onClick={onDownload}>
         <Download size={16} /> Download .md
       </button>
     </>

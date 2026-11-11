@@ -13,7 +13,8 @@
 
 import { useRef, useState, type ReactNode } from "react";
 import { useOutsideClose } from "@/hooks/useOutsideClose";
-import { Search } from "lucide-react";
+import { Search, X } from "lucide-react";
+import IconButton from "./IconButton";
 
 export interface SearchRow {
   key: string;
@@ -30,7 +31,7 @@ export interface SearchRow {
 export const SEARCH_ROWS = 60;
 
 export default function SearchPicker({
-  rows, onPick, placeholder, compact, before, empty, none, trailing, onOpenChange, text, startOpen, enterPicks,
+  rows, onPick, placeholder, compact, before, empty, none, clear, onOpenChange, text, startOpen, enterPicks,
 }: {
   /** The rows matching what is typed ("" when nothing is). */
   rows: (query: string) => readonly SearchRow[];
@@ -44,8 +45,9 @@ export default function SearchPicker({
   empty?: string;
   /** Said in the open list when nothing matches what is typed (the ticket form: "it will be saved as free text"). */
   none?: (query: string) => ReactNode;
-  /** Beside the box while the list is closed (EntityPicker's clear button). */
-  trailing?: ReactNode;
+  /** The box's ✕ while the list is closed, with what it empties ("Clear the search"); none: nothing to clear.
+   *  ⚠️ DRAWN HERE (owner, 2026-11-10: one definition): three fields each drew a ✕ of their own, three looks. */
+  clear?: { label: string; run: () => void } | null | false;
   /** The list opened or closed (EntityPicker hides its "Bound to" line while it is open). */
   onOpenChange?: (open: boolean) => void;
   /** FREE TEXT: the box's words are the value (a device or a description typed as is), kept when the list closes;
@@ -91,7 +93,9 @@ export default function SearchPicker({
           }}
           onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
         />
-        {!open && trailing}
+        {!open && clear && (
+          <IconButton small label={clear.label} onClick={(e) => { e.stopPropagation(); clear.run(); }}><X size={16} /></IconButton>
+        )}
       </div>
 
       {open && (() => {

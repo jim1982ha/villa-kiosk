@@ -10,7 +10,6 @@
 // entity ID or label…" box, Asleep between reports' "Add a device…", Bound 3D objects' picker with its Add button.
 
 import { useEffect, useRef, useState, type RefObject } from "react";
-import { X } from "lucide-react";
 import SearchPicker, { type SearchRow } from "./SearchPicker";
 import { useDeviceSearch } from "@/hooks/useDeviceSearch";
 import { firstToAdd, offered, type AddOffer } from "@/config/searchOrAdd";
@@ -39,11 +38,7 @@ export default function SearchOrAdd({ query, onQuery, placeholder, offer, onAdd,
   return (
     <div className="search-or-add">
       <SearchPicker text={{ value: query, onChange: onQuery }} rows={rows} onPick={pick} placeholder={placeholder} enterPicks
-        trailing={query && (
-          <button type="button" className="icon-btn entity-picker-clear" aria-label="Clear the search" onClick={() => onQuery("")}>
-            <X size={16} />
-          </button>
-        )} />
+        clear={!!query && { label: "Clear the search", run: () => onQuery("") }} />
     </div>
   );
 }
@@ -59,7 +54,7 @@ export function SearchEmpty({ query, noun, offer, onAdd }: {
     <div className="search-empty">
       <p className="muted body-text">No {noun} has “{query.trim()}”.</p>
       {add && offer && onAdd && (
-        <button type="button" className="btn ghost" onClick={() => onAdd(add.id)}>{offer.exactWords(add.name)}</button>
+        <button type="button" className="btn" onClick={() => onAdd(add.id)}>{offer.exactWords(add.name)}</button>
       )}
     </div>
   );

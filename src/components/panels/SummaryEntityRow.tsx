@@ -46,14 +46,14 @@ export default function SummaryEntityRow({
       <button
         className="summary-entity-main"
         onClick={onOpen}
-        title={notInHa
+        data-tip={notInHa
           ? `${label}, no device has this id`
           : offMap ? `${label}, not on the 3D map` : `Open ${label}`}
       >
         <img className="summary-entity-badge" src={badgeSrc} key={badgeKey} alt="" draggable={false} />
         <span className="summary-entity-text">
           <span className="summary-entity-name-row">
-            <span className="summary-entity-name" title={label}>{label}</span>
+            <span className="summary-entity-name" data-tip={label}>{label}</span>
             {hidden && <EyeOff size={16} className="summary-entity-hidden-icon" aria-label="Hidden" />}
           </span>
           <span className="summary-entity-state">{stateText}</span>

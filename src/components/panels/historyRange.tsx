@@ -14,7 +14,7 @@
 // entry here carries both resolutions and a view picks which ranges it offers.
 
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import SegmentedGroup from "@/components/common/SegmentedGroup";
+import SegmentedGroup, { type SegmentedLayout } from "@/components/common/SegmentedGroup";
 import InfoTip from "@/components/common/InfoTip";
 import { villaKeptFrom } from "@/ha/HAHistoryAPI";
 import { useStateHistory, type StateHistoryResult } from "@/hooks/useStateHistory";
@@ -31,23 +31,24 @@ import { DEFAULT_KEY, historyRange, RANGES, type HistoryRange, type RangeKey } f
  */
 export function useSegmentedChoice<K extends string>(
   options: readonly { key: K; label: ReactNode; title?: string; disabled?: boolean }[], initial: K, ariaLabel: string,
-  className: string, shared?: [K, (k: K) => void] | null,
+  layout: SegmentedLayout, shared?: [K, (k: K) => void] | null,
 ): { key: K; picker: ReactNode } {
   const own = useState<K>(initial);
   const [picked, setPicked] = shared ?? own;
   const key = options.some((o) => o.key === picked && !o.disabled) ? picked : initial;
-  const picker = <SegmentedGroup options={options} active={key} onChange={setPicked} ariaLabel={ariaLabel} className={className} />;
+  const picker = <SegmentedGroup options={options} active={key} onChange={setPicked} ariaLabel={ariaLabel} layout={layout} />;
   return { key, picker };
 }
 
 /** Returns the active range plus a ready-rendered picker for it: every toggle shows the five; `greyed` are the ones
- *  this view has nothing to draw for — shown, not pressable (owner, 2026-10-20). */
+ *  this view has nothing to draw for — shown, not pressable (owner, 2026-10-20). Compact beside a chart's heading;
+ *  `natural` where it stands in a window's header (Weather). */
 export function useHistoryRange(
-  className = "timeline-ranges", greyed: readonly RangeKey[] = [],
+  layout: SegmentedLayout = "compact", greyed: readonly RangeKey[] = [],
 ): { range: HistoryRange; picker: ReactNode } {
   const { key, picker } = useSegmentedChoice(
     RANGES.map((r) => ({ key: r.key, label: r.label, title: r.title, disabled: greyed.includes(r.key) })),
-    DEFAULT_KEY, "History range", className, useContext(SharedRange));
+    DEFAULT_KEY, "History range", layout, useContext(SharedRange));
   return { range: historyRange(key), picker };
 }
 

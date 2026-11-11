@@ -14,3 +14,10 @@ const COUNT_BADGE_CAP = 99;
 export function formatCountBadge(n: number): string {
   return n > COUNT_BADGE_CAP ? "99+" : String(n);
 }
+
+/** A name followed by how many it holds: "Tickets (3)", the bare name when it holds none. ⚠️ THE ONE WRITING OF IT
+ *  (owner, 2026-11-10: a window's tab said "Tickets (1)", the filter under it "Issues 6" in bold): a tab, a filter, a
+ *  section's title and a menu line all say it here. */
+export function withCount(name: string, count?: number | null): string {
+  return count ? `${name} (${count})` : name;
+}

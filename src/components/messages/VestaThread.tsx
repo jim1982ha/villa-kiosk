@@ -8,6 +8,7 @@
 import { momentText } from "@/utils/dateText";
 import { useEffect, useRef, useState } from "react";
 import { Mic, RotateCcw, Send, Square, Volume2 } from "lucide-react";
+import IconButton from "@/components/common/IconButton";
 import Window from "@/components/common/Window";
 import ModalFooter from "@/components/common/ModalFooter";
 
@@ -34,16 +35,13 @@ export function TurnLine({ turn, canOpenPage, onListen, playing = false, onStop 
         {turn.at && <span className="muted">{momentText(turn.at)}</span>}
         {turn.speech && playing && onStop ? (
           // being said now: Stop in Listen's place, back to Listen once it ends or is stopped (owner, 2026-10-30)
-          <button type="button" className="btn ghost vesta-turn-listen" aria-label="Stop" title="Stop" onClick={onStop}>
-            <Square size={16} aria-hidden />
-          </button>
+          <IconButton small label="Stop" className="vesta-turn-listen" onClick={onStop}><Square size={16} aria-hidden /></IconButton>
         ) : turn.speech && onListen && (
           // the answer said aloud (ticket 24): played as it came on the tablet that asked; heard again from here, an
           // icon at the end of the line (owner, 2026-10-29: not a button the width of the answer)
-          <button type="button" className="btn ghost vesta-turn-listen" aria-label="Listen" title="Listen"
-            onClick={() => { if (turn.speech) onListen(turn.speech); }}>
+          <IconButton small label="Listen" className="vesta-turn-listen" onClick={() => { if (turn.speech) onListen(turn.speech); }}>
             <Volume2 size={18} aria-hidden />
-          </button>
+          </IconButton>
         )}
       </div>
       {/* the camera pictures the answer carries: the one row of photos, no camera named (the answer's words say it) */}
@@ -91,7 +89,7 @@ export default function VestaWindow({ onClose, canOpenPage }: { onClose: () => v
       <div className="modal-header">
         <h2>VESTA</h2>
         <div className="modal-header-actions">
-          <button type="button" className="btn ghost" disabled={sending} onClick={() => void send(NEW_CONVERSATION)}>
+          <button type="button" className="btn" disabled={sending} onClick={() => void send(NEW_CONVERSATION)}>
             <RotateCcw size={16} aria-hidden /> New conversation
           </button>
         </div>

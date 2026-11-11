@@ -49,12 +49,12 @@ export default function PhotoLightbox({
   const view = (
     <div ref={dialogRef} className="fm-lightbox" onClick={onClose} role="dialog" aria-modal="true"
       aria-label={`Photo ${index + 1} of ${count}`}>
-      <button className="fm-lightbox-close" onClick={onClose} aria-label="Close photo">
+      <button className="media-btn fm-lightbox-close" onClick={onClose} aria-label="Close photo">
         <X size={20} />
       </button>
       {count > 1 && (
         <button
-          className="fm-lightbox-nav prev"
+          className="media-btn fm-lightbox-nav prev"
           onClick={(e) => { e.stopPropagation(); step(-1); }}
           aria-label="Previous photo"
         ><ChevronLeft size={26} /></button>
@@ -66,7 +66,7 @@ export default function PhotoLightbox({
       {photo.label && <div className="fm-lightbox-label">{photo.label}</div>}
       {count > 1 && (
         <button
-          className="fm-lightbox-nav next"
+          className="media-btn fm-lightbox-nav next"
           onClick={(e) => { e.stopPropagation(); step(1); }}
           aria-label="Next photo"
         ><ChevronRight size={26} /></button>

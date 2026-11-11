@@ -18,15 +18,14 @@ import { useFmTerms } from "@/fm/useFmTerms";
 import EvidenceRow from "./EvidenceRow";
 import RecentWorkList from "./RecentWorkList";
 import NotesField from "./NotesField";
-import InlineConfirm from "@/components/common/InlineConfirm";
+import AskFirstButton from "@/components/common/AskFirstButton";
 import RecordCard from "./RecordCard";
-import TaskCard, { REMOVE_TASK_TIP } from "./TaskCard";
+import TaskCard from "./TaskCard";
 import { formatMoney } from "@/utils/money";
 import CostFields from "./CostFields";
 import FormActions from "./FormActions";
 import WorkerName from "./WorkerName";
 import { useWorkFields } from "./useWorkFields";
-import BinButton from "@/components/common/BinButton";
 import FmForm from "./FmForm";
 import { useListEditor } from "./ListEditor";
 
@@ -38,11 +37,6 @@ export default function TodayTab({ onOpenEntity }: { onOpenEntity: (id: string) 
   const board = scheduleBoard(data);
   // the task whose Log is open (ListEditor): paused or erased on another tablet, its form closes
   const log = useListEditor(board.map((s) => s.schedule.id));
-  // Bulk delete is destructive across every task at once — require an
-  // explicit second tap before it fires, same pattern as the "Turn all
-  // on/off" confirm elsewhere (SummaryGroupPanel) and the Facility
-  // unavailable-devices bulk toggle.
-  const [confirmingDeleteAll, setConfirmingDeleteAll] = useState(false);
 
   if (data.schedules.length === 0) {
     // work already logged (a task done, since removed) is part of the record: listed UNDER the empty-state message,
@@ -95,32 +89,26 @@ export default function TodayTab({ onOpenEntity }: { onOpenEntity: (id: string) 
       </div>
 
       <div className="row" style={{ justifyContent: "flex-end" }}>
-        {confirmingDeleteAll ? (
-          // data.schedules.length, not board.length: the board only shows
-          // ENABLED tasks (scheduleBoard filters paused ones out), but
-          // removeAllSchedules clears every schedule regardless — the
-          // confirm count must match what actually gets deleted.
-          <InlineConfirm confirmLabel={<>Delete all {data.schedules.length} tasks?</>}
-            onConfirm={async () => { await removeAllSchedules(); setConfirmingDeleteAll(false); }}
-            onCancel={() => setConfirmingDeleteAll(false)} />
-        ) : (
-          <button className="btn ghost" onClick={() => setConfirmingDeleteAll(true)}>
-            <Trash2 size={16} /> Delete all
-          </button>
-        )}
+        {/* Bulk delete is destructive across every task at once: it asks first (AskFirstButton).
+            data.schedules.length, not board.length: the board only shows ENABLED tasks (scheduleBoard filters paused
+            ones out), but removeAllSchedules clears every schedule regardless — the confirm count must match what
+            actually gets deleted. */}
+        <AskFirstButton className="btn" confirmLabel={`Delete all ${data.schedules.length} tasks?`}
+          onConfirm={removeAllSchedules}>
+          <Trash2 size={16} /> Delete all
+        </AskFirstButton>
       </div>
 
       <div className="fm-list">
         {board.map((s) => (
           <Fragment key={s.schedule.id}>
           {/* THE task's card, the Schedule tab's too (TaskCard): Log and the bin in its bar */}
-          <TaskCard status={s} room={roomOf(s.schedule)}
-            actions={<>
-              <button className="btn ghost" onClick={() => (log.editing === s.schedule.id ? log.close() : log.edit(s.schedule.id))}>
+          <TaskCard status={s} room={roomOf(s.schedule)} onRemove={() => removeSchedule(s.schedule.id)}
+            actions={
+              <button className="btn" onClick={() => (log.editing === s.schedule.id ? log.close() : log.edit(s.schedule.id))}>
                 <Check size={16} /> Log
               </button>
-              <BinButton label={`Remove ${s.schedule.title}`} tip={REMOVE_TASK_TIP} onPress={() => void removeSchedule(s.schedule.id)} />
-            </>} />
+            } />
           {/* ⚠️ ITS LOG UNDER ITS CARD (owner, 2026-11-01: a form opened away from what it was asked on): it was drawn
               under Recent work, below every task */}
           {log.editing === s.schedule.id && (

@@ -1,3 +1,80 @@
+## 2.496.769
+
+What you will see:
+- "Back" is one button everywhere: the round grey button with its arrow and its word. A data window's History
+  (Weather, Energy) had a square tile with a bare arrow, a device window's header a smaller pill of its own, and the
+  PIN pad a grey text link ("← Profiles"): the PIN pad's is now the same button, top left, saying where it returns.
+- Under a mouse, every text that appears is the app's own small dark card, at once: the top bar's buttons, the
+  camera view's, a device window's, Settings' and the Rooms window's. About seventy of them were still the browser's
+  grey box that comes after a second. It also follows the keyboard's focus. A finger never brings one up.
+- A name that fits no longer repeats itself under the mouse: a window's title or a reading's name shows its tip only
+  when it is cut short.
+- Nothing else changed.
+
+## 2.496.768
+
+What you will see:
+- A lone icon to press is now one quiet icon everywhere in a window: a card's remove (the bin in its strip), the ✕ of
+  a pill ("Pool pump ✕"), the ✕ that empties a search field or a device field, the (i), a chart's enlarge, the ✕ of a
+  notice and of the note in a window's footer, and Listen beside VESTA's answer. They were eight looks: a black
+  plate here, a ringed circle there, from 18 to 32 px. Under a mouse each one now names itself in the app's own tip.
+- A button without its word is the worded button, round: the bin at the end of a card's buttons, a schedule's
+  pencil, "all on / all off" in a category's list and a device window's header buttons.
+- A button over a photo or a video is one look, dark with a thin white line: the camera view's buttons (they were
+  frosted grey at the bottom and dark at the top), the photo viewer's close and arrows, the ✕ on a photo's
+  thumbnail and the bin on a room's card. A camera's lit button stays green, a sounding siren's red.
+- Nothing else changed: every button does what it did, and the siren still asks before it sounds.
+
+## 2.496.767
+
+What you will see:
+- A save that did not happen says so, in one place: a red notice at the top of the screen, over any open window, with
+  its own ✕. It stays as long as it is true. Five cases were silent or said only in one window: a shared change the
+  server refuses (said in Advanced Settings, not in Settings), a Cockpit save made with no connection, this device's
+  own settings that its storage refuses, a card's delete that failed ("Not deleted: the server could not be
+  reached, nothing was changed. Try again."), and a number that is none.
+- A number that is none names its field and what it needs: letters typed in Latitude give "Latitude" needs a number:
+  the one before was kept. The same for the days records are kept and a notice's seconds. Save then keeps the window
+  open, so the field can be corrected.
+- A half-filled form is no longer lost to a touch outside. "Report a problem", "Open a ticket" and every Cockpit form
+  ask "Discard what you typed?" with Keep and Discard, on a touch outside, Escape, Back and the Cockpit's Close. A
+  form with nothing typed closes at once, and a form's own Cancel asks nothing.
+
+## 2.496.766
+
+What you will see:
+- Every worded button is now one button: a soft grey pill, green for the main answer, red for one that cannot be
+  taken back. A window's footer had pills while the same Cancel and Save in a Cockpit form, a question asked in
+  place ("Unlock Front door?") and every "Add", "Copy", "Record spend" or "Reload" were outlined boxes. A cover's
+  Open, Stop and Close are three alike, in the device's colour.
+- Cancel and the answer are the same pair everywhere: the ✕ and "Cancel", then a check and the answer's own words
+  ("Save task", "Unlock", "Send report"), on the right. In a window's footer, at the end of a Cockpit form, in a
+  question asked in place and in the question box. On a phone Cancel is the round ✕ alone.
+- The answer greys while it is on its way ("Saving…", "Sending…") everywhere, so a second press cannot send twice.
+- What went wrong is one red line, the same size everywhere. In a window it stands on its own line just above the
+  footer's buttons: a refused Save in Settings was amber words squeezed beside Cancel and Save.
+
+## 2.496.765
+
+What you will see:
+- Every "choose one of several" is now one control with one look: a soft track, the chosen one tinted green. The
+  Cockpit's tabs (Inbox, Tickets, Schedule…) and Settings' tabs were solid green rectangles; the Inbox's Issues,
+  Notifications and Reports were outlined pills; a schedule's "How often" and a device's modes and speeds (air
+  conditioner, fan) were buttons of their own; the weather's and the energy's periods another kind. They are all
+  the same control as Settings' choices now, so a change to its look changes all of them at once.
+- The Inbox's filters say their count as the tabs do: "Issues (6)", and "Notifications" in full on every phone.
+- A window with nothing to save closes with the same button shape as Save and Cancel: "✕ Close" on a wide screen,
+  the round ✕ on a phone (the Cockpit had a word pill where Settings had round buttons).
+
+## 2.496.764
+
+What you will see:
+- The Rooms window: "Add room here" and a room's bin are the owner's alone. Anyone else sees the rooms and goes to
+  them; a room they added stayed on their device only, or was replaced later with no word.
+- A bin asks before it deletes: a task's bin on the Cockpit's Today and Schedule tabs ("Remove this task?
+  Completions already logged against it are kept."), a saved document's ("Delete this saved report?"), and
+  "Clear" in Advanced Settings' telemetry ("Erase every event?"). One press deleted, with nothing to take it back.
+
 ## 2.496.763
 
 What you will see:

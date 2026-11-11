@@ -615,21 +615,21 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
             controls the user is about to reach for (prev/next/fullscreen/
             close) while they're mid-gesture on the feed. */}
         {zoom.zoomed && (
-          <button className="camera-zoom-pill" onClick={zoom.reset} title="Reset zoom" aria-label="Reset zoom">
+          <button className="media-btn worded camera-zoom-pill" onClick={zoom.reset} data-tip="Reset zoom" aria-label="Reset zoom">
             <ZoomOut size={16} /> Zoomed in, tap to reset
           </button>
         )}
         </div>
         {/* the device window's own pieces, at its top right as in every device window: the warning first */}
         <div className="camera-header-actions">
-          {warning && <FaultsButton onOpen={warning.open} severity={warning.severity} className="camera-chip-btn" />}
+          {warning && <FaultsButton onOpen={warning.open} severity={warning.severity} className="media-btn" />}
           {readings && readings.length > 0 && (
-            <button type="button" className={`camera-chip-btn${readingsOpen ? " on" : ""}`} onClick={() => setReadingsOpen((o) => !o)}
-              title="Also on this device" aria-label="Also on this device" aria-expanded={readingsOpen}>
+            <button type="button" className={`media-btn${readingsOpen ? " on" : ""}`} onClick={() => setReadingsOpen((o) => !o)}
+              data-tip="Also on this device" aria-label="Also on this device" aria-expanded={readingsOpen}>
               <ListTree size={16} aria-hidden="true" />
             </button>
           )}
-          <EditButton className="camera-chip-btn" icon />
+          <EditButton className="media-btn" icon />
           <OpenTicketButton />
         </div>
       </div>
@@ -752,7 +752,7 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
           {/* the linked sensor (a noise or door sensor): its state over the same day, named on hover — the strip the
               other windows draw as a band under the device's own (LinkedSensorRow) */}
           {linkedSensor && linkedId && (
-            <div className="camera-linked-strip" title={`${linkedSensor.label} (linked entity)`}>
+            <div className="camera-linked-strip" data-tip={`${linkedSensor.label} (linked entity)`}>
               <StateTimeline
                 data={barStates?.s[linkedId] ?? []}
                 status={statusFetch}
@@ -777,9 +777,9 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
             {/* its sound, off until tapped (soundOn) — only a video feed that carries one (hasSound) */}
             {(mode === "webrtc" || mode === "hls") && hasSound && (
               <button
-                className={`icon-btn camera-sound-btn${soundOn ? " on" : ""}`}
+                className={`media-btn camera-sound-btn${soundOn ? " on" : ""}`}
                 onClick={toggleSound}
-                title={soundOn ? "Mute" : "Sound on"}
+                data-tip={soundOn ? "Mute" : "Sound on"}
                 aria-label={soundOn ? "Mute" : "Sound on"}
                 aria-pressed={soundOn}
                 style={vOrder(11)}
@@ -789,23 +789,22 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
             )}
           </div>
           {/* Linked entity on/off — the camera's stand-in for the switch
-              BasePanel shows at the top of every other panel. Styled as an
-              icon-btn so it sits in this cluster naturally; .on marks the
-              live state, matching the badge's ring.
+              BasePanel shows at the top of every other panel. One of this
+              cluster's buttons; .on marks the live state, matching the
+              badge's ring.
               Vertical (phone-landscape) rail order deliberately differs from
               this DOM/portrait order — see vOrder: Close top, Fullscreen 2nd,
               Next above Previous, this detection toggle last. Portrait order
               (this DOM order) is untouched.
-              No explicit icon `size` on any button below — .camera-controls
-              .icon-btn svg (styles.css) sizes every icon in this cluster to
-              a consistent 55% of its button uniformly, at every breakpoint,
+              No explicit icon `size` on any button below: .media-btn sizes
+              every icon to the same share of its button, at every breakpoint,
               instead of a hand-picked pixel value per icon. */}
           {linked && (
             <button
-              className={`icon-btn camera-linked-btn${linked.isOn ? " on" : ""}`}
+              className={`media-btn camera-linked-btn${linked.isOn ? " on" : ""}`}
               {...linkedSwitchProps(linked)}
               // its word as the card windows say it (linkedStateWords: Unavailable only when lost, else Unknown)
-              title={`${linked.label}: ${linkedStateWords(linked)}${linked.known ? `, ${linked.isOn ? "turn off" : "turn on"}` : ""}`}
+              data-tip={`${linked.label}: ${linkedStateWords(linked)}${linked.known ? `, ${linked.isOn ? "turn off" : "turn on"}` : ""}`}
               style={vOrder(5)}
             >
               <Power />
@@ -820,20 +819,20 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
                   swallowed by the hook's consumeClick, which exists only to
                   suppress the click at the end of a hold. */}
               <button
-                className="icon-btn cam-prev"
+                className="media-btn"
                 onClick={() => stepCamera(-1)}
-                title="Previous camera"
+                data-tip="Previous camera"
                 aria-label="Previous camera"
                 style={vOrder(4)}
               >
                 <ChevronLeft />
               </button>
               <button
-                className="icon-btn cam-next has-hold-action"
+                className="media-btn has-hold-action"
                 {...pickerHold}
                 onContextMenu={(e) => e.preventDefault()}
                 onClick={() => onCycleBtnClick(1)}
-                title="Next camera, hold to pick a camera"
+                data-tip="Next camera, hold to pick a camera"
                 aria-label="Next camera, hold to pick a camera"
                 style={vOrder(3)}
               >
@@ -843,9 +842,9 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
           )}
           {fullscreenSupported && (
             <button
-              className="icon-btn fs-btn"
+              className="media-btn"
               onClick={toggleFullscreen}
-              title={isFs ? "Exit fullscreen" : "Fullscreen"}
+              data-tip={isFs ? "Exit fullscreen" : "Fullscreen"}
               aria-label={isFs ? "Exit fullscreen" : "Fullscreen"}
               style={vOrder(2)}
             >
@@ -853,12 +852,12 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
             </button>
           )}
           {back && (
-            <button className="icon-btn" onClick={back.go} title={`Back to ${back.label}`}
+            <button className="media-btn" onClick={back.go} data-tip={`Back to ${back.label}`}
               aria-label={`Back to ${back.label}`} style={vOrder(1)}>
               <ArrowLeft />
             </button>
           )}
-          <button className="icon-btn close" onClick={onClose} title="Close" aria-label="Close" style={vOrder(1)}>
+          <button className="media-btn" onClick={onClose} data-tip="Close" aria-label="Close" style={vOrder(1)}>
             <X />
           </button>
         </div>
@@ -907,7 +906,7 @@ function Unavailable({ label, onRetry }: { label: string; onRetry?: () => void }
       <p>{label}</p>
       {onRetry && (
         // the press is the button's own: it does not also reach the picture, where a tap shows or hides the controls
-        <button type="button" className="camera-zoom-pill" style={{ margin: "8px auto 0" }}
+        <button type="button" className="media-btn worded" style={{ margin: "8px auto 0" }}
           onPointerDown={(e) => e.stopPropagation()} onClick={onRetry}>
           <RotateCw size={16} aria-hidden /> Try again
         </button>

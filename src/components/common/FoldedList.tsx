@@ -13,6 +13,7 @@ import { useState, type ReactNode } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { Pager, usePaged, PAGE_CARDS } from "./Paged";
 import SegmentedGroup from "./SegmentedGroup";
+import { withCount } from "@/utils/countBadge";
 
 /** THE "this opens more" control (owner, 2026-11-06: a chevron after the title in one place, an outlined button in
  *  another): its chevron before its words, pointing down while open. A section's title (ListSection) and a list inside
@@ -46,7 +47,7 @@ export interface SectionViews {
  *  a folded section's (ListSection `views`: Grouped devices), where none is filled while it is folded. */
 export function SectionViewButtons({ title, views, open = true }: { title: string; views: SectionViews; open?: boolean }) {
   return (
-    <SegmentedGroup className="segmented-compact section-views" ariaLabel={`${title}: which list`}
+    <SegmentedGroup layout="compact" className="section-views" ariaLabel={`${title}: which list`}
       active={open ? views.shown : null} onChange={views.onShow}
       options={views.items.map((v) => ({ key: v.key, label: v.words }))} />
   );
@@ -67,7 +68,7 @@ export function ListSection({ title, count, summary, views, open, onToggle, tip,
       <div className="cockpit-issues-head">
         <div className="with-tip">
           <FoldToggle className="messages-section-toggle settings-section-title" open={open} onToggle={onToggle}>
-            <span className="fold-toggle-words">{title}{count ? ` (${count})` : ""}</span>
+            <span className="fold-toggle-words">{withCount(title, count)}</span>
             {summary && !views && <span className="section-summary">{summary}</span>}
           </FoldToggle>
           {views ? <span className="title-after"><SectionViewButtons title={title} views={views} open={open} />{tip}</span> : tip}

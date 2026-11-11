@@ -6,6 +6,7 @@ import { AgentProvider } from "@/agent/AgentContext";
 import { HAStateProvider } from "@/ha/HAStateStore";
 import { ProfileProvider } from "@/auth/ProfileContext";
 import ProfileGate from "@/components/auth/ProfileGate";
+import { TipLayer } from "@/components/common/Tip";
 import { SuperadminGate } from "@/auth/SuperadminGate";
 import Dashboard from "@/pages/Dashboard";
 import { markBoot } from "@/utils/bootTimeline";
@@ -19,6 +20,8 @@ export default function App() {
       <ProfileProvider>
         <HAStateProvider>
           <div className="app-root">
+            {/* The one hover tooltip of every screen, the gates included (common/Tip). */}
+            <TipLayer />
             <ProfileGate>
               {/* Headless — reconciles the shared DEVICE configuration
                   (bindings, per-device metadata, rooms, groups) with the

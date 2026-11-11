@@ -43,7 +43,7 @@ export default function ContractTermsEditor() {
 
   if (!open) {
     return (
-      <button className="btn ghost" onClick={start} style={{ alignSelf: "flex-start" }}>
+      <button className="btn" onClick={start} style={{ alignSelf: "flex-start" }}>
         <Settings2 size={16} /> Spend settings
         <span className="muted" style={{ marginLeft: 6 }}>
           {terms.monthlyCap > 0
@@ -79,7 +79,7 @@ export default function ContractTermsEditor() {
           sits with Cancel and Save, drawn as they are (owner, 2026-10-14) */}
       <FormActions onCancel={() => setOpen(false)} onSave={save} saveLabel="Save"
         extra={cap.trim() !== "" && (
-          <button type="button" className="btn ghost" onClick={() => setCap("")}><Trash2 size={16} aria-hidden /> Remove cap</button>
+          <button type="button" className="btn" onClick={() => setCap("")}><Trash2 size={16} aria-hidden /> Remove cap</button>
         )} />
     </FmForm>
   );

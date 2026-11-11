@@ -93,7 +93,7 @@ export default function LockPanel({ entity, mapping, onClose }: PanelProps) {
           </button>
         ) : (
           <div key={b} className="mt">
-            <button className="btn ghost" style={{ width: "100%" }} onClick={ask.request}>
+            <button className="btn" style={{ width: "100%" }} onClick={ask.request}>
               <Icon size={18} /> {b === "lock" ? "Lock door" : "Unlock door…"}
             </button>
           </div>

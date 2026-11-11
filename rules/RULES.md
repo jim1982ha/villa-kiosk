@@ -28,6 +28,8 @@ Keep this file short: add a rule only when the owner states one, and remove rule
 - One mechanism per job, each list, value or text defined once; fix the shared piece, not the caller.
 - No exception for one device or case: fix the logic for every device.
 - A feature nobody can reach is removed with its code.
+- Controls that do the same job look the same and are one definition, so one change shows everywhere. A UI scan lists
+  the controls by job and compares them side by side on screen, never file by file.
 - Telegram and the tablet alike: one alert is one card updated in place, with the same name ("#91-P2") and the same
   Status everywhere, every copy updated at every change.
 - A repeated problem is one line with a count.

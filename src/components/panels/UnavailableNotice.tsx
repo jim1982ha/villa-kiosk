@@ -56,7 +56,7 @@ export default function UnavailableNotice({ entityId }: Props) {
     "Contact with this device is lost, its real state isn't known, so controls are disabled until it reports in again.";
   return (
     <div className="center" style={{ margin: "8px 0 20px" }}>
-      <span className={`status-pill ${tone}`} title={detail} aria-label={detail}>
+      <span className={`status-pill ${tone}`} data-tip={detail} aria-label={detail}>
         <AlertTriangle size={16} />
         UNAVAILABLE
       </span>

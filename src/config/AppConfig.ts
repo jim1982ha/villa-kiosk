@@ -616,9 +616,10 @@ export function overrides(config: AppConfig): Partial<AppConfig> {
   return out as Partial<AppConfig>;
 }
 
-export function saveConfig(config: AppConfig): void {
-  // Said, not swallowed: a full quota here loses this device's own settings.
-  if (!writeJson(CONFIG_KEY, overrides(config))) console.error("[AppConfig] failed to save (storage full or disabled)");
+/** Store this device's copy. False when its storage refused it (full, or turned off): a full quota here loses this
+ *  device's own settings, so the caller says it (ConfigContext `storeProblem`), never the console alone. */
+export function saveConfig(config: AppConfig): boolean {
+  return writeJson(CONFIG_KEY, overrides(config));
 }
 
 /** Fallback title when neither a configured title nor the HA instance name exist. */

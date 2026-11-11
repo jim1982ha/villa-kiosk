@@ -18,14 +18,13 @@ export type MessagesFilter = "issues" | "notifications" | "reports";
 
 /** The filters, in their order on their one line. ⚠️ NO "ALL" (owner, 2026-10-30: "remove the All tab, and make Issues
  *  the default"): each filter lists one kind. */
-export const FILTERS: readonly { id: MessagesFilter; label: string; short?: string }[] = [
+export const FILTERS: readonly { id: MessagesFilter; label: string }[] = [
   // ⚠️ "ISSUES", NOT "OPEN ISSUES" (owner, 2026-10-28): it lists a problem's whole life — open, watched, closed —
   // its count the open ones only
   { id: "issues", label: "Issues" },
-  // ⚠️ "NOTIFICATIONS" WHERE IT FITS, "NOTIFS" WHERE IT DOES NOT (owner, 2026-10-31: with "Notifications" the filters
-  // left no room on a phone for Open Ticket, which dropped to a line of its own; 2026-11-01: "Notifications if it
-  // fits"): `short` is the button's word on a line too narrow for the four buttons (08-shared.css, the toolbar's width)
-  { id: "notifications", label: "Notifications", short: "Notifs" },
+  // ⚠️ THE WHOLE WORD, ON EVERY SCREEN (owner, 2026-11-01: "Notifications if it fits"): the three fit a 360px phone
+  // in the one choice control (measured 301px with a two-figure count, on a 324px line), so its short "Notifs" went
+  { id: "notifications", label: "Notifications" },
   // ticket 20 of "One inbox": the facility manager's daily, weekly and monthly reports, the night check's message
   { id: "reports", label: "Reports" },
 ];
@@ -37,7 +36,7 @@ export type MessageItem =
 
 interface MessagesView {
   /** Each filter with its count (Open issues: the open issues; the others none). */
-  filters: { id: MessagesFilter; label: string; short?: string; count: number | null }[];
+  filters: { id: MessagesFilter; label: string; count: number | null }[];
   /** The open issues, in their order; then the watched faults and VESTA's cards of alerts that cleared (placeOf
    *  "watch"), folded after them, never counted. */
   issues: MessageItem[];

@@ -10,6 +10,7 @@
 import InfoTip from "@/components/common/InfoTip";
 import { useState } from "react";
 import Dropdown from "@/components/common/Dropdown";
+import SegmentedGroup from "@/components/common/SegmentedGroup";
 import { Plus, Pencil } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
 import { useFmData } from "@/fm/FmDataContext";
@@ -18,10 +19,10 @@ import { scheduleStatus } from "@/fm/fmEngine";
 import type { FmSchedule } from "@/fm/fmTypes";
 import { EMPTY_SCHEDULE_DRAFT as EMPTY, scheduleToDraft as toDraft, draftDays, scheduleWrite, SCHEDULE_PRESETS, type ScheduleDraft as Draft } from "@/fm/scheduleDraft";
 import FormActions from "./FormActions";
-import BinButton from "@/components/common/BinButton";
-import TaskCard, { REMOVE_TASK_TIP } from "./TaskCard";
+import TaskCard from "./TaskCard";
 import FmForm from "./FmForm";
 import { useListEditor } from "./ListEditor";
+import ProblemLine from "@/components/common/ProblemLine";
 
 export default function ScheduleEditor() {
   const { data, addSchedule, updateSchedule, removeSchedule } = useFmData();
@@ -66,16 +67,9 @@ export default function ScheduleEditor() {
 
       <div className="fm-field">
         <span>How often</span>
-        <div className="fm-chiprow">
-          {SCHEDULE_PRESETS.map((p) => (
-            <button
-              key={p.days}
-              className={`fm-entity-chip${days === p.days ? " on" : ""}`}
-              aria-pressed={days === p.days}
-              onClick={() => setDraft({ ...draft, everyDays: String(p.days) })}
-            >{p.label}</button>
-          ))}
-        </div>
+        <SegmentedGroup ariaLabel="How often" active={SCHEDULE_PRESETS.some((p) => p.days === days) ? String(days) : null}
+          onChange={(everyDays) => setDraft({ ...draft, everyDays })}
+          options={SCHEDULE_PRESETS.map((p) => ({ key: String(p.days), label: p.label }))} />
       </div>
 
       <label className="fm-field" style={{ maxWidth: 200 }}>
@@ -97,7 +91,7 @@ export default function ScheduleEditor() {
       </label>
 
       {!write.ok && draft.everyDays.trim() !== "" && days === null && (
-        <div className="fm-inline-error" role="alert">{write.problem}</div>
+        <ProblemLine>{write.problem}</ProblemLine>
       )}
       <FormActions error={formError} onCancel={editor.close} onSave={save} disabled={!valid}
         saveLabel={editingId ? "Save changes" : "Add task"} />
@@ -109,7 +103,7 @@ export default function ScheduleEditor() {
       {/* the description and "Add a task" on one line (owner, 2026-10-14) */}
       <div className="fm-desc-row">
         {editor.addButton && (
-          <button className="btn ghost" onClick={startAdd}><Plus size={16} /> Add a task</button>
+          <button className="btn" onClick={startAdd}><Plus size={16} /> Add a task</button>
         )}
         <InfoTip label="About the tasks">
           Each task repeats at the interval you set. It becomes overdue when its interval has passed since it was last
@@ -130,15 +124,14 @@ export default function ScheduleEditor() {
           const due = scheduleStatus(s, data.completions);
           return editor.inPlace(s.id, (
             // THE task's card, the Today tab's too (TaskCard): its state, due day and who last did it on both
-            <TaskCard key={s.id} status={due} room={roomOf(s)}
+            <TaskCard key={s.id} status={due} room={roomOf(s)} onRemove={() => removeSchedule(s.id)}
               actions={<>
-                <button className="btn ghost" onClick={() => void updateSchedule(s.id, { enabled: !s.enabled })}>
+                <button className="btn" onClick={() => void updateSchedule(s.id, { enabled: !s.enabled })}>
                   {s.enabled ? "Pause" : "Resume"}
                 </button>
-                <button className="icon-btn" onClick={() => startEdit(s)} aria-label={`Edit ${s.title}`}>
+                <button className="btn icon-only" onClick={() => startEdit(s)} aria-label={`Edit ${s.title}`}>
                   <Pencil size={16} />
                 </button>
-                <BinButton label={`Remove ${s.title}`} tip={REMOVE_TASK_TIP} onPress={() => void removeSchedule(s.id)} />
               </>} />
           ), () => form);
         })}

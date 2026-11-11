@@ -14,6 +14,7 @@
 
 import { useId, type ReactNode } from "react";
 import { Maximize2 } from "lucide-react";
+import IconButton from "@/components/common/IconButton";
 import type { HistoryPoint, HistoryGap } from "@/types/ha.types";
 import { drawableWindow, type TimeWindow } from "@/utils/lineChart";
 import { chartGeometry, type ChartGeometry } from "@/utils/chartGeometry";
@@ -157,10 +158,9 @@ export default function LineChart({ lines, window, height = 150, status, label, 
       <ChartUnitLine slider={!!slid} left={{ unit: unit.trim(), cls: lines[0].cls?.split(" ")[0], color: lines[0].color }}
         right={right ? { unit: right.unit?.trim() || right.label, cls: right.cls?.split(" ")[0], color: right.color } : null}
         action={onExpand && (
-          <button type="button" className="chart-expand" onClick={onExpand} title="Enlarge the chart"
-            aria-label={`Enlarge: ${label}`}>
+          <IconButton small label={`Enlarge: ${label}`} tip="Enlarge the chart" onClick={onExpand}>
             <Maximize2 size={14} aria-hidden="true" />
-          </button>
+          </IconButton>
         )}>
         {on && slid && <RangeChip range={on} step={ax.step} unit={unit} state={slid.state}
           kept={kept ? keptWords(kept.count, kept.of, stepMs) : undefined} onClear={() => slid.onChange(null)} />}

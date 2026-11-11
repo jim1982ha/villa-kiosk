@@ -28,12 +28,14 @@ import { announcementWords, isReport, messagesView, followingFilter, openingFilt
 import FaultTiming from "@/components/fm/FaultTiming";
 import { Pager, usePaged } from "@/components/common/Paged";
 import FoldedList, { ListSection } from "@/components/common/FoldedList";
+import SegmentedGroup from "@/components/common/SegmentedGroup";
 import { AnnouncementContent, RecordButtons } from "@/components/messages/AnnouncementContent";
 import RecordCard, { type RecordCardProps } from "@/components/fm/RecordCard";
 import { eraseMessage, titleSentences, type Announcement } from "@/messages/announcements";
 import { QUIET_PILL } from "@/fm/tone";
 import { CockpitAttentionRow } from "./IssueCard";
 import { useCockpitIssues } from "./useVillaAttention";
+import { withCount } from "@/utils/countBadge";
 
 /** ⚠️ ONE CARD OF THE INBOX, WHATEVER IT HOLDS (owner, 2026-11-01: "NEVER add dedicated lines of code for specific
  *  cards"): whole under Issues (`opened`, no `onToggle`: the card itself is not pressed, its buttons are); a notification
@@ -130,21 +132,12 @@ export default function MessagesTab({ onOpenEntity, doors, onRaiseTicket, onEdit
           its right a guest's "Report a problem" (Open Ticket is the Tickets tab's, owner 2026-11-02): two groups, so a
           narrow phone wraps the button whole under the filters, never squeezing them */}
       <div className="messages-toolbar">
-        <div className="messages-filters" role="group" aria-label="Show">
-          {view.filters.map((f) => (
-            <button key={f.id} type="button" className={`messages-filter${filter === f.id ? " on" : ""}`}
-              aria-pressed={filter === f.id} onClick={() => pickFilter(f.id)}>
-              {/* both words drawn, the line's width shows one (08-shared.css .messages-filter-short) */}
-              {f.short ? <><span className="messages-filter-long">{f.label}</span><span className="messages-filter-short">{f.short}</span></>
-                : f.label}
-              {f.count ? <span className="messages-filter-count">{f.count}</span> : null}
-            </button>
-          ))}
-        </div>
+        <SegmentedGroup layout="natural" ariaLabel="Show" active={filter} onChange={pickFilter}
+          options={view.filters.map((f) => ({ key: f.id, label: withCount(f.label, f.count) }))} />
         {/* only while the issues are listed, as when it sat over Open issues */}
         {showsIssues && !canManage && canReport && (
           <div className="messages-toolbar-actions">
-            <button type="button" className="btn ghost" onClick={onReportProblem}><Plus size={16} /> Report a problem</button>
+            <button type="button" className="btn" onClick={onReportProblem}><Plus size={16} /> Report a problem</button>
           </div>
         )}
       </div>

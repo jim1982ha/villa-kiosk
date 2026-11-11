@@ -18,11 +18,10 @@ export function taskState(st: Pick<ScheduleStatus, "schedule" | "state">): { wor
   return st.schedule.enabled ? DUE_WORDS[st.state] : { word: "Paused", tone: "warn" };
 }
 
-/** What a task's bin does, said on both tabs that draw it. */
-export const REMOVE_TASK_TIP = "Remove this task. Completions already logged against it are kept.";
-
-export default function TaskCard({ status: st, room, actions }: {
+export default function TaskCard({ status: st, room, actions, onRemove }: {
   status: ScheduleStatus; room?: string; actions: ReactNode;
+  /** Its bin's second press, on both tabs that draw it (RecordCard `bin`: it asks first). */
+  onRemove: () => unknown;
 }) {
   const s = taskState(st);
   return (
@@ -38,6 +37,8 @@ export default function TaskCard({ status: st, room, actions }: {
         {st.schedule.clause && <span className="fm-clause">Cl. {st.schedule.clause}</span>}
         <AgentMark record={st.schedule} />
       </>}
-      actions={actions} />
+      actions={actions}
+      bin={{ label: `Remove ${st.schedule.title}`, question: "Remove this task? Completions already logged against it are kept.",
+        run: onRemove }} />
   );
 }

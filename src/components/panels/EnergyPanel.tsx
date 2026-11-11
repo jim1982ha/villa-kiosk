@@ -53,7 +53,7 @@ export default function EnergyPanel({ onClose, fallback }: { onClose: () => void
   const house = resolveSiteTitle(config, haConfig?.location_name);
   // The period picker lives in the HEADER on the history screen, as the
   // Weather window's does — the same control (useSegmentedChoice).
-  const { key: range, picker } = useSegmentedChoice(RANGE_OPTIONS, "1w", "Period", "weather-ranges");
+  const { key: range, picker } = useSegmentedChoice(RANGE_OPTIONS, "1w", "Period", "natural");
   // A statistic's name: the device's own name in HA's Energy settings, else its
   // entity's as every screen names it (energyStatName).
   const nameOf = (id: string) => energyStatName(id, config.entityMap, entities);
@@ -291,7 +291,7 @@ function HistoryView({ setup, costUnit, range: rangeKey, colourOf }: { setup: En
   const range = energyRange(rangeKey);
   // Every device as a list or as HA's pie — the app's one segmented control.
   // The pie first (owner, 2026-10-05: "show the pie chart by default").
-  const { key: shape, picker: shapePicker } = useSegmentedChoice(SHAPES, "pie", "Show every device as", "energy-shape");
+  const { key: shape, picker: shapePicker } = useSegmentedChoice(SHAPES, "pie", "Show every device as", "compact");
   const now = Date.now();
   const starts = periodStarts(range.kind, now);
   const { data: answer, status } = useHistorySource({ p: energyRequest(setup, starts[0], range.period) });

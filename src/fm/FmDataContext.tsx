@@ -64,8 +64,10 @@ export interface FmDataContextValue {
   ready: boolean;
   /** The record has never been read and the last try could not reach the add-on (the next refresh tries again). */
   unreachable: boolean;
-  /** Set when the last write failed, so the UI can say so instead of pretending. */
+  /** Set when the last write failed, so the UI can say so instead of pretending: said where every save that did not
+   *  happen is (components/hud/ProblemNotices), until its ✕ (`dismissSaveError`) or the next action. */
   saveError: string | null;
+  dismissSaveError: () => void;
   /** Kept on this tablet for profiles not signed in, which the one signed in does not send (fmSave heldLine). */
   heldFor: string[];
   /** How long the server keeps a closed fault, as it published it with the record (null until read, or not said). */
@@ -384,12 +386,13 @@ export function FmDataProvider({ children }: { children: ReactNode }) {
   // evidence photos from /data). No ordinary code path can reach them by accident: a token exists only because
   // someone entered the superadmin code seconds earlier for this specific action.
   const removeCost = useCallback((id: string, elevation: string) => run({ type: "removeCost", id }, elevation), [run]);
+  const dismissSaveError = useCallback(() => setSaveError(null), []);
   const removeTicket = useCallback((id: string, elevation: string) => run({ type: "removeTicket", id }, elevation), [run]);
   const removeCompletion = useCallback((id: string, elevation: string) => run({ type: "removeCompletion", id }, elevation), [run]);
 
   return (
     <FmDataContext.Provider value={{
-      data, ready, unreachable, saveError, heldFor, retention, reload,
+      data, ready, unreachable, saveError, dismissSaveError, heldFor, retention, reload,
       addSchedule, updateSchedule, removeSchedule, removeAllSchedules,
       logCompletion, addCost, updateCost, addTicket, updateTicket,
       removeCost, removeTicket, removeCompletion, advanceTickets, closeTickets, helpTickets,

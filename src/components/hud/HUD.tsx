@@ -58,7 +58,7 @@ import LegendModal from "./LegendModal";
 import type { Doors } from "@/auth/doors";
 import { useVillaAttention } from "@/components/cockpit/useVillaAttention";
 import type { VillaHealthLevel } from "@/config/attention";
-import { formatCountBadge } from "@/utils/countBadge";
+import { formatCountBadge, withCount } from "@/utils/countBadge";
 import { useConversation } from "@/messages/ConversationContext";
 import { useAnnouncements } from "@/messages/AnnouncementsContext";
 import { countOf } from "@/utils/countOf";
@@ -356,7 +356,7 @@ export default function HUD({
           role="menuitem"
           className="hud-menu-item"
           onClick={() => { close(); beginSwitch(); }}
-          title={`Signed in as ${ROLE_LABELS[role]} · Connection: ${connection}`}
+          data-tip={`Signed in as ${ROLE_LABELS[role]} · Connection: ${connection}`}
           aria-label={`Signed in as ${ROLE_LABELS[role]}, connection ${connection}, log out`}
         >
           <span className="hud-menu-glyph" aria-hidden="true">
@@ -442,7 +442,7 @@ export default function HUD({
             type="button"
             className={`hud-home-btn${hasOverviewDefault ? "" : " has-hold-action"}`}
             {...homeButtonProps}
-            title="Tap for this device's default view · long-press / right-click to set it to the current view"
+            data-tip="Tap for this device's default view · long-press / right-click to set it to the current view"
             aria-label="Go to this device's default overview view"
             aria-describedby="home-btn-hint"
           >
@@ -464,7 +464,7 @@ export default function HUD({
             <span className="hud-title">{title}</span>
             <span
               className={`conn-dot ${connClass}`}
-              title={`Connection: ${connection}`}
+              data-tip={`Connection: ${connection}`}
               role="img"
               aria-label={`Connection: ${connection}`}
             >
@@ -518,7 +518,7 @@ export default function HUD({
                   onKeyDown={onCatKeyDown(cat)}
                   onContextMenu={(e) => e.preventDefault()}
                   onClick={onCatClick(cat)}
-                  title={`${hidden ? "Show" : "Hide"} ${CATEGORY_LABELS[cat]} devices on the map, hold to list them`}
+                  data-tip={`${hidden ? "Show" : "Hide"} ${CATEGORY_LABELS[cat]} devices on the map, hold to list them`}
                   aria-label={`${CATEGORY_LABELS[cat]} devices on the map`}
                   aria-pressed={!hidden}
                 >
@@ -535,7 +535,7 @@ export default function HUD({
             <button
               className="icon-btn hud-cat-help"
               onClick={() => setLegendOpen(true)}
-              title="What do these colours mean, and the keyboard keys"
+              data-tip="What do these colours mean, and the keyboard keys"
               aria-label="Map colours and keyboard keys"
             >
               <CircleHelp size={24} />
@@ -560,7 +560,7 @@ export default function HUD({
               className="icon-btn hud-labelsize-btn"
               onClick={() => stepLabelScale(-LABEL_SCALE_STEP)}
               disabled={labelScale <= ENTITY_ICON_SCALE_MIN}
-              title="Decrease label size"
+              data-tip="Decrease label size"
               aria-label="Decrease label size"
             >
               <Minus size={24} />
@@ -569,7 +569,7 @@ export default function HUD({
               className="icon-btn hud-labelsize-btn"
               onClick={() => stepLabelScale(LABEL_SCALE_STEP)}
               disabled={labelScale >= ENTITY_ICON_SCALE_MAX}
-              title="Increase label size"
+              data-tip="Increase label size"
               aria-label="Increase label size"
             >
               <Plus size={24} />
@@ -617,7 +617,7 @@ export default function HUD({
             <button
               className={`icon-btn${robot ? " agent-btn" : ""}${HEALTH_CLASS[health.level]}`}
               onClick={onOpenCockpit}
-              title={(attentionGroups.length > 0 ? health.summary : "Cockpit, villa status at a glance")
+              data-tip={(attentionGroups.length > 0 ? health.summary : "Cockpit, villa status at a glance")
                 + (robot ? ` · ${agentTitle}` : "") + unreadSaid}
               aria-label={`Open Cockpit, villa status at a glance${robot ? ` (${agentTitle})` : ""}${unreadSaid}`}
             >
@@ -643,7 +643,7 @@ export default function HUD({
                 <button
                   className={`icon-btn hud-role-badge${account.open ? " active" : ""}`}
                   onClick={() => account.setOpen((o) => !o)}
-                  title={`Signed in as ${ROLE_LABELS[role]}, settings and logout`}
+                  data-tip={`Signed in as ${ROLE_LABELS[role]}, settings and logout`}
                   aria-label={`Signed in as ${ROLE_LABELS[role]}, settings and logout`}
                   aria-haspopup="menu"
                   aria-expanded={account.open}
@@ -677,7 +677,7 @@ export default function HUD({
             <button
               className={`icon-btn hud-gear${menuOpen ? " active" : ""}`}
               onClick={() => setMenuOpen((o) => !o)}
-              title={`Menu${unreadSaid}`}
+              data-tip={`Menu${unreadSaid}`}
               aria-label={`Menu${unreadSaid}`}
               aria-haspopup="menu"
               aria-expanded={menuOpen}
@@ -700,7 +700,7 @@ export default function HUD({
                   role="menuitem"
                   className="hud-menu-item"
                   onClick={() => { setMenuOpen(false); onOpenCockpit(); }}
-                  title={robot ? agentTitle : undefined}
+                  data-tip={robot ? agentTitle : undefined}
                 >
                   {/* The agent's presence is the dot on its robot, as in the
                       top bar (owner, 2.496.247) — no "· agent online" text. */}
@@ -709,7 +709,7 @@ export default function HUD({
                     {robot && agentDot}
                   </span>
                   <span>
-                    Cockpit{attentionGroups.length > 0 ? ` (${formatCountBadge(attentionGroups.length)})` : ""}
+                    {withCount("Cockpit", attentionGroups.length)}
                     {robot && <span className="sr-only">{`, ${agentTitle}`}</span>}
                     {unreadSaid && <span className="sr-only">{unreadSaid}</span>}
                   </span>
@@ -753,7 +753,7 @@ export default function HUD({
                       className="icon-btn"
                       onClick={() => stepLabelScale(-LABEL_SCALE_STEP)}
                       disabled={labelScale <= ENTITY_ICON_SCALE_MIN}
-                      title="Decrease label size"
+                      data-tip="Decrease label size"
                       aria-label="Decrease label size"
                     >
                       <Minus size={16} />
@@ -762,7 +762,7 @@ export default function HUD({
                       className="icon-btn"
                       onClick={() => stepLabelScale(LABEL_SCALE_STEP)}
                       disabled={labelScale >= ENTITY_ICON_SCALE_MAX}
-                      title="Increase label size"
+                      data-tip="Increase label size"
                       aria-label="Increase label size"
                     >
                       <Plus size={16} />
@@ -815,7 +815,7 @@ export default function HUD({
               key={f}
               ref={(el) => { if (el) floorBtnRefs.current.set(f, el); else floorBtnRefs.current.delete(f); }}
               className={`icon-btn hud-floor-btn has-hold-action${currentFloor === f || radial?.floor === f ? " active" : ""}`}
-              title={`Show floor ${f}, hold for its rooms`}
+              data-tip={`Show floor ${f}, hold for its rooms`}
               aria-label={`Show floor ${f}, hold for its rooms`}
               aria-describedby="floor-btn-hint"
               aria-pressed={currentFloor === f}

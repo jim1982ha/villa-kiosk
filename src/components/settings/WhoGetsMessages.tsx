@@ -31,6 +31,7 @@ import { MessageCircle } from "lucide-react";
 import Dropdown from "@/components/common/Dropdown";
 import AddOnLine from "@/components/common/AddOnLine";
 import EntityPicker from "./EntityPicker";
+import ProblemLine from "@/components/common/ProblemLine";
 
 interface Props {
   /** Each chat's language, as Settings' draft shows it (its view). */
@@ -129,7 +130,7 @@ export default function WhoGetsMessages(props: Props) {
           </div>
         );
       })}
-      {problem && <span className="body-text sev-warning" role="alert">{problem}</span>}
+      <ProblemLine>{problem}</ProblemLine>
     </>
   );
 }

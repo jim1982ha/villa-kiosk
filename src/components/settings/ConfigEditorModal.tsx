@@ -9,7 +9,7 @@
 import Window from "@/components/common/Window";
 import { roleCan } from "@/auth/permissions";
 import { useState, type ReactNode } from "react";
-import { FIELD_COMMIT_MS, PendingFields, usePendingField, type PendingField } from "@/hooks/usePendingField";
+import { FIELD_COMMIT_MS, PendingFields, typedNumber, usePendingField, type PendingField } from "@/hooks/usePendingField";
 import { RECORDS_KEPT_DAYS_MAX, type AppConfig } from "@/config/AppConfig";
 import { Boxes, CalendarClock, Home, LogOut, Upload, Wrench } from "lucide-react";
 import SettingRow, { SettingSlider, settingValue } from "@/components/common/SettingRow";
@@ -26,13 +26,14 @@ import TelemetryPanel from "./TelemetryPanel";
 import GroupedDevices from "./GroupedDevices";
 import UnavailableByDesign from "./UnavailableByDesign";
 import EntityPicker from "./EntityPicker";
-import InlineConfirm from "@/components/common/InlineConfirm";
+import AskFirstButton from "@/components/common/AskFirstButton";
 import MaintenanceMode from "./MaintenanceMode";
 import ModalFooter, { footerExits } from "@/components/common/ModalFooter";
-import RemoteReplacedNote, { SaveProblemNote } from "./RemoteReplacedNote";
+import RemoteReplacedNote from "./RemoteReplacedNote";
 import { useAppNotice } from "@/components/hud/AppNotice";
 import { useDraftedSlice } from "@/hooks/useDraftedSlice";
 import { ADVANCED_SETTINGS_KEYS } from "@/config/configSlice";
+import ProblemLine from "@/components/common/ProblemLine";
 
 /** ⚠️ EVERY TAB CARRIES TWO PANELS, AND THAT IS A RULE RATHER THAN AN
  *  ACCIDENT. This screen was a stack of six collapsible sections and read as
@@ -87,16 +88,12 @@ function VillaCoordinates() {
   // blur wrote it back over the adopted one. A half-typed number ("-")
   // writes nothing; the field simply lapses to the stored value.
   // ⚠️ THE TYPED TEXT WAITS IN THE DIALOG'S ONE PENDING STORE (usePendingField, 2.496.500): Save lights while it is
-  // typed, and closing before the pause no longer drops it.
+  // typed, and closing before the pause no longer drops it. What is no number is said (typedNumber).
   const coord = (key: "latitude" | "longitude", id: string, label: string, field: PendingField<string>) => (
     <div className="villa-location-coord">
       <label htmlFor={id}>{label}</label>
-      <input
-        id={id} inputMode="decimal" value={field.shown ?? coordinateText(config[key])}
-        onChange={(e) => field.draft(e.target.value, coordinateWrite(key, e.target.value))}
-        onBlur={field.flush}
-        onKeyDown={(e) => e.key === "Enter" && field.flush()}
-      />
+      <input id={id} inputMode="decimal"
+        {...typedNumber(field, coordinateText(config[key]), (text) => coordinateWrite(key, text), label, "a number")} />
     </div>
   );
   const lat = usePendingField<string>("latitude", FIELD_COMMIT_MS);
@@ -145,7 +142,7 @@ function NorthOffset({ viewHeadingDeg }: { viewHeadingDeg?: () => number | null 
         onChange={(northOffsetDeg) => update({ northOffsetDeg })}
         before={
           // One control in two forms: the button measures it from the view, the slider sets it by hand.
-          <button className="btn ghost" disabled={!viewHeadingDeg}
+          <button className="btn" disabled={!viewHeadingDeg}
             onClick={() => {
               const h = viewHeadingDeg?.();
               if (h != null) update({ northOffsetDeg: northOffsetFacing(h) });
@@ -177,7 +174,7 @@ function PresenceSensor() {
 
 /** How long the Facility record is kept (config/recordsKeptDays): the villa's, applied by the server. Commits on
  *  blur/Enter or after a pause, like the coordinates; a value that is not a whole number of days in range commits
- *  nothing and the field falls back to the stored one. */
+ *  nothing, the field falls back to the stored one and says so (typedNumber). */
 function RecordsKept() {
   const { config } = useConfig();
   const field = usePendingField<string>("recordsKeptDays", FIELD_COMMIT_MS);
@@ -189,13 +186,9 @@ function RecordsKept() {
   // one line at every width (owner, 2026-11-06), the owner's whole sentence in the section's (i)
   return (
     <SettingRow className="setting-field" icon={<CalendarClock size={16} />} label={<label htmlFor="records-kept">Days records are kept</label>}>
-      <input
-        id="records-kept" inputMode="numeric" className="field-narrow"
-        value={field.shown ?? String(config.recordsKeptDays)}
-        onChange={(e) => field.draft(e.target.value, write(e.target.value))}
-        onBlur={field.flush}
-        onKeyDown={(e) => e.key === "Enter" && field.flush()}
-      />
+      <input id="records-kept" inputMode="numeric" className="field-narrow"
+        {...typedNumber(field, String(config.recordsKeptDays), write, "Days records are kept",
+          `a whole number from 0 to ${RECORDS_KEPT_DAYS_MAX}`)} />
     </SettingRow>
   );
 }
@@ -206,27 +199,15 @@ function RecordsKept() {
  *  header's right since 2026-10-24 (owner: Back took its footer place, where Settings' "Advanced Settings" opener is). */
 function LogoutAll() {
   const { logoutAll } = useProfile();
-  const [confirming, setConfirming] = useState(false);
   const [failed, setFailed] = useState(false);
 
   return (
     <>
-      {failed && (
-        <span className="body-text sev-warning" role="alert">Could not reach the server, no session was signed out.</span>
-      )}
-      {confirming ? (
-        <InlineConfirm confirmLabel="Log out every device?"
-          onConfirm={async () => {
-            const ok = await logoutAll();
-            setFailed(!ok);
-            setConfirming(false);
-          }}
-          onCancel={() => setConfirming(false)} />
-      ) : (
-        <button type="button" onClick={() => setConfirming(true)} title="Log Out All" aria-label="Log Out All">
-          <LogOut size={18} aria-hidden /><span className="btn-label">Log Out All</span>
-        </button>
-      )}
+      {failed && <ProblemLine>Could not reach the server, no session was signed out.</ProblemLine>}
+      <AskFirstButton confirmLabel="Log out every device?" title="Log Out All" aria-label="Log Out All"
+        onConfirm={async () => setFailed(!(await logoutAll()))}>
+        <LogOut size={18} aria-hidden /><span className="btn-label">Log Out All</span>
+      </AskFirstButton>
     </>
   );
 }
@@ -252,7 +233,7 @@ export function HeaderActions({ glbUpload, logout }: {
             type="button"
             onClick={glbUpload.openPicker}
             disabled={glbUpload.uploadBusy !== null}
-            title="Upload a GLB model"
+            data-tip="Upload a GLB model"
             aria-label={glbUpload.progress.words ?? "Upload Model"}
           >
             <Upload size={18} aria-hidden />
@@ -283,8 +264,6 @@ export default function ConfigEditorModal({ onBack, withinSettings, focusEntityI
   // Settings, Settings' draft records the same changes and this dialog just closes back to it; on its own, it is this
   // one's: Save keeps, Cancel (and Escape, and the backdrop) puts them back — the passing notices of every other dialog.
   const own = useDraftedSlice(ADVANCED_SETTINGS_KEYS);
-  // why the last device-setup save did not reach the other tablets (DeviceConfigSync), said above the footer
-  const { saveProblem, setSaveProblem } = useConfig();
   const notice = useAppNotice();
   const commit = withinSettings ? undefined : { dirty: own.dirty, save: own.save, discard: () => { own.discard(); } };
   // Over Settings, closing back writes what is still being typed here (as this dialog's): Settings' Save / Cancel then
@@ -426,7 +405,6 @@ export default function ConfigEditorModal({ onBack, withinSettings, focusEntityI
       {/* Every tab applies LIVE through `ConfigContext`, so a tab switch loses nothing. Over Settings: Close, back to
           Settings, whose Save / Cancel own these changes; on its own: this dialog's Save / Cancel (`commit`). */}
       <RemoteReplacedNote replaced={own.replaced} onDismiss={own.dismissReplaced} />
-      <SaveProblemNote line={saveProblem} onDismiss={() => setSaveProblem(null)} />
       <ModalFooter onClose={back} commit={commit} back={{ go: exit, to: withinSettings ? "Settings" : undefined }}
         actions={withinSettings ? <span /> : undefined} />
     </Window>

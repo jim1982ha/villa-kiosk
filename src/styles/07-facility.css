@@ -3,35 +3,6 @@
    width/scroll/mobile behaviour for free; only what's specific to an
    operator worklist is defined here. Colour is semantic throughout — an
    overdue task must read as overdue before anything is actually read. */
-.fm-tabs {
-  /* Symmetric top/bottom padding — this had ZERO top padding (only 10px at
-     the bottom, before the border), so the tab buttons sat flush against the
-     row's top edge with all the breathing room below them, reading as "not
-     vertically centred" within the header band even though each button's
-     OWN icon+label were centred fine internally. */
-  display: flex; align-items: center; gap: 4px; padding: 10px 22px; overflow-x: auto;
-  scrollbar-width: none; border-bottom: 1px solid var(--hairline);
-  /* ⚠️ NEVER SHRINKS (owner, 2026-10-01). The modal is a flex column: with a
-     long tab (Faults) the row was squeezed below its own height, and since
-     overflow-x:auto clips vertically too, the active pill showed cut in half
-     with the cards scrolling right under it. Short tabs (Today) never showed it. */
-  flex-shrink: 0;
-}
-.fm-tabs::-webkit-scrollbar { display: none; }
-.fm-tab {
-  display: flex; align-items: center; gap: 7px; flex: 0 0 auto;
-  padding: 8px 13px; border-radius: 10px; border: 1px solid transparent;
-  background: transparent; color: var(--text-secondary);
-  /* line-height:1 — without it the label's line box (taller than its glyphs,
-     per normal font metrics) added asymmetric space the 16px icon next to it
-     doesn't have, so align-items:center still read as the TEXT sitting a
-     couple px off-centre against the icon despite both being flex-centred. */
-  font-size: var(--text-base); line-height: 1; cursor: pointer;
-}
-@media (hover: hover) {
-  .fm-tab:hover { background: var(--bg-input); }
-}
-.fm-tab.active { background: var(--accent); color: var(--text-on-accent); }
 .fm-stack { display: flex; flex-direction: column; gap: 16px; }
 
 /* Summary numbers — the glance layer above the detail. ⚠️ ONE LINE, HOWEVER
@@ -91,7 +62,7 @@
    not inherited */
 .named-id { color: var(--text-secondary); font-weight: 500; overflow-wrap: normal; word-break: normal; }
 .fm-record-when { margin-left: auto; font-size: var(--text-xs); font-weight: 500; color: var(--text-secondary); }
-/* a Settings card's remove (RecordCard `remove`, owner 2026-11-06): the small round icon button at the strip's right end,
+/* a Settings card's remove (RecordCard `remove`, owner 2026-11-06): the lone icon button (.icon-quiet) at the strip's right end,
    where a Cockpit card says its time; drawn 30px into the strip's padding so the band keeps its height, its touch
    target 44px (the ::after), its glyph centred on the name's first line */
 .fm-record-strip .fm-record-remove { width: 30px; height: 30px; margin: -4px -8px -4px auto; }
@@ -151,20 +122,20 @@
    a notification's buttons, a task's Pause and bin, an icon-only one (its name read aloud: aria-label). */
 .fm-record-actions { display: flex; flex-wrap: wrap; gap: 1px; padding-top: 1px; background: var(--hairline); min-width: 0; }
 .fm-record-actions :is(.fm-documents, .vesta-notice-actions) { display: contents; }
-.fm-record-actions :is(.btn, .icon-btn, .fm-document-link) {
+.fm-record-actions :is(.btn, .fm-document-link) {
   flex: 1 1 0; min-width: 0; min-height: var(--touch-min); margin: 0; padding: 0 4px; border: 0; border-radius: 0;
   display: inline-flex; align-items: center; justify-content: center; gap: 6px; white-space: nowrap; overflow: hidden;
   background: var(--bg-card); color: var(--text-secondary); font-size: var(--text-base); font-weight: 500; text-decoration: none;
   box-shadow: none;
 }
-@media (max-width: 640px) { .fm-record-actions :is(.btn, .icon-btn, .fm-document-link) { min-height: 48px; } }
+@media (max-width: 640px) { .fm-record-actions :is(.btn, .fm-document-link) { min-height: 48px; } }
 @media (hover: hover) {
-  .fm-record-actions :is(.btn, .icon-btn, .fm-document-link):hover:not(:disabled) {
+  .fm-record-actions :is(.btn, .fm-document-link):hover:not(:disabled) {
     background: color-mix(in srgb, var(--accent) 10%, var(--bg-card)); color: var(--text-primary); }
 }
 .fm-record-actions .fm-bar-main { color: var(--accent); font-weight: 600; }
 /* what a button did or why it did not land, a standing Need help: a line of its own above the segments */
-.fm-record-actions :is(.fm-work-asked, .fm-inline-error, .vesta-notice-said) { flex: 1 1 100%; min-width: 0; margin: 0;
+.fm-record-actions :is(.fm-work-asked, .problem-line, .vesta-notice-said) { flex: 1 1 100%; min-width: 0; margin: 0;
   padding: 8px 16px; background: var(--bg-card); }
 .fm-record-actions .fm-work-asked { order: -1; }
 /* A CARD'S QUESTION TAKES ITS BAR: the question on a line of its own, then [the main action][Cancel] */
@@ -172,7 +143,7 @@
   background: color-mix(in srgb, var(--text-primary) 5%, var(--bg-card)); font-size: var(--text-base); font-weight: 500;
   color: var(--text-primary); }
 .fm-record-ask > svg { flex: none; margin-top: 3px; }
-.fm-record-ask ~ :is(.btn, .icon-btn) { background: color-mix(in srgb, var(--text-primary) 5%, var(--bg-card)); }
+.fm-record-ask ~ .btn { background: color-mix(in srgb, var(--text-primary) 5%, var(--bg-card)); }
 /* ⚠️ SHORT WORDS ON A NARROW CARD (owner, 2026-11-04: "use 1 word label and icon in the button"; 2026-11-05: Help,
    Ignore, Ticket, Dismiss on a phone, the full words on a computer): THE CARD IS MEASURED, never the bar (owner,
    2026-11-04: a row measuring itself measured nothing). A browser without container queries keeps the labels, cut
@@ -249,7 +220,6 @@
 /* A row's own "sure?" (the fault's one-step close): a line of its own under
    the record, its question and buttons wrapping on a phone. */
 .fm-row-confirm { flex: 1 1 100%; }
-.fm-row-confirm .modal-actions { flex-wrap: wrap; align-items: center; }
 .fm-row-sub { font-size: var(--text-xs); }
 /* A record that opens for editing when tapped. The cursor and hover lift are
    the whole affordance — a per-row "Edit" button would compete with the status
@@ -291,18 +261,11 @@
   max-width: 100%; max-height: 100%;
   object-fit: contain; border-radius: 8px;
 }
-.fm-lightbox-close, .fm-lightbox-nav {
-  position: absolute; display: flex; align-items: center; justify-content: center;
-  width: var(--touch-min); height: var(--touch-min);
-  border-radius: 50%; border: 1px solid rgba(255, 255, 255, 0.25);
-  background: var(--chip-scrim); color: #fff; cursor: pointer;
-}
+/* its buttons (.media-btn): Close at the top right, the arrows at mid-height on each side */
+.fm-lightbox-close, .fm-lightbox-nav { position: absolute; }
 .fm-lightbox-close { top: calc(env(safe-area-inset-top, 0px) + 12px); right: 12px; }
 .fm-lightbox-nav.prev { left: 12px; }
 .fm-lightbox-nav.next { right: 12px; }
-@media (hover: hover) {
-  .fm-lightbox-close:hover, .fm-lightbox-nav:hover { background: var(--chip-scrim-strong); }
-}
 .fm-lightbox-count {
   position: absolute; bottom: max(14px, var(--safe-bottom));
   left: 50%; transform: translateX(-50%);
@@ -313,13 +276,6 @@
   position: absolute; bottom: calc(max(14px, var(--safe-bottom)) + 22px);
   left: 50%; transform: translateX(-50%); max-width: calc(100% - 32px);
   color: #fff; font-size: var(--text-sm); text-align: center; overflow-wrap: anywhere;
-}
-
-/* Square icon-only variant of .btn, for a secondary action that sits beside a
-   worded one (the panel footer's "report a fault" next to "Edit"). */
-.btn.icon-only {
-  padding: 0; width: var(--touch-min); min-width: var(--touch-min);
-  justify-content: center;
 }
 
 /* The shared free-text field (see NotesField). Vertical resize stays available
@@ -456,14 +412,11 @@
 @media (hover: hover) {
   .fm-entity-chip:hover { border-color: var(--accent); }
 }
-.fm-entity-chip.on { background: var(--accent); color: var(--text-on-accent); border-color: transparent; }
+
 /* the same pill with its own ✕ (common/RemovablePill): a member of a list, taken off by its ✕ */
 .fm-chip-removable { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; overflow-wrap: anywhere; padding-right: 4px; }
-.fm-chip-remove {
-  flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px;
-  border: none; border-radius: 999px; background: none; color: var(--text-secondary); cursor: pointer; padding: 0;
-}
-@media (hover: hover) { .fm-chip-remove:hover { background: var(--bg-card); color: var(--text-primary); } }
+/* its ✕ (the lone icon button, small) inside the pill's own height */
+.fm-chip-removable > .icon-quiet { margin-block: -4px; }
 /* the same pill when it only says something (a room, a next check): no hand, no hover ring */
 .fm-entity-chip.fm-chip-static { cursor: default; }
 @media (hover: hover) { .fm-entity-chip.fm-chip-static:hover { border-color: var(--hairline); } }
@@ -513,7 +466,6 @@
   color: var(--text-primary);
   border: 1px solid var(--status-warning);
 }
-.fm-inline-error { font-size: var(--text-xs); color: var(--status-danger); }
 
 /* Spend-vs-cap meter. The bar fill IS the state indicator — a number alone
    doesn't convey "how close am I" at a glance, and that proximity is the
@@ -540,12 +492,8 @@
   flex: 0 0 auto;
 }
 .fm-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.fm-thumb-x {
-  position: absolute; top: 3px; right: 3px; width: 20px; height: 20px;
-  display: flex; align-items: center; justify-content: center;
-  border-radius: 50%; border: none; cursor: pointer;
-  background: var(--chip-scrim-strong); color: #fff;
-}
+/* a thumbnail's ✕ (.media-btn small), in its corner */
+.fm-thumb-x { position: absolute; top: 3px; right: 3px; }
 .fm-thumb-add {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   gap: 3px; cursor: pointer; color: var(--text-secondary);

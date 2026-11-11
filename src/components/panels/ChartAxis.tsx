@@ -24,7 +24,7 @@ export function FitMark() {
   const fit = useChartFit();
   const words = fit === "zero" ? "Axis from 0: tap to fit" : "Axis fitted: tap to show from 0";
   return (
-    <button type="button" className={`chart-fit-mark ${fit}`} aria-label={words} title={words} onClick={toggleChartFit}>
+    <button type="button" className={`chart-fit-mark ${fit}`} aria-label={words} data-tip={words} onClick={toggleChartFit}>
       {fit === "zero" ? <><ArrowDownToLine size={15} aria-hidden /><span className="chart-fit-zero" aria-hidden>0</span></>
         : <FoldVertical size={15} aria-hidden />}
     </button>

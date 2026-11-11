@@ -2,7 +2,7 @@
 // THE card of every Cockpit list — an open issue in the Inbox, a notification or a report, a ticket, a closed one, a
 // scheduled task, a spend line, a piece of work done, a readiness check, a saved document (owner, 2026-10-14/15: "the
 // same style as any other card, fully re-using the same code"). Tapping it opens it (`onOpen`); holding it erases it when
-// it can be erased (`erase`: ErasableRow, superadmin) — a scheduled task is removed with its own bin instead.
+// it can be erased (`erase`: ErasableRow, superadmin) — a scheduled task is removed with its own bin instead (`bin`).
 //
 // ⚠️ ONE CARD, NOT FOUR (architecture review, 2026-10-15): the Overview, Schedule and Spend each drew their own, so a
 // layout request ("buttons inside, on the right", "a note never runs out of the card") was made up to four times.
@@ -35,6 +35,9 @@ import type { ReactNode } from "react";
 import { RefreshCw, Trash2, UserRound } from "lucide-react";
 import Tip from "@/components/common/Tip";
 import InfoTip from "@/components/common/InfoTip";
+import BinButton from "@/components/common/BinButton";
+import IconButton from "@/components/common/IconButton";
+import { useAskFirst } from "@/hooks/useAskFirst";
 import ErasableRow from "./ErasableRow";
 import EvidenceRow from "./EvidenceRow";
 import { RecordNotes } from "./RecordMeta";
@@ -44,6 +47,11 @@ import { PageLink } from "@/components/messages/AnnouncementContent";
  *  card, the bin; it had been an ✕ on a card taking a thing off a list). `label` is its tooltip and its accessible
  *  name, saying what goes ("Delete the group Kitchen Temperature", "Take Back Door off Asleep between reports"). */
 export interface CardRemove { label: string; run: () => void }
+
+/** ⚠️ A CARD'S BIN ASKS FIRST (owner, 2026-11-10: a task's bin and a saved document's deleted at one press, nothing to
+ *  take it back): the bin at the end of its bar; pressed, the bar becomes its question (CardAsk) and the second press
+ *  removes. `label` names what goes ("Remove Generator service"), `question` says what is kept. */
+export interface CardBin { label: string; question: string; confirmLabel?: string; run: () => unknown }
 
 /** A card's state: its words and its tone's class (fm/tone pillClass, ACCENT_PILL, QUIET_PILL). */
 export interface RecordStatus { text: string; tone: string }
@@ -105,6 +113,8 @@ export interface RecordCardProps {
   /** Settings and Advanced Settings only: what takes the record away, an icon at its strip's right (never a word in
    *  its bar). The Cockpit's cards never pass it (tests/oracles/settings_cards.mjs). */
   remove?: CardRemove;
+  /** A Cockpit record removed by its own bin (a task, a saved document): the last button of its bar, asking first. */
+  bin?: CardBin;
   erase?: { title: string; detail: string; run: (token: string) => Promise<unknown> };
   onOpen?: () => void;
   framed?: boolean;
@@ -163,8 +173,8 @@ export function CardAsk({ question, icon, confirmLabel, onConfirm, onCancel }: {
   return (
     <>
       <div className="fm-record-ask">{icon}<span>{question}</span></div>
-      <button type="button" className="btn ghost fm-bar-main" onClick={() => { void onConfirm(); }}>{confirmLabel}</button>
-      <button type="button" className="btn ghost" onClick={onCancel}>Cancel</button>
+      <button type="button" className="btn fm-bar-main" onClick={() => { void onConfirm(); }}>{confirmLabel}</button>
+      <button type="button" className="btn" onClick={onCancel}>Cancel</button>
     </>
   );
 }
@@ -218,16 +228,14 @@ function StateWords({ status, tip }: { status: readonly RecordStatus[]; tip?: st
 }
 
 /** ⚠️ A SETTINGS CARD'S REMOVE (owner, 2026-11-06: "a small icon button at the top right of the card's band", where a
- *  Cockpit card shows its time): the app's small round icon button, its 44px touch target outside its glyph so the strip
+ *  Cockpit card shows its time): the app's lone icon button, its 44px touch target outside its glyph so the strip
  *  keeps its height (07-facility.css); a press is the button's, never the card's tap or hold. */
 function RemoveButton({ label, run }: CardRemove) {
   return (
-    <Tip text={label}>
-      <button type="button" className="icon-btn-sm fm-record-remove danger" aria-label={label}
-        onPointerDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); run(); }}>
-        <Trash2 size={16} aria-hidden="true" />
-      </button>
-    </Tip>
+    <IconButton danger label={label} className="fm-record-remove"
+      onPointerDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); run(); }}>
+      <Trash2 size={16} aria-hidden="true" />
+    </IconButton>
   );
 }
 
@@ -261,8 +269,23 @@ function PartHead({ lead, number, status, check, when, tone }: {
   );
 }
 
+/** A bar ending in a bin that asks first: the two steps of every switch that asks (hooks/useAskFirst), so no card
+ *  keeps an "am I asking" of its own. Pressed, the bar becomes the question; the second press removes. */
+function BinnedBar({ bin, children }: { bin: CardBin; children: ReactNode }) {
+  const { asking, request, confirm, cancel } = useAskFirst(
+    { question: bin.question, confirmLabel: bin.confirmLabel ?? "Remove" }, () => { void bin.run(); });
+  return (
+    <ActionsRow>
+      {asking
+        ? <CardAsk question={asking.question} icon={<Trash2 size={16} aria-hidden="true" />}
+            confirmLabel={asking.confirmLabel} onConfirm={confirm} onCancel={cancel} />
+        : <>{children}<BinButton label={bin.label} onPress={request} /></>}
+    </ActionsRow>
+  );
+}
+
 export default function RecordCard({ title, status, statusTip, lead, number, device, room, when, check, pills,
-  notes, body, folded, photoIds, pages, amount, who, parts, actions, remove, erase, onOpen, framed = true, tone }: RecordCardProps) {
+  notes, body, folded, photoIds, pages, amount, who, parts, actions, remove, bin, erase, onOpen, framed = true, tone }: RecordCardProps) {
   const whole = folded === undefined;
   const statuses = [status ?? []].flat();
   // one problem is the card itself: its words, who line and buttons are the card's
@@ -270,7 +293,16 @@ export default function RecordCard({ title, status, statusTip, lead, number, dev
   const several = parts && parts.length > 1 ? parts : [];
   const text = single ? single.text : body;
   const whoSaid = single ? single.who : who;
-  const bar = (pages?.length ?? 0) > 0 || actions || single?.actions;
+  const bar = (pages?.length ?? 0) > 0 || actions || single?.actions || bin;
+  // the main action first (rule 6), the pages after the buttons (a bin, last: BinnedBar)
+  const buttons = (
+    <>
+      {single?.actions}
+      {actions}
+      {pages?.map((p) => <PageLink key={p.id} page={p.id}
+        label={p.short ? <><span className="work-long">{p.label}</span><span className="work-short">{p.short}</span></> : p.label} />)}
+    </>
+  );
   const toneWords = (tone ?? "").split(" ").filter(Boolean);
   const frame = toneWords.filter((w) => !w.startsWith("tone-")).join(" ");
   const strip = stripTone(statuses, toneWords.find((w) => w.startsWith("tone-")));
@@ -307,15 +339,7 @@ export default function RecordCard({ title, status, statusTip, lead, number, dev
           {p.actions && <ActionsRow>{p.actions}</ActionsRow>}
         </section>
       ))}
-      {bar && (
-        <ActionsRow>
-          {/* the main action first (rule 6), the pages after the buttons */}
-          {single?.actions}
-          {actions}
-          {pages?.map((p) => <PageLink key={p.id} page={p.id}
-            label={p.short ? <><span className="work-long">{p.label}</span><span className="work-short">{p.short}</span></> : p.label} />)}
-        </ActionsRow>
-      )}
+      {bar && (bin ? <BinnedBar bin={bin}>{buttons}</BinnedBar> : <ActionsRow>{buttons}</ActionsRow>)}
     </>
   );
   const record = erase ? (

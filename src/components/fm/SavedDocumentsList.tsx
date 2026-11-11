@@ -12,9 +12,9 @@ import { useFmData } from "@/fm/FmDataContext";
 import { DOCUMENT_KINDS } from "@/fm/monthlyDocument";
 import type { FmSavedDocument } from "@/fm/fmTypes";
 import AgentMark from "./AgentMark";
-import BinButton from "@/components/common/BinButton";
 import { Pager, usePaged, PAGE_CARDS } from "@/components/common/Paged";
 import RecordCard from "./RecordCard";
+import { withCount } from "@/utils/countBadge";
 
 export default function SavedDocumentsList({
   kind, onOpen,
@@ -52,19 +52,20 @@ export function SavedDocumentRows({ kind, docs: all, onOpen, onRemove }: {
   return (
     <div className="fm-stack">
       <div className="fm-row-sub muted" style={{ marginTop: 4 }}>
-        Saved {plural} ({docs.length})
+        {withCount(`Saved ${plural}`, docs.length)}
       </div>
       <div className="fm-list">
         {paged.page.map((doc) => (
           // THE Cockpit card (RecordCard), as every list (owner, 2026-10-22)
           <RecordCard key={doc.id} title={title(doc)} when={saved(doc)}
             pills={<AgentMark record={doc} />}
-            actions={<>
-              <button className="btn ghost" onClick={() => onOpen(doc)}>
+            bin={{ label: `Delete saved ${noun} for ${title(doc)}`, question: `Delete this saved ${noun}?`,
+              confirmLabel: "Delete", run: () => onRemove(doc.id) }}
+            actions={
+              <button className="btn" onClick={() => onOpen(doc)}>
                 <Eye size={16} /> Reopen
               </button>
-              <BinButton label={`Delete saved ${noun} for ${title(doc)}`} tip={`Delete this saved ${noun}`} onPress={() => onRemove(doc.id)} />
-            </>} />
+            } />
         ))}
       </div>
       <Pager paged={paged} />
