@@ -15,6 +15,7 @@ import UnitField from "@/components/common/UnitField";
 import RecordCard from "@/components/fm/RecordCard";
 import CardField from "./CardField";
 import { Maximize } from "lucide-react";
+import EmptyLine from "@/components/common/EmptyLine";
 
 interface Props {
   /** The picked announcements as the dialog shows them (its draft's view). */
@@ -46,7 +47,7 @@ export function FullScreenAnnouncements({ value, onChange }: Props) {
       </AddOnLine>
       {/* ⚠️ EACH ANNOUNCEMENT THE COCKPIT'S CARD (owner, 2026-11-06): its title in the strip, its time on screen its
           one field, its bin at its strip's right; it was a row of a table under "Announcement · Time" */}
-      {value.length === 0 ? <p className="muted body-text">None yet: add one above.</p> : (
+      {value.length === 0 ? <EmptyLine>None yet: add one above.</EmptyLine> : (
         <div className="fm-list settings-cards">
           {value.map((f) => (
             <FullScreenCard key={f.title} item={f} onRemove={() => onChange(value.filter((x) => x.title !== f.title))} />

@@ -62,10 +62,31 @@ ck("the handshake: connecting → authenticating → connected, answering auth o
   const bad = await ws.callService("refused", "do", {}).catch(() => { rejected = true; });
   ck("a refused one RESOLVES { ok: false } with the reason — it never rejects",
      !rejected && bad?.ok === false && bad.error.message === "refused", bad);
-  ck("  ...and the error toast still hears it, once", reported.length === 1 && reported[0] === "refused", reported);
+  ck("  ...and the notice still hears it, once", reported.length === 1 && reported[0] === "refused", reported);
   ws.onServiceError = () => {};
 }
-const { onFailure, NOT_SENT } = await import("@/ha/serviceOutcome");
+const { onFailure, NOT_SENT, CommandRefused, failedCommandLine, allSent } = await import("@/ha/serviceOutcome");
+{
+  // what a person reads when a press did nothing (UI scan, 2026-11-10): the device by its name, never the socket's words
+  const heard = [];
+  ws.onServiceError = (e, target) => heard.push(failedCommandLine(e, [target?.entity_id ?? []].flat().map((id) => (id === "light.x" ? "Kitchen light" : id))));
+  await ws.callService("refused", "do", {}, { entity_id: "light.x" });
+  ck("a command the add-on refused to this profile is said in the add-on's own sentence",
+     heard[0] === "refused", heard);
+  ws.onServiceError = () => {};
+  const lost = new Error("No answer from the server");
+  ck("a command that failed names its device in plain words",
+     failedCommandLine(lost, ["Kitchen light"]) === "Kitchen light did not respond. Try again.");
+  ck("  ...several devices are the first and a count, none is the villa's system",
+     failedCommandLine(lost, ["Kitchen light", "Hall fan", "Gate"]) === "Kitchen light and 2 others did not respond. Try again."
+     && failedCommandLine(lost, ["Kitchen light", "Hall fan"]) === "Kitchen light and 1 other did not respond. Try again."
+     && failedCommandLine(lost, []) === "The villa's system did not respond. Try again.");
+  ck("  ...and a refusal is never \"did not respond\"",
+     failedCommandLine(new CommandRefused("This profile may not send this command."), ["Gate"]) === "This profile may not send this command.");
+  const one = await allSent([Promise.resolve({ ok: true }), Promise.resolve({ ok: false, error: lost })]);
+  const all = await allSent([Promise.resolve({ ok: true }), Promise.resolve({ ok: true })]);
+  ck("a group switched in several commands failed when any of them did", one.ok === false && all.ok === true);
+}
 {
   const calls = [];
   const probe = (label, sent) => onFailure(sent, () => calls.push(label));

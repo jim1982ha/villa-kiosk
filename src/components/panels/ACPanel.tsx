@@ -5,7 +5,7 @@ import type { PanelProps } from "@/types/panel.types";
 import { useHA } from "@/ha/HAStateStore";
 import { HAServices } from "@/ha/HAServiceCalls";
 import ControlFrame from "./ControlFrame";
-import SegmentedGroup from "@/components/common/SegmentedGroup";
+import DeviceChoice from "./DeviceChoice";
 import { climateRange, climateStep, fmtTemp } from "@/utils/panelRules";
 import { useLiveDraft } from "@/hooks/useLiveDraft";
 
@@ -34,9 +34,9 @@ export default function ACPanel({ entity, mapping, onClose }: PanelProps) {
   return (
     <BasePanel title={mapping.label} entityId={mapping.entityId} icon={<Snowflake size={22} />} onClose={onClose}>
       <ControlFrame entity={entity} mapping={mapping}>
-      <div className="temp-display">
+      <div className="reading-large">
         <span className="value-unit">Current</span>
-        <div className="big">{fmtTemp(a?.current_temperature, unit)}</div>
+        <div className="value-large">{fmtTemp(a?.current_temperature, unit)}</div>
       </div>
 
       <div className="temp-stepper">
@@ -46,17 +46,17 @@ export default function ACPanel({ entity, mapping, onClose }: PanelProps) {
       </div>
 
         <div className="field">
-          <label className="entity-label">Mode</label>
-          <SegmentedGroup device ariaLabel="Mode" active={entity?.state ?? null}
-            onChange={(m) => HAServices.setHvacMode(ws, mapping.entityId, m)}
+          <label className="eyebrow">Mode</label>
+          <DeviceChoice label="Mode" active={entity?.state ?? null}
+            send={(m) => HAServices.setHvacMode(ws, mapping.entityId, m)}
             options={hvacModes.map((m) => ({ key: m, label: MODE_LABELS[m] ?? m }))} />
         </div>
 
       {fanModes.length > 0 && (
         <div className="field">
-          <label className="entity-label">Fan speed</label>
-          <SegmentedGroup device ariaLabel="Fan speed" active={typeof a?.fan_mode === "string" ? a.fan_mode : null}
-            onChange={(f) => HAServices.setFanMode(ws, mapping.entityId, f)}
+          <label className="eyebrow">Fan speed</label>
+          <DeviceChoice label="Fan speed" active={typeof a?.fan_mode === "string" ? a.fan_mode : null}
+            send={(f) => HAServices.setFanMode(ws, mapping.entityId, f)}
             options={fanModes.map((f) => ({ key: f, label: f }))} />
         </div>
       )}

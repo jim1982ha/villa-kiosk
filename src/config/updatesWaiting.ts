@@ -36,8 +36,3 @@ export function updatesWaiting(entities: Readonly<Record<string, HassEntity>>, h
     .map((e) => updateName(e, entityMap))
     .sort((a, b) => a.localeCompare(b));
 }
-
-/** The header count's tooltip. */
-export function updatesTip(names: readonly string[]): string {
-  return ["Upgrade(s) available for:", ...names.map((n) => `- ${n}`)].join("\n");
-}

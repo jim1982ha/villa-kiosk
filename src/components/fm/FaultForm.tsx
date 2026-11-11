@@ -60,7 +60,7 @@ export default function FaultForm({ editing, presetEntity, deviceOptions, onDone
   return (
     <FmForm>
       <h3>{heading}</h3>
-      <div className="fm-field">
+      <div className="named-field">
         <span>Device (search, or type one not listed)</span>
         <DeviceSearchPicker
           {...device.pickerProps}
@@ -68,7 +68,7 @@ export default function FaultForm({ editing, presetEntity, deviceOptions, onDone
           options={deviceOptions}
         />
       </div>
-      <label className="fm-field">
+      <label className="named-field">
         <span>Title</span>
         {/* One line: the headline someone scans a list for; what is actually wrong belongs below.
             ⚠️ THE CARD'S TITLE, SAID SO (owner, 2026-11-01: "i don't see how i can change the title"): this field was
@@ -85,7 +85,7 @@ export default function FaultForm({ editing, presetEntity, deviceOptions, onDone
         placeholder="What exactly happens, when it started, anything already tried…"
         rows={3}
       />
-      <div className="fm-field">
+      <div className="named-field">
         <span>Photo evidence</span>
         <EvidenceRow photoIds={photoIds} onChange={setPhotoIds} />
       </div>

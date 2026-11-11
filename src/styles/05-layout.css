@@ -401,7 +401,7 @@
      inset-left/right, not inset-top, so a header/body/footer with only a
      flat 18px had no protection from it on that side. */
   .modal-header {
-    min-height: 72px;
+    min-height: 77px;
     padding: 16px calc(18px + env(safe-area-inset-right, 0px)) 12px calc(18px + env(safe-area-inset-left, 0px));
   }
   .modal-body {

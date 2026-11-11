@@ -119,9 +119,9 @@ export default function NumericHistory({ series, named = false, name }: {
             <LineChart stepMs={range.grainMs} label={`${a.label} and ${b.label} history`} height={height ?? 120}
               window={history[a.id]?.window} status={status}
               lines={[line(a, { scale: "own" }), line(b, { dashed: true, scale: "own" })]} onExpand={onExpand} />
-            <div className="row" style={{ gap: 16, marginTop: 8, fontSize: "var(--text-xs)" }}>
-              <span className="muted"><span style={{ color: a.color }}>●</span> {a.label}</span>
-              <span className="muted"><span style={{ color: b.color }}>┄</span> {b.label}</span>
+            <div className="fine-print chart-key under">
+              <span><span style={{ color: a.color }}>●</span> {a.label}</span>
+              <span><span style={{ color: b.color }}>┄</span> {b.label}</span>
             </div>
           </>
         )} />
@@ -134,7 +134,7 @@ export default function NumericHistory({ series, named = false, name }: {
         <div className="field" key={s.id}>
           {i === 0
             ? header(`${s.label}, ${range.title.toLowerCase()}`)
-            : <label className="entity-label">{s.label}, {range.title.toLowerCase()}<ChartStep words={step} about={about} /></label>}
+            : <label className="eyebrow">{s.label}, {range.title.toLowerCase()}<ChartStep words={step} about={about} /></label>}
           {/* the larger one carries the toggle whichever chart it is: it changes them all, as the first one's does */}
           <ExpandableChart title={s.label} head={header(`${s.label}, ${range.title.toLowerCase()}`)}
             chart={oneLine(s, `${s.label} history`)} />

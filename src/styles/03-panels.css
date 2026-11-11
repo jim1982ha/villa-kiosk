@@ -14,14 +14,13 @@
    device panel, Energy and Weather use them exactly as Settings does. Only the
    title row's device-specific parts are here. */
 .modal-header .title { display: flex; align-items: center; gap: 12px; min-width: 0; flex: 1 1 auto; }
-.modal-header-actions { flex: 0 0 auto; }
+.modal-header .title-words { min-width: 0; }
 /* The header's right side: its buttons, then "Back" (common/BackButton) where the window was opened from another
    one (a device's reading, a room list, the Cockpit…). */
-.modal-header-actions { display: flex; align-items: center; gap: 8px; }
+.modal-header-actions { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; }
 /* A device name is unbounded: single line, truncated with an ellipsis. Same
    size and weight as every modal title (.modal h2). */
 .modal-header .title h2 { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-.modal-header .room { font-size: var(--text-xs); color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.08em; }
 .panel-icon { width: 44px; height: 44px; border-radius: 12px; background: var(--bg-card); display: flex; align-items: center; justify-content: center; color: var(--accent); flex-shrink: 0; }
 /* Real map badge shown in the panel header. As a button it's a colour editor. */
 .panel-icon .panel-badge-img, .panel-badge-btn .panel-badge-img {
@@ -48,8 +47,7 @@ h2[data-autofocus]:focus { outline: none; }
 }
 
 /* Badge colour picker — sizing comes from .panel-modal (see BadgeColorModal.tsx,
-   same treatment as the device panel it opens from) — .badge-color-modal is
-   just a styling hook, no rules of its own needed right now. */
+   same treatment as the device panel it opens from). */
 .badge-swatch-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; }
 .badge-swatch {
   width: 100%; aspect-ratio: 1; border-radius: 10px; border: 2px solid transparent;
@@ -67,10 +65,16 @@ h2[data-autofocus]:focus { outline: none; }
 .field > label { display: block; margin-bottom: var(--field-label-gap); }
 
 /* --- Sliders --- */
+/* ⚠️ THE BAR A SLIDER IS, SAID HERE (UI scan, 2026-11-11). This rule used to say a 4px track, which no screen ever
+   drew: every slider is in a window, where the text box's old `.modal input` rule gave it the box's padding, border
+   and corner. The bar a person knows is that one (26px to aim at, the thumb stopping short of each end), now written
+   in the slider's own rule, so the text box's rule no longer reaches a slider. */
 input[type="range"] {
   -webkit-appearance: none; appearance: none;
-  width: 100%; height: 4px; border-radius: var(--radius-pill);
-  background: var(--bg-input); outline: none;
+  width: 100%; height: 26px; padding: 0 var(--field-pad); border-radius: var(--field-radius);
+  background: var(--bg-input); border: 1px solid var(--hairline); outline: none;
+  /* the browser's own 2px around a slider: its bar's ends are the ends of every other box in its column */
+  margin: 0;
 }
 /* The thumb is the only part of a slider you aim at, so it is filled rather
    than hollow — with the THEME accent, not the device's colour: a slider is a
@@ -130,12 +134,13 @@ input[type="range"]::-moz-range-thumb {
   box-shadow: inset 0 0 0 1.5px var(--accent);
 }
 .big-toggle:active { transform: scale(0.97); }
-/* Tap acknowledgment while waiting on HA's real state_changed round-trip —
-   see PowerToggle.tsx's docstring. Deliberately NOT a colour/text change
-   (that would read as a state prediction); just a soft breathing opacity so
-   the button visibly "knows" a tap landed. */
-.big-toggle.pending { animation: big-toggle-pending 0.9s ease-in-out infinite; }
-@keyframes big-toggle-pending { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
+/* THE WAITING SIGN, ONE RULE (UI scan, 2026-11-10): a button whose command is on its way to a device says it is busy
+   (aria-busy: usePendingAck) and breathes until the device answers: the power button, the lock, Play / Pause, a
+   blind's buttons, a mode or a speed (DeviceChoice), a camera's moves, a list's "turn all off". Deliberately NOT a
+   colour/text change (that would read as a state prediction); just a soft breathing opacity so the button visibly
+   "knows" a tap landed. It was the power button's own class. */
+button[aria-busy="true"] { animation: command-waiting 0.9s ease-in-out infinite; }
+@keyframes command-waiting { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
 
 /* The power button's row (PowerToggle.PowerSection): a compact On button and the device's other choices beside it —
    a light's colours and effects (LightChoices). It wraps on a narrow phone: the choices go under the button. */
@@ -146,16 +151,11 @@ input[type="range"]::-moz-range-thumb {
 }
 .light-choices { flex: 1 1 220px; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
 .light-choices .field { margin: 0; }
-/* ⚠️ ONE GRID, EVERY SWATCH ITS CELL (owner, 2026-10-20: "align better the colour bubbles"): a wrapping row let the
-   last swatch — a <label>, the colour picker — take the modal's label margins (.modal-body label: 14 px above) and
-   sit lower and smaller than the presets. Equal columns of one size, the picker in the next cell like any other. */
+/* ⚠️ ONE GRID, EVERY SWATCH ITS CELL (owner, 2026-10-20: "align better the colour bubbles"): equal columns of one
+   size, the picker (a <label>) in the next cell like any other. The rule that made every <label> in a window a
+   block with margins is gone (04-modals.css "a field's name over its box"), and with it the rule that undid it here. */
 .light-swatches { display: grid; grid-template-columns: repeat(auto-fill, 36px); gap: 10px; align-items: center; }
 /* 36 px: a fingertip's target on an iPhone, nine to a row on an iPad's window. */
-.light-swatches .light-swatch {
-  margin: 0; box-sizing: border-box; font-size: inherit; width: 36px; height: 36px;
-  display: inline-flex; align-items: center; justify-content: center;
-}
-.light-swatches .light-swatch-custom { color: var(--text-primary); }
 .light-swatch {
   position: relative; width: 36px; height: 36px; flex: 0 0 auto; padding: 0;
   border: none; border-radius: 50%; cursor: pointer;
@@ -174,7 +174,21 @@ input[type="range"]::-moz-range-thumb {
 }
 .light-effect { align-self: stretch; }
 
-.status-pill { display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; border-radius: 999px; font-weight: 600; }
+/* THE state pill of a device window (panels/StatusPill): one size wherever it sits (a line of large numbers gave it
+   theirs), kept inside its place: long words wrap inside the pill. `large`: the reading is all the window says. */
+.status-pill {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px; max-width: 100%;
+  padding: 8px 16px; border-radius: 999px; font-size: var(--text-md); font-weight: 600; line-height: 1.25;
+}
+.status-pill > svg { flex: none; }
+.status-pill.large { padding: 14px 24px; font-size: var(--text-xl); }
+/* ...and its line: centred, the (i) that explains it beside it, one distance to what follows (it was four). */
+.status-line { display: flex; align-items: center; justify-content: center; gap: 6px; margin: 8px 0 16px; }
+/* ⚠️ A WINDOW'S READING IN LARGE FIGURES, ONE LINE (UI scan, 2026-11-11; the rules: "controls that do the same job look
+   the same and are one definition"): a sensor's value, a device's state in words, the air conditioning's temperature
+   now. Centred, at the state pill's distances. Each window wrote its own (8 and 16px, 18 and 18, 12 and 20). The
+   figures are `.value-large`, what is said beside them `.value-unit` (01-base.css). */
+.reading-large { text-align: center; margin: 8px 0 16px; }
 .status-pill.on { background: color-mix(in srgb, var(--status-on) 20%, transparent); color: var(--status-on); }
 .status-pill.off { background: var(--bg-input); color: var(--text-secondary); }
 .status-pill.danger { background: color-mix(in srgb, var(--status-danger) 22%, transparent); color: var(--status-danger); }
@@ -192,8 +206,6 @@ input[type="range"]::-moz-range-thumb {
 .status-pill.unavailable { background: color-mix(in srgb, var(--status-lost) 20%, transparent); color: var(--status-lost); }
 
 /* --- Temperature control --- */
-.temp-display { text-align: center; margin: 12px 0 20px; }
-.temp-display .big { font-size: var(--text-display-lg); font-weight: 200; }
 .temp-stepper { display: flex; align-items: center; justify-content: center; gap: 24px; margin: 16px 0; }
 .temp-stepper button { width: 64px; height: 64px; border-radius: 50%; background: var(--bg-input); font-size: var(--text-2xl); }
 .temp-stepper .target { font-size: var(--text-display); font-weight: 300; min-width: 110px; text-align: center; }
@@ -528,8 +540,7 @@ input[type="range"]::-moz-range-thumb {
 .data-window .panel-icon:has(> .btn) { background: none; }
 .data-window-live { font-size: var(--text-sm); color: var(--text-secondary); white-space: nowrap; }
 
-.weather-now, .weather-history { display: flex; flex-direction: column; gap: 18px; padding-top: 8px; }
-.weather-eyebrow { font-size: var(--text-xs); font-weight: 700; text-transform: uppercase; letter-spacing: 0.09em; color: var(--text-secondary); }
+.weather-now, .weather-history { display: flex; flex-direction: column; gap: 18px; }
 .weather-feels { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; }
 .weather-headline { font-family: var(--font-display); font-size: var(--text-2xl); font-weight: 500; line-height: 1.15; margin-top: 6px; }
 .weather-big { font-family: var(--font-display); font-size: var(--text-display); font-weight: 500; line-height: 1; font-variant-numeric: tabular-nums; }
@@ -576,7 +587,7 @@ input[type="range"]::-moz-range-thumb {
 .weather-instruments { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
 .weather-tile { background: var(--bg-input); border-radius: 20px; padding: 16px; display: flex; flex-direction: column; justify-content: space-between; gap: 10px; min-width: 0; min-height: 280px; }
 .weather-tile.center { align-items: center; }
-.weather-tile.center > .weather-eyebrow { align-self: flex-start; }
+.weather-tile.center > .eyebrow { align-self: flex-start; }
 .weather-tile-foot { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; font-size: var(--text-sm); color: var(--text-secondary); text-align: center; }
 .weather-tile-foot b { color: var(--text-primary); font-weight: 600; }
 
@@ -676,9 +687,12 @@ input[type="range"]::-moz-range-thumb {
 .weather-charts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
 .weather-tile.chart { min-height: 220px; justify-content: flex-start; }
 /* .weather-chart-head: a title with its controls at the far end (07-facility.css, with .cockpit-issues-head). */
-.weather-legend { display: flex; gap: 12px; font-size: var(--text-xs); color: var(--text-secondary); }
-.weather-legend .key { display: inline-block; width: 14px; height: 3px; border-radius: 2px; margin-right: 5px; vertical-align: middle; }
-.weather-legend .key.area { height: 8px; opacity: 0.45; }
+/* ⚠️ A CHART'S KEY, ONE ROW (UI scan, 2026-11-11): what each colour drawn is, in the fine print (01-base.css), its
+   marks wrapping as a row. The weather and energy charts wrote it as `.weather-legend`; a device's history and its
+   state band each typed the same row where they drew it. */
+.chart-key { display: flex; flex-wrap: wrap; gap: 4px 12px; }
+.chart-key .key { display: inline-block; width: 14px; height: 3px; border-radius: 2px; margin-right: 5px; vertical-align: middle; }
+.chart-key .key.area { height: 8px; opacity: 0.45; }
 .key:is(.out, .in, .water, .warm, .ink, .uv) { background: var(--series); }
 /* ── Charts: the parts every chart shares (LineChart, BarChart, StateTimeline,
    ChartTip, the energy flow). ONE place, and BEFORE the per-window rules below
@@ -838,7 +852,7 @@ input[type="range"]::-moz-range-thumb {
 .bar-chart-dot { position: absolute; width: 7px; height: 7px; border-radius: 50%; transform: translate(-50%, -50%); border: 1.5px solid var(--bg-panel); pointer-events: none; }
 .bar-chart-dot.hover { width: 11px; height: 11px; }
 .bar-chart-dot.cost, .key.cost { background: var(--series); }
-.weather-legend .key.line { height: 3px; border-radius: 2px; }
+.chart-key .key.line { height: 3px; border-radius: 2px; }
 .bar-chart-note { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: var(--text-sm); color: var(--text-secondary); pointer-events: none; }
 .bar-chart-axis { position: relative; height: 1.4em; font-size: var(--text-xs); color: var(--text-secondary); font-variant-numeric: tabular-nums; }
 .bar-chart-axis span { position: absolute; top: 0; white-space: nowrap; }
@@ -897,7 +911,7 @@ input[type="range"]::-moz-range-thumb {
 .energy-pie-legend b { margin-left: auto; font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .energy-pie-legend .key { flex: 0 0 auto; }
 
-.weather-legend .key.e-used, .weather-legend .key[class*="e-s"], .weather-legend .key.e-untracked { height: 8px; }
+.chart-key .key.e-used, .chart-key .key[class*="e-s"], .chart-key .key.e-untracked { height: 8px; }
 .energy-pie-legend .key { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
 .energy-flow { width: 100%; height: auto; }
 .energy-band { opacity: 0.55; transition: opacity 120ms; }
@@ -914,7 +928,6 @@ input[type="range"]::-moz-range-thumb {
 .energy-rank-row { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 2fr) auto 3.2em; grid-template-areas: "name bar kwh pct"; gap: 4px 12px; align-items: center; }
 .energy-rank-name { grid-area: name; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .energy-rank-name.muted { color: var(--text-secondary); }
-.energy-rank-note { color: var(--text-secondary); font-size: var(--text-xs); }
 .energy-rank-chevron { color: var(--text-secondary); vertical-align: -2px; margin-right: 4px; transition: transform 0.15s ease; }
 .energy-rank-chevron.open { transform: rotate(90deg); }
 /* A main device without devices inside keeps the chevron's column. */

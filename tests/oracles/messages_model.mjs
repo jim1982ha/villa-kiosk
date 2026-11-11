@@ -201,9 +201,9 @@ ck("  ...the tab lists, counts and opens what messagesView says, from the open i
   const layout = readFileSync(new URL("../../src/styles/05-layout.css", import.meta.url), "utf8");
   const bar = css.match(/\n\.messages-toolbar \{([^}]*)\}/)?.[1] ?? "";
   ck("  ...nothing shows behind it: it stops at the body's very top and spans its whole width, in the window's solid colour",
-     /top: calc\(-1 \* var\(--body-top, 0px\)\);/.test(bar) && /margin-inline: calc\(-1 \* var\(--body-left, 0px\)\) calc\(-1 \* var\(--body-right, 0px\)\);/.test(bar)
+     /top: calc\(-1 \* var\(--body-top, 0px\)\);/.test(bar) && /margin: -4px calc\(-1 \* var\(--body-right, 0px\)\) 0 calc\(-1 \* var\(--body-left, 0px\)\);/.test(bar)
      && /padding: 4px var\(--body-right, 0px\) 8px var\(--body-left, 0px\);/.test(bar) && /background: var\(--bg-modal\);/.test(bar)
-     && /\n\.modal-body \{ --body-top: 8px; --body-left: \d+px; --body-right: \d+px;\s*[^}]*padding: var\(--body-top\) var\(--body-right\) \d+px var\(--body-left\);/.test(modals)
+     && /\n\.modal-body \{ --body-top: \d+px; --body-left: \d+px; --body-right: \d+px;\s*[^}]*padding: var\(--body-top\) var\(--body-right\) var\(--body-top\) var\(--body-left\);/.test(modals)
      && /\.modal-body \{\s*--body-left: calc\([^;]*inset-left[^;]*\); --body-right: calc\([^;]*inset-right[^;]*\);\s*\}/.test(layout)
      // the colour solid in each theme (light, dark, and the explicit dark): a hex, never a see-through mix
      && [...readFileSync(new URL("../../src/styles/01-base.css", import.meta.url), "utf8").matchAll(/--bg-modal: ([^;]+);/g)].every((m) => /^#[0-9A-Fa-f]{6}$/.test(m[1])), bar);
@@ -835,6 +835,65 @@ ck("  ...a report under Reports, an open alert a notification, a closed one in C
      && sent[1][1].command === "need_help" && okW.done && okW.note === null && !goneW.done && goneW.note === "No longer offered"
      && !failW.done && failW.note === "Not sent, try again" && visitWrite({ ...acts[0], step: { kind: "help" } }, send(200)) === null, [sent, okW, goneW, failW]);
 }
+// UI scan, 2026-11-10 (the rules: "the same name and the same Status everywhere"): over the villa an alert's notice was
+// a bell, its title and a line in the app's accent, an alarm and a doorbell alike; it is its Cockpit card's head now
+{
+  const { cardOfMessage } = await import("@/messages/messagesModel");
+  const { parseAnnouncement } = await import("@/messages/announcements");
+  const { AnnouncementNoticeView } = await import("@/components/hud/AnnouncementNotice");
+  const { AttentionCard } = await import("@/components/cockpit/IssueCard");
+  const { setVillaTimeZone } = await import("@/utils/villaClock");
+  setVillaTimeZone("Etc/GMT-8");
+  const told = parseVestaMessage({ seq: 80, at: "2026-11-10T14:05:00+08:00", key: "incident:91", title: "#91-P2 (new)", to: "FM",
+    body: "Stopped for 20min", status: ["⚠️ New alert"], stage: "new" });
+  const line = (key, extra = {}) => ({ key, text: "", story: [], closing: null, actions: [], records: [], asked: null,
+    openedAt: "2026-11-10T14:05:00+08:00", ...extra });
+  const alertLead = { sources: ["alert"], severities: ["danger"] };
+  const issue = card("device:pump", { title: "Device pump", tone: "danger", lead: alertLead,
+    lines: [line("alert", { alertNumber: 91, own: alertLead })] });
+  const of = (a, open = [issue]) => cardOfMessage(a, { open, watched: [], announcements: [] });
+  const its = of(told);
+  ck("VESTA's message of an alert an open issue holds: that issue's card, as told",
+     its?.title === "Device pump" && its.lines.length === 1 && its.lines[0].told === told && its.lines[0].alertLabel === "#91-P2", its);
+  ck("  ...a message no issue holds yet, and a ring: no card (a notification)",
+     of(told, []) === null && of(ann(70, { key: "ring:1" })) === null);
+  const visit = parseAnnouncement({ seq: 81, at: "2026-11-10T07:10:23+08:00", key: "visit:example-2",
+    message: "<b>Activity while the villa is empty</b>\nTo: Owner\n<blockquote>Seen at Parking, 07:09</blockquote>\n\nStatus:\n<blockquote><i>⚠️ New alert, monitoring until 07:39</i></blockquote>" });
+  ck("  ...the villa's own alert: its card", of(visit, [])?.key === "villa:visit:example-2", of(visit, []));
+  const notice = draw(h(AnnouncementNoticeView, { announcement: told, card: its }));
+  const cardHtml = draw(h(AttentionCard, { card: its, onOpenEntity() {} }));
+  const strip = (html) => inside(html, "fm-record-strip");
+  ck("its notice is its card's head: the very strip (its icon, #91-P2, its device, its time)",
+     strip(notice) !== "" && strip(notice) === strip(cardHtml) && /#91-P2[\s\S]*Device pump[\s\S]*10\/11\/2026 14:05/.test(strip(notice)), [strip(notice), strip(cardHtml)]);
+  ck("  ...then its state first, as its card's first line says it, and the first of its words",
+     text(inside(notice, "fm-record-state")) === "|New alert| · Stopped for 20min|"
+     && text(inside(cardHtml, "fm-record-state")).startsWith("|New alert|"), [text(inside(notice, "fm-record-state")), text(inside(cardHtml, "fm-record-state"))]);
+  ck("  ...in its strip's colour (red: act now), no bell; its ✕ kept",
+     /class="vesta-notice strip-danger"/.test(notice) && notice.includes("--tone:var(--strip)") && !notice.includes("lucide-bell")
+     && notice.includes('aria-label="Dismiss"'), notice);
+  // one problem of a card of several: the alert's own head, never "2 problems"
+  const two = card("device:pump", { title: "Device pump", tone: "danger", lead: alertLead,
+    status: [{ text: "Unavailable", tone: "tone-quiet" }],
+    lines: [line("alert", { alertNumber: 91, own: alertLead }),
+      line("night", { text: "Runs too long", own: { sources: ["night"], severities: ["warn"] } })] });
+  const one = of(told, [two]);
+  const noticeOfTwo = draw(h(AnnouncementNoticeView, { announcement: told, card: one }));
+  ck("  ...the alert of a device with another problem: its own state and colour, not \"2 problems\"",
+     one?.lines.length === 1 && text(inside(noticeOfTwo, "fm-record-state")) === "|New alert| · Stopped for 20min|"
+     && /class="vesta-notice strip-danger"/.test(noticeOfTwo), noticeOfTwo);
+  // a reminder on a ticket someone took on: the state is the ticket's, the words say what changed
+  const reminded = parseVestaMessage({ seq: 82, at: "2026-11-10T14:25:00+08:00", key: "incident:91", title: "#91-P2 (existing)", to: "FM",
+    body: "Stopped for 20min", status: ["- Alert sent 14:05", "⏰ Reminder sent 14:25"], stage: "existing" });
+  const stepNotice = draw(h(AnnouncementNoticeView, { announcement: reminded, card: of(reminded), step: true }));
+  ck("  ...a later step of it says the same head again (a rewrite never falls back to the bell)",
+     strip(stepNotice).includes("#91-P2") && !stepNotice.includes("lucide-bell"), stepNotice);
+  const ring = ann(71, { title: "🔔 Visitor", text: "At the door" });
+  const ringNotice = draw(h(AnnouncementNoticeView, { announcement: ring, card: of(ring) }));
+  ck("  ...a ring keeps the bell, its title and its line in the app's accent",
+     ringNotice.includes("🔔 Visitor · At the door") && ringNotice.includes("--tone:var(--accent)") && ringNotice.includes("lucide-bell")
+     && !ringNotice.includes("fm-record-strip"), ringNotice);
+}
+
 
 // architecture review of 2026-11-07, card 4 (owner-approved): ONE tablet card whoever tells the visit. The villa's card
 // was rebuilt from its message's text and drawn apart from VESTA's, so each field VESTA's card gained (its name, its

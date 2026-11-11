@@ -661,20 +661,9 @@
 }
 .summary-tile-icon svg { width: var(--chip-glyph); height: var(--chip-glyph); }
 .summary-tile-text { display: flex; flex-direction: column; min-width: 0; line-height: 1.18; gap: 1px; }
-.summary-tile-label {
-  /* 11px Jost caps, per the brand guidelines' bottom-bar spec — the label is
-     an eyebrow, which is display type, not body copy. The VALUE below it is
-     Jost too (18px/500); everything a guest actually READS stays Public Sans. */
-  font-family: var(--font-display);
-  /* --text-secondary, NOT --text-dim. #9AA09B on the light bar is 2.4:1,
-     which fails WCAG AA (4.5:1) for text this size by a wide margin and was
-     reported as simply hard to read; --text-secondary is 5.8:1. --text-dim is
-     a decorative tone in this palette (separators, placeholders, disabled
-     chevrons) and darkening the TOKEN enough to pass would have collapsed it
-     into --text-secondary, so the eyebrows move instead. */
-  font-size: var(--text-2xs); font-weight: 500; color: var(--text-secondary);
-  text-transform: uppercase; letter-spacing: var(--tracking-label);
-}
+/* The bar's eyebrow (01-base.css .eyebrow) in Jost, per the brand guidelines' bottom-bar spec: display type, as the
+   VALUE below it (18px/500); everything a guest actually READS stays Public Sans. */
+.summary-tile-label { font-family: var(--font-display); font-weight: 500; }
 .summary-tile-value {
   font-family: var(--font-display); font-size: var(--text-lg); font-weight: 500; color: var(--text-primary);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
@@ -734,11 +723,6 @@
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   margin-bottom: 14px;
 }
-/* "Scenes for this room" strip's heading — quieter than .summary-offmap-heading. */
-.summary-room-heading {
-  margin: 10px 2px 6px; font-size: var(--text-2xs); font-weight: 600;
-  text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-secondary);
-}
 /* The Per Room / Per Floor toggle (SummaryGroupPanel), above the list. */
 .summary-grouping { margin: 0 0 10px; }
 /* One heading of a device list (summaryRows.listSections: a room or a floor): its name on the left, its own
@@ -757,7 +741,7 @@
 .summary-room-scenes {
   border-top: 1px solid var(--hairline); padding-top: 14px; margin-top: 14px;
 }
-.summary-room-scenes .summary-room-heading { margin-top: 0; }
+.summary-room-scenes .section-title { margin: 0 2px 6px; }
 .summary-room-scenes-row { display: flex; flex-wrap: wrap; gap: 8px; }
 /* On a phone two ordinary scene names miss sharing a row by a hair — measured
    at 296px of button against 285px of content on a 360px-wide device, an
@@ -772,11 +756,8 @@
 }
 /* HA-only devices (no geometry in this villa model) — listed after the mapped
    ones under this heading and tinted, so it's clear they're not on the map. */
-.summary-offmap-heading {
-  margin: 18px 0 8px; font-size: var(--text-xs); font-weight: 600;
-  text-transform: uppercase; letter-spacing: 0.08em; color: var(--accent);
-  border-top: 1px solid var(--hairline); padding-top: 14px;
-}
+.summary-offmap-heading { margin: 18px 0 8px; border-top: 1px solid var(--hairline); padding-top: 14px; }
+.summary-offmap-heading .section-title { margin: 0; color: var(--accent); }
 .summary-entity-row.is-offmap .summary-entity-name,
 .summary-entity-row.is-offmap .summary-entity-state { color: var(--accent); }
 /* Devices Home Assistant has no entity for at all — the villa model still
@@ -786,7 +767,7 @@
    colours legend; amber until 2026-10-22, now a fault's colour). Reusing the
    off-map accent here would have said "exists in HA, just not modelled",
    which is the opposite of what this section means. */
-.summary-notinha-heading { color: var(--status-lost); }
+.summary-notinha-heading .section-title { color: var(--status-lost); }
 .summary-entity-row.is-notinha .summary-entity-name,
 .summary-entity-row.is-notinha .summary-entity-state { color: var(--status-lost); }
 .summary-entity-row {

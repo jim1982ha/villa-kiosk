@@ -6,7 +6,7 @@
 // already applies to the live scene through ConfigContext.update(), so there is
 // nothing to reload on the way out.
 
-import Window from "@/components/common/Window";
+import Window, { WindowHeader } from "@/components/common/Window";
 import { roleCan } from "@/auth/permissions";
 import { useState, type ReactNode } from "react";
 import { FIELD_COMMIT_MS, PendingFields, typedNumber, usePendingField, type PendingField } from "@/hooks/usePendingField";
@@ -89,19 +89,19 @@ function VillaCoordinates() {
   // writes nothing; the field simply lapses to the stored value.
   // ⚠️ THE TYPED TEXT WAITS IN THE DIALOG'S ONE PENDING STORE (usePendingField, 2.496.500): Save lights while it is
   // typed, and closing before the pause no longer drops it. What is no number is said (typedNumber).
-  const coord = (key: "latitude" | "longitude", id: string, label: string, field: PendingField<string>) => (
-    <div className="villa-location-coord">
-      <label htmlFor={id}>{label}</label>
-      <input id={id} inputMode="decimal"
+  const coord = (key: "latitude" | "longitude", label: string, field: PendingField<string>) => (
+    <label className="named-field villa-location-coord">
+      <span>{label}</span>
+      <input inputMode="decimal"
         {...typedNumber(field, coordinateText(config[key]), (text) => coordinateWrite(key, text), label, "a number")} />
-    </div>
+    </label>
   );
   const lat = usePendingField<string>("latitude", FIELD_COMMIT_MS);
   const lng = usePendingField<string>("longitude", FIELD_COMMIT_MS);
   return (
     <>
-      {coord("latitude", "villa-lat", "Latitude", lat)}
-      {coord("longitude", "villa-lng", "Longitude", lng)}
+      {coord("latitude", "Latitude", lat)}
+      {coord("longitude", "Longitude", lng)}
     </>
   );
 }
@@ -222,7 +222,7 @@ export function HeaderActions({ glbUpload, logout }: {
   logout: ReactNode;
 }) {
   return (
-    <div className="modal-header-actions">
+    <>
       {/* ⚠️ ONE GROUP IN THE THEME CONTROL'S LOOK (owner, 2026-11-06: Advanced Settings' header buttons were filled
           squares beside Settings' pill): the one tool group (.tool-group), each word hidden on a phone */}
       <ToolGroup label="The model and the sessions">
@@ -254,7 +254,7 @@ export function HeaderActions({ glbUpload, logout }: {
           </div>
         )}
       </InfoTip>
-    </div>
+    </>
   );
 }
 
@@ -294,15 +294,9 @@ export default function ConfigEditorModal({ onBack, withinSettings, focusEntityI
     <DialogEdits>
     <PendingFields pending={own.pending}>
     <Window kind="content" label="Advanced Settings" onClose={exit} className="settings-modal config-editor-modal">
-      <div className="modal-header">
-        {/* tabIndex={-1} + data-autofocus: useModalA11y's default (the
-            FIRST focusable descendant) would otherwise land on the header's
-            first button ("Upload Model", "Log Out All", or the (i)) and, for an (i),
-            pop its tooltip on open with no hover at all. The heading is the
-            conventional dialog-open focus target anyway; tabIndex={-1} makes
-            it programmatically focusable without joining the normal Tab
-            order. */}
-        <h2 tabIndex={-1} data-autofocus>Advanced Settings <span className="modal-title-version">v{__APP_VERSION__}</span></h2>
+      {/* the title takes the first focus: the header's first button ("Upload Model", "Log Out All", or the (i)) would
+          otherwise, and an (i) pops its card on open with no hover at all */}
+      <WindowHeader focus title={<>Advanced Settings <span className="modal-title-version">v{__APP_VERSION__}</span></>}>
         {/* ⚠️ BACK WHERE SETTINGS' OPENER IS, "LOG OUT ALL DEVICES" UP HERE (owner, 2026-10-24: "invert the position of
             Log out all devices and the Back button, so that Back appears at the same position as where Advanced
             Settings is in the previous menu"): Settings → Advanced Settings → Back is one spot under the finger. The
@@ -310,7 +304,7 @@ export default function ConfigEditorModal({ onBack, withinSettings, focusEntityI
         {(canUploadModel || roleCan(role, "editConfig")) && (
           <HeaderActions glbUpload={canUploadModel ? glbUpload : null} logout={roleCan(role, "editConfig") && <LogoutAll />} />
         )}
-      </div>
+      </WindowHeader>
 
       {/* ⚠️ OUTSIDE `.modal-body`, LIKE FACILITY'S. The strip is chrome and
           the body scrolls; putting the tabs inside would scroll them out of
@@ -324,7 +318,7 @@ export default function ConfigEditorModal({ onBack, withinSettings, focusEntityI
 
       <div className="modal-body">
         {glbUpload.uploadMsg && (
-          <div className={`test-result ${glbUpload.uploadMsg.ok ? "ok" : "fail"}`} style={{ marginTop: 0 }}>
+          <div className={`test-result ${glbUpload.uploadMsg.ok ? "ok" : "fail"}`}>
             {glbUpload.uploadMsg.text}
           </div>
         )}

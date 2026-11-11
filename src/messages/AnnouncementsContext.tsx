@@ -12,7 +12,8 @@ import { readJson, writeJson } from "@/utils/storedJson";
 import { fetchAnnouncements, fetchVestaMessages, inLanguage, pressOf, type Announcement, type Pressable } from "./announcements";
 import { useConfig } from "@/config/ConfigContext";
 import { pauseFor, watchFeed, type FeedRead } from "./feed";
-import { afterRead, messagePlaces, readAtOpening, shownTogether } from "./messagesModel";
+import { afterRead, cardOfMessage, messagePlaces, readAtOpening, shownTogether } from "./messagesModel";
+import type { CardView } from "@/config/cockpitCard";
 import { pressesOf, type PressState, type Presses } from "./presses";
 import { useCockpitIssues } from "@/components/cockpit/useVillaAttention";
 
@@ -43,6 +44,9 @@ interface AnnouncementsAndUnread extends Announcements {
   opened: () => void;
   /** The page's one record of presses (messages/presses). */
   presses: Presses;
+  /** The card the Cockpit draws for a message (messagesModel.cardOfMessage), null for a plain notification: its
+   *  notice over the villa draws that card's head. */
+  cardOf: (a: Announcement) => CardView | null;
 }
 
 const NONE: Announcements = { kept: [], villa: [], loaded: false, fresh: null };
@@ -65,7 +69,7 @@ function useFeed(read: (after: number | null, stop: AbortSignal) => Promise<Feed
   return state;
 }
 const NO_PRESSES = pressesOf(async () => "failed");
-const AnnouncementsContext = createContext<AnnouncementsAndUnread>({ ...NONE, unread: 0, unreadReports: 0, opened: () => {}, presses: NO_PRESSES });
+const AnnouncementsContext = createContext<AnnouncementsAndUnread>({ ...NONE, unread: 0, unreadReports: 0, opened: () => {}, presses: NO_PRESSES, cardOf: () => null });
 
 export function AnnouncementsProvider({ children }: { children: ReactNode }) {
   // ⚠️ TWO FEEDS, ONE LIST (tickets 26-27 of "One inbox"): the villa's announcements and VESTA's cards are read apart
@@ -104,7 +108,8 @@ export function AnnouncementsProvider({ children }: { children: ReactNode }) {
   const issues = useCockpitIssues();
   const value = useMemo(() => {
     const { unread, unreadReports } = messagePlaces({ ...issues, announcements: kept, read });
-    return { ...state, unread, unreadReports, opened, presses };
+    const cardOf = (a: Announcement) => cardOfMessage(a, { ...issues, announcements: kept });
+    return { ...state, unread, unreadReports, opened, presses, cardOf };
   }, [state, kept, read, issues, opened, presses]);
   return <AnnouncementsContext.Provider value={value}>{children}</AnnouncementsContext.Provider>;
 }

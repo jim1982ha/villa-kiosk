@@ -40,7 +40,7 @@ export default function LightPanel({ entity, mapping, onClose }: PanelProps) {
 
   const temperature = supportsTemp && (
     <div className="field">
-      <label className="entity-label">Colour temperature · {kelvin.value}K</label>
+      <label className="eyebrow">Colour temperature · {kelvin.value}K</label>
       <input
         type="range"
         min={entity?.attributes.min_color_temp_kelvin ?? 2700}
@@ -66,7 +66,7 @@ export default function LightPanel({ entity, mapping, onClose }: PanelProps) {
       >
       {supportsBrightness && (
         <div className="field">
-          <label className="entity-label">Brightness · {brightnessToPct(brightness.value)}%</label>
+          <label className="eyebrow">Brightness · {brightnessToPct(brightness.value)}%</label>
           <input
             type="range" min={1} max={255} {...brightness.rangeProps}
           />

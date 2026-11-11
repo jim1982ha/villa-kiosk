@@ -6,6 +6,7 @@
 // plus one dual-axis 24h graph when there are exactly two numeric series
 // (the common case) or a stacked line chart per series otherwise.
 
+import { Fragment } from "react";
 import { Layers } from "lucide-react";
 import BasePanel from "./BasePanel";
 import NumericHistory from "./NumericHistory";
@@ -88,12 +89,12 @@ export default function DeviceGroupPanel({ group, primaryMapping, onClose }: Pro
         {/* each on/off or words member's own state history, drawn as in its own
             window (config/reading's historyOf — a words member had none here) */}
         {rows.filter((r) => historyOf(r.reading) !== "numbers").map((r) => (
-          <div key={`h-${r.id}`}>
+          <Fragment key={`h-${r.id}`}>
             <div className="muted body-text" style={{ margin: "12px 0 4px" }}>{r.label}</div>
             {historyOf(r.reading) === "states"
               ? <LastDayTimeline entityId={r.id} colorFor={r.reading.stateColor ?? undefined} />
               : <LastDayTimeline entityId={r.id} palette />}
-          </div>
+          </Fragment>
         ))}
       </>}
       onClose={onClose}
@@ -113,13 +114,12 @@ export default function DeviceGroupPanel({ group, primaryMapping, onClose }: Pro
                     were previously two stacked block divs; now one line, unit
                     a bit smaller, matching how SensorPanel already does it. */}
                 {r.reading.pill
-                  // A pill at pill size — inside the large-number style an
+                  // The windows' pill at its own size (StatusPill) — inside the large-number style an
                   // alarm's capitals ("SMOKE DETECTED") broke awkwardly — kept
                   // inside its column: on a phone it wraps within the pill
                   // rather than running into its neighbour.
-                  ? <ReadingPill r={r.reading} size={18}
-                      icon={binarySensorClassInfo(entities[r.id]?.attributes.device_class).icon}
-                      style={{ fontSize: "var(--text-lg)", maxWidth: "100%", justifyContent: "center" }} />
+                  ? <ReadingPill r={r.reading} inline
+                      icon={binarySensorClassInfo(entities[r.id]?.attributes.device_class).icon} />
                   : <span style={{ color: r.reading.color }}>{r.reading.value}{r.reading.unit && <span className="value-unit" style={{ fontSize: "var(--text-md)", marginLeft: 3 }}>{r.reading.unit}</span>}</span>}
               </div>
               <div className="muted body-text">{r.label}</div>

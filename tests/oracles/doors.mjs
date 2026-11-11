@@ -66,8 +66,8 @@ ck("no window's visibility is implied by a callback being passed (no `? () => �
 ck("the top bar draws Settings and the agent's robot from doors — and no Facility button (its tabs are the Cockpit's)",
    (hud.match(/\{doors\.facility && \(/g) ?? []).length === 0 && (hud.match(/\{doors\.settings && \(/g) ?? []).length === 1   // ONE Settings row, shared by both menus (accountRows, 2.496.335)
    && !/\{onOpenFacility && \(|\{canOpenSettings && \(/.test(hud));
-ck("the Cockpit's updates count reads doors, not roleCan — and names them in its tooltip (config/updatesWaiting)",
+ck("the Cockpit's updates count reads doors, not roleCan — and names them in its card (config/updatesWaiting)",
    /doors\.updates \? updatesWaiting\(entities, hiddenInHaEntityIds, config\.entityMap\) : \[\]/.test(cockpit) && !/roleCan\(role, "seeUpdates"\)/.test(cockpit)
-   && /<Tip text=\{updatesTip\(updates\)\}>/.test(cockpit));
+   && /\{updates\.map\(\(n\) => <div key=\{n\}>\{n\}<\/div>\)\}/.test(cockpit));
 
 done("✅ which doors a profile has is said once");

@@ -11,7 +11,7 @@
 // .modal-header .title h2 in styles.css) instead of fighting a footer button
 // for room.
 
-import Window from "@/components/common/Window";
+import Window, { WindowHeader } from "@/components/common/Window";
 import { useState, type ReactNode } from "react";
 import { linkedSwitchProps, usePanelActions } from "./PanelActionsContext";
 import { linkedStateWords } from "./panelHeader";
@@ -158,21 +158,10 @@ export default function BasePanel({ title, entityId, icon, className, headerActi
         ["--device-ink" as string]: deviceTint.ink,
         ["--device-ring" as string]: deviceTint.ring,
       } : undefined}>
-      <div className="modal-header">
-        <div className="title">
-          {headerIcon}
-          <div style={{ minWidth: 0 }}>
-            {/* The window's first focus (useModalA11y's data-autofocus), not the
-                badge: the badge is the Owner's recolour BUTTON, and focusing it on
-                open drew the phone's own focus ring round it — an amber border
-                that read as a device state (owner, 2026-10-05). The heading is the
-                conventional dialog-open target; tabIndex={-1} keeps it out of Tab. */}
-            <h2 data-tip={title} tabIndex={-1} data-autofocus>{title}</h2>
-            {room && <div className="room">{room}</div>}
-          </div>
-        </div>
+      {/* the title takes the first focus, never the badge (WindowHeader `focus`) */}
+      <WindowHeader focus title={title} icon={headerIcon} under={room}>
         {(headerActions || back || warning) && (
-          <div className="modal-header-actions">
+          <>
             {/* ⚠️ ITS OPEN ISSUES, ONE TAP AWAY (owner, 2026-10-24, top right: "not top left"): while the Cockpit's
                 Open issues list an issue for the device or its linked entity (useDeviceIssue: a fault, an offline
                 device, an alarm, late maintenance), the Cockpit's own warning sign, in that issue's colour, opens the
@@ -180,9 +169,9 @@ export default function BasePanel({ title, entityId, icon, className, headerActi
             {warning && <FaultsButton onOpen={warning.open} severity={warning.severity} />}
             {headerActions}
             {back && <BackButton onClick={back.go} label={back.label} />}
-          </div>
+          </>
         )}
-      </div>
+      </WindowHeader>
       <div className="modal-body">
         {/* one range for the window's bands: the device's and its linked sensor's (HistoryRangeShare) */}
         <HistoryRangeShare device={entityId}
@@ -204,7 +193,7 @@ export default function BasePanel({ title, entityId, icon, className, headerActi
             </button>
             <div style={{ minWidth: 0 }}>
               <div className="panel-linked-label" data-tip={linked.label}>{linked.label}</div>
-              <div className="muted" style={{ fontSize: "var(--text-2xs)" }}>
+              <div className="fine-print">
                 {linkedStateWords(linked)} · linked entity
               </div>
             </div>

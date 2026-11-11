@@ -11,7 +11,7 @@ import { ingressWsUrl } from "./ingress";
 import { captureError } from "@/utils/diagnostics";
 import { report as reportTelemetry } from "@/utils/telemetry";
 import { reportSessionLost } from "@/auth/sessionLost";
-import type { ServiceOutcome } from "./serviceOutcome";
+import { CommandRefused, type ServiceOutcome } from "./serviceOutcome";
 
 type Resolver = (result: unknown) => void;
 type Rejecter = (err: Error) => void;
@@ -53,8 +53,8 @@ export class HAWebSocket {
   private authInvalidReported = false;
 
   onStateChange: (state: ConnectionState) => void = () => {};
-  /** Every failed service call is reported here (panels fire-and-forget). */
-  onServiceError: (err: Error) => void = () => {};
+  /** Every failed service call is reported here (panels fire-and-forget), with the devices it was for. */
+  onServiceError: (err: Error, target?: HassServiceTarget) => void = () => {};
 
   // Stored so disconnect() can remove them — anonymous inline handlers would
   // leak (and keep this whole client, its socket and timers, reachable) if
@@ -296,12 +296,14 @@ export class HAWebSocket {
     });
   }
 
-  private handleResult(msg: { id: number; success: boolean; result?: unknown; error?: { message: string } }) {
+  private handleResult(msg: { id: number; success: boolean; result?: unknown; error?: { code?: string; message: string } }) {
     const p = this.pending.get(msg.id);
     if (!p) return;
     this.pending.delete(msg.id);
     clearTimeout(p.timer);
     if (msg.success) p.resolve(msg.result);
+    // the add-on's own refusal (a profile that may not send this) keeps its sentence: serviceOutcome.CommandRefused
+    else if (msg.error?.code === "unauthorized") p.reject(new CommandRefused(msg.error.message));
     else p.reject(new Error(msg.error?.message ?? "Service call failed"));
   }
 
@@ -558,11 +560,11 @@ export class HAWebSocket {
     } catch (err) {
       // Most buttons fire service calls without awaiting them; a rejection
       // nobody catches is exactly the "I tap and nothing happens" bug. So this
-      // never rejects: failures go to one listener (the HUD toast), AND the
+      // never rejects: failures go to one listener (the villa view's notice), AND the
       // outcome resolves so the control that sent it can undo itself at once
       // (see serviceOutcome.ts).
       const error = err instanceof Error ? err : new Error(String(err));
-      this.onServiceError(error);
+      this.onServiceError(error, target);
       return { ok: false, error };
     }
   }

@@ -11,9 +11,9 @@
 // Deleting it removed the hold-vs-scroll touch arbitration this grid needed
 // purely to host the gesture.
 
-import { X, MapPin, Plus, Trash2 } from "lucide-react";
+import { X, MapPin, Plus, Trash2, List } from "lucide-react";
 import { Axis } from "@babylonjs/core/Maths/math.axis";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useModalA11y } from "@/hooks/useModalA11y";
 import { useConfig } from "@/config/ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
@@ -28,9 +28,26 @@ interface Props {
   currentFloor: number;
   onClose: () => void;
   onTeleport: (point: TeleportPoint) => void;
+  /** A room's devices, as this profile's lists show them. */
+  devicesOf: (room: string) => string[];
+  /** The room's device list: what holding the room's chip on the map opens (UI scan, 2026-11-10: a list reached only
+   *  by a hold gets something to press). */
+  onListDevices: (room: string, entityIds: string[]) => void;
 }
 
-export default function TeleportMenu({ manager, currentFloor, onClose, onTeleport }: Props) {
+/** A room card's corner button (.media-btn small, the button over a photo): a press on it is not a press on the card. */
+function CornerButton({ label, danger = false, onPress, children }: {
+  label: string; danger?: boolean; onPress: () => void; children: ReactNode;
+}) {
+  return (
+    <span role="button" tabIndex={-1} className={`media-btn small${danger ? " danger" : ""}`}
+      onClick={(e) => { e.stopPropagation(); onPress(); }} data-tip={label} aria-label={label}>
+      {children}
+    </span>
+  );
+}
+
+export default function TeleportMenu({ manager, currentFloor, onClose, onTeleport, devicesOf, onListDevices }: Props) {
   const { config, update } = useConfig();
   const points = config.teleportPoints;
   /** Which in-app dialog is open, if any — see AskDialog for why these are not
@@ -141,7 +158,9 @@ export default function TeleportMenu({ manager, currentFloor, onClose, onTelepor
       </button>
       <h2>Rooms</h2>
       <div className="tp-cards">
-        {points.map((p) => (
+        {points.map((p) => {
+          const devices = devicesOf(p.name);
+          return (
           <button
             key={p.name}
             className="tp-card"
@@ -151,24 +170,22 @@ export default function TeleportMenu({ manager, currentFloor, onClose, onTelepor
           >
             <div className="scrim" />
             {p.floor !== currentFloor && <span className="floor-tag">F{p.floor}</span>}
-            {mayEdit && (
-            <span
-              role="button"
-              tabIndex={-1}
-              className="media-btn small danger tp-delete"
-              onClick={(e) => {
-                e.stopPropagation();
-                setAsk({ kind: "remove", name: p.name });
-              }}
-              data-tip="Remove room"
-              aria-label={`Remove room ${p.name}`}
-            >
-              <Trash2 size={16} />
+            <span className="tp-card-tools">
+              {devices.length > 0 && (
+                <CornerButton label={`List the devices in ${p.name}`} onPress={() => onListDevices(p.name, devices)}>
+                  <List size={16} />
+                </CornerButton>
+              )}
+              {mayEdit && (
+                <CornerButton label={`Remove room ${p.name}`} danger onPress={() => setAsk({ kind: "remove", name: p.name })}>
+                  <Trash2 size={16} />
+                </CornerButton>
+              )}
             </span>
-            )}
             <span>{p.name}</span>
           </button>
-        ))}
+          );
+        })}
 
         {mayEdit && (
         <button className="tp-card tp-add" onClick={() => setAsk({ kind: "add" })} data-tip="Add current viewpoint as a room">
@@ -178,7 +195,7 @@ export default function TeleportMenu({ manager, currentFloor, onClose, onTelepor
         )}
       </div>
       <p className="muted center mt body-text">
-        <MapPin size={16} /> Tap a room to fly there, the view is framed to that room automatically.
+        <MapPin size={16} /> Tap a room to fly there, the view is framed to that room automatically. The list icon on a room lists its devices.
       </p>
     </div>
     </>

@@ -5,7 +5,7 @@
 // Messages screen reads; the later tickets add the reports and VESTA's conversation to it. Pure:
 // tests/oracles/messages_model.mjs.
 
-import { cockpitCard, othersFirst, saysWord, type CardLine, type CardView } from "@/config/cockpitCard";
+import { cardOfLine, cockpitCard, leadLine, othersFirst, saysWord, toldShown, type CardLine, type CardView } from "@/config/cockpitCard";
 import { groupAttention, type AttentionItem } from "@/config/attention";
 import { alertStage, incidentKey, statusWords, versionOf, VISIT_PRESS, type Announcement, type VillaCardFields } from "./announcements";
 import { WORK_ACTIONS, type WorkAction, type WorkActionKind } from "@/fm/deviceWork";
@@ -240,6 +240,35 @@ export function issueAsTold(card: CardView, kept: readonly Announcement[]): Card
   // ...nor a problem's own state, in its header on a card of several (cockpitCard.lineStrip)
   return othersFirst({ ...card, lines: lines.map((l) => (l.state ? { ...l, state: l.state.filter(unsaid) } : l)), ...(status ? { status } : {}) },
     (l) => l.told !== undefined);
+}
+
+/** ⚠️ THE CARD THE COCKPIT DRAWS FOR A MESSAGE (UI scan, 2026-11-10; the rules: "the same name and the same Status
+ *  everywhere"): VESTA's message of an alert, the issue holding that alert, as told (issueAsTold, `a` its message; its
+ *  alert's own problem when the card holds several: cardOfLine); the villa's own alert, its card (villaAlertCards);
+ *  null for what the Cockpit lists as a notification (a ring, an approval, an alert whose issue is not read yet). The
+ *  notice over the villa draws this card's head, so it names the alert, its device, its time and its state as its
+ *  card does. From the same pieces messagePlaces lists by. Pure. */
+export function cardOfMessage(a: Announcement, { open, watched, closed = [], announcements }: {
+  open: readonly CardView[]; watched: readonly CardView[]; closed?: readonly CardView[]; announcements: readonly Announcement[];
+}): CardView | null {
+  if (a.feed !== "vesta") {
+    const villa = villaAlertCards([a]);
+    return villa.open[0] ?? villa.closed[0] ?? null;
+  }
+  const card = [...open, ...watched, ...closed].find((c) => c.lines.some((l) => messageOfLine(l, [a])));
+  if (!card) return null;
+  // `a` first: its line tells this message, whatever step the page keeps of it
+  const told = issueAsTold(card, [a, ...announcements]);
+  const line = told.lines.find((l) => l.told === a);
+  return line && told.lines.length > 1 ? cardOfLine(told, line) : told;
+}
+
+/** What a card's notice says after its state: the first of its words, as an announcement's notice says them
+ *  (announcementWords: a step says what changed, its bottom line, unless the state says it already: toldShown). Pure. */
+export function cardWords(card: Pick<CardView, "lines" | "look">, opts: { step?: boolean } = {}): string {
+  const line = leadLine(card), told = line && toldShown(line, card.look);
+  if (!line || !told) return line?.text ?? "";
+  return announcementWords({ ...told, text: line.text || told.text || told.story?.[0] || "" }, opts).line;
 }
 
 // the list's one order (feed.byTime): two feeds' numbers do not compare

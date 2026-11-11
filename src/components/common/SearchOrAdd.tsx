@@ -13,6 +13,7 @@ import { useEffect, useRef, useState, type RefObject } from "react";
 import SearchPicker, { type SearchRow } from "./SearchPicker";
 import { useDeviceSearch } from "@/hooks/useDeviceSearch";
 import { firstToAdd, offered, type AddOffer } from "@/config/searchOrAdd";
+import EmptyLine from "@/components/common/EmptyLine";
 
 export default function SearchOrAdd({ query, onQuery, placeholder, offer, onAdd, onFound }: {
   /** What is typed: the list's filter (its owner narrows the list with it). */
@@ -52,7 +53,7 @@ export function SearchEmpty({ query, noun, offer, onAdd }: {
   const add = offer ? firstToAdd(query, src, offer) : undefined;
   return (
     <div className="search-empty">
-      <p className="muted body-text">No {noun} has “{query.trim()}”.</p>
+      <EmptyLine>No {noun} has “{query.trim()}”.</EmptyLine>
       {add && offer && onAdd && (
         <button type="button" className="btn" onClick={() => onAdd(add.id)}>{offer.exactWords(add.name)}</button>
       )}

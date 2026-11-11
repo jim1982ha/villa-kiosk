@@ -76,6 +76,8 @@
 .fm-record-state.strip-neutral { color: var(--text-secondary); }
 .fm-record-state .fm-record-status { min-width: 0; overflow-wrap: anywhere; }
 .fm-record-state .info-tip { flex: none; margin-block: -6px; }
+/* the first of its words after its state, where its head stands alone (RecordHead: an alert's notice over the villa) */
+.fm-record-words { font-weight: 400; color: var(--text-primary); }
 /* its next check (CheckPill): the app's pill (.fm-entity-chip), at the right of the first line, under the strip's time;
    on a line too narrow for both it takes the next line, still at the right (owner, 2026-11-06) */
 /* ...and a part's (a problem watched live on a card of several), at the right of its header line, before its time */
@@ -187,7 +189,7 @@
 /* A title with its controls at the far end — the Overview's issues and the Weather / Energy charts
    (.weather-chart-head, 03-panels.css until grouped here, the later file). */
 .cockpit-issues-head, .weather-chart-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
-.cockpit-issues-head .settings-section-title { margin-bottom: 0; }
+.cockpit-issues-head .section-title { margin-bottom: 0; }
 .fm-summary { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 10px; }
 .fm-stat {
   display: flex; flex-direction: column; gap: 2px; min-width: 0;
@@ -220,7 +222,6 @@
 /* A row's own "sure?" (the fault's one-step close): a line of its own under
    the record, its question and buttons wrapping on a phone. */
 .fm-row-confirm { flex: 1 1 100%; }
-.fm-row-sub { font-size: var(--text-xs); }
 /* A record that opens for editing when tapped. The cursor and hover lift are
    the whole affordance — a per-row "Edit" button would compete with the status
    action already in these rows, and on a phone there is no width for both. */
@@ -428,34 +429,6 @@
 }
 .fm-form h3 { margin: 0; font-size: var(--text-md); }
 /* a form's opening words sit close to its fields: the form's own gap is the only space (owner, 2026-10-14) */
-.fm-field { display: flex; flex-direction: column; gap: var(--field-label-gap); }
-.fm-field > span { font-size: var(--field-label-size); color: var(--text-secondary); }
-/* DIRECT children only. A descendant selector here reached into every nested
-   component that happens to sit in a field — EvidenceRow's hidden file input
-   (which it un-hid, putting a stray "Choose files / No file chosen" control
-   under the photo strip) and DeviceSearchPicker's search box (which has its
-   own styling and does not want this one). A field styles its OWN control,
-   not whatever a child component renders.
-
-   textarea belongs in this list. Leaving it out meant every multi-line field
-   in the workspace kept the browser's UA defaults — a white box with black
-   text sized by the `cols` attribute — which is invisible until a form
-   actually has one. Grouping the three controls is also what stops the next
-   textarea from needing its own rule. */
-.fm-field > input, .fm-field > select, .fm-field > textarea {
-  padding: 10px 12px; border-radius: 10px; font-size: var(--field-text); font-weight: 400;
-  background: var(--bg-input); color: var(--text-primary); border: 1px solid var(--hairline);
-  /* Width comes from the column, never from `cols`; the border box keeps the
-     padding inside it so the field lines up with the inputs above and below. */
-  display: block; width: 100%; box-sizing: border-box;
-}
-.fm-field > input:focus, .fm-field > select:focus, .fm-field > textarea:focus {
-  border-color: var(--accent); outline: none;
-}
-/* All three, not just the textarea: a placeholder styled on one control and
-   left to the browser on the one directly above it is a visible mismatch in
-   the same form. */
-.fm-field > input::placeholder, .fm-field > textarea::placeholder { color: var(--text-dim); }
 
 .fm-banner {
   padding: 10px 12px; border-radius: 10px; font-size: var(--text-sm);
@@ -478,7 +451,7 @@
 .fm-cap-bar { height: 8px; border-radius: 999px; background: var(--bg-input); overflow: hidden; }
 .fm-cap-bar > span { display: block; height: 100%; background: var(--status-on); }
 :is(.tone-warn, .tone-danger) .fm-cap-bar > span { background: var(--tone); }
-.fm-cap-note { margin: 0; font-size: var(--text-sm); color: var(--text-secondary); }
+.fm-cap-note { margin: 0; }
 
 /* Evidence thumbnails */
 .fm-evidence { display: flex; flex-direction: column; gap: 6px; }

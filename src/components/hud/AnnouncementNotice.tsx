@@ -4,6 +4,11 @@
 // for ANNOUNCEMENT_NOTICE_MS, each its own time, none replacing another (noticeModel); drawn as every notice is (Notice).
 // Its own place in the column, above AppNotice's: a motion notice (the visitor walking up) must not replace the ring.
 //
+// ⚠️ AN ALERT'S NOTICE IS ITS CARD'S HEAD (UI scan, 2026-11-10; the rules: "the same name and the same Status
+// everywhere"): every notice was a bell, a title and a line in the app's accent, an alarm and a doorbell alike. A
+// message the Cockpit draws as an issue's card (messagesModel.cardOfMessage) is told here by that card's head: its
+// source icons, its alert's name, its device, its time, then its state first, in its strip's colour (RecordHead).
+//
 // A notice offers its record's buttons too (RecordButtons: the doorbell's Unlock, an approval's Approve / Refuse) for
 // its few seconds; its card in the Cockpit's Inbox keeps them after (owner, 2026-10-29). A rewrite of the same record
 // (answered, opened at the gate, decided) takes its place and says what changed.
@@ -18,28 +23,39 @@ import { useConfig } from "@/config/ConfigContext";
 import type { Announcement } from "@/messages/announcements";
 import { NO_NOTICE, noticeStep } from "@/messages/noticeModel";
 import { useAnnouncements } from "@/messages/AnnouncementsContext";
-import { announcementWords, idOf } from "@/messages/messagesModel";
-import { PhotoRow, RecordButtons } from "@/components/messages/AnnouncementContent";
+import { announcementWords, cardWords, idOf } from "@/messages/messagesModel";
+import { PhotoRow, RecordButtons, StatusLines } from "@/components/messages/AnnouncementContent";
+import { cardTop, type CardView } from "@/config/cockpitCard";
+import { RecordHead, stripTone } from "@/components/fm/RecordCard";
+import { cardLead } from "@/components/fm/sourceIcons";
 
 /** One announcement, drawn — pure (a check draws it): its photos above its words when it has some (a ring's snapshot,
  *  a visit's every camera: PhotoRow; the notice then square-cornered: 08-shared.css), its title and the first line of what it says, then `buttons` (its
  *  RecordButtons: the doorbell's Unlock, an approval's Approve / Refuse). A rewrite of the same record replaces it in
  *  place (the add-on's key). Its ✕ (NoticeView: every notice's) closes it before its time (`onDismiss`: the notices'
- *  record, noticeModel "dismissed"). */
-export function AnnouncementNoticeView({ announcement, onDismiss, buttons, step = false }: {
+ *  record, noticeModel "dismissed"). `card`: the Cockpit's card of it (an alert's): the notice is that card's head. */
+export function AnnouncementNoticeView({ announcement, onDismiss, buttons, step = false, card = null }: {
   announcement: Announcement;
   onDismiss?: () => void;
   buttons?: ReactNode;
   /** It arrived as a rewrite (noticeModel `steps`): it says what changed, its bottom line. */
   step?: boolean;
+  /** The card the Cockpit draws for it (AnnouncementsContext `cardOf`); null: a plain notification, the bell. */
+  card?: CardView | null;
 }) {
   // its words as every screen says them (messagesModel.announcementWords): the title, then its first line or bottom line
   const { title, line } = announcementWords(announcement, { step });
   const words = line ? `${title} · ${line}` : title;
+  // an alert: what its card's strip and first line say (cockpitCard.cardTop), in the strip's colour
+  const top = card ? cardTop(card) : null;
+  const strip = top ? stripTone(top.status, top.tone) : null;
   return (
-    <NoticeView tone="info" icon={<Bell size={16} />} onDismiss={onDismiss}>
+    <NoticeView tone={strip ?? "info"} icon={strip ? null : <Bell size={16} />} onDismiss={onDismiss}>
       <PhotoRow photos={announcement.photos} />
-      {words}
+      {card && top && strip
+        ? <RecordHead title={card.title} lead={cardLead(card)} number={top.number} when={top.when} status={top.status}
+            statusTip={top.statusTip} tone={strip}>{cardWords(card, { step })}</RecordHead>
+        : words}
       {buttons}
     </NoticeView>
   );
@@ -78,15 +94,13 @@ export function AnnouncementFullScreenView({ announcement, onDismiss, buttons, t
   leftMs: number;
 }) {
   const { words, fraction } = countdownOf(totalMs, leftMs);
-  const story = announcement.story ?? [];
   return (
     <>
       <div className="modal-header announcement-night-head">
         <h2 className="announcement-full-title">{announcement.title}</h2>
         {announcement.text && <p className="announcement-night-text">{announcement.text}</p>}
-        {(story.length > 0 || announcement.status) && (
-          <p className="announcement-night-text">{[...story, announcement.status].filter(Boolean).join("\n")}</p>
-        )}
+        {/* its Status as its Inbox card says it: labelled, its story's lines, where it stands */}
+        <StatusLines announcement={announcement} />
       </div>
       <div className="modal-body announcement-night-body">
         <PhotoRow photos={announcement.photos} lead />
@@ -110,8 +124,10 @@ export function AnnouncementFullScreenView({ announcement, onDismiss, buttons, t
 }
 
 /** One notice with its record's buttons (RecordButtons: the one row, wherever a record shows). */
-function OneNotice({ announcement, onDismiss, step }: { announcement: Announcement; onDismiss: () => void; step: boolean }) {
-  return <AnnouncementNoticeView announcement={announcement} onDismiss={onDismiss} step={step}
+function OneNotice({ announcement, onDismiss, step, card }: {
+  announcement: Announcement; onDismiss: () => void; step: boolean; card: CardView | null;
+}) {
+  return <AnnouncementNoticeView announcement={announcement} onDismiss={onDismiss} step={step} card={card}
     buttons={<RecordButtons record={announcement} />} />;
 }
 
@@ -139,7 +155,7 @@ export default function AnnouncementNotice() {
   // what just came, from the page's one watch (messages/AnnouncementsContext), each saying whether it rewrites one the
   // page held: a rewrite (the ring answered, timed out) never takes the screen again, a reload or a wake-up between
   // the two included (review Q 1)
-  const { fresh, kept, villa, loaded } = useAnnouncements();
+  const { fresh, kept, villa, loaded, cardOf } = useAnnouncements();
   useEffect(() => {
     for (const { announcement, rewrite } of fresh?.arrived ?? []) {
       send({ type: "arrived", announcement, rewrite, settings: settings.current });
@@ -165,7 +181,7 @@ export default function AnnouncementNotice() {
       {state.full && <OneFullScreen key={idOf(state.full.announcement)} announcement={state.full.announcement} ms={state.full.ms}
         onDismiss={() => send({ type: "fullEnded" })} />}
       {state.shown.map(({ announcement: a, ms }) => (
-        <TimedNotice key={idOf(a)} announcement={a} ms={ms} step={state.steps.includes(idOf(a))}
+        <TimedNotice key={idOf(a)} announcement={a} ms={ms} step={state.steps.includes(idOf(a))} card={cardOf(a)}
           onEnded={() => send({ type: "noticeEnded", id: idOf(a) })} onDismiss={() => send({ type: "dismissed", id: idOf(a) })} />
       ))}
     </>
@@ -173,8 +189,8 @@ export default function AnnouncementNotice() {
 }
 
 /** One notice for its own time (noticeFor: one time for every notice), then gone; its card stays in the Inbox. */
-function TimedNotice({ announcement, ms, step, onEnded, onDismiss }: {
-  announcement: Announcement; ms: number; step: boolean; onEnded: () => void; onDismiss: () => void;
+function TimedNotice({ announcement, ms, step, card, onEnded, onDismiss }: {
+  announcement: Announcement; ms: number; step: boolean; card: CardView | null; onEnded: () => void; onDismiss: () => void;
 }) {
   const ended = useRef(onEnded);
   ended.current = onEnded;
@@ -182,5 +198,5 @@ function TimedNotice({ announcement, ms, step, onEnded, onDismiss }: {
     const t = setTimeout(() => ended.current(), ms);
     return () => clearTimeout(t);
   }, [ms]);
-  return <OneNotice announcement={announcement} onDismiss={onDismiss} step={step} />;
+  return <OneNotice announcement={announcement} onDismiss={onDismiss} step={step} card={card} />;
 }

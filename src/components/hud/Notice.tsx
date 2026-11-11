@@ -11,12 +11,14 @@
 // The tone is a meaning of "Map colours & keys" (utils/stateColors STATUS_COLOR, the legend's own swatches), never a
 // colour of the notice's own: contact lost = unavailable (amber), a sensor triggered = active (green), a failure =
 // alert (red). `info` — news that is no device's state (a new version, a floor not modelled) — is the VESTA accent.
+// An alert's notice wears its card's strip colour (a StripTone: the strips' one table, 07-facility.css .strip-*).
 
 import { useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import IconButton from "@/components/common/IconButton";
 import { STATUS_COLOR } from "@/utils/stateColors";
+import type { StripTone } from "@/components/fm/RecordCard";
 
 export type NoticeTone = "active" | "unavailable" | "alert" | "info";
 
@@ -31,7 +33,8 @@ const TONE: Record<NoticeTone, string> = {
 const NOTICE_STACK_ID = "vesta-notices";
 
 interface NoticeProps {
-  tone: NoticeTone;
+  /** What it is; a card's strip tone for the notice of an alert (its card's head: AnnouncementNotice). */
+  tone: NoticeTone | StripTone;
   icon: ReactNode;
   children: ReactNode;
   /** The whole notice is the button (a new version: tap to reload). */
@@ -55,8 +58,9 @@ export function NoticeView({ tone, icon, children, onTap, onDismiss, role = "sta
   const [closed, setClosed] = useState(false);
   if (closed) return null;
   const closable = !onTap && !stays;
-  const className = `vesta-notice${onTap ? " tappable" : ""}${belowCamera ? " below-camera" : ""}`;
-  const style = { "--tone": TONE[tone] } as React.CSSProperties;
+  const own = tone in TONE ? TONE[tone as NoticeTone] : null;
+  const className = `vesta-notice${own ? "" : ` strip-${tone}`}${onTap ? " tappable" : ""}${belowCamera ? " below-camera" : ""}`;
+  const style = { "--tone": own ?? "var(--strip)" } as React.CSSProperties;
   const inner = (
     <>
       {icon}

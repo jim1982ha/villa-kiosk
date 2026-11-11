@@ -26,6 +26,7 @@ import RemovablePill from "@/components/common/RemovablePill";
 import { countOf } from "@/utils/countOf";
 import { groupMatches } from "@/config/deviceRecord";
 import { useDeviceSearch } from "@/hooks/useDeviceSearch";
+import EmptyLine from "@/components/common/EmptyLine";
 
 /** The list Grouped devices shows: its groups, or the groups it suggests. */
 type GroupView = "groups" | "suggested";
@@ -119,9 +120,7 @@ export default function GroupedDevices({ title, tip }: { title: string; tip?: Re
       <SearchOrAdd query={search} onQuery={typed} placeholder="Search groups, or a device to group…"
         offer={offer} onAdd={createGroup} onFound={showGroup} />
 
-      {view === "groups" && config.deviceGroups.length === 0 && !search.trim() && (
-        <p className="muted body-text mt">No grouped devices yet.</p>
-      )}
+      {view === "groups" && config.deviceGroups.length === 0 && !search.trim() && <EmptyLine>No grouped devices yet.</EmptyLine>}
 
       {(view === "groups" ? matches : suggested).length === 0 && search.trim() !== "" && (
         <SearchEmpty query={search} noun={view === "groups" ? "group" : "suggested group"} offer={offer} onAdd={createGroup} />

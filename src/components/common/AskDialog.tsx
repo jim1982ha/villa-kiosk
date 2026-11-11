@@ -36,7 +36,7 @@
 // open with the text intact and the reason under the field.
 
 import ModalFooter from "@/components/common/ModalFooter";
-import Window from "@/components/common/Window";
+import Window, { WindowHeader } from "@/components/common/Window";
 import { useState } from "react";
 
 interface Props {
@@ -84,14 +84,13 @@ export default function AskDialog({
     // render a two-line question edge-to-edge with square corners.
     <Window kind="question" label={title} onClose={onCancel} className="panel-modal" layer="panel-modal-backdrop"
       zIndex={90} style={{ maxWidth: 420 }}>
-      <div className="modal-header"><div className="title"><h2>{title}</h2></div></div>
+      <WindowHeader title={title} />
       <div className="modal-body">
         {message && <p style={{ margin: input ? "0 0 14px" : 0 }}>{message}</p>}
         {input && (
-          <div className="field" style={{ margin: 0 }}>
-            <label htmlFor="ask-dialog-input">{input.label}</label>
+          <label className="named-field">
+            <span>{input.label}</span>
             <input
-              id="ask-dialog-input"
               // `data-autofocus` is useModalA11y's OWN way to nominate the
               // primary control — it prefers a marked element over "the first
               // focusable" when it focuses into the dialog. The first cut here
@@ -109,7 +108,7 @@ export default function AskDialog({
               // to accept is worse than the prompt it replaced.
               onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); submit(); } }}
             />
-          </div>
+          </label>
         )}
       </div>
       {/* ⚠️ THE APP'S ONE FOOTER (owner, 2026-11-10: one definition): the box wrote its own, with its own Cancel. */}

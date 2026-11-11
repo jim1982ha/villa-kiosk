@@ -46,7 +46,7 @@ export default function NotesField({
   }, [value]);
 
   return (
-    <label className="fm-field">
+    <label className="named-field">
       <span>{label}</span>
       <textarea
         ref={ref}

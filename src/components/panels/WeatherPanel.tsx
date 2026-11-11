@@ -103,7 +103,7 @@ function NowView({ station, r }: { station: WeatherStation; r: Readings }) {
       {r.t !== undefined && (
         <div className="weather-feels">
           <div>
-            <div className="weather-eyebrow">How it feels</div>
+            <div className="eyebrow">How it feels</div>
             <div className="weather-headline">{comfortHeadline(r.t, r.dew, r.wind)}</div>
           </div>
           <div className="weather-big">{f1(r.t)}°</div>
@@ -166,7 +166,7 @@ function NowView({ station, r }: { station: WeatherStation; r: Readings }) {
 function Tile({ title, center, k, children }: { title: string; center?: boolean; k: string; children: ReactNode }) {
   return (
     <div className={`weather-tile k-${k}${center ? " center" : ""}`}>
-      <div className="weather-eyebrow">{title}</div>
+      <div className="eyebrow">{title}</div>
       {children}
     </div>
   );
@@ -215,7 +215,7 @@ export function Barometer({ hpa }: { hpa: number }) {
   // No "CHANGE" over the arc (owner, 2026-09-26: redundant — the needle
   // between RAIN and FAIR says it), so the frame starts at the arc's top.
   return (
-    <svg className="weather-dial baro" viewBox="0 30 230 166" role="img" aria-label={`Pressure ${hpa.toFixed(1)} hPa`}>
+    <svg className="weather-dial" viewBox="0 30 230 166" role="img" aria-label={`Pressure ${hpa.toFixed(1)} hPa`}>
       <path d="M 30 160 A 90 90 0 1 1 200 160" className="baro-track" />
       <path d="M 30 160 A 90 90 0 0 1 60 58" className="baro-zone rain" />
       <path d="M 170 58 A 90 90 0 0 1 200 160" className="baro-zone fair" />
@@ -332,7 +332,7 @@ export function SunUv({ r, peak }: { r: Readings; peak: { v: number; t: number }
       <div className="weather-uv-foot">
         {peak && <div><span>Peak today</span><b>{f0(peak.v)} at {fmtChartTime(peak.t)}</b></div>}
         {r.solar !== undefined && (
-          <div className="weather-sunshine">
+          <div>
             <span>Sunshine</span>
             <span className="weather-sunshine-bar" aria-hidden="true"><i style={{ width: `${sunshineFraction(r.solar) * 100}%` }} /></span>
             <b>{f0(r.solar)} W/m²</b>
@@ -431,9 +431,9 @@ function ChartTile({ title, legend, note, lines, win, status, stepMs, picker }: 
   const kept = useKeptFrom();
   const head = (
     <div className="weather-chart-head">
-      <div className="weather-eyebrow">{title}<ChartStep words={aggregationWords(stepMs, "avg")} about={chartAbout("average", stepMs, win.from, kept, drawsUnkept(present.map((l) => l.s)))} /></div>
-      {legend && <div className="weather-legend">{legend.map(([n, c]) => <span key={n}><i className={`key ${c}`} />{n}</span>)}</div>}
-      {note && <div className="weather-legend">{note}</div>}
+      <div className="eyebrow">{title}<ChartStep words={aggregationWords(stepMs, "avg")} about={chartAbout("average", stepMs, win.from, kept, drawsUnkept(present.map((l) => l.s)))} /></div>
+      {legend && <div className="fine-print chart-key">{legend.map(([n, c]) => <span key={n}><i className={`key ${c}`} />{n}</span>)}</div>}
+      {note && <div className="fine-print">{note}</div>}
     </div>
   );
   return (
@@ -472,8 +472,8 @@ function RainTile({ s, win, status, stepMs, unit }: {
   return (
     <div className="weather-tile chart">
       <div className="weather-chart-head">
-        <div className="weather-eyebrow">Rain<ChartStep words={aggregationWords(stepMs, "sum")} about={chartAbout("total", stepMs)} /></div>
-        <div className="weather-legend">{unit}</div>
+        <div className="eyebrow">Rain<ChartStep words={aggregationWords(stepMs, "sum")} about={chartAbout("total", stepMs)} /></div>
+        <div className="fine-print">{unit}</div>
       </div>
       {n === 0
         ? <ChartEmpty status={status} />

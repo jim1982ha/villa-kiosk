@@ -9,7 +9,7 @@ import { momentText } from "@/utils/dateText";
 import { useEffect, useRef, useState } from "react";
 import { Mic, RotateCcw, Send, Square, Volume2 } from "lucide-react";
 import IconButton from "@/components/common/IconButton";
-import Window from "@/components/common/Window";
+import Window, { WindowHeader } from "@/components/common/Window";
 import ModalFooter from "@/components/common/ModalFooter";
 
 import { NEW_CONVERSATION, QUESTION_MAX, SPOKEN_WAITING, TALK_SAID, pressableOf, type Turn } from "@/messages/conversation";
@@ -17,6 +17,7 @@ import { useConversation } from "@/messages/ConversationContext";
 import { followOf, unanswered, vestaWorking } from "@/messages/conversationModel";
 import { PageLink, PhotoRow, RecordButtons } from "./AnnouncementContent";
 import TalkButton from "./TalkButton";
+import EmptyLine from "@/components/common/EmptyLine";
 
 /** One line of the thread: who said it, when, its words, the camera pictures VESTA looked at and the page it attached
  *  ("Open the page" only for a profile the add-on serves pages to). A spoken question (hold to talk) carries the
@@ -28,7 +29,7 @@ export function TurnLine({ turn, canOpenPage, onListen, playing = false, onStop 
   /** Its sound is being said now: Stop in Listen's place (onStop: Stop pressed). */
   playing?: boolean; onStop?: () => void }) {
   return (
-    <div data-turn={turn.key} className={`vesta-turn ${turn.from === "person" ? "asked" : "answered"}${turn.voice ? " vesta-turn-spoken" : ""}`}>
+    <div data-turn={turn.key} className={`vesta-turn${turn.from === "person" ? " asked" : ""}${turn.voice ? " vesta-turn-spoken" : ""}`}>
       <div className="vesta-turn-head">
         <b>{turn.from === "person" ? "You" : "VESTA"}</b>
         {turn.voice && <Mic size={14} aria-label="spoken" />}
@@ -57,7 +58,7 @@ export function TurnLine({ turn, canOpenPage, onListen, playing = false, onStop 
 /** VESTA answering: its bubble with three dots, as every chat app shows "typing" (conversationModel.vestaWorking). */
 export function WorkingBubble() {
   return (
-    <div className="vesta-turn answered vesta-working" role="status" aria-label="VESTA is answering">
+    <div className="vesta-turn vesta-working" role="status" aria-label="VESTA is answering">
       <span className="vesta-working-dot" /><span className="vesta-working-dot" /><span className="vesta-working-dot" />
     </div>
   );
@@ -86,19 +87,14 @@ export default function VestaWindow({ onClose, canOpenPage }: { onClose: () => v
 
   return (
     <Window kind="content" label="VESTA" onClose={onClose} className="settings-modal vesta-modal">
-      <div className="modal-header">
-        <h2>VESTA</h2>
-        <div className="modal-header-actions">
-          <button type="button" className="btn" disabled={sending} onClick={() => void send(NEW_CONVERSATION)}>
-            <RotateCcw size={16} aria-hidden /> New conversation
-          </button>
-        </div>
-      </div>
+      <WindowHeader title="VESTA">
+        <button type="button" className="btn" disabled={sending} onClick={() => void send(NEW_CONVERSATION)}>
+          <RotateCcw size={16} aria-hidden /> New conversation
+        </button>
+      </WindowHeader>
       <div className="modal-body vesta-thread">
       <div className="vesta-thread-lines" role="log" aria-live="polite">
-        {thread.lines.length === 0 && (
-          <p className="muted body-text messages-empty">Ask VESTA about the villa: what is on, what happened, what to check.</p>
-        )}
+        {thread.lines.length === 0 && <EmptyLine>Ask VESTA about the villa: what is on, what happened, what to check.</EmptyLine>}
         {thread.lines.map((t) => <TurnLine key={t.key} turn={t} canOpenPage={canOpenPage} onListen={listen}
           playing={!!t.speech && t.speech === playing} onStop={stopListening} />)}
         {vestaWorking(thread, Date.now()) && <WorkingBubble />}

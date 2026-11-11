@@ -192,9 +192,9 @@ export default function StateTimeline({
         )}
       </div>
       {key.length > 0 && (
-        <div className="row state-timeline-legend" style={{ gap: 16, marginTop: 8, fontSize: "var(--text-xs)", flexWrap: "wrap" }}>
+        <div className="fine-print chart-key under state-timeline-legend">
           {key.map((l) => (
-            <span className="muted" key={l.state}>
+            <span key={l.state}>
               <span style={{ color: l.color }}>●</span> {l.label}
             </span>
           ))}

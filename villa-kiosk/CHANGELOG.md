@@ -1,3 +1,140 @@
+## 2.496.778
+
+What you will see:
+- **Every window's first line starts at the same distance under its header or its tabs, and its last line ends at the
+  same distance over its buttons.** Side by side they differed: a form's first field and a tab's first card began
+  8px under the line, a device's state 16, the air conditioning's temperature 20, a section's heading 32 (40 for
+  Advanced Settings' device list); a device window ended 30px over its buttons, a form 12. It is 16px everywhere
+  now, from one rule.
+- So: Settings, each Cockpit tab, the forms, Weather, Energy and the fan and TV windows start 8px lower; Map colours
+  & keys and Settings' Messages tab start 16px higher, Advanced Settings' Devices tab 24px higher; device windows are
+  14px shorter.
+- **A window's large reading is one line everywhere**: a sensor's value, a device's state in words and the air
+  conditioning's "Current" temperature sit at the same distances (each window had its own).
+- The Cockpit's Inbox: the filter buttons start where every window's first line does, and still stay in view over
+  the cards that scroll.
+
+## 2.496.777
+
+What you will see:
+- **Advanced Settings, a device's card: Type, Category, Label and a light's Intensity each have an (i) after their
+  name.** It says what the field is for. This was said only when a mouse rested on the box, which a finger never
+  sees.
+- **A light's Intensity shows its value as Settings' sliders do**, at the right of its track.
+- **A slider's bar ends where the boxes above and under it end**, in every window (it stopped 2px short at each end).
+- **Put right from the last update:** in Energy, "kWh" at the right of "Today, hour by hour" was drawn larger and
+  white in 2.496.776. It is the small grey line again.
+- Nothing else looks different: names in the code that nothing read, and a rule for a button state that no longer
+  exists, are removed.
+
+## 2.496.776
+
+What you will see:
+- **The small grey line that adds a detail is one look everywhere.** The note beside Save, the second line of a
+  choice when you search for a device, "linked entity" under a name in a device's window, a device's id when it
+  cannot be reached, the note under a chart, the lines under each name in the Legend, and the notes in Facility's
+  Spend and Readiness were written in three sizes. They are one size and one grey. Three were a little smaller
+  (the search results, "linked entity", a device's id) and one a little larger (Spend's notes).
+- **A chart's key (what each colour is) is one row everywhere**: in Weather, in Energy and under a device's
+  history. Under a device's history its words are now grey like the others (they were white), and on a narrow
+  screen the key wraps instead of running off the edge.
+
+## 2.496.775
+
+What you will see:
+- **Every box you type or pick in is one box.** A question's answer, a form's field ("Report a problem", "Open a
+  ticket", a visit, a cost), a device's card in Advanced Settings, a search box, a number with its unit, a choice
+  list and "Ask VESTA" were seven looks: heights from 36 to 46, two corners, with or without an edge, two text
+  sizes. They are now the same height, corner, edge and text everywhere. The most visible change is in Advanced
+  Settings: a device card's fields are a little taller and have the edge every other box has.
+- **A field's name sits the same distance above its box in every form.** In "Report a problem" and the Facility
+  forms some names touched their box while others kept a gap, and the fields were unevenly spaced. Settings'
+  "Dashboard title", a question's answer and the villa's Latitude and Longitude are named the same way.
+- **The captions in a device's window ("Mode", "Fan speed", "Position", "Last 24 hours") are the size of every
+  other caption.** The last update said captions were one look; these were still drawn larger. They are now.
+- Sliders, the tick box on a device's card and the colour pickers look as before.
+- Each of these is written once, so a later change to a box or to a field's name shows in every window at once.
+
+## 2.496.774
+
+What you will see:
+- **Every window's header is the same height.** A window with only a title, a device's window, the Cockpit and
+  Settings had headers of four heights (a few pixels apart), so the tabs and the first line under them sat at
+  different places from one window to the next. They are now one height, on a phone and on a wide screen.
+- **A long window title is cut with "…" on one line** in every window (a chart's window, "Open a ticket") as it
+  already was in a device's window; under a mouse it says itself whole.
+- **The small capitals are two looks, not nine.** The heading over a group of lines ("Dashboard title" in Settings,
+  "Also on this device" in a device's window, "Scenes for this room" and "Not on the map" in a room's list) is one
+  look everywhere. The small caption over one value, control or chart ("Fan speed", "Today, hour by hour", a settings
+  card's "Linked entity", the room over a device window's title, the bottom bar's "Lights") is the other.
+  "Not on the map" keeps its colour, and its explanation is behind an (i) beside it.
+- Nothing else changed. Each of these is now written once, so a later change to a header, a heading or a caption
+  shows in every window at once.
+
+## 2.496.773
+
+What you will see:
+- **An alert's notice over the villa looks like its card.** It was a bell, a title and a line in the app's green, so
+  an alarm and a doorbell looked the same. It now shows what the alert's Cockpit card shows at its top: its icon, its
+  name ("#91-P2"), the device, the time, then its state first ("New alert", "Reminder sent 14:25, waiting for
+  someone") followed by its first words, all in the colour of its severity (red, amber). A device with several
+  problems shows the alert's own state, not "2 problems".
+- A doorbell, an approval and any message that is not an alert keep the bell. So does an alert during the moment the
+  Cockpit has no card for it yet: the notice then turns into the card's top by itself.
+- **Full screen, and on every card, the status is labelled.** The last line was a bare line under the words; it now
+  sits under "Status:", with the earlier steps above it, as the Inbox card shows them.
+- Nothing else changed: the photo, the buttons, the ✕ and how long a notice stays are as before.
+
+## 2.496.772
+
+What you will see:
+- Four lists were reached only by holding a button, which nobody finds on a phone. Each now also has something to
+  press, and every hold still works:
+  - **Rooms**: a "Rooms" line in the menu (the gear's menu on a phone, the profile's menu on a wide screen). It opens
+    the Rooms window. In the dial that opens when a floor button is held, the fixed button reads "All rooms" (it said
+    "Manage rooms", and only the owner manages rooms there).
+  - **A room's devices**: in the Rooms window, each room has a small list button in its corner. It opens the list of
+    that room's devices (the list a hold on the room's group on the map opens). A room with no device has no button.
+    The owner's bin sits beside it.
+  - **A category's devices**: in "Map colours & keys" (the ? button), each category has a list button that opens
+    its list, as holding the category's icon in the top bar does.
+  - **Choosing a camera**: a list button beside the camera arrows opens the list of cameras, as holding the Next
+    arrow does.
+- Nothing else changed.
+
+## 2.496.771
+
+What you will see:
+- A press that did nothing says so in plain words, naming the device: "Living room AC did not respond. Try again."
+  It was the connection's own wording ("Not connected", "No answer from the server") and named nothing. It is the
+  red notice under the top bar, it stays as long as the other notices and has its ✕. Several devices at once (a
+  list's "turn all off") read "Kitchen light and 2 others did not respond."
+- A command this profile may not send still says exactly that ("This profile may not send this command.").
+- Every command button shows that the press landed, as the power button does (it dims and brightens until the
+  device answers): Play / Pause, a blind's Open, Stop and Close, an AC's mode and fan speed, a fan's speed and
+  preset, a camera's turn buttons, a list's "turn all on / off". The selected mode or speed stays what the device
+  reports: nothing is guessed.
+- With "reduce motion" set on the device, the waiting sign stays (a slow fade, nothing moves); it used to vanish.
+- The camera's siren button is untouched: it asks first, as before.
+- Nothing else changed.
+
+## 2.496.770
+
+What you will see:
+- A device that does not answer says since when: its window reads "UNAVAILABLE SINCE 14:05" (the day too when it is
+  not today), with an (i) beside it. A tap on the (i) says why there are no controls; that was a text only a mouse
+  could read. After the villa's system restarts, the time is the restart's.
+- In a category's or a room's device list, "Not on the map" and "Missing" each have an (i) that says what they mean,
+  on a tap. The "Missing" text had a garbled sentence: rewritten.
+- The Cockpit's updates count (top right) is a button: a tap opens the list of what has an update waiting. It was
+  only shown under a mouse. It looks like a device window's header buttons.
+- A device window's state pill is one pill everywhere: the lock's, the blind's, a sensor's, a grouped device's and
+  the lost-contact one sit on the same line at the same distance from what follows. In a grouped device's window the
+  pill is the same size as the others (it was larger and wrapped onto two lines sooner).
+- "Nothing here" lines ("Nothing needs attention.", "No tasks yet.", "No report yet.", "Nothing recorded.") sit at
+  one distance under their title in every list; some were tight against it, others 23 px lower.
+- Nothing else changed.
+
 ## 2.496.769
 
 What you will see:

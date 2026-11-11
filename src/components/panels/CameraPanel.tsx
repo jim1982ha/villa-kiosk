@@ -7,7 +7,7 @@
 // camera picker and the status bar.
 
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { ArrowLeft, X, VideoOff, Maximize2, Minimize2, ZoomOut, ChevronLeft, ChevronRight, Power, Check, Video, Volume2, VolumeX, ListTree, RotateCw } from "lucide-react";
+import { ArrowLeft, X, VideoOff, Maximize2, Minimize2, ZoomOut, ChevronLeft, ChevronRight, Power, Check, Video, Volume2, VolumeX, ListTree, RotateCw, List } from "lucide-react";
 import type { PanelProps } from "@/types/panel.types";
 import { useRailLayout } from "@/utils/railLayout";
 import { linkedSwitchProps, usePanelActions } from "./PanelActionsContext";
@@ -838,6 +838,19 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
               >
                 <ChevronRight />
               </button>
+              {/* The chooser's visible way in (UI scan, 2026-11-10): the hold on Next still opens it, and nobody on a
+                  phone finds a hold. */}
+              <button
+                className={`media-btn${pickerOpen ? " on" : ""}`}
+                onClick={() => setPickerOpen(true)}
+                data-tip="Choose a camera"
+                aria-label="Choose a camera"
+                aria-haspopup="menu"
+                aria-expanded={pickerOpen}
+                style={vOrder(3)}
+              >
+                <List />
+              </button>
             </>
           )}
           {fullscreenSupported && (
@@ -863,7 +876,7 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
         </div>
       </div>
 
-      {/* Camera picker — opened by holding the NEXT arrow. A plain
+      {/* Camera picker — opened by its own button, or by holding the NEXT arrow. A plain
           list rather than a radial dial (the Rooms menu's style): this is a
           flat list of names, nothing spatial about it. */}
       {pickerOpen && (

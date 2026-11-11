@@ -32,6 +32,7 @@ import type { HassEntity } from "@/types/ha.types";
 import type { Category } from "@/types/scene.types";
 import { listSections, offersGrouping, summaryRows, type Grouping } from "@/config/summaryRows";
 import SegmentedGroup from "@/components/common/SegmentedGroup";
+import { TipTitle } from "@/components/common/InfoTip";
 import { useRoomFloors } from "@/config/useRoomFloors";
 import { deviceRoom, floorOfRoom } from "@/config/devicePlace";
 
@@ -40,9 +41,11 @@ import type { SummaryGroup } from "@/config/summaryGroups";
 import { useVillaModel } from "@/config/VillaModel";
 import { deviceSwitch } from "@/utils/devicePower";
 import InlineConfirm from "@/components/common/InlineConfirm";
-import { NOT_SENT } from "@/ha/serviceOutcome";
+import { NOT_SENT, allSent } from "@/ha/serviceOutcome";
+import { usePendingAck } from "@/hooks/usePendingAck";
 import { domainOf } from "@/utils/entityDomain";
 import { NOT_IN_HA } from "@/utils/stateColors";
+import EmptyLine from "@/components/common/EmptyLine";
 
 interface Props {
   group: SummaryGroup;
@@ -85,20 +88,21 @@ interface Props {
  * turn on, PowerOff = will turn off) and the tooltip says what it will switch (bulkWords: "Turn off 1 fan"). "On" is
  * POWER (groupLook's onCount), and the switch is config/activeDevices' — one
  * call PER DOMAIN (a lock: lock / unlock). Shown over any heading with a device a row switches (owner, 2026-10-20:
- * one switch, four locks — every heading that has one).
+ * one switch, four locks — every heading that has one). Once sent it waits as every command button does
+ * (usePendingAck), until one of the devices it switches says so.
  */
 function BulkToggle({ devices, looks }: { devices: HassEntity[]; looks: LookSource }) {
   const { callService } = useHA();
   const [confirming, setConfirming] = useState(false);
-  if (devices.length === 0) return null;
   const anyOn = groupLook(devices.map((e) => deviceLook(e.entity_id, looks)), { showingDevices: true }).onCount > 0;
   // what it will change, said (owner, 2026-10-20): the devices now on when it turns off, else those now off
   const changing = devices.map((e) => e.entity_id).filter((id) => (deviceLook(id, looks).power === "on") === anyOn);
+  const { pending, markPending } = usePendingAck(changing.join());
+  if (devices.length === 0) return null;
   const words = bulkWords(changing, !anyOn);
   const run = () => {
-    for (const call of bulkSwitchPlan(devices.map((e) => e.entity_id), !anyOn, ROW_SWITCH_DOMAINS)) {
-      void callService(call.domain, call.service, {}, { entity_id: call.entityIds });
-    }
+    markPending(allSent(bulkSwitchPlan(devices.map((e) => e.entity_id), !anyOn, ROW_SWITCH_DOMAINS)
+      .map((call) => callService(call.domain, call.service, {}, { entity_id: call.entityIds }))));
     setConfirming(false);
   };
   return confirming ? (
@@ -110,6 +114,7 @@ function BulkToggle({ devices, looks }: { devices: HassEntity[]; looks: LookSour
       onClick={() => setConfirming(true)}
       data-tip={words}
       aria-label={words}
+      aria-busy={pending || undefined}
     >
       {anyOn ? <PowerOff size={18} /> : <Power size={18} />}
     </button>
@@ -179,7 +184,7 @@ export default function SummaryGroupPanel({
       // visible, not scrolled past a long, room-grouped device list.
       headerActions={bulk && <BulkToggle devices={toggleables} looks={looks} />}
     >
-      {rows.length === 0 && <div className="muted body-text">No devices in this group.</div>}
+      {rows.length === 0 && <EmptyLine>No devices in this group.</EmptyLine>}
       {splits && (
         <SegmentedGroup ariaLabel="Group by" className="summary-grouping" active={grouping} onChange={setGrouping} options={[
           { key: "room", label: <><MapPin size={16} /> Per Room</> },
@@ -193,19 +198,17 @@ export default function SummaryGroupPanel({
       {onMap.length > 0 && renderRooms(onMap)}
       {offMap.length > 0 && (
         <>
-          <div className="summary-offmap-heading" data-tip="These devices exist but have no 3D geometry in this villa model">
-            Not on the map
+          {/* what each heading means is behind its (i), which a tap opens: it was a hover text (UI scan, 2026-11-10) */}
+          <div className="summary-offmap-heading">
+            <TipTitle title="Not on the map" tip="The villa's system has these devices, but the villa's 3D model has no object for them." />
           </div>
           {renderRooms(offMap)}
         </>
       )}
       {notInHa.length > 0 && (
         <>
-          <div
-            className="summary-offmap-heading summary-notinha-heading"
-            data-tip="This villa model has 3D geometry named after these devices, but no such device exists, it was removed from the villa's system, or renamed, or it was renamed. Update the model, or add the device back."
-          >
-            {NOT_IN_HA}
+          <div className="summary-offmap-heading summary-notinha-heading">
+            <TipTitle title={NOT_IN_HA} tip="The villa's 3D model has objects named after these devices, but the villa's system has no such device: it was removed there, or renamed. Update the model, or add the device back." />
           </div>
           {renderRooms(notInHa)}
         </>
@@ -215,7 +218,7 @@ export default function SummaryGroupPanel({
           scenes are a secondary shortcut for the same room. */}
       {!!roomScenes?.length && (
         <div className="summary-room-scenes">
-          <div className="summary-room-heading">Scenes for this room</div>
+          <div className="section-title">Scenes for this room</div>
           <div className="summary-room-scenes-row">
             {roomScenes.map((s) => (
               <button

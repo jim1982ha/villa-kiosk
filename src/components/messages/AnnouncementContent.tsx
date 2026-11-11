@@ -129,10 +129,24 @@ export function pressOrAsk(b: AnnouncementButton, ask: (q: Question) => void, pr
   else press(b.command);
 }
 
+/** ⚠️ AN ANNOUNCEMENT'S STATUS, ONE BLOCK (UI scan, 2026-11-10): "Status:", its story's lines, then where it stands, as
+ *  Telegram writes it. The full screen joined them into one unlabelled paragraph of its own, and a bottom line with no
+ *  story had no label on the card either. Nothing when it has neither. */
+export function StatusLines({ announcement }: { announcement: Pick<Announcement, "story" | "status"> }) {
+  const story = announcement.story ?? [];
+  if (story.length === 0 && !announcement.status) return null;
+  return (
+    <div className="announcement-full-status">
+      <span className="announcement-status-label">Status:</span>
+      {story.map((line, i) => <span key={i} className="announcement-story-line">{line}</span>)}
+      {announcement.status && <span>{announcement.status}</span>}
+    </div>
+  );
+}
+
 /** Everything an announcement says, below its title: its photos (PhotoRow), all its words, its bottom line — then `buttons`
  *  (RecordButtons, where the screen shows them under the words). Pure: a check draws it. */
 export function AnnouncementContent({ announcement, buttons }: { announcement: Announcement; buttons?: ReactNode }) {
-  const story = announcement.story ?? [];
   return (
     <>
       {/* who it is for, as Telegram's "To:" line says it */}
@@ -140,13 +154,7 @@ export function AnnouncementContent({ announcement, buttons }: { announcement: A
       <PhotoRow photos={announcement.photos} />
       {announcement.text && <p className="announcement-full-text">{announcement.text}</p>}
       {/* VESTA's card: its Status story, then where it stands, as on Telegram */}
-      {(story.length > 0 || announcement.status) && (
-        <div className="announcement-full-status">
-          {story.length > 0 && <span className="announcement-status-label">Status:</span>}
-          {story.map((line, i) => <span key={i} className="announcement-story-line">{line}</span>)}
-          {announcement.status && <span>{announcement.status}</span>}
-        </div>
-      )}
+      <StatusLines announcement={announcement} />
       {buttons}
     </>
   );

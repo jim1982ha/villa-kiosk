@@ -72,9 +72,9 @@ export default function PowerToggle({ on, onClick, ask = null, compact = false }
 
   return (
     <button
-      className={`big-toggle${compact ? " compact" : ""}${on ? " on" : ""}${pending ? " pending" : ""}`}
+      className={`big-toggle${compact ? " compact" : ""}${on ? " on" : ""}`}
       onClick={request}
-      aria-busy={pending}
+      aria-busy={pending || undefined}
     >
       <Power size={compact ? 20 : 24} /> {on ? "On" : "Off"}
     </button>

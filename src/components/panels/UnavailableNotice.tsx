@@ -15,6 +15,8 @@ import { useVillaModel } from "@/config/VillaModel";
 import { lostPillTone } from "@/config/reading";
 import { usePanelActions } from "./PanelActionsContext";
 import { useLastSeen } from "@/hooks/useLastSeen";
+import { statusMoment } from "@/utils/dateText";
+import StatusPill from "./StatusPill";
 
 interface Props {
   /** The panel's entity: when Home Assistant does not have it at all, the notice says so and what to do. */
@@ -36,30 +38,34 @@ export default function UnavailableNotice({ entityId }: Props) {
   // system knows it by sits under it, small, said for what it is: what a technician searches for there or in Edit.
   if (missing) {
     return (
-      <div className="center" style={{ margin: "8px 0 20px" }}>
-        <span className="status-pill unavailable"><AlertTriangle size={16} />{NOT_IN_HA.toUpperCase()}</span>
+      // each a line of the window's body, no box round them: the first and the last line of a window keep the
+      // window's own distance to its header and footer (04-modals.css .modal-body)
+      <>
+        <StatusPill tone="unavailable" icon={AlertTriangle}>{NOT_IN_HA.toUpperCase()}</StatusPill>
         {seen !== "loading" && (
-          <p className="muted body-text" style={{ marginTop: 10 }}>
+          <p className="muted body-text center">
             {missingAdvice(mappedEntityIds.has(entityId!), seen)}
           </p>
         )}
-        <p className="muted" style={{ marginTop: 6, fontSize: "var(--text-2xs)" }}>
+        <p className="fine-print under center">
           Its id in the villa's system: <code>{entityId}</code>
         </p>
-      </div>
+      </>
     );
   }
   // The pill alone carries the message. The paragraph that used to sit under
   // it just restated the word above it and tripled the height of an otherwise
-  // tiny panel, so it survives only as the title / accessible description.
-  const detail =
-    "Contact with this device is lost, its real state isn't known, so controls are disabled until it reports in again.";
+  // tiny panel.
+  // ⚠️ WHY THERE ARE NO CONTROLS IS BEHIND ITS (i), AND THE PILL SAYS SINCE WHEN (owner, 2026-11-10: "Do all of
+  // them", the UI scan's hover-only texts): the explanation was a hover text, which a finger never reads. The moment
+  // is the one the villa's system gives for this state (its last change): after that system restarts, its restart.
+  const since = entityId ? entities[entityId]?.last_changed : undefined;
   return (
-    <div className="center" style={{ margin: "8px 0 20px" }}>
-      <span className={`status-pill ${tone}`} data-tip={detail} aria-label={detail}>
-        <AlertTriangle size={16} />
-        UNAVAILABLE
-      </span>
-    </div>
+    <StatusPill tone={tone} icon={AlertTriangle} info={{
+      label: "Why this device has no controls",
+      text: "Contact with this device is lost and its real state isn't known: no controls until it reports in again.",
+    }}>
+      UNAVAILABLE{since ? ` SINCE ${statusMoment(since, Date.now())}` : ""}
+    </StatusPill>
   );
 }

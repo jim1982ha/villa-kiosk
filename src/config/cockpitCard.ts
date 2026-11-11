@@ -187,6 +187,31 @@ export function lineStrip(line: CardLine): { status: RecordStatus[]; number?: st
   return { status: dedupe([...(line.state ?? []), ...lineState(line, tone)]), tone, ...(line.alertLabel ? { number: line.alertLabel } : {}) };
 }
 
+/** ⚠️ A CARD'S TOP, SAID ONCE (UI scan, 2026-11-10; the rules: "the same name and the same Status everywhere"): its
+ *  strip (cardStrip: its alert's name, its colour), its time (rowWhen) and its first line: where it stands, or, on the
+ *  Watch list, when it closes with its (i) (owner, 2026-11-05: "Closes 15:06"), its next check then no pill. The
+ *  Cockpit's card worked this out as it drew, and the alert's notice over the villa said a title and a line of its
+ *  own; both draw this now (cockpit/IssueCard, hud/AnnouncementNotice). Pure. */
+export function cardTop(card: Pick<CardView, "lines" | "status" | "tone" | "look" | "nextCheck">): {
+  status: RecordStatus[]; statusTip?: string; number?: string; tone: string; when?: string; check?: { pill: string; tip: string };
+} {
+  const strip = cardStrip(card);
+  const watch = card.look === "watched" && card.nextCheck ? card.nextCheck : null;
+  return {
+    ...strip,
+    ...(watch ? { status: [{ text: watch.when, tone: ACCENT_PILL }], statusTip: watch.tip } : {}),
+    ...(card.lines.length ? { when: rowWhen(card) } : {}),
+    ...(card.nextCheck && !watch ? { check: { pill: card.nextCheck.pill, tip: card.nextCheck.tip } } : {}),
+  };
+}
+
+/** One problem of a card of several, as the card it would be alone: its own icons, state and colour (lineStrip's),
+ *  the card's name, room and look. What the notice of ITS alert draws (messagesModel.cardOfMessage). Pure. */
+export function cardOfLine(card: CardView, line: CardLine): CardView {
+  const lead = line.own ?? null;
+  return { ...card, lines: [line], lead, status: line.state ?? [], tone: cardTone(lead, [line]) };
+}
+
 /** How a problem was last moved (a ticket's stage, "Reopened", a close's word: faultNotes.moveState), else where its
  *  alert stands as VESTA's message says it (toldState), else where its open fault stands (faultState). */
 const lineState = (l: CardLine, tone: string, look?: CardView["look"]): RecordStatus[] => {

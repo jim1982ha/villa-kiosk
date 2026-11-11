@@ -6,7 +6,7 @@
 // place. A first-time user has to tap around and learn it by trial. This is
 // that reference, one tap away, not shown by default.
 
-import Window from "@/components/common/Window";
+import Window, { WindowHeader } from "@/components/common/Window";
 import { CATEGORY_ORDER, CATEGORY_LABELS, categorySurface, type DeviceSurfaceState } from "@/config/EntityCategories";
 import { badgeImage } from "@/babylon/badgeIcons";
 import type { BadgeMark, LinkPill } from "@/utils/deviceActivity";
@@ -17,6 +17,9 @@ import { overviewKeyHelp } from "@/babylon/overviewKeys";
 import { healthPill } from "@/babylon/colors";
 import type { RoomHealth } from "@/babylon/summaryLook";
 import ModalFooter from "@/components/common/ModalFooter";
+import IconButton from "@/components/common/IconButton";
+import { List } from "lucide-react";
+import type { Category } from "@/types/scene.types";
 
 /** What the MAP badge says — drawn by the badge renderer itself (babylon/badgeIcons.badgeImage), so this legend
  *  cannot describe a badge the app no longer draws. A representative category ("light") stands in for "whichever
@@ -68,7 +71,14 @@ const STATUS_ITEMS: { label: string; swatch: string; note: string }[] = [
   { label: "Alert", swatch: STATUS_COLOR.alert, note: "Needs attention (e.g. unlocked door, jammed lock, leak), or a detection (motion, occupancy), which is not a fault" },
 ];
 
-export default function LegendModal({ onClose }: { onClose: () => void }) {
+export default function LegendModal({ onClose, listable, onListCategory }: {
+  onClose: () => void;
+  /** The categories this profile may list. */
+  listable: readonly Category[];
+  /** A category's device list: what holding its icon in the top bar opens (UI scan, 2026-11-10: a list reached only
+   *  by a hold gets something to press). */
+  onListCategory: (category: Category) => void;
+}) {
   const { config } = useConfig();
   // Focus trap + Escape + focus restore (see useModalA11y).
   // Every swatch below is a colour composited in JS from the theme's tokens,
@@ -81,15 +91,14 @@ export default function LegendModal({ onClose }: { onClose: () => void }) {
     // card. It already reuses .modal-header/-body/-footer below; sharing
     // the outer width too means this is a genuine "same modal, different
     // content" reuse instead of its own one-off sizing.
-    <Window kind="content" label="Map colours and keys" onClose={onClose} className="settings-modal legend-modal" frameKey={theme}>
-      <div className="modal-header">
-        <h2>Map colours &amp; keys</h2>
-      </div>
+    <Window kind="content" label="Map colours and keys" onClose={onClose} className="settings-modal" frameKey={theme}>
+      <WindowHeader title="Map colours &amp; keys" />
       <div className="modal-body">
-        <div className="settings-section-title">Device category (badge colour when on)</div>
+        <div className="section-title">Device category (badge colour when on)</div>
         <p className="muted body-text" style={{ marginTop: 4 }}>
           A device's badge is plain at rest, its icon in its category
-          colour, the whole square takes the colour once it is on.
+          colour, the whole square takes the colour once it is on. The list
+          icon beside a category lists its devices.
         </p>
         <div className="legend-grid">
           {CATEGORY_ORDER.map((c) => (
@@ -99,11 +108,16 @@ export default function LegendModal({ onClose }: { onClose: () => void }) {
                 style={{ background: categorySurface(c, "active").fill, border: `1.5px solid ${categorySurface(c, "active").ring}` }}
               />
               <span>{CATEGORY_LABELS[c]}</span>
+              {listable.includes(c) && (
+                <IconButton small label={`List the ${CATEGORY_LABELS[c]} devices`} onClick={() => onListCategory(c)}>
+                  <List size={16} />
+                </IconButton>
+              )}
             </div>
           ))}
         </div>
 
-        <div className="settings-section-title">On the map (badge state)</div>
+        <div className="section-title">On the map (badge state)</div>
         <p className="muted body-text" style={{ marginTop: 4 }}>
           The square says what a device does. The top-right pill is the
           device itself: what is wrong with it, the most urgent first.
@@ -119,19 +133,19 @@ export default function LegendModal({ onClose }: { onClose: () => void }) {
               />
               <span>
                 <strong>{b.label}</strong>
-                <span className="muted legend-note">{b.note}</span>
+                <span className="fine-print legend-note">{b.note}</span>
               </span>
             </div>
           ))}
           <div className="legend-row">
             <span className="legend-badge" aria-hidden />
-            <span className="muted legend-note">A device hidden in the villa's system has no badge.</span>
+            <span className="fine-print legend-note">A device hidden in the villa's system has no badge.</span>
           </div>
         </div>
 
         {/* Drawn from the same owners as the chip: categorySurface("others", …)
             for the border, healthPill for the number. */}
-        <div className="settings-section-title">Room chips (zoomed out)</div>
+        <div className="section-title">Room chips (zoomed out)</div>
         <p className="muted body-text" style={{ marginTop: 4 }}>
           A room's name with its number of devices. The number's colour says
           whether the room is all right; the border, whether something is on.
@@ -145,7 +159,7 @@ export default function LegendModal({ onClose }: { onClose: () => void }) {
               }} />
               <span>
                 <strong>{r.label}</strong>
-                <span className="muted legend-note">{r.note}</span>
+                <span className="fine-print legend-note">{r.note}</span>
               </span>
             </div>
           ))}
@@ -156,7 +170,7 @@ export default function LegendModal({ onClose }: { onClose: () => void }) {
               }}>3</span>
               <span>
                 <strong>{n.label}</strong>
-                <span className="muted legend-note">{n.note}</span>
+                <span className="fine-print legend-note">{n.note}</span>
               </span>
             </div>
           ))}
@@ -164,7 +178,7 @@ export default function LegendModal({ onClose }: { onClose: () => void }) {
 
         {/* The keyboard, as the current Natural Scroll setting makes it act
             (overviewKeys.overviewKeyHelp) — nowhere else says it. */}
-        <div className="settings-section-title">Moving around with a keyboard</div>
+        <div className="section-title">Moving around with a keyboard</div>
         <p className="muted body-text" style={{ marginTop: 4 }}>
           Bird's-eye view, hold a key to keep moving{config.naturalScrolling ? " (Natural Scroll is on)" : " (Natural Scroll is off)"}:
         </p>
@@ -177,7 +191,7 @@ export default function LegendModal({ onClose }: { onClose: () => void }) {
           Walking: ↑ ↓ or W S walk, ← → or A D turn, Q / E step sideways, Shift + ↑ ↓ look up or down.
         </p>
 
-        <div className="settings-section-title">On a device panel (status pill)</div>
+        <div className="section-title">On a device panel (status pill)</div>
         <p className="muted body-text" style={{ marginTop: 4 }}>
           Shown when you open a device's controls.
         </p>
@@ -187,7 +201,7 @@ export default function LegendModal({ onClose }: { onClose: () => void }) {
               <span className="legend-swatch legend-swatch-round" style={{ background: s.swatch }} />
               <span>
                 <strong>{s.label}</strong>
-                <span className="muted legend-note">{s.note}</span>
+                <span className="fine-print legend-note">{s.note}</span>
               </span>
             </div>
           ))}

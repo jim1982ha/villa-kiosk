@@ -518,7 +518,7 @@ export default function TelemetryPanel() {
 
       {probeText && (
         <div className="field">
-          <label className="entity-label row spread">
+          <label className="eyebrow row spread">
             Frame cost on this device, what each thing was costing
             <button className="btn" onClick={() => void copyResult(probeText, "Frame-cost probe")}><Copy size={14} /> Copy</button>
           </label>
@@ -528,7 +528,7 @@ export default function TelemetryPanel() {
 
       {selfReport && (
         <div className="field">
-          <label className="entity-label row spread">
+          <label className="eyebrow row spread">
             This device, screen, viewport, WebGL, model
             <span className="row" style={{ gap: 6 }}>
               <button className="btn" onClick={() => void copyResult(selfReport, "Device report")}><Copy size={14} /> Copy</button>
@@ -549,7 +549,7 @@ export default function TelemetryPanel() {
       {!!events?.length && (
         // ⚠️ TIME FIRST, THEN THE KIND, THE DEVICE, THE WORDS (owner, 2026-11-06): a log read down its times; the time and
         // the kind in columns of one width (the page's longest kind), so the rows align; on a phone the words under them
-        <div className="telemetry-list" style={{ ["--telemetry-kind" as string]: `${Math.max(...paged.page.map((e) => e.kind.length))}ch` }}>
+        <div style={{ ["--telemetry-kind" as string]: `${Math.max(...paged.page.map((e) => e.kind.length))}ch` }}>
           {paged.page.map((e, i) => <TelemetryRow key={i} e={e} />)}
         </div>
       )}

@@ -8,14 +8,13 @@ import type { ReactNode } from "react";
 import WorkButtons, { useCardWork, type RaisedFault } from "@/components/fm/WorkButtons";
 import { useRecordPlace } from "@/components/fm/useRecordPlace";
 import type { RecordPlace } from "@/fm/recordPlace";
-import { cardIcons, cardStrip, lineStrip, rowWhen, toldShown, type CardLine, type CardView } from "@/config/cockpitCard";
-import { IconTip, SourceIcons, WatchedIcon } from "@/components/fm/sourceIcons";
+import { cardIcons, cardTop, lineStrip, rowWhen, toldShown, type CardLine, type CardView } from "@/config/cockpitCard";
+import { cardLead, SourceIcons } from "@/components/fm/sourceIcons";
 import RecordCard, { type CardPart, type RecordCardProps } from "@/components/fm/RecordCard";
 import { useFmDataOrNull } from "@/fm/FmDataContext";
 import { backendFetch } from "@/auth/sessionLost";
 import { eraseMessage, type Announcement } from "@/messages/announcements";
 import { moveWho } from "@/fm/faultNotes";
-import { ACCENT_PILL } from "@/fm/tone";
 import { AnnouncementContent } from "@/components/messages/AnnouncementContent";
 
 /** One card of the Live issues, ONE SHAPE whatever it holds (owner, 2026-10-10: "make sure each reported issue
@@ -83,17 +82,14 @@ export function AttentionCard({ card, onOpenEntity, buttons, focused, erase }: {
   erase?: RecordCardProps["erase"];
 }) {
   const icons = cardIcons(card);
-  const strip = cardStrip(card);
-  // ⚠️ A WATCH CARD'S FIRST LINE SAYS WHEN IT CLOSES (owner, 2026-11-05: "Closes 15:06" with its (i)); how it was cleared,
-  // when and by whom, is its who line
-  const watch = card.look === "watched" && card.nextCheck ? card.nextCheck : null;
-  const status = watch ? [{ text: watch.when, tone: ACCENT_PILL }] : strip.status;
-  const when = card.lines.length ? rowWhen(card) : undefined;
+  // its strip, its time and its first line (a Watch card's says when it closes; how it was cleared, when and by whom,
+  // is its who line), as the alert's notice over the villa says them too (cockpitCard.cardTop)
+  const top = cardTop(card);
   const parts: CardPart[] = card.lines.map((line, i) => {
     const own = lineStrip(line);
     const alone = card.lines.length === 1;
     // its time and its state as the card says them: the card's for one problem, its header's for one of several
-    const said = alone ? status : own.status, at = alone ? when : rowWhen({ lines: [line] });
+    const said = alone ? top.status : own.status, at = alone ? top.when : rowWhen({ lines: [line] });
     return {
       key: line.key, status: own.status, number: own.number, when: at, tone: own.tone,
       ...(line.check ? { check: { pill: line.check.pill, tip: line.check.tip } } : {}),
@@ -109,24 +105,20 @@ export function AttentionCard({ card, onOpenEntity, buttons, focused, erase }: {
       title={card.entityId
         ? <button type="button" className="fm-title-link" onClick={() => onOpenEntity(card.entityId!)}>{card.title}</button> : card.title}
       // the time of its problem, the same as its ticket's (rowWhen)
-      when={when}
+      when={top.when}
       room={card.room}
-      status={status}
-      statusTip={watch?.tip}
-      number={strip.number}
-      // where its problems come from, in place of a warning sign (owner, 2026-10-14) — legend: the (i)
-      // a fault being confirmed: a check in the status vocabulary's green, in place of its source (owner, 2026-10-23)
-      // ...the Watch list's only: a closed card wears its source, in grey (cockpitCard.clearedCard)
-      lead={card.look === "watched"
-        ? <IconTip k="watch" icon={<WatchedIcon size={18} />} />
-        : icons.head ? <SourceIcons {...icons.head} /> : undefined}
+      status={top.status}
+      statusTip={top.statusTip}
+      number={top.number}
+      // where its problems come from, or the Watch list's check (sourceIcons.cardLead) — legend: the (i)
+      lead={cardLead(card)}
       // when its problems are read again: a pill at the right of its first line (owner, 2026-11-06); hovering it says it
       // in words, with its date and time (owner, 2026-10-19). On the Watch list the first line says when it closes.
-      check={card.nextCheck && !watch ? { pill: card.nextCheck.pill, tip: card.nextCheck.tip } : undefined}
+      check={top.check}
       parts={parts}
       erase={erase}
       // its strip's colour when nothing is said (cardStrip); a fault being confirmed: its frame marked (owner, 2026-10-23)
-      tone={[strip.tone, card.look === "watched" ? "fault-watched" : "", focused ? "cockpit-focus" : ""].filter(Boolean).join(" ")}
+      tone={[top.tone, card.look === "watched" ? "fault-watched" : "", focused ? "cockpit-focus" : ""].filter(Boolean).join(" ")}
     />
   );
 }

@@ -25,7 +25,7 @@
   }
   /* The tap ripple is PURELY decorative motion with no end state worth
      landing on (it exists only to acknowledge a tap the 3D scene can't
-     otherwise confirm) — the status pill and the service toast already
+     otherwise confirm) — the status pill and the failed command's notice already
      report the same outcome in text, so removing it costs no information. */
   .tap-ripple { display: none; }
 
@@ -41,7 +41,7 @@
      Reduced-motion asks for no VESTIBULAR motion, not for no feedback, so
      these keep animating with the movement taken out: a slow opacity breath
      conveys "still working" while nothing travels, rotates or scales. */
-  .spinner, .conn-dot.connecting .dot, .status-dot.pending, .state-timeline-skeleton {
+  .spinner, .conn-dot.connecting .dot, .status-dot.pending, .state-timeline-skeleton, button[aria-busy="true"] {
     animation: reduced-motion-breathe 1.6s ease-in-out infinite !important;
   }
   /* The skeleton's own look is a moving GRADIENT, so the breath above has to
@@ -89,6 +89,11 @@
 }
 .vesta-notice > svg:first-child { flex: 0 0 auto; color: var(--tone); }
 .vesta-notice-text { min-width: 0; overflow-wrap: anywhere; }
+/* ⚠️ AN ALERT'S NOTICE IS ITS CARD'S HEAD (UI scan, 2026-11-10; RecordCard RecordHead): the card's own strip and first
+   line, in the strip's colour (--tone is its --strip: 07-facility.css .strip-*). The notice is the band: the strip
+   brings no band, padding or height of its own, the first line reads on, at the notice's size, from the left. */
+.vesta-notice .fm-record-strip { min-height: 0; padding: 0; background: none; text-align: left; }
+.vesta-notice .fm-record-state { display: block; font-size: inherit; text-align: left; }
 /* ⚠️ AN ANNOUNCEMENT'S PHOTOS, ONE ROW (AnnouncementContent PhotoRow; owner, 2026-11-06, "One visit, one story"): each
    a thumbnail with its camera and time under it, the main one first, a tap opens it full size; they wrap on a narrow
    phone. A photo alone keeps the size one photo had (a ring's snapshot, 2.496.562). The same row on every screen. */
@@ -140,6 +145,9 @@
 }
 .announcement-night-head .announcement-full-title { margin: 0; font-size: var(--text-2xl); color: var(--night-ink); }
 .announcement-night-text { margin: 0; color: var(--night-muted); font-size: var(--text-md); white-space: pre-line; overflow-wrap: anywhere; }
+/* its Status, the block its Inbox card draws (AnnouncementContent StatusLines), in the night's colours */
+.announcement-night-head .announcement-full-status { color: var(--night-muted); font-size: var(--text-md); overflow-wrap: anywhere; }
+.announcement-night-head .announcement-status-label { color: var(--night-ink); }
 .announcement-night .announcement-night-body { display: flex; overflow: hidden; padding: 20px 40px; }
 /* its main photo as large as the screen allows, the others in a row under it (PhotoRow `lead`) */
 .photo-row-lead { flex: 1 1 auto; min-height: 0; width: 100%; flex-direction: column; flex-wrap: nowrap; gap: 12px; }
@@ -203,9 +211,11 @@ body:has(.camera-fullscreen) .vesta-notice.below-camera { display: none; }
 /* ⚠️ NOTHING SHOWS BEHIND IT (owner, 2026-11-06: a card's "Reopened … next check" read through above and beside the
    pills on a phone): a sticky bar stops at the body's padding, so the cards scrolled through the 8px over it and the
    gutters at its sides. It stops at the body's very top (top: minus its padding) and spans the body's whole width (its
-   gutters drawn by its own padding), in the window's solid colour, in light and dark. */
+   gutters drawn by its own padding), in the window's solid colour, in light and dark. The 4px over its buttons are for
+   when it is stopped there: at rest it gives them back (margin-top), so its buttons start where every window's first
+   line does. */
 .messages-toolbar { display: flex; flex-wrap: wrap; align-items: stretch; gap: 6px;
-  padding: 4px var(--body-right, 0px) 8px var(--body-left, 0px); margin-inline: calc(-1 * var(--body-left, 0px)) calc(-1 * var(--body-right, 0px));
+  padding: 4px var(--body-right, 0px) 8px var(--body-left, 0px); margin: -4px calc(-1 * var(--body-right, 0px)) 0 calc(-1 * var(--body-left, 0px));
   position: sticky; top: calc(-1 * var(--body-top, 0px)); z-index: 2; background: var(--bg-modal); }
 /* what brings itself into view stops under that line */
 .messages-card, .messages-toolbar ~ .fm-form { scroll-margin-top: 72px; }
@@ -213,7 +223,8 @@ body:has(.camera-fullscreen) .vesta-notice.below-camera { display: none; }
 /* ⚠️ ONE SHAPE FOR THE LINE (owner, 2026-10-31: "the corners are not the same: style them all the same"): the filters
    are the one choice control (SegmentedGroup) and the button beside them the one worded button (.btn, a pill as its
    track is): nothing about it is written here. tests/oracles/live_issues.mjs */
-.messages-empty { padding: 8px 0; }
+/* THE "nothing here" line of a list, a chart or a section (common/EmptyLine): one look, one distance. */
+.empty-line { margin: 0; padding: 8px 0; color: var(--text-secondary); font-family: var(--font-ui); font-size: var(--text-md); line-height: 1.5; }
 /* an open notification or report is the Cockpit's one card (RecordCard, owner 2026-10-29): its words as an issue's
    lines, its "To:" and Status as an issue's story; the full-screen ring keeps its large text (.announcement-full-text) */
 .messages-card-body { display: flex; flex-direction: column; gap: 6px; }
@@ -261,10 +272,10 @@ body:has(.camera-fullscreen) .vesta-notice.below-camera { display: none; }
 .cockpit-attention-story { list-style: none; margin: 4px 0 0; padding: 10px 12px; border-radius: 12px; display: flex;
   flex-direction: column; gap: 6px; background: var(--bg-input); }
 
-/* The Cockpit header's updates count: a header button's look, nothing to press. */
-.header-icon-badge { cursor: default; position: relative; }
-/* its count at the bottom-right corner (owner, 2026-10-14) — the top bar's counts stay where they are */
-.header-icon-badge > .icon-btn-count { top: auto; bottom: 1px; }
+/* A count on a window's header button (the Cockpit's updates): at its bottom-right corner (owner, 2026-10-14); the
+   top bar's counts stay where they are. */
+.btn.icon-only { position: relative; }
+.btn.icon-only > .icon-btn-count { top: auto; bottom: 1px; }
 
 /* ── Telemetry log rows ────────────────────────────────────────────────────
    A diagnostic row is four parts: the event kind, which device/role/build sent
@@ -463,7 +474,6 @@ body:has(.camera-fullscreen) .vesta-notice.below-camera { display: none; }
 
 /* The small grey line under a field — what it is linked to, what will happen, what the setting does. Same
    specificity as .body-text (01-base.css) and later, so its size wins. */
-.field-hint { margin-top: 6px; font-size: var(--text-xs); }
 
 /* ── THE DROPDOWN (common/Dropdown.tsx) ──────────────────────────────────
    The app's own list in place of the platform's picker (2.496.275). The
@@ -472,11 +482,8 @@ body:has(.camera-fullscreen) .vesta-notice.below-camera { display: none; }
    above every window (z 400: the topmost layer is 300). */
 .dropdown {
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
-  width: 100%; min-height: 44px; padding: 10px 14px; border-radius: 10px;
-  background: var(--bg-input); color: var(--text-primary); border: 1px solid var(--hairline);
-  font: inherit; font-size: var(--text-md); text-align: left; cursor: pointer;
+  font-family: inherit; text-align: left; cursor: pointer;
 }
-.dropdown:focus-visible, .dropdown.is-open { border-color: var(--accent); outline: none; }
 .dropdown:disabled { opacity: 0.5; cursor: default; }
 .dropdown-value { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .dropdown-caret { flex: none; color: var(--text-secondary); transition: transform 0.15s ease; }
@@ -505,7 +512,7 @@ body:has(.camera-fullscreen) .vesta-notice.below-camera { display: none; }
   border-color: color-mix(in srgb, var(--tone) var(--tone-edge), var(--hairline));
 }
 .messages-section .fm-list { margin-top: 8px; }
-.messages-section .cockpit-issues-head .settings-section-title { margin: 0; }
+.messages-section .cockpit-issues-head .section-title { margin: 0; }
 /* VESTA's conversation, its own window (ticket 21 of "One inbox"; owner, 2026-10-29: beside the robot, the windows' own
    frame): its lines scroll above the box to ask, the person's own lines set apart, as in any chat */
 /* ⚠️ ONLY THE LINES SCROLL (owner, 2026-10-30: a spoken question's line and VESTA's dots sat half hidden at the
@@ -525,8 +532,7 @@ body:has(.camera-fullscreen) .vesta-notice.below-camera { display: none; }
 .vesta-turn-text { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: var(--text-base); }
 .vesta-thread-ask { display: flex; gap: 8px; align-items: flex-end; flex: 0 0 auto; padding-top: 6px;
   background: var(--bg-modal); }
-.vesta-thread-ask textarea { flex: 1 1 auto; min-width: 0; resize: vertical; font: inherit; font-size: var(--text-base);
-  padding: 8px 10px; border-radius: 10px; border: 1px solid var(--hairline); background: var(--bg-input); color: var(--text-primary); }
+.vesta-thread-ask textarea { flex: 1 1 auto; width: auto; min-width: 0; resize: vertical; }
 /* VESTA answering: three dots in its bubble, rising in turn, as every chat app shows "typing" (VestaThread WorkingBubble) */
 .vesta-working { flex-direction: row; align-items: center; gap: 5px; padding: 14px 16px; }
 .vesta-working-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text-secondary);

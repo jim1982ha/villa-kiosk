@@ -39,6 +39,7 @@ import FormActions from "./FormActions";
 import { TONE_OF, toneClass } from "@/fm/tone";
 import FmForm from "./FmForm";
 import { useListEditor } from "./ListEditor";
+import EmptyLine from "@/components/common/EmptyLine";
 
 export default function SpendTab(
   { onOpenEntity, deviceOptions, inputs }: {
@@ -105,7 +106,7 @@ export default function SpendTab(
   const form = (
     <FmForm>
       <h3>{editingId ? "Edit spend entry" : "Record maintenance spend"}</h3>
-      <div className="fm-field">
+      <div className="named-field">
         <span className="with-tip">Device
           <InfoTip label="About the device">Search, or type one not listed; leave it blank for a whole-villa expense.</InfoTip></span>
         <DeviceSearchPicker
@@ -113,7 +114,7 @@ export default function SpendTab(
           options={deviceOptions}
         />
       </div>
-      <label className="fm-field">
+      <label className="named-field">
         <span>What the spend is about</span>
         <input value={label} onChange={(e) => setLabel(e.target.value)}
           placeholder="e.g. Gas top-up and filter clean" />
@@ -130,7 +131,7 @@ export default function SpendTab(
       <CostFields amount={amount} onAmount={setAmount} category={category} onCategory={setCategory}
         replacing={editingId ?? undefined} />
 
-      <div className="fm-field">
+      <div className="named-field">
         <span>Receipt / photo</span>
         <EvidenceRow photoIds={photoIds} onChange={setPhotoIds} />
       </div>
@@ -180,7 +181,7 @@ export default function SpendTab(
           </div>
         )}
         {/* the cap's sentence, ONE per state (fmEngine.capNotes) — the statement's and the cost banner's too */}
-        {capNotes(b).map((note) => <p key={note} className="fm-cap-note">{note}</p>)}
+        {capNotes(b).map((note) => <p key={note} className="fine-print fm-cap-note">{note}</p>)}
       </div>
 
 
@@ -188,9 +189,7 @@ export default function SpendTab(
       {editor.adding && form}
 
       <div className="fm-list">
-        {b.entries.length === 0 && (
-          <p className="muted body-text">No spend recorded for {monthLabel(month)}.</p>
-        )}
+        {b.entries.length === 0 && <EmptyLine>No spend recorded for {monthLabel(month)}.</EmptyLine>}
         {entries.page.map((c) => editor.inPlace(c.id, (
           // THE Cockpit card (RecordCard, architecture review 2026-10-15): the amount on the right, its receipt —
           // the whole point of attaching one is that somebody can later check it
@@ -216,7 +215,7 @@ export default function SpendTab(
       {/* ⚠️ THE MONTHLY RECAP, A SECTION OF ITS OWN UNDER THE SPEND (owner, 2026-11-05): its title, then the Month on the
           same line as its recap's buttons (owner, 2026-10-14), its preview, its saved copies. The Month still chooses
           what this whole tab shows, the money card and the list above included, and the recap is of that month. */}
-      <div className="settings-section-title">Monthly recap</div>
+      <div className="section-title">Monthly recap</div>
       {/* ⚠️ THE RECAP'S THREE BUTTONS ARE ONE GROUP (owner, 2026-10-14: Download .md fell alone onto a second line): they
           never part; on a narrow screen the group goes under the Month as a whole. "Save", not "Save recap": beside
           "Generate recap" it says the same, and the three fit one line on the iPad. */}

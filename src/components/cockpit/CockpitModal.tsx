@@ -9,13 +9,13 @@
 //
 // Every section here is read-only reporting on its own face; a device opens its own window (onOpenEntity).
 
-import Window from "@/components/common/Window";
+import Window, { WindowHeader } from "@/components/common/Window";
 import { useEffect, useMemo } from "react";
 import { Inbox, RefreshCw } from "lucide-react";
 import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
 import type { Doors } from "@/auth/doors";
-import { updatesTip, updatesWaiting } from "@/config/updatesWaiting";
+import { updatesWaiting } from "@/config/updatesWaiting";
 import { formatCountBadge } from "@/utils/countBadge";
 import ModalFooter from "@/components/common/ModalFooter";
 import ModalTabs, { type ModalTab } from "@/components/common/ModalTabs";
@@ -26,7 +26,7 @@ import { openCounts } from "@/fm/deviceWork";
 import { useDeviceIdentity } from "@/config/VillaModel";
 import MessagesTab from "./MessagesTab";
 import { useAnnouncements } from "@/messages/AnnouncementsContext";
-import Tip from "@/components/common/Tip";
+import InfoTip from "@/components/common/InfoTip";
 import { countOf } from "@/utils/countOf";
 
 interface CockpitModalProps {
@@ -94,32 +94,30 @@ export default function CockpitModal({
   // Firmware / add-on updates waiting — Home Assistant's own `update` domain counts them, per device and per add-on.
   const { entities, hiddenInHaEntityIds } = useHA();
   const { config } = useConfig();
-  // ...and WHICH, said on hover (owner, 2026-10-20) — still nothing to press (config/updatesWaiting).
+  // ...and WHICH (owner, 2026-10-20), in the card a tap or a mouse opens (config/updatesWaiting).
   const updates = useMemo(() => (doors.updates ? updatesWaiting(entities, hiddenInHaEntityIds, config.entityMap) : []),
     [entities, hiddenInHaEntityIds, config.entityMap, doors.updates]);
   const updatesAvailable = updates.length;
 
   return (
     <Window kind="content" label="Cockpit" onClose={onClose} className="settings-modal cockpit-modal">
-      <div className="modal-header">
-        <h2>Cockpit</h2>
-        {/* Updates Home Assistant has waiting (firmware, add-ons — this one included): in the header, drawn like
-            Advanced Settings' header buttons, for the profiles holding `doors.updates` (owner, 2026-10-14). It only
-            SAYS so — nothing to press; it used to be a line at the bottom of the Overview. */}
+      <WindowHeader title="Cockpit">
+        {/* Updates Home Assistant has waiting (firmware, add-ons — this one included): in the header, a window's
+            header button (.btn.icon-only, as a device window's), for the profiles holding `doors.updates` (owner,
+            2026-10-14). It only SAYS so: a press opens the list of them, the (i)'s card (common/InfoTip); it used to
+            be a line at the bottom of the Overview, then a hover text a finger never read. */}
         {/* the updates waiting, at the right as Advanced Settings' header buttons are (the gear to Settings › Messages
             was removed: owner, 2026-10-29) */}
-        <div className="modal-header-actions">
         {updatesAvailable > 0 && (
-          <Tip text={updatesTip(updates)}>
-            <span className="icon-btn header-icon-btn header-icon-badge" role="status"
-              aria-label={`${countOf(updatesAvailable, "update")} available`}>
-              <RefreshCw size={18} />
-              <span className="icon-btn-count" aria-hidden="true">{formatCountBadge(updatesAvailable)}</span>
-            </span>
-          </Tip>
+          <InfoTip label={`${countOf(updatesAvailable, "update")} available`} button="btn icon-only" trigger={<>
+            <RefreshCw size={18} />
+            <span className="icon-btn-count" aria-hidden="true">{formatCountBadge(updatesAvailable)}</span>
+          </>}>
+            <strong className="info-pop-title">Updates available for</strong>
+            {updates.map((n) => <div key={n}>{n}</div>)}
+          </InfoTip>
         )}
-        </div>
-      </div>
+      </WindowHeader>
       {tabs.length > 1 && <ModalTabs tabs={tabs} active={shownTab} onSelect={onTab} label="Cockpit sections"
         counts={{ tickets: ticketsOpen }} />}
 

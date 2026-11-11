@@ -11,7 +11,7 @@
 // instantly dismiss what the opening gesture created (which is what left the
 // menu looking stuck).
 
-import { Settings2 } from "lucide-react";
+import { LayoutGrid } from "lucide-react";
 
 import type { RadialItem } from "./roomDial";
 export type { RadialItem };
@@ -59,9 +59,9 @@ export default function RadialRoomMenu({ items, open, onPick, onBackdrop, listAt
       ) : (
         items.map((it) => chip(it, { left: `${it.x}px`, top: `${it.y}px` }))
       )}
-      {/* Full Rooms list (create / edit / re-anchor) — the one thing the old
-          Rooms button's long-press used to reach that this dial's floor/room
-          picking doesn't cover. Pinned at a fixed screen position (NOT part
+      {/* The Rooms window: every floor's rooms, each one's device list, and for the owner "Add room here" (the
+          menu's "Rooms" row opens the same window, with the same icon). "All rooms", not "Manage rooms": only the
+          owner manages them there (owner, 2026-11-10). Pinned at a fixed screen position (NOT part
           of the arc layout above) so it can never collide with a long room
           list or sit differently depending on which floor button opened the
           dial. */}
@@ -69,11 +69,11 @@ export default function RadialRoomMenu({ items, open, onPick, onBackdrop, listAt
         className="radial-manage-btn"
         onPointerDown={(e) => {
           e.stopPropagation();
-          onPick({ key: "manage", label: "Manage rooms", kind: "manage", x: 0, y: 0, active: false });
+          onPick({ key: "manage", label: "All rooms", kind: "manage", x: 0, y: 0, active: false });
         }}
       >
-        <Settings2 size={16} />
-        <span>Manage rooms</span>
+        <LayoutGrid size={16} />
+        <span>All rooms</span>
       </button>
     </div>
   );

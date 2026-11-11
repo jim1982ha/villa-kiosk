@@ -122,6 +122,8 @@
   /* The text typed in EVERY field — a search, a picker, a name, a number (owner, 2026-10-22: the coordinates and the
      records-kept days looked bigger than the pickers beside them). One size, read by every field rule. */
   --field-text: var(--text-base);
+  --field-pad: 14px;    /* a field's box: the space at each side of its text */
+  --field-radius: 10px; /* a field's box: its corner */
   --text-md: 15px;    /* emphasised rows, primary buttons */
   --text-lg: 18px;    /* card/section titles */
   --text-xl: 20px;    /* panel + modal headings */
@@ -471,14 +473,23 @@ button {
 
 /* --- Typography scale --- */
 .room-title { font-family: var(--font-display); font-size: var(--text-2xl); font-weight: 300; letter-spacing: 0.05em; }
-/* Small section caption ("LAST 24 HOURS", …). Slightly smaller and lighter
-   than it was: at 13px/500 it competed with the actual content underneath it
-   instead of quietly labelling it. */
-/* Same eyebrow, same contrast fix as .summary-tile-label — see its comment. */
-.entity-label { font-family: var(--font-ui); font-size: var(--text-2xs); font-weight: 600; text-transform: uppercase; letter-spacing: 0.09em; color: var(--text-secondary); }
+/* ⚠️ THE EYEBROW, ONE LOOK (UI scan, 2026-11-11; the rules: "controls that do the same job look the same and are one
+   definition"): the small capitals over ONE value, control or chart ("FAN SPEED", "LAST 24 HOURS", a weather tile's
+   name, a settings card's field name, the room over a window's title, a bottom-bar tile's name). They were five rules
+   (11px or 12px, weights 400 to 700, four letter spacings). Quiet on purpose: at 13px/500 it competed with the
+   content under it. --text-secondary, never --text-dim (2.4:1 on the light bar, hard to read). The capitals over a
+   GROUP of rows are `.section-title` (04-modals.css). */
+.eyebrow { font-family: var(--font-ui); font-size: var(--text-2xs); font-weight: 600; text-transform: uppercase; letter-spacing: var(--tracking-label); color: var(--text-secondary); }
 .value-large { font-family: var(--font-ui); font-size: var(--text-display-lg); font-weight: 200; line-height: 1; }
 .value-unit { font-family: var(--font-ui); font-size: var(--text-lg); font-weight: 400; color: var(--text-secondary); }
 .body-text { font-family: var(--font-ui); font-size: var(--text-md); line-height: 1.5; }
+/* ⚠️ THE FINE PRINT, ONE LOOK (UI scan, 2026-11-11; the rules: "controls that do the same job look the same and are one
+   definition"): the small grey line that adds a fact to what it sits beside or under (a footer's note, the second
+   line of a choice in a list, a chart's note or unit, what a number is a share of, "linked entity" under a name, a
+   device's id, a legend's line under its name). It was seven rules and five sizes typed where they were used: 11px,
+   12px or 13px for the same job. `.under`: its gap when it sits under what it is about. */
+.fine-print { font-family: var(--font-ui); font-size: var(--text-xs); line-height: 1.4; color: var(--text-secondary); }
+.fine-print.under { margin-top: 6px; }
 
 /* --- App shell --- */
 /* The shell is pinned to the viewport, and paints the theme's own background
@@ -629,7 +640,7 @@ button {
    used by every floating HUD/modal-adjacent piece over the 3D scene. One
    definition instead of eight copies of the same two values; each selector
    below still sets its own border (color/width vary: hairline, hairline-strong,
-   or the danger color for the service-error toast) and layout separately. */
+   or the danger color for what did not happen) and layout separately. */
 .icon-btn, .hud-group, .hud-stack, .hud-menu,
 .room-label, .joystick-base {
   background: var(--bg-panel);
@@ -674,16 +685,6 @@ button {
 }
 /* Lit state for toggle / open icon buttons (view mode, display toggles, menus). */
 .icon-btn.active { background: var(--accent); color: var(--text-on-accent); border-color: transparent; }
-/* Category filter row (HUD.tsx's .hud-center): a soft accent tint, not a
-   solid fill or a per-category gradient — VESTA-DESIGN.md §1.6. These are
-   FILTERS (is this category shown at all), not category-coloured badges, so
-   they use the app's one accent regardless of which category they toggle;
-   the map badges are what carry each category's own hue (see
-   config/EntityCategories.categorySurface), only once a device in it is
-   actually active or alerting. */
-.hud-center .icon-btn.active {
-  background: var(--accent-soft); color: var(--accent); border-color: transparent;
-}
 /* Unavailable-devices button (HUD category row): quiet at zero, red the
    instant something's offline — same colour language as the map badge ring
    and the status pill's "Unavailable" state, so it reads as the same signal. */

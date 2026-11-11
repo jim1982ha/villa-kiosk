@@ -44,6 +44,7 @@ import {
   type EnergyBucket, type EnergySplit,
 } from "@/config/energyModel";
 import { formatMoney } from "@/utils/money";
+import EmptyLine from "@/components/common/EmptyLine";
 
 
 export default function EnergyPanel({ onClose, fallback }: { onClose: () => void; fallback: () => ReactNode }) {
@@ -73,7 +74,7 @@ export default function EnergyPanel({ onClose, fallback }: { onClose: () => void
   // FAILED, saying so: this was a skeleton forever (2.496.188).
   const loading = <ChartEmpty status={status === "failed" ? "failed" : "loading"} />;
   return (
-    <DataWindow title="Energy" icon={<Zap size={22} />} className="energy-modal" onClose={onClose}
+    <DataWindow title="Energy" icon={<Zap size={22} />} onClose={onClose}
       live={<LiveNote>Energy dashboard</LiveNote>} picker={picker}
       now={() => (setup ? <NowView setup={setup} costUnit={costUnit} house={house} colourOf={colourOf} /> : loading)}
       history={() => (setup ? <HistoryView setup={setup} costUnit={costUnit} range={range as EnergyRangeKey} colourOf={colourOf} /> : loading)} />
@@ -118,10 +119,10 @@ function NowView({ setup, costUnit, house, colourOf }: { setup: EnergyWindowSetu
   const { split, cost, typical, standout } = T;
 
   return (
-    <div className="weather-now energy-now">
+    <div className="weather-now">
       <div className="weather-feels">
         <div>
-          <div className="weather-eyebrow">Today so far</div>
+          <div className="eyebrow">Today so far</div>
           <div className="weather-headline">{T.headline}</div>
         </div>
         <div className="energy-hero">
@@ -133,7 +134,7 @@ function NowView({ setup, costUnit, house, colourOf }: { setup: EnergyWindowSetu
       <ObservationCards cards={T.cards} />
 
       <div className="weather-tile chart energy-wide">
-        <div className="weather-chart-head"><div className="weather-eyebrow">Today, hour by hour<ChartStep words={aggregationWords(PERIOD_MS.hour, "sum")} about={chartAbout("total", PERIOD_MS.hour)} /></div><div className="weather-legend">kWh</div></div>
+        <div className="weather-chart-head"><div className="eyebrow">Today, hour by hour<ChartStep words={aggregationWords(PERIOD_MS.hour, "sum")} about={chartAbout("total", PERIOD_MS.hour)} /></div><div className="fine-print">kWh</div></div>
         <BarChart label="Energy used today, hour by hour" fmt={kwh} unit="kWh"
           buckets={todayP.buckets.map((b) => ({ t: b.t, segs: segsOf(b, () => [{ key: "used", label: "Used", v: b.split!.used, cls: "e-used" }]) }))}
           stamp={(t) => fmtStepStamp(t, PERIOD_MS.hour, 24)}
@@ -143,8 +144,8 @@ function NowView({ setup, costUnit, house, colourOf }: { setup: EnergyWindowSetu
 
       <div className="weather-tile chart energy-wide">
         <div className="weather-chart-head">
-          <div className="weather-eyebrow">Last 7 days<ChartStep words={aggregationWords(PERIOD_MS.day, "sum")} about={chartAbout("total", PERIOD_MS.day)} /></div>
-          <div className="weather-legend">{fmtKwh(T.weekTotal)} kWh{typical ? ` · typical day ${fmtKwh(typical)}` : ""}</div>
+          <div className="eyebrow">Last 7 days<ChartStep words={aggregationWords(PERIOD_MS.day, "sum")} about={chartAbout("total", PERIOD_MS.day)} /></div>
+          <div className="fine-print">{fmtKwh(T.weekTotal)} kWh{typical ? ` · typical day ${fmtKwh(typical)}` : ""}</div>
         </div>
         <BarChart label="Energy used, the last seven days" fmt={kwh} unit="kWh"
           buckets={weekP.buckets.map((b, i) => ({ t: b.t, segs: segsOf(b, () => [{ key: "used", label: "Used", v: b.split!.used, cls: standout?.index === i ? "e-standout" : "e-used" }]) }))}
@@ -155,7 +156,7 @@ function NowView({ setup, costUnit, house, colourOf }: { setup: EnergyWindowSetu
 
       <div className="weather-tile chart energy-wide">
         <div className="weather-chart-head">
-          <div className="weather-eyebrow">Where today&apos;s {fmtKwh(split.used)} kWh went</div>
+          <div className="eyebrow">Where today&apos;s {fmtKwh(split.used)} kWh went</div>
         </div>
         <Flow split={split} rateKw={rateKw} house={house} colourOf={colourOf} />
         {overlapShows(split) && (
@@ -174,7 +175,7 @@ function NowView({ setup, costUnit, house, colourOf }: { setup: EnergyWindowSetu
 export function Flow({ split, rateKw, house, colourOf }: { split: EnergySplit; rateKw: (id: string | null) => number | undefined; house: string; colourOf: (id: string) => string }) {
   const [hover, setHover] = useState<number | null>(null);
   const tree = flowTree(split, house, colourOf);
-  if (tree.children.length === 0) return <div className="muted body-text">Nothing recorded yet today.</div>;
+  if (tree.children.length === 0) return <EmptyLine>Nothing recorded yet today.</EmptyLine>;
   const L = flowLayout(tree);
   const { W, H, nodeW } = L;
   const colRight = (d: number) => Math.min(W, ...L.boxes.filter((b) => b.depth === d + 1).map((b) => b.x), W);
@@ -202,7 +203,7 @@ export function Flow({ split, rateKw, house, colourOf }: { split: EnergySplit; r
           <g key={`n${b.node.id}`} onPointerEnter={() => setHover(i)} onPointerDown={() => setHover(i)}>
             {/* The whole row beside the bar answers the pointer, not only the bar. */}
             <rect x={b.x} y={b.y} width={colRight(b.depth) - b.x} height={slotH} className="energy-hit" />
-            <rect x={b.x} y={b.y} width={nodeW} height={b.h} rx="3" className={`energy-node ${b.node.cls}`} />
+            <rect x={b.x} y={b.y} width={nodeW} height={b.h} rx="3" className={b.node.cls} />
             {/* Name and kWh only, as HA's diagram: a middle column's label
                 runs over the links, and "now" beside it ran into the next
                 column's names. The power "now" is in the tooltip and the
@@ -228,7 +229,7 @@ export function DevicePie({ split, colourOf }: { split: EnergySplit; colourOf: (
   // Before any early return: a hook runs on every render or none.
   const paged = usePaged(slices, PAGE_CARDS);
   const total = slices.reduce((a, s) => a + s.kwh, 0);
-  if (!slices.length) return <div className="muted body-text">Nothing recorded.</div>;
+  if (!slices.length) return <EmptyLine>Nothing recorded.</EmptyLine>;
   const turns = sliceTurns(slices.map((s) => s.kwh));
   const cls = (i: number) => slices[i].cls;
   const R0 = 58, R1 = 92, C = 100;
@@ -321,8 +322,8 @@ function HistoryView({ setup, costUnit, range: rangeKey, colourOf }: { setup: En
 
       <div className="weather-tile chart energy-wide">
         <div className="weather-chart-head">
-          <div className="weather-eyebrow">{hasCost ? `Energy and cost per ${unit}` : "Energy used, by device"}<ChartStep words={aggregationWords(PERIOD_MS[range.period], "sum")} about={chartAbout("total", PERIOD_MS[range.period])} /></div>
-          <div className="weather-legend">
+          <div className="eyebrow">{hasCost ? `Energy and cost per ${unit}` : "Energy used, by device"}<ChartStep words={aggregationWords(PERIOD_MS[range.period], "sum")} about={chartAbout("total", PERIOD_MS[range.period])} /></div>
+          <div className="fine-print chart-key">
             {series.map((s) => <span key={s.id}><i className={`key ${s.cls}`} />{s.label}</span>)}
             {hasCost && <span><i className="key cost line" />Cost · {formatMoney(costTotal, costUnit)}</span>}
           </div>
@@ -341,9 +342,9 @@ function HistoryView({ setup, costUnit, range: rangeKey, colourOf }: { setup: En
 
       <div className="weather-tile chart energy-wide">
         <div className="weather-chart-head">
-          <div className="weather-eyebrow">Every device</div>
+          <div className="eyebrow">Every device</div>
           <div className="energy-rank-tools">
-            {shape === "list" && <span className="weather-legend">share of {fmtKwh(whole.used)} kWh</span>}
+            {shape === "list" && <span className="fine-print">share of {fmtKwh(whole.used)} kWh</span>}
             {shapePicker}
           </div>
         </div>
@@ -423,7 +424,7 @@ function RankRow({ label, kwh, of, used, cls, muted, depth = 0, note, toggle = n
 }) {
   const name = (
     <>
-      {label}{note ? <small className="energy-rank-note"> · {note}</small> : null}
+      {label}{note ? <small className="fine-print"> · {note}</small> : null}
     </>
   );
   const Row = toggle ? "button" : "div";

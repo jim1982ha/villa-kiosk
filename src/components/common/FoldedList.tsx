@@ -14,6 +14,7 @@ import { ChevronDown, ChevronRight } from "lucide-react";
 import { Pager, usePaged, PAGE_CARDS } from "./Paged";
 import SegmentedGroup from "./SegmentedGroup";
 import { withCount } from "@/utils/countBadge";
+import EmptyLine from "@/components/common/EmptyLine";
 
 /** THE "this opens more" control (owner, 2026-11-06: a chevron after the title in one place, an outlined button in
  *  another): its chevron before its words, pointing down while open. A section's title (ListSection) and a list inside
@@ -67,7 +68,7 @@ export function ListSection({ title, count, summary, views, open, onToggle, tip,
     <section className="messages-section">
       <div className="cockpit-issues-head">
         <div className="with-tip">
-          <FoldToggle className="messages-section-toggle settings-section-title" open={open} onToggle={onToggle}>
+          <FoldToggle className="messages-section-toggle section-title" open={open} onToggle={onToggle}>
             <span className="fold-toggle-words">{withCount(title, count)}</span>
             {summary && !views && <span className="section-summary">{summary}</span>}
           </FoldToggle>
@@ -102,7 +103,7 @@ export default function FoldedList<T>({ title, rows, children, tip, empty, open,
       tip={tip ? <InfoTip label={`About ${title}`}>{tip}</InfoTip> : undefined}>
       {paged.page.map(children)}
       {/* its count is in its title: the pager only past a page (owner, 2026-11-03) */}
-      {rows.length === 0 ? <p className="muted body-text messages-empty">{empty}</p> : <Pager paged={paged} />}
+      {rows.length === 0 ? <EmptyLine>{empty}</EmptyLine> : <Pager paged={paged} />}
     </ListSection>
   );
 }

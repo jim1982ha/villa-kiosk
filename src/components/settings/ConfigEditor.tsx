@@ -37,6 +37,7 @@ import EntityCard from "./EntityCard";
 import EntityMapRow from "./EntityMapRow";
 import EntityPicker from "./EntityPicker";
 import { countOf } from "@/utils/countOf";
+import EmptyLine from "@/components/common/EmptyLine";
 
 /** The list shown: the devices on the map, or those no 3D object shows. */
 type ListView = "on" | "off";
@@ -168,7 +169,8 @@ export default function ConfigEditor({ title, tip, initialSearch }: { title: str
 
   const narrowed = search.trim() !== "";
   return (
-    <div>
+    // no box round the section: its title is a line of the window's body, at the body's own distances (04-modals.css)
+    <>
       {/* what this section does is its title's (i) (ConfigEditorModal, owner 2026-10-22: no visible description) */}
       <TipTitle title={title} tip={tip} after={
         <SectionViewButtons title={title} views={{
@@ -200,9 +202,7 @@ export default function ConfigEditor({ title, tip, initialSearch }: { title: str
       <SearchOrAdd query={search} onQuery={setSearch} placeholder="Search, or a device to prepare…"
         offer={offer} onAdd={addDevice} onFound={found} />
 
-      {view === "on" && allRows.length === 0 && (
-        <p className="muted body-text mt">No auto-detected entities yet.</p>
-      )}
+      {view === "on" && allRows.length === 0 && <EmptyLine>No auto-detected entities yet.</EmptyLine>}
 
       {/* a 3D object whose entity is gone: a card like every device's, its state "No such entity", its one action in
           its bar (owner, 2026-11-06: every record of Settings is the Cockpit's card) */}
@@ -251,7 +251,7 @@ export default function ConfigEditor({ title, tip, initialSearch }: { title: str
       {view === "on" && <ShowAll list={shown} noun="entity" plural="entities" />}
 
       {/* the devices no 3D object shows: the same card, its "3D object" field empty; an object picked puts it on the map */}
-      {view === "off" && (offMap.length === 0 ? <p className="muted body-text mt">Every device is on the map.</p>
+      {view === "off" && (offMap.length === 0 ? <EmptyLine>Every device is on the map.</EmptyLine>
         : narrowed && offFound.length === 0 ? <SearchEmpty query={search} noun="device" offer={offer} onAdd={addDevice} /> : (
         <div className="fm-list settings-cards">
           {offShown.visible.map((id) => (
@@ -261,6 +261,6 @@ export default function ConfigEditor({ title, tip, initialSearch }: { title: str
         </div>
       ))}
       {view === "off" && <ShowAll list={offShown} noun="entity" plural="entities" />}
-    </div>
+    </>
   );
 }

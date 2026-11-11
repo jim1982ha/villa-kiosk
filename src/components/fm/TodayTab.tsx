@@ -165,7 +165,7 @@ function LogCompletion({
       <h3>Log: {schedule?.title}</h3>
 
       {/* the name typed, never offered (WorkerName); `by` is the signed-in profile, stamped by the store */}
-      <div className="fm-field">
+      <div className="named-field">
         <span>Done by</span>
         <WorkerName value={who} onChange={setWho} />
       </div>
@@ -180,7 +180,7 @@ function LogCompletion({
       {/* A completion's cost is always the capped kind (CostFields). */}
       <CostFields amount={amount} onAmount={setAmount} optional />
 
-      <div className="fm-field">
+      <div className="named-field">
         <span>Photo evidence</span>
         <EvidenceRow photoIds={photoIds} onChange={setPhotoIds} />
       </div>

@@ -142,7 +142,9 @@ console.log("\n  a refused command:");
   const orig = s.send.bind(s);
   s.send = (raw) => { const m = JSON.parse(raw); if (m.type === "call_service") { s.sent.push(m); setTimeout(() => s.emit({ id: m.id, type: "result", success: false, error: { message: "refused" } }), 0); return; } orig(raw); };
   const outcome = await store.callService("light", "turn_on", {}, { entity_id: "light.a" });
-  ck("resolves the outcome, and the toast's state hears it", outcome.ok === false && store.getState().serviceError?.message === "refused");
+  const said = store.getState().serviceError;
+  ck("resolves the outcome, and the notice's state hears it with the device it was for",
+     outcome.ok === false && said?.error.message === "refused" && said.entityIds.join() === "light.a", said);
 }
 
 store.dispose();

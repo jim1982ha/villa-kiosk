@@ -5,7 +5,7 @@
 // default" reset. Commits on choice (one config write / re-index per pick — the
 // same cost as a label edit), so there's no live-drag re-index storm.
 
-import Window from "@/components/common/Window";
+import Window, { WindowHeader } from "@/components/common/Window";
 import { RotateCcw } from "lucide-react";
 import ModalFooter from "@/components/common/ModalFooter";
 
@@ -46,11 +46,9 @@ export default function BadgeColorModal({ current, categoryColor, onChange, onCl
     // (Settings/Config Editor): top-anchored, edge-to-edge, square corners.
     // This is a short picker, same category as the device panel itself, so it
     // should get the same small centered rounded card on phones.
-    <Window kind="question" label="Badge colour" onClose={onClose} className="panel-modal badge-color-modal"
+    <Window kind="question" label="Badge colour" onClose={onClose} className="panel-modal"
       layer="panel-modal-backdrop" zIndex={80}>
-      <div className="modal-header">
-        <div className="title"><h2>Icon colour</h2></div>
-      </div>
+      <WindowHeader title="Icon colour" />
 
       <div className="modal-body">
         <div className="badge-swatch-grid">
