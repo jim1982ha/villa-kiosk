@@ -67,12 +67,12 @@ export function objectLinks(
 }
 
 /** What a device's "Add a 3D object…" search lists for `query`: the objects found by their name that do not show
- *  `entityId` already, those showing nothing first (`shows` null), then those showing another device (picking one
- *  moves it here). Pure. */
+ *  `entityId` already, those showing a device first (picking one moves it here: the model's devices are what this
+ *  search is for, owner 2026-11-11), then those showing nothing (`shows` null: walls and furniture among them). Pure. */
 export function objectOffers(query: string, links: ObjectLinks, entityId: string): { object: string; shows: string | null }[] {
   const found = [...links.shows].filter(([object, id]) => id !== entityId && matchesQuery(query, object))
     .map(([object, shows]) => ({ object, shows }));
-  return [...found.filter((o) => o.shows === null), ...found.filter((o) => o.shows !== null)];
+  return [...found.filter((o) => o.shows !== null), ...found.filter((o) => o.shows === null)];
 }
 
 /** What a device search reads: the stored devices, the villa's system's entities, the rooms. */
