@@ -13,7 +13,7 @@ export default function GenericPanel({ entity, mapping, onClose }: PanelProps) {
       history={<LastDayTimeline entityId={mapping.entityId} palette />}>
       {/* its state, unless contact is LOST (the frame's notice says so: BasePanel); "unknown" is a state, shown as one */}
       {!isOffline(entity) && (
-        <div className="center" style={{ margin: "8px 0 16px" }}>
+        <div className="reading-large">
           <span className="value-large">{entity?.state ?? "unknown"}</span>
         </div>
       )}

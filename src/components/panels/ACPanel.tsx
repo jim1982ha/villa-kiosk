@@ -34,9 +34,9 @@ export default function ACPanel({ entity, mapping, onClose }: PanelProps) {
   return (
     <BasePanel title={mapping.label} entityId={mapping.entityId} icon={<Snowflake size={22} />} onClose={onClose}>
       <ControlFrame entity={entity} mapping={mapping}>
-      <div className="temp-display">
+      <div className="reading-large">
         <span className="value-unit">Current</span>
-        <div className="big">{fmtTemp(a?.current_temperature, unit)}</div>
+        <div className="value-large">{fmtTemp(a?.current_temperature, unit)}</div>
       </div>
 
       <div className="temp-stepper">

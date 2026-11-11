@@ -318,7 +318,7 @@ export default function ConfigEditorModal({ onBack, withinSettings, focusEntityI
 
       <div className="modal-body">
         {glbUpload.uploadMsg && (
-          <div className={`test-result ${glbUpload.uploadMsg.ok ? "ok" : "fail"}`} style={{ marginTop: 0 }}>
+          <div className={`test-result ${glbUpload.uploadMsg.ok ? "ok" : "fail"}`}>
             {glbUpload.uploadMsg.text}
           </div>
         )}

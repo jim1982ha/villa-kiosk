@@ -177,8 +177,16 @@
    horizontal scroll (wide tables card-stack on mobile already). */
 /* Its padding in named parts, so a bar that stays in view while it scrolls (the Inbox's filters) can cover the edges
    the cards scroll through (08-shared.css .messages-toolbar). */
-.modal-body { --body-top: 8px; --body-left: 28px; --body-right: 28px;
-  flex: 1 1 auto; overflow-y: auto; overflow-x: hidden; padding: var(--body-top) var(--body-right) 12px var(--body-left); }
+/* ⚠️ ONE DISTANCE UNDER THE HEADER AND OVER THE FOOTER, IN EVERY WINDOW (UI scan, 2026-11-11; the rules: "controls that
+   do the same job look the same and are one definition"): the first line starts `--body-top` under the header (or the
+   tabs) and the last one ends as far over the footer, whatever they are. Each first line used to add its own margin to
+   an 8px padding: measured side by side, a form's first field and a tab's first card began 8px under the line, a device's
+   state 16, the air conditioning's temperature 20, a section's heading 32; a device window's last line ended 30px over
+   its footer, a form's 12. A piece drawn first or last keeps no margin of its own on that side. */
+.modal-body { --body-top: 16px; --body-left: 28px; --body-right: 28px;
+  flex: 1 1 auto; overflow-y: auto; overflow-x: hidden; padding: var(--body-top) var(--body-right) var(--body-top) var(--body-left); }
+.modal .modal-body > :first-child { margin-top: 0; }
+.modal .modal-body > :last-child { margin-bottom: 0; }
 /* No separator above this footer, same reasoning as .modal-footer (device
    panels) — the same visual rule applied once here since this ONE class
    already backs every settings-style modal (Settings, Advanced Settings,

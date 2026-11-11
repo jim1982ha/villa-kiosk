@@ -201,9 +201,9 @@ ck("  ...the tab lists, counts and opens what messagesView says, from the open i
   const layout = readFileSync(new URL("../../src/styles/05-layout.css", import.meta.url), "utf8");
   const bar = css.match(/\n\.messages-toolbar \{([^}]*)\}/)?.[1] ?? "";
   ck("  ...nothing shows behind it: it stops at the body's very top and spans its whole width, in the window's solid colour",
-     /top: calc\(-1 \* var\(--body-top, 0px\)\);/.test(bar) && /margin-inline: calc\(-1 \* var\(--body-left, 0px\)\) calc\(-1 \* var\(--body-right, 0px\)\);/.test(bar)
+     /top: calc\(-1 \* var\(--body-top, 0px\)\);/.test(bar) && /margin: -4px calc\(-1 \* var\(--body-right, 0px\)\) 0 calc\(-1 \* var\(--body-left, 0px\)\);/.test(bar)
      && /padding: 4px var\(--body-right, 0px\) 8px var\(--body-left, 0px\);/.test(bar) && /background: var\(--bg-modal\);/.test(bar)
-     && /\n\.modal-body \{ --body-top: 8px; --body-left: \d+px; --body-right: \d+px;\s*[^}]*padding: var\(--body-top\) var\(--body-right\) \d+px var\(--body-left\);/.test(modals)
+     && /\n\.modal-body \{ --body-top: \d+px; --body-left: \d+px; --body-right: \d+px;\s*[^}]*padding: var\(--body-top\) var\(--body-right\) var\(--body-top\) var\(--body-left\);/.test(modals)
      && /\.modal-body \{\s*--body-left: calc\([^;]*inset-left[^;]*\); --body-right: calc\([^;]*inset-right[^;]*\);\s*\}/.test(layout)
      // the colour solid in each theme (light, dark, and the explicit dark): a hex, never a see-through mix
      && [...readFileSync(new URL("../../src/styles/01-base.css", import.meta.url), "utf8").matchAll(/--bg-modal: ([^;]+);/g)].every((m) => /^#[0-9A-Fa-f]{6}$/.test(m[1])), bar);

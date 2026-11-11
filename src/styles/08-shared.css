@@ -211,9 +211,11 @@ body:has(.camera-fullscreen) .vesta-notice.below-camera { display: none; }
 /* ⚠️ NOTHING SHOWS BEHIND IT (owner, 2026-11-06: a card's "Reopened … next check" read through above and beside the
    pills on a phone): a sticky bar stops at the body's padding, so the cards scrolled through the 8px over it and the
    gutters at its sides. It stops at the body's very top (top: minus its padding) and spans the body's whole width (its
-   gutters drawn by its own padding), in the window's solid colour, in light and dark. */
+   gutters drawn by its own padding), in the window's solid colour, in light and dark. The 4px over its buttons are for
+   when it is stopped there: at rest it gives them back (margin-top), so its buttons start where every window's first
+   line does. */
 .messages-toolbar { display: flex; flex-wrap: wrap; align-items: stretch; gap: 6px;
-  padding: 4px var(--body-right, 0px) 8px var(--body-left, 0px); margin-inline: calc(-1 * var(--body-left, 0px)) calc(-1 * var(--body-right, 0px));
+  padding: 4px var(--body-right, 0px) 8px var(--body-left, 0px); margin: -4px calc(-1 * var(--body-right, 0px)) 0 calc(-1 * var(--body-left, 0px));
   position: sticky; top: calc(-1 * var(--body-top, 0px)); z-index: 2; background: var(--bg-modal); }
 /* what brings itself into view stops under that line */
 .messages-card, .messages-toolbar ~ .fm-form { scroll-margin-top: 72px; }

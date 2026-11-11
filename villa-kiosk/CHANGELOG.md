@@ -1,3 +1,19 @@
+## 2.496.778
+
+What you will see:
+- **Every window's first line starts at the same distance under its header or its tabs, and its last line ends at the
+  same distance over its buttons.** Side by side they differed: a form's first field and a tab's first card began
+  8px under the line, a device's state 16, the air conditioning's temperature 20, a section's heading 32 (40 for
+  Advanced Settings' device list); a device window ended 30px over its buttons, a form 12. It is 16px everywhere
+  now, from one rule.
+- So: Settings, each Cockpit tab, the forms, Weather, Energy and the fan and TV windows start 8px lower; Map colours
+  & keys and Settings' Messages tab start 16px higher, Advanced Settings' Devices tab 24px higher; device windows are
+  14px shorter.
+- **A window's large reading is one line everywhere**: a sensor's value, a device's state in words and the air
+  conditioning's "Current" temperature sit at the same distances (each window had its own).
+- The Cockpit's Inbox: the filter buttons start where every window's first line does, and still stay in view over
+  the cards that scroll.
+
 ## 2.496.777
 
 What you will see:

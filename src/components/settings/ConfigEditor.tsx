@@ -169,7 +169,8 @@ export default function ConfigEditor({ title, tip, initialSearch }: { title: str
 
   const narrowed = search.trim() !== "";
   return (
-    <div>
+    // no box round the section: its title is a line of the window's body, at the body's own distances (04-modals.css)
+    <>
       {/* what this section does is its title's (i) (ConfigEditorModal, owner 2026-10-22: no visible description) */}
       <TipTitle title={title} tip={tip} after={
         <SectionViewButtons title={title} views={{
@@ -260,6 +261,6 @@ export default function ConfigEditor({ title, tip, initialSearch }: { title: str
         </div>
       ))}
       {view === "off" && <ShowAll list={offShown} noun="entity" plural="entities" />}
-    </div>
+    </>
   );
 }

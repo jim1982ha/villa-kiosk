@@ -38,17 +38,19 @@ export default function UnavailableNotice({ entityId }: Props) {
   // system knows it by sits under it, small, said for what it is: what a technician searches for there or in Edit.
   if (missing) {
     return (
-      <div className="center">
+      // each a line of the window's body, no box round them: the first and the last line of a window keep the
+      // window's own distance to its header and footer (04-modals.css .modal-body)
+      <>
         <StatusPill tone="unavailable" icon={AlertTriangle}>{NOT_IN_HA.toUpperCase()}</StatusPill>
         {seen !== "loading" && (
-          <p className="muted body-text">
+          <p className="muted body-text center">
             {missingAdvice(mappedEntityIds.has(entityId!), seen)}
           </p>
         )}
-        <p className="fine-print under">
+        <p className="fine-print under center">
           Its id in the villa's system: <code>{entityId}</code>
         </p>
-      </div>
+      </>
     );
   }
   // The pill alone carries the message. The paragraph that used to sit under
