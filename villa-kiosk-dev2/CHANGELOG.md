@@ -1,3 +1,20 @@
+## 2.496.770
+
+What you will see:
+- A device that does not answer says since when: its window reads "UNAVAILABLE SINCE 14:05" (the day too when it is
+  not today), with an (i) beside it. A tap on the (i) says why there are no controls; that was a text only a mouse
+  could read. After the villa's system restarts, the time is the restart's.
+- In a category's or a room's device list, "Not on the map" and "Missing" each have an (i) that says what they mean,
+  on a tap. The "Missing" text had a garbled sentence: rewritten.
+- The Cockpit's updates count (top right) is a button: a tap opens the list of what has an update waiting. It was
+  only shown under a mouse. It looks like a device window's header buttons.
+- A device window's state pill is one pill everywhere: the lock's, the blind's, a sensor's, a grouped device's and
+  the lost-contact one sit on the same line at the same distance from what follows. In a grouped device's window the
+  pill is the same size as the others (it was larger and wrapped onto two lines sooner).
+- "Nothing here" lines ("Nothing needs attention.", "No tasks yet.", "No report yet.", "Nothing recorded.") sit at
+  one distance under their title in every list; some were tight against it, others 23 px lower.
+- Nothing else changed.
+
 ## 2.496.769
 
 What you will see:
