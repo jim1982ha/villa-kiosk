@@ -7,6 +7,7 @@ import { HAServices } from "@/ha/HAServiceCalls";
 import { coverPill } from "@/config/reading";
 import { useLiveDraft } from "@/hooks/useLiveDraft";
 import ControlFrame from "./ControlFrame";
+import CommandButton from "./CommandButton";
 import StatusPill from "./StatusPill";
 
 export default function CoverPanel({ entity, mapping, onClose }: PanelProps) {
@@ -18,6 +19,8 @@ export default function CoverPanel({ entity, mapping, onClose }: PanelProps) {
   const position = useLiveDraft<number>(hasPosition ? pos as number : undefined, 0,
     (v) => HAServices.setCoverPosition(ws, mapping.entityId, v));
   const pill = coverPill(mapping.entityId, entity?.state, hasPosition ? position.value : undefined);
+  // what a command moves: the blind's state ("opening") or, on one that reports only it, its position
+  const moves = `${entity?.state} ${pos}`;
 
   return (
     <BasePanel title={mapping.label} entityId={mapping.entityId} icon={<Blinds size={22} />} onClose={onClose}>
@@ -27,15 +30,15 @@ export default function CoverPanel({ entity, mapping, onClose }: PanelProps) {
         <StatusPill tone={pill.tone}>{pill.text}</StatusPill>
 
       <div className="row-buttons">
-        <button className="btn" style={{ flex: 1 }} onClick={() => HAServices.openCover(ws, mapping.entityId)}>
+        <CommandButton style={{ flex: 1 }} watch={moves} send={() => HAServices.openCover(ws, mapping.entityId)}>
           <ChevronUp size={20} /> Open
-        </button>
-        <button className="btn" style={{ flex: 1 }} onClick={() => HAServices.stopCover(ws, mapping.entityId)}>
+        </CommandButton>
+        <CommandButton style={{ flex: 1 }} watch={moves} send={() => HAServices.stopCover(ws, mapping.entityId)}>
           <Square size={16} /> Stop
-        </button>
-        <button className="btn" style={{ flex: 1 }} onClick={() => HAServices.closeCover(ws, mapping.entityId)}>
+        </CommandButton>
+        <CommandButton style={{ flex: 1 }} watch={moves} send={() => HAServices.closeCover(ws, mapping.entityId)}>
           <ChevronDown size={20} /> Close
-        </button>
+        </CommandButton>
       </div>
 
       {/* Position slider only when the device reports current_position. */}

@@ -10,14 +10,13 @@ import SummaryGroupPanel from "@/components/panels/SummaryGroupPanel";
 import { Layers } from "lucide-react";
 import HUD from "@/components/hud/HUD";
 import RoomLabel from "@/components/hud/RoomLabel";
-import ServiceErrorToast from "@/components/hud/ServiceErrorToast";
 import ConnectionBanner from "@/components/hud/ConnectionBanner";
 import UpdateBanner from "@/components/hud/UpdateBanner";
 import AnnouncementNotice from "@/components/hud/AnnouncementNotice";
 import { AnnouncementsProvider } from "@/messages/AnnouncementsContext";
 import { ConversationProvider } from "@/messages/ConversationContext";
 import VestaWindow from "@/components/messages/VestaThread";
-import AppNotice, { AppNoticeContext, useRaisedNotices } from "@/components/hud/AppNotice";
+import AppNotice, { AppNoticeContext, useFailedCommandNotice, useRaisedNotices } from "@/components/hud/AppNotice";
 import ProblemNotices from "@/components/hud/ProblemNotices";
 import { NoticeStack } from "@/components/hud/Notice";
 import FirstRunTips from "@/components/hud/FirstRunTips";
@@ -194,9 +193,10 @@ export default function Dashboard() {
   // General app notices (e.g. "this floor isn't modelled yet") — themed,
   // replaces a native alert() that used to break out of the kiosk's own
   // dark/light chrome entirely. See AppNotice.
-  // What did not happen (a save refused, a number that was none) is raised the same way and drawn apart
-  // (ProblemNotices), so news never replaces it.
+  // What did not happen (a save refused, a number that was none, a command that failed) is raised the same way and
+  // drawn apart (ProblemNotices), so news never replaces it.
   const { passing: notice, problems, raise: raiseNotice, expire: expireNotice, drop: dropProblem } = useRaisedNotices();
+  useFailedCommandNotice(raiseNotice);
   // First-ever login on this device — see FirstRunTips/utils/viewPrefs'
   // hasSeenFirstRunTips docstring. Checked once, lazily, so it reflects
   // whatever was in localStorage when this component first mounted rather
@@ -737,12 +737,11 @@ export default function Dashboard() {
 
       {/* EVERY notice of the villa view, in one column under the top bar, drawn by one piece (Notice) — the most
           lasting first: the connection (the only signal that survives the phone tier, where the top bar's dot is
-          hidden), a new version, a failed tap, a save that did not happen, what the villa announced, then what just
+          hidden), a new version, what did not happen (a failed tap, a save), what the villa announced, then what just
           happened. The 3D canvas's own joins it. */}
       <NoticeStack>
         <ConnectionBanner />
         <UpdateBanner />
-        <ServiceErrorToast />
         <ProblemNotices raised={problems} onDrop={dropProblem} />
         <AnnouncementNotice />
         <AppNotice message={notice} onExpire={expireNotice} />

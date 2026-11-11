@@ -1,3 +1,19 @@
+## 2.496.771
+
+What you will see:
+- A press that did nothing says so in plain words, naming the device: "Living room AC did not respond. Try again."
+  It was the connection's own wording ("Not connected", "No answer from the server") and named nothing. It is the
+  red notice under the top bar, it stays as long as the other notices and has its ✕. Several devices at once (a
+  list's "turn all off") read "Kitchen light and 2 others did not respond."
+- A command this profile may not send still says exactly that ("This profile may not send this command.").
+- Every command button shows that the press landed, as the power button does (it dims and brightens until the
+  device answers): Play / Pause, a blind's Open, Stop and Close, an AC's mode and fan speed, a fan's speed and
+  preset, a camera's turn buttons, a list's "turn all on / off". The selected mode or speed stays what the device
+  reports: nothing is guessed.
+- With "reduce motion" set on the device, the waiting sign stays (a slow fade, nothing moves); it used to vanish.
+- The camera's siren button is untouched: it asks first, as before.
+- Nothing else changed.
+
 ## 2.496.770
 
 What you will see:

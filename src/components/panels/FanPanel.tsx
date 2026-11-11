@@ -2,7 +2,7 @@
 import { Fan } from "lucide-react";
 import BasePanel from "./BasePanel";
 import ControlFrame from "./ControlFrame";
-import SegmentedGroup from "@/components/common/SegmentedGroup";
+import DeviceChoice from "./DeviceChoice";
 import type { PanelProps } from "@/types/panel.types";
 import { useHA } from "@/ha/HAStateStore";
 import { HAServices } from "@/ha/HAServiceCalls";
@@ -36,8 +36,8 @@ export default function FanPanel({ entity, mapping, onClose }: PanelProps) {
       {levels.length > 0 && (
         <div className="field">
           <label className="entity-label">Speed</label>
-          <SegmentedGroup device ariaLabel="Speed" active={on && closestLevel ? String(closestLevel.value) : null}
-            onChange={(v) => HAServices.setFanPercentage(ws, mapping.entityId, Number(v))}
+          <DeviceChoice label="Speed" active={on && closestLevel ? String(closestLevel.value) : null}
+            send={(v) => HAServices.setFanPercentage(ws, mapping.entityId, Number(v))}
             options={levels.map((l) => ({ key: String(l.value), label: l.label }))} />
         </div>
       )}
@@ -45,8 +45,8 @@ export default function FanPanel({ entity, mapping, onClose }: PanelProps) {
       {presets.length > 0 && (
         <div className="field">
           <label className="entity-label">Preset</label>
-          <SegmentedGroup device ariaLabel="Preset" active={currentPreset ?? null}
-            onChange={(p) => HAServices.setFanPreset(ws, mapping.entityId, p)}
+          <DeviceChoice label="Preset" active={currentPreset ?? null}
+            send={(p) => HAServices.setFanPreset(ws, mapping.entityId, p)}
             options={presets.map((p) => ({ key: p, label: p }))} />
         </div>
       )}

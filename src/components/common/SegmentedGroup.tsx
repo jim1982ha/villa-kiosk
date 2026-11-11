@@ -27,7 +27,7 @@ interface SegmentedOption<K extends string> {
 export type SegmentedLayout = "fill" | "natural" | "compact";
 
 export default function SegmentedGroup<K extends string>({
-  options, active, onChange, ariaLabel, layout = "fill", tabs = false, device = false, className = "",
+  options, active, onChange, ariaLabel, layout = "fill", tabs = false, device = false, pending = null, className = "",
 }: {
   options: readonly SegmentedOption<K>[];
   /** The pressed option, or null for none (a toggle that is off). */
@@ -39,6 +39,8 @@ export default function SegmentedGroup<K extends string>({
   tabs?: boolean;
   /** The choice is a device's own state (its mode, its speed): selected in the device's colour, as its On button. */
   device?: boolean;
+  /** The option pressed and not yet answered by the device: it shows the app's waiting sign (panels/DeviceChoice). */
+  pending?: K | null;
   /** Where the group sits in its line (a margin, a width). Never a segment's look. */
   className?: string;
 }) {
@@ -52,7 +54,7 @@ export default function SegmentedGroup<K extends string>({
         return (
           <button key={o.key} type="button" className={on ? "active" : ""} disabled={o.disabled}
             aria-disabled={o.disabled || undefined} role={tabs ? "tab" : undefined}
-            {...(tabs ? { "aria-selected": on } : { "aria-pressed": on })}
+            {...(tabs ? { "aria-selected": on } : { "aria-pressed": on })} aria-busy={o.key === pending || undefined}
             onClick={() => { if (!o.disabled) onChange(o.key); }} data-tip={o.title} aria-label={o.title}>
             {o.label}
           </button>

@@ -25,7 +25,7 @@
   }
   /* The tap ripple is PURELY decorative motion with no end state worth
      landing on (it exists only to acknowledge a tap the 3D scene can't
-     otherwise confirm) — the status pill and the service toast already
+     otherwise confirm) — the status pill and the failed command's notice already
      report the same outcome in text, so removing it costs no information. */
   .tap-ripple { display: none; }
 
@@ -41,7 +41,7 @@
      Reduced-motion asks for no VESTIBULAR motion, not for no feedback, so
      these keep animating with the movement taken out: a slow opacity breath
      conveys "still working" while nothing travels, rotates or scales. */
-  .spinner, .conn-dot.connecting .dot, .status-dot.pending, .state-timeline-skeleton {
+  .spinner, .conn-dot.connecting .dot, .status-dot.pending, .state-timeline-skeleton, button[aria-busy="true"] {
     animation: reduced-motion-breathe 1.6s ease-in-out infinite !important;
   }
   /* The skeleton's own look is a moving GRADIENT, so the breath above has to

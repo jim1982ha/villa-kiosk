@@ -15,6 +15,7 @@ import { roleCan } from "@/auth/permissions";
 import { cameraControlsOf } from "@/utils/panelRules";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { useEntityLabel } from "@/hooks/useEntityLabel";
+import CommandButton from "./CommandButton";
 
 /** The moves in the order drawn, each with its icon and words. */
 const MOVES = [
@@ -42,10 +43,11 @@ export default function CameraDeviceButtons({ cameraId, order }: {
       {MOVES.map(({ dir, Icon, words }, i) => {
         const id = controls.moves[dir];
         return id ? (
-          <button key={dir} type="button" className="media-btn" data-tip={words} aria-label={words}
-            style={order(6 + i)} onClick={() => void callService("button", "press", {}, { entity_id: id })}>
+          // a button of the villa's system reports the moment of its last press: the press arriving ends the waiting
+          <CommandButton key={dir} className="media-btn" data-tip={words} aria-label={words} style={order(6 + i)}
+            watch={entities[id]?.state} send={() => callService("button", "press", {}, { entity_id: id })}>
             <Icon />
-          </button>
+          </CommandButton>
         ) : null;
       })}
       {siren && (

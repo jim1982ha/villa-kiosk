@@ -6,8 +6,9 @@
 // said in Advanced Settings and not in Settings, which saves the same things; a save made with no connection was a
 // line at the top of the Cockpit's scrolling body; this device's storage refusing its own settings was a line in the
 // console; a number that was none went back to the one before; a card's erase that failed answered nobody. Each store
-// keeps its own line (it knows when it is over); a line raised by name (`raised`: useAppNotice, tone "alert") passes
-// after the notices' one time. This is the only piece that draws any of them.
+// keeps its own line (it knows when it is over); a line raised by name (`raised`: useAppNotice, tone "alert"; a
+// command that failed: AppNotice.useFailedCommandNotice) passes after the notices' one time. This is the only piece that
+// draws any of them.
 
 import { useEffect } from "react";
 import { AlertTriangle } from "lucide-react";

@@ -81,9 +81,9 @@ export default function LockPanel({ entity, mapping, onClose }: PanelProps) {
         return n === 0 ? (
           <button key={b}
             // `cta`, not `on`: emphasis for the action to take, never a report of the device's state
-            className={`big-toggle cta${pending ? " pending" : ""}`}
+            className="big-toggle cta"
             onClick={ask.request}
-            aria-busy={pending}
+            aria-busy={pending || undefined}
           >
             <Icon size={22} /> {b === "lock" ? "Lock door" : "Unlock door…"}
           </button>

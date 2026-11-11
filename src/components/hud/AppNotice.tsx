@@ -4,10 +4,14 @@
 
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { Activity, Info } from "lucide-react";
+import { useHA } from "@/ha/HAStateStore";
+import { failedCommandLine } from "@/ha/serviceOutcome";
+import { useEntityLabel } from "@/hooks/useEntityLabel";
 import { NoticeView, type NoticeTone } from "./Notice";
 
 /** What to say, and what it is: a sensor triggered ("active"), plain news ("info"), or something that did NOT happen
- *  ("alert": a number that was none, a delete that failed), drawn with every such line (ProblemNotices). */
+ *  ("alert": a number that was none, a delete that failed, a command a device did not take), drawn with every such
+ *  line (ProblemNotices). */
 export interface AppNoticeMessage { text: string; tone: Extract<NoticeTone, "active" | "info" | "alert"> }
 
 /** Raise a notice from anywhere under the villa view — a window's Save or Cancel says what it did (owner,
@@ -28,6 +32,19 @@ export function useRaisedNotices() {
   const expire = useCallback(() => setPassing(null), []);
   const drop = useCallback((line: string) => setProblems((said) => said.filter((l) => l !== line)), []);
   return { passing, problems, raise, expire, drop };
+}
+
+/** A command that failed, raised as what did not happen, naming its device (serviceOutcome.failedCommandLine).
+ *  ⚠️ IT HAD A NOTICE OF ITS OWN (UI scan, 2026-11-10): the socket's words ("Not connected") for four seconds, naming
+ *  no device. Every control fires its command without waiting for it, so this is the one place a failed press is
+ *  said, wherever it was made. */
+export function useFailedCommandNotice(raise: (message: AppNoticeMessage) => void) {
+  const { serviceError } = useHA();
+  const label = useEntityLabel();
+  useEffect(() => {
+    if (serviceError) raise({ text: failedCommandLine(serviceError.error, serviceError.entityIds.map(label)), tone: "alert" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once per failure, not per change of a name
+  }, [serviceError]);
 }
 
 export default function AppNotice({ message, onExpire }: { message: AppNoticeMessage | null; onExpire: () => void }) {

@@ -41,7 +41,8 @@ import type { SummaryGroup } from "@/config/summaryGroups";
 import { useVillaModel } from "@/config/VillaModel";
 import { deviceSwitch } from "@/utils/devicePower";
 import InlineConfirm from "@/components/common/InlineConfirm";
-import { NOT_SENT } from "@/ha/serviceOutcome";
+import { NOT_SENT, allSent } from "@/ha/serviceOutcome";
+import { usePendingAck } from "@/hooks/usePendingAck";
 import { domainOf } from "@/utils/entityDomain";
 import { NOT_IN_HA } from "@/utils/stateColors";
 import EmptyLine from "@/components/common/EmptyLine";
@@ -87,20 +88,21 @@ interface Props {
  * turn on, PowerOff = will turn off) and the tooltip says what it will switch (bulkWords: "Turn off 1 fan"). "On" is
  * POWER (groupLook's onCount), and the switch is config/activeDevices' — one
  * call PER DOMAIN (a lock: lock / unlock). Shown over any heading with a device a row switches (owner, 2026-10-20:
- * one switch, four locks — every heading that has one).
+ * one switch, four locks — every heading that has one). Once sent it waits as every command button does
+ * (usePendingAck), until one of the devices it switches says so.
  */
 function BulkToggle({ devices, looks }: { devices: HassEntity[]; looks: LookSource }) {
   const { callService } = useHA();
   const [confirming, setConfirming] = useState(false);
-  if (devices.length === 0) return null;
   const anyOn = groupLook(devices.map((e) => deviceLook(e.entity_id, looks)), { showingDevices: true }).onCount > 0;
   // what it will change, said (owner, 2026-10-20): the devices now on when it turns off, else those now off
   const changing = devices.map((e) => e.entity_id).filter((id) => (deviceLook(id, looks).power === "on") === anyOn);
+  const { pending, markPending } = usePendingAck(changing.join());
+  if (devices.length === 0) return null;
   const words = bulkWords(changing, !anyOn);
   const run = () => {
-    for (const call of bulkSwitchPlan(devices.map((e) => e.entity_id), !anyOn, ROW_SWITCH_DOMAINS)) {
-      void callService(call.domain, call.service, {}, { entity_id: call.entityIds });
-    }
+    markPending(allSent(bulkSwitchPlan(devices.map((e) => e.entity_id), !anyOn, ROW_SWITCH_DOMAINS)
+      .map((call) => callService(call.domain, call.service, {}, { entity_id: call.entityIds }))));
     setConfirming(false);
   };
   return confirming ? (
@@ -112,6 +114,7 @@ function BulkToggle({ devices, looks }: { devices: HassEntity[]; looks: LookSour
       onClick={() => setConfirming(true)}
       data-tip={words}
       aria-label={words}
+      aria-busy={pending || undefined}
     >
       {anyOn ? <PowerOff size={18} /> : <Power size={18} />}
     </button>

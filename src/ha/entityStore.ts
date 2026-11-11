@@ -94,9 +94,9 @@ export interface EntityStoreState {
    *  connect. Null until then. */
   haConfig: HAConfig | null;
   lastError: string | null;
-  /** Most recent failed service call (tap did nothing) — shown as a toast.
-   *  Wrapped in an object so firing the SAME error twice still re-triggers. */
-  serviceError: { message: string; at: number } | null;
+  /** Most recent failed service call (tap did nothing) and the devices it was for: said as a notice of the villa
+   *  view (serviceOutcome.failedCommandLine). Wrapped in an object so the SAME error twice still re-triggers. */
+  serviceError: { error: Error; entityIds: string[]; at: number } | null;
 }
 
 type EntityCallback = (entity: HassEntity) => void;
@@ -252,7 +252,8 @@ export class EntityStore {
       // for connect()'s own on the first connect).
       if (connection === "connected") void this.onConnected();
     };
-    this.ws.onServiceError = (err) => this.set({ serviceError: { message: err.message, at: Date.now() } });
+    this.ws.onServiceError = (error, target) =>
+      this.set({ serviceError: { error, entityIds: [target?.entity_id ?? []].flat(), at: Date.now() } });
     return () => {
       this.ws.onStateChange = () => {};
       this.ws.onServiceError = () => {};

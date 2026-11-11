@@ -629,7 +629,7 @@ button {
    used by every floating HUD/modal-adjacent piece over the 3D scene. One
    definition instead of eight copies of the same two values; each selector
    below still sets its own border (color/width vary: hairline, hairline-strong,
-   or the danger color for the service-error toast) and layout separately. */
+   or the danger color for what did not happen) and layout separately. */
 .icon-btn, .hud-group, .hud-stack, .hud-menu,
 .room-label, .joystick-base {
   background: var(--bg-panel);

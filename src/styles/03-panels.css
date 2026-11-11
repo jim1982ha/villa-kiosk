@@ -130,12 +130,13 @@ input[type="range"]::-moz-range-thumb {
   box-shadow: inset 0 0 0 1.5px var(--accent);
 }
 .big-toggle:active { transform: scale(0.97); }
-/* Tap acknowledgment while waiting on HA's real state_changed round-trip —
-   see PowerToggle.tsx's docstring. Deliberately NOT a colour/text change
-   (that would read as a state prediction); just a soft breathing opacity so
-   the button visibly "knows" a tap landed. */
-.big-toggle.pending { animation: big-toggle-pending 0.9s ease-in-out infinite; }
-@keyframes big-toggle-pending { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
+/* THE WAITING SIGN, ONE RULE (UI scan, 2026-11-10): a button whose command is on its way to a device says it is busy
+   (aria-busy: usePendingAck) and breathes until the device answers: the power button, the lock, Play / Pause, a
+   blind's buttons, a mode or a speed (DeviceChoice), a camera's moves, a list's "turn all off". Deliberately NOT a
+   colour/text change (that would read as a state prediction); just a soft breathing opacity so the button visibly
+   "knows" a tap landed. It was the power button's own class. */
+button[aria-busy="true"] { animation: command-waiting 0.9s ease-in-out infinite; }
+@keyframes command-waiting { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
 
 /* The power button's row (PowerToggle.PowerSection): a compact On button and the device's other choices beside it —
    a light's colours and effects (LightChoices). It wraps on a narrow phone: the choices go under the button. */
