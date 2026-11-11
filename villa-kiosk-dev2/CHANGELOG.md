@@ -1,3 +1,17 @@
+## 2.496.773
+
+What you will see:
+- **An alert's notice over the villa looks like its card.** It was a bell, a title and a line in the app's green, so
+  an alarm and a doorbell looked the same. It now shows what the alert's Cockpit card shows at its top: its icon, its
+  name ("#91-P2"), the device, the time, then its state first ("New alert", "Reminder sent 14:25, waiting for
+  someone") followed by its first words, all in the colour of its severity (red, amber). A device with several
+  problems shows the alert's own state, not "2 problems".
+- A doorbell, an approval and any message that is not an alert keep the bell. So does an alert during the moment the
+  Cockpit has no card for it yet: the notice then turns into the card's top by itself.
+- **Full screen, and on every card, the status is labelled.** The last line was a bare line under the words; it now
+  sits under "Status:", with the earlier steps above it, as the Inbox card shows them.
+- Nothing else changed: the photo, the buttons, the ✕ and how long a notice stays are as before.
+
 ## 2.496.772
 
 What you will see:
