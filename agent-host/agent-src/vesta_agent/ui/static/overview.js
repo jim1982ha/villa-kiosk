@@ -1,5 +1,5 @@
 // VESTA Agent page — the Overview tab: the agent's state, the changes made on these pages, copying the setup.
-import { api, ask, card, fileBase64, fill, go, h, jobsBanner, loading, NEWEST_FIRST, paged, place, plural, problemsBox, reasons, setting, tabbedCard, tell, toast, $view, where } from "./core.js";
+import { api, ask, bullets, button, capital, card, chip, fileBase64, fileButton, fill, go, h, heading, jobsBanner, loading, NEWEST_FIRST, none, note, paged, place, plural, problemsBox, reasons, setting, tabbedCard, tell, toast, $view, where } from "./core.js";
 
 // ---------------------------------------------------------------- overview
 export async function overview() {
@@ -20,14 +20,14 @@ export async function overview() {
     // card's sub-title "Scheduled jobs run" went with them: it was the only thing left under the card's own title.
     // Each run's outcome in the agent's words (status.jobs_run `words`: done / not prepared (why) / stopped by a restart)
     // how far back is a setting (page.last_day_hours): the title says it, the lead links to it (core.setting)
-    const lh = o.last_hours || { value: 24 };
+    const lh = o.last_hours;
     kids.push(card(place("last_day", { hours: lh.value }), h("span", {}, "The scheduled jobs the agent ran in the last ",
       setting(`${lh.value} hours`, lh.ref), ", from its own records."),
       r.scheduled_jobs.length
         ? paged(["Job", "Ran at", "Outcome"], [...r.scheduled_jobs].reverse().map((j) => [j.label || j.job, j.at, j.words]), 10, { nav: NEWEST_FIRST })
-        : h("p", { class: "muted" }, `No scheduled job ran in the last ${lh.value} hours.`)));
+        : none(`No scheduled job ran in the last ${lh.value} hours.`, "p")));
   } else {
-    kids.push(card(place("last_day", { hours: (o.last_hours || { value: 24 }).value }), "The agent has not recorded anything yet."));
+    kids.push(card(place("last_day", { hours: o.last_hours.value }), "The agent has not recorded anything yet."));
   }
   kids.push(await historyCard(), setupCard(o.setup));
   fill($view, ...kids);
@@ -47,11 +47,11 @@ export async function historyCard() {
   return card(place("changes"), lead,
     changes.length ? paged(["When", "Where", "What changed", ""], changes.map((c) => [
       c.at,
-      h("span", { class: "chip " + c.chip }, c.place),                   // its colour: history.CHIPS
+      chip(c.place, c.chip),                                             // its status: history.CHIPS
       c.what,
       // the server says which changes Undo handles (server.undoable): the page kept its own list and left out the instructions
-      c.undone_by ? h("span", { class: "muted" }, "undone") : c.undoable ? h("button", { class: "btn ghost", onclick: undo(c) }, "Undo") : ""]), 10, { nav: NEWEST_FIRST })
-    : h("p", { class: "muted" }, "No change made here yet."));
+      c.undone_by ? none("undone") : c.undoable ? button("", { onclick: undo(c) }, "Undo") : ""]), 10, { nav: NEWEST_FIRST })
+    : none("No change made here yet.", "p"));
 }
 
 // ---------------------------------------------------------------- overview › copy this setup to another villa (3A, 3B)
@@ -61,7 +61,7 @@ export function exportCard(offer) {
   const tick = (k, label, sub) => h("label", { class: "tick" }, h("input", { type: "checkbox", checked: parts[k], onchange: (e) => { parts[k] = e.target.checked; } }),
     h("span", {}, label, sub ? h("span", { class: "muted small block" }, sub) : null));
   const stay = (label, sub) => h("div", { class: "tick" }, h("span", { class: "lock" }, "✕"), h("span", {}, label, sub ? h("span", { class: "muted small block" }, sub) : null));
-  const btn = h("button", { class: "btn primary", onclick: async () => {
+  const btn = button("primary", { onclick: async () => {
     btn.disabled = true;
     try {
       const { blob, name } = await api("POST", "api/setup/export", parts, { file: true });
@@ -72,8 +72,8 @@ export function exportCard(offer) {
   } }, "Download the setup");
   return h("div", {}, h("p", { class: "muted" }, `One file with the skills and the shareable part of the rules. On the other villa: ${where("setup_in")}.`),
     h("div", { class: "grid two" },
-      h("div", { class: "box" }, h("div", { class: "eyebrow" }, "Goes in the file"), offer.parts.map((p) => tick(p.key, p.words, p.note))),
-      h("div", { class: "box" }, h("div", { class: "eyebrow" }, "Always stays here"), offer.stays.map((x) => stay(x.words, x.note)))),
+      h("div", { class: "box" }, heading("Goes in the file"), offer.parts.map((p) => tick(p.key, p.words, p.note))),
+      h("div", { class: "box" }, heading("Always stays here"), offer.stays.map((x) => stay(x.words, x.note)))),
     h("div", { class: "actions" }, btn));
 }
 
@@ -85,7 +85,6 @@ export function setupCard(offer) {
 
 export function importCard() {
   const out = h("div");
-  const input = h("input", { type: "file", accept: ".zip,application/zip", onchange: () => input.files[0] && look(input.files[0]) });
   let zip = null;
   async function look(file) {
     fill(out, h("p", { class: "muted" }, "Reading…"));
@@ -94,22 +93,22 @@ export function importCard() {
     catch (e) { fill(out, problemsBox(reasons(e), "Not a setup this agent can read:")); }
   }
   function show(name, p) {
-    const CH = { added: "", replaced: "", changed: "", same: "gray" };
+    const CH = { same: "gray" };                 // a status each (core.STATUS): nothing to do is quiet, a change the page's own
     fill(out,
       h("p", { class: "muted" }, `${name}${p.made_with ? `, made with agent ${p.made_with}` : ""}. Nothing is written until you press Apply.`),
       // the shared table: 10 rows a page, each row a labelled card on a phone (a setup can carry many skills)
       paged(["What", "Change", "Detail"], p.rows.map((r) => [r.what,
-        h("span", { class: "chip " + (CH[r.change] || "") }, r.change[0].toUpperCase() + r.change.slice(1)),
+        chip(capital(r.change), CH[r.change] || ""),
         { v: r.detail, cls: "muted" }])),
-      p.misfits.length ? h("div", { class: "banner warnbox" }, h("div", {}, h("b", {}, `${plural(p.misfits.length, "thing does", "things do")} not fit this villa`),
-        h("ul", {}, p.misfits.map((m) => h("li", { class: "muted" }, m))))) : null,
+      p.misfits.length ? note("warn", `${plural(p.misfits.length, "thing does", "things do")} not fit this villa`, bullets(p.misfits)) : null,
       h("div", { class: "actions" },
-        h("button", { class: "btn ghost", onclick: () => { fill(out); input.value = ""; } }, "Cancel"),
-        h("button", { class: "btn primary", disabled: !p.changes, onclick: async () => {
+        button("", { onclick: () => fill(out) }, "Cancel"),
+        button("primary", { disabled: !p.changes, onclick: async () => {
           try { await api("POST", "api/setup/import", { zip, apply: true, fingerprint: p.fingerprint }); toast(`Imported. Every change is in ${where("changes")}.`); go("overview"); }
           catch (e) { tell("Not imported", reasons(e)); }
         } }, p.changes ? `Apply ${plural(p.changes, "change", "changes")}` : "Nothing to change")));
   }
   return h("div", {}, h("p", { class: "muted" }, "A file made by \"Download the setup\" on another villa. You see every change, and what does not fit this villa, before anything is written."),
-    h("label", { class: "field" }, h("span", {}, "Setup file"), input), out);
+    // the page's own file chooser (core.fileButton), as Skills' "Import skill"
+    h("div", { class: "actions" }, fileButton(".zip,application/zip", look, "Choose the setup file")), out);
 }

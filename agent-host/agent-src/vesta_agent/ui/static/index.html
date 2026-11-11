@@ -11,21 +11,16 @@
 <body>
 <header class="top">
   <div class="brand"><span class="mark">VESTA</span><span class="eyebrow">Agent</span><span class="ver" title="{ver_title}">{ver}</span></div>
-  <div class="themes" role="radiogroup" aria-label="Theme">
-    <button data-theme-set="light" role="radio" title="Light">Light</button>
-    <button data-theme-set="auto" role="radio" title="Follow this device">Auto</button>
-    <button data-theme-set="dark" role="radio" title="Dark">Dark</button>
-  </div>
 </header>
 <nav class="tabs" role="tablist">
-  <button data-tab="overview" class="on">{tab:overview}</button>
-  <button data-tab="rules">{tab:rules} <span class="tab-file" data-tab="rules-file" title="Open policy.yaml itself">(file)</span></button>
-  <button data-tab="knowledge">{tab:knowledge}</button>
-  <button data-tab="skills">{tab:skills}</button>
-  <button data-tab="costs">{tab:costs}</button>
-  <button data-tab="limits">{tab:limits}</button>
+  <button role="tab" data-tab="overview" class="on">{tab:overview}</button>
+  <button role="tab" data-tab="rules">{tab:rules} <span class="tab-file" data-tab="rules-file" title="Open policy.yaml itself">(file)</span></button>
+  <button role="tab" data-tab="knowledge">{tab:knowledge}</button>
+  <button role="tab" data-tab="skills">{tab:skills}</button>
+  <button role="tab" data-tab="costs">{tab:costs}</button>
+  <button role="tab" data-tab="limits">{tab:limits}</button>
 </nav>
-<div id="pageerror" class="pageerror" hidden></div>
+<div id="pageerror" class="note alert pageerror" hidden></div>
 <main id="view"></main>
 <div id="savebar" class="savebar" hidden></div>
 <div id="toast" class="toast" hidden></div>

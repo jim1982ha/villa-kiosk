@@ -1354,7 +1354,7 @@ title's line (`cardWith`), a card of tabs (`tabbedCard`), and a fit measured aga
 
 | Job | One owner |
 |---|---|
-| The theme: the stored choice, Auto following the device, the header's three buttons | `static/theme.js` (always writes `data-theme` on `<html>`; `app.css` holds the dark palette once, under `:root[data-theme="dark"]`) |
+| The theme: the stored choice, Auto following the device | `static/theme.js` (always writes `data-theme` on `<html>`; `app.css` holds the dark palette once, under `:root[data-theme="dark"]`); the header's switch is drawn by `app.js` with `core.segmented` |
 | The version beside the title, on every tab | `server.index` (`{ver}`, `{ver_title}` in `index.html`); the Overview's answer no longer carries it |
 | The jobs, devices and tools the Rules tab lists | `server.rules_view` (the routes `/api/jobs`, `/api/entities`, `/api/tools` had no caller and are removed) |
 | A sent page's two palettes | `templates/page_head.html` (`{% set light %}` / `{% set dark %}`, each written once and used by the five theme selectors) |
@@ -1376,6 +1376,29 @@ fifteen is gone). The Costs chart is drawn at its own box's width and again on a
 | A job's time, picked | `when.PICKS` and `Spec.picked()` say what is offered and what is chosen; `limits.js` `timePicker` draws it and sends back the text the scheduler reads. A job with a `kiosk` key offers its hour only (`picks: None`): `skills.py` refuses anything but a daily time there |
 | A sentence in a table on a phone | the cell class `words` (`paged` cells `{v, cls}`): left, across the card, no label |
 | A figure's size | `--figure` on `.figures` (one value for the letters and for the column's least width, so a figure is never cut) |
+
+The same scan, one definition per look (owner, 2026-11-10: "only 1 definition for all similar UI elements", so that
+"changing 1 code will naturally waterfall"): a tab's module writes no class and no markup of a shared piece;
+`static/core.js` builds it and `static/app.css` styles it once.
+
+| Piece | Built by (`core.js`) | Styled once (`app.css`) |
+|---|---|---|
+| A status: a pill, a note over what it is about, a legend dot | `chip(words, status)`, `note(status, title, words, actions)` (`problemsBox` is the red one, `jobsBanner` an amber one), `dot(status)`. A status is a NAME of core's `STATUS` table (`""` fine, `warn`, `alert`, `gray`), which is also what `history.CHIPS` and `limits_tab.TOLD` send | `--status` and `--status-soft`, set by `.warn`, `.alert`, `.gray` and read by `.chip`, `.note`, `.dot`; the soft tints (`--warning-soft`, `--danger-soft`) are mixed from the palette's colours, so the dark theme follows. Red is "needs attention" only: a tool switched off or never available is grey, a skill that works without a tool is amber |
+| A button | `button(kind, attrs, words)` (`""` outlined, `primary`, `danger`, `icon`); the small pill `pillButton` (`moreButton`, Offline Test, "All N files"); `backButton`; `fileButton` (a page button over a hidden file input) | `.btn`, `.pill-btn` |
+| A switch | `toggle(on, change, label, {words})`, Limits' word lists included | `.switch` |
+| Choose one of several | `segmented` (View / Edit, the header's theme switch) | `.seg` |
+| Tabs | `tabbed`, `subTabs`; the top tabs are `index.html`'s | `button[role="tab"]` |
+| What is chosen | | three looks: a tab (its underline), a choice (`.seg button.on, .dropdown-option.on, .picker-row.on`), a line of a list (`.skill-item.on, .files button.on`) |
+| A card, its title, a heading inside it, a group | `card`, `cardWith`, `heading`, `group`, `folded`; a title's count is `counted` | `.card h2`, `h3`, `.group` |
+| Nothing to show | `none(words)`, `DASH` | `.none` |
+| A field and its hint | `field(label, input, hint, after)` | `.field`, `.muted` |
+| A table | `table`, `paged`, `editTable` | `table.rows th, table.rows td` (one padding, one line under each row); the column headings' look is written once, for a table, a phone card's labels, a run's steps and Compare's sides |
+| A file shown | `viewer.js` | `.file-view` (the box), `.md-view` and `.yaml-view` (what is in it) |
+| A figure's words | `usd`, `seconds`, `lastDays`, `plural`, `capital` | |
+
+Every size is one of the `--text-*` steps (a formatted file's own headings and code are sized from the text around
+them). Left as they are: the Overview's "what the file holds" ticks (a list to
+tick beside lines that cannot be, not an on/off setting) and `(file)` inside the Rules tab (a link in a tab).
 
 Not renamed on purpose: Telegram's messages and the AI's instructions still say "VESTA Kiosk" (`message_format`,
 `kiosk_told`, `villa_recipients`, `tools`, `tickets`, the starter skills); the page's own texts say "VESTA UI".

@@ -20,7 +20,7 @@ const named = (v) => {
   return setting(`${v}: ${value}${s.unit ? ` ${s.unit}` : ""}`, s.ref);
 };
 const inl = (list) => list.map((x) => x.t === "text" ? x.v : x.t === "code" ? named(x.v) : x.t === "b" ? h("strong", {}, inl(x.c))
-  : x.t === "i" ? h("em", {}, inl(x.c)) : /^https?:\/\//.test(x.href) ? h("a", { href: x.href, target: "_blank", rel: "noopener noreferrer" }, inl(x.c))
+  : x.t === "i" ? h("em", {}, inl(x.c)) : /^https?:\/\//.test(x.href) ? h("a", { class: "link", href: x.href, target: "_blank", rel: "noopener noreferrer" }, inl(x.c))
   : h("span", { title: x.href }, inl(x.c)));
 function listView(items) {
   // nested by depth; a list of the other kind at the same depth starts beside it
@@ -43,7 +43,7 @@ function listView(items) {
 }
 export function markdownView(text, settings = {}) {
   names = settings || {};
-  // flatMap, never map: core.h and fill flatten ONE level, and a list is several nodes (an array inside lost them)
+  // flatMap: a list is several nodes, each a block of the page like the others
   return parse(text).flatMap((b) => b.t === "meta" ? h("dl", { class: "md-meta" }, b.rows.flatMap(([k, v]) => [h("dt", {}, k), h("dd", {}, v)]))
     : b.t === "h" ? h(`h${b.level}`, {}, inl(b.inl)) : b.t === "p" ? h("p", {}, inl(b.inl)) : b.t === "list" ? listView(b.items)
     : b.t === "code" ? h("pre", {}, h("code", {}, b.text)) : b.t === "quote" ? h("blockquote", {}, inl(b.inl)) : b.t === "hr" ? h("hr")
@@ -65,7 +65,8 @@ export const viewKind = (path) => (/\.md$/i.test(path || "") ? "md" : /\.ya?ml$/
 export function fileViewer(ta, path) {
   const kind = viewKind(path);
   let settings = {};                       // the settings the file names, with their values (markdownView)
-  const box = h("div", { class: `file-view ${kind === "md" ? "md-box" : "yaml-box"}`, hidden: true });
+  // one box for every kind of file; what is inside follows the kind (app.css .md-view, .yaml-view)
+  const box = h("div", { class: `file-view ${kind === "md" ? "md-view" : ""}`.trim(), hidden: true });
   const show = () => {
     const formatted = !!kind && page.fileView !== "raw";
     ta.hidden = formatted; box.hidden = !formatted;

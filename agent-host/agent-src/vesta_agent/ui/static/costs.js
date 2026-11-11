@@ -1,11 +1,10 @@
 // VESTA Agent page — the Costs tab.
-import { alertButton, api, card, cardWith, dropdown, figures, fill, h, infoButton, loading, measured, moreButton, NEWEST_FIRST, paged, place, placed, plural, svg, tabbedCard, $view, where } from "./core.js";
+import { alertButton, api, capital, card, cardWith, chip, DASH, dropdown, figures, fill, h, heading, infoButton, lastDays, loading, measured, moreButton, NEWEST_FIRST, none, paged, place, placed, plural, svg, tabbedCard, usd, $view, where } from "./core.js";
 
 // ---------------------------------------------------------------- costs
-export const usd = (v) => "US$ " + (v || 0).toFixed((v || 0) > 0 && v < 0.01 ? 4 : 2);
-export const ktok = (n) => (n === null || n === undefined ? "—" : n >= 1e6 ? (n / 1e6).toFixed(1) + "M" : n >= 1000 ? (n / 1000).toFixed(n >= 1e5 ? 0 : 1) + "k" : String(n));
+export const ktok = (n) => (n === null || n === undefined ? DASH : n >= 1e6 ? (n / 1e6).toFixed(1) + "M" : n >= 1000 ? (n / 1000).toFixed(n >= 1e5 ? 0 : 1) + "k" : String(n));
 let PROFILES = {};                     // the brains' names, from this tab's own answer (no shared page field)
-export const brain = (p, m) => [p ? (PROFILES[p] || p).replace(/ \(.*/, "") : null, m ? m.replace(/^claude-/, "") : null].filter(Boolean).join(" · ") || "—";
+export const brain = (p, m) => [p ? (PROFILES[p] || p).replace(/ \(.*/, "") : null, m ? m.replace(/^claude-/, "") : null].filter(Boolean).join(" · ") || DASH;
 
 // A run's "What" (owner, 2026-10-19): its label, the chat it came from, and the pill that opens the question as it was
 // asked, whole, and the steps, on the run's line underneath (runMore), across every column: squeezed into this column
@@ -36,13 +35,13 @@ export function runMore(r) {
       h("li", { class: "steps-head" }, h("span", { class: "step-n" }, "#"), h("span", {}, "Skill"), h("span", {}, "Tool"),
         h("span", {}, "What it did")),
       steps.map((x) => h("li", { title: x.raw || null },
-        h("span", { class: "step-n" }, String(x.n)), h("span", { class: "step-skill" }, x.skill || "—"),
-        h("span", { class: "chip gray" }, x.tool), h(x.code ? "code" : "span", { class: "step-sum" }, x.summary || "")))) : null);
+        h("span", { class: "step-n" }, String(x.n)), h("span", { class: "step-skill" }, x.skill || DASH),
+        chip(x.tool, "gray"), h(x.code ? "code" : "span", { class: "step-sum" }, x.summary || "")))) : null);
 }
 
 // ⚠️ EVERYTHING ON THIS TAB FOLLOWS THE PERIOD CHOSEN, 7 DAYS UNLESS ANOTHER IS (owner, 2026-10-06): the figures,
 // the chart, by job, by model, every run and the tools.
-const PERIODS = [[7, "Last 7 days"], [30, "Last 30 days"], [90, "Last 90 days"]];
+const PERIODS = [7, 30, 90].map((d) => [d, capital(lastDays(d))]);
 
 export async function costs(days = 7) {
   days = PERIODS.some(([d]) => d === Number(days)) ? Number(days) : 7;      // a period the tab has (the address may say any)
@@ -54,7 +53,7 @@ export async function costs(days = 7) {
   const period = dropdown(PERIODS, days, (v) => costs(Number(v)), "Period");
   // the figures as the agent adds them up (status.costs: period, runs_count, per_run, busiest, activity), never here
   const busiest = c.busiest || { day: null, cost: 0 };
-  const kpis = figures([[`Last ${days} days`, usd(c.period)], ["Runs", String(c.runs_count)],
+  const kpis = figures([[capital(lastDays(days)), usd(c.period)], ["Runs", String(c.runs_count)],
     ["Per run", usd(c.per_run || 0)],
     [busiest.day ? `Busiest day (${busiest.said})` : "Busiest day", usd(busiest.cost)],
     // then what the agent did in the same period (owner, 2026-10-22: moved here from Overview's fixed 24 hours),
@@ -94,34 +93,34 @@ export async function costs(days = 7) {
   measured(chart, () => fill(chart, drawChart()));
   const groupTable = (rows, title) => paged([title, { v: "Runs", cls: "num" }, { v: "Tokens in", cls: "num" }, { v: "Tokens out", cls: "num" },
     { v: "Cost", cls: "num" }, { v: "Per run", cls: "num" }], rows.map((g) => [g.name.replace(/^claude-/, ""), { v: g.runs, cls: "num" },
-    { v: g.recorded ? ktok(g.tokens_in) : "—", cls: "num" }, { v: g.recorded ? ktok(g.tokens_out) : "—", cls: "num" }, { v: usd(g.cost), cls: "num" }, { v: usd(g.cost / g.runs), cls: "num" }]));
+    { v: g.recorded ? ktok(g.tokens_in) : none(), cls: "num" }, { v: g.recorded ? ktok(g.tokens_out) : none(), cls: "num" }, { v: usd(g.cost), cls: "num" }, { v: usd(g.cost / g.runs), cls: "num" }]));
   const runRows = c.runs.map((r) => ({ more: (r.steps || []).length || r.asked ? runMore(r) : null, cells: [
     { v: r.at, cls: "nowrap" },
     runWhat(r),
-    r.without_ai ? "Without the AI" : r.no_result ? "—" : brain(r.profile, r.model),
+    r.without_ai ? "Without the AI" : r.no_result ? none() : brain(r.profile, r.model),
     usedSkills(r.skills),
-    { v: r.tokens_in === null || r.tokens_in === undefined ? "—" : `${ktok((r.tokens_in || 0) + (r.cache_read || 0) + (r.cache_write || 0))} / ${ktok(r.tokens_out)}`, cls: "num" },
+    { v: r.tokens_in === null || r.tokens_in === undefined ? none() : `${ktok((r.tokens_in || 0) + (r.cache_read || 0) + (r.cache_write || 0))} / ${ktok(r.tokens_out)}`, cls: "num" },
     { v: r.interrupted && !r.cost ? "not reported" : usd(r.cost), cls: "num" },
     r.without_ai ? madeWithoutAi(r.without_ai)
       // a run that ended without sending its report (agent_records.JOB_NO_RESULT): the agent's words of why
-      : r.no_result ? h("span", { class: "chips one-line" }, infoButton("Not sent", r.no_result.why), h("span", { class: "chip off" }, "not sent"))
+      : r.no_result ? h("span", { class: "chips one-line" }, infoButton("Not sent", r.no_result.why), chip("not sent", "alert"))
       // the (!) a failed run has, its words in the tooltip (owner, 2026-10-15: "a single (!) icon, the details in tooltip")
       : r.interrupted ? alertButton("Stopped by a restart", () => h("div", {}, h("b", {}, "Stopped by a restart of the agent."),
         h("div", { class: "tooltip-detail" }, "It was still working when the agent restarted. Anthropic reports a run's cost when it ends, so this one's is not here: the Anthropic Console has it.")))
-      : r.stopped ? h("span", { class: "chip off" }, "stopped at its limit") : r.error ? alertButton("This run failed", () => h("div", {}, h("b", {}, r.cause ? `This run failed: ${r.cause}.` : "This run failed."),
+      : r.stopped ? chip("stopped at its limit", "alert") : r.error ? alertButton("This run failed", () => h("div", {}, h("b", {}, r.cause ? `This run failed: ${r.cause}.` : "This run failed."),
       r.what_to_do ? h("div", {}, r.what_to_do) : null, h("div", { class: "tooltip-detail" }, r.error))) : ""] }));
   fill($view,
     // the period's selector on the title's line, on the right (owner, 2026-10-06); the figures straight under it, no
     // line between (owner, 2026-10-22: the separator under the title row went); the chart below its own separator
     cardWith(period, place("cost"), "As the Anthropic API reported it for each run: a chat reply, or a run of an AI job. Tokens in count what the agent re-read from its cache too. Everything on this tab follows the period chosen here.",
-      kpis, h("div", { class: "divided" }, h("h2", {}, place("cost_day")), chart)),
+      kpis, h("div", { class: "divided" }, heading(place("cost_day")), chart)),
     // ⚠️ TWO CARDS OF TWO TABS (owner, 2026-10-08): "By job" and "By model" are one question asked two ways, and so
     // are "Every run" and the tools those runs used — each pair is one card, its tab kept when the period changes
-    tabbedCard(`${place("cost_split")} · last ${days} days`, "spend", [
+    tabbedCard(`${place("cost_split")} · ${lastDays(days)}`, "spend", [
       ["job", place("by_job"), "Chat replies (the alert cards put in a chat's language, which use their brain, apart: Chat replies › alert translation), and each AI job, named by its skill (reports › fm-daily).", () => groupTable(c.by_job, "Job")],
       ["model", place("by_model"), "Which model ran each reply and each job.", () => groupTable(c.by_model, "Model")]]),
-    tabbedCard(`${place("runs")} · last ${days} days`, "runs", [
-      ["runs", place("every_run"), `${c.runs_count} runs, newest first. Open a run's steps to see what was asked, whole, and each tool it used (recorded from agent 0.6.42 on).`,
+    tabbedCard(`${place("runs")} · ${lastDays(days)}`, "runs", [
+      ["runs", place("every_run"), `${plural(c.runs_count, "run", "runs")}, newest first. Open a run's steps to see what was asked, whole, and each tool it used (recorded from agent 0.6.42 on).`,
         () => paged(["When", "What", "Brain · model", "Skills", { v: "Tokens in / out", cls: "num" }, { v: "Cost", cls: "num" }, ""],
                     runRows, 10,
                     // the columns named, the row's cells at their top (a long question no longer centres the others);
@@ -130,7 +129,7 @@ export async function costs(days = 7) {
       ["tools", place("tools_called"), `Each tool the AI called, in how many runs and how many times. A tool never called is a candidate to switch off (${where("tools")}).`,
         () => (c.tools && c.tools.length ? paged(["Tool", { v: "Runs", cls: "num" }, { v: "Calls", cls: "num" }],
           c.tools.map((t) => [h("code", {}, t.tool), { v: t.runs, cls: "num" }, { v: t.calls, cls: "num" }]))
-          : h("p", { class: "muted" }, "No tool recorded in this period yet."))]]));
+          : none("No tool recorded in this period yet.", "p"))]]));
 }
 
 // A job its code steps made when the AI could not run (owner, 2026-10-07): the figures and charts were sent, said
@@ -142,12 +141,12 @@ export function madeWithoutAi(w) {
     infoButton(ok ? "Made without the AI" : "Not made", ok
       ? `${w.why} The report was still made from its figures and charts, and sent saying so; VESTA's readings are missing.`
       : `${w.why} Its figures could not be made either${w.failed ? ` (${w.failed} failed)` : ""}${w.sent ? "; part of it was sent" : ""}.`),
-    h("span", { class: ok ? "chip warn" : "chip off" }, ok ? "without the AI" : "not made"));
+    chip(ok ? "without the AI" : "not made", ok ? "warn" : "alert"));
 }
 
 // the skills a run used, in order, as the agent lists them (status.costs: the one it was started for, then those the AI
 // read or ran a script of); a run recorded before agent 0.6.260 has none
 export function usedSkills(skills) {
-  return (skills || []).length ? h("div", { class: "chips" }, skills.map((k) => h("span", { class: "chip" }, k))) : "—";
+  return (skills || []).length ? h("div", { class: "chips" }, skills.map((k) => chip(k))) : none();
 }
 

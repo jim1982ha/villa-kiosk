@@ -1,3 +1,23 @@
+## 0.12.501
+
+- On the Agent's page, everything that does the same job now looks the same on every tab, because each is drawn by
+  one piece: the buttons, the pills, the switches, the notes at the top of a tab, the headings inside a box, the
+  tables and the words of an empty list. A change to one of them now shows everywhere at once.
+- The notes at the top of a tab have one look: amber when something is worth a look ("AI jobs are not set", "The
+  agent uses this skill without…", "another version of this skill"), red only when something is refused or broken.
+  "The agent uses this skill without…" was red although the skill still works.
+- What is locked or simply off is grey, never red: the tools that are "Never available", a tool a skill works
+  without. Red stays for what needs attention (a device that is gone, a skill not working).
+- Every table has the same lines between its rows and the same headings; the rows of "Allowed actions" are a little
+  taller for it.
+- "Acting on the villa": its switch is at the right of its title, where every other box keeps its control.
+- A small pill is one size everywhere (Knowledge, Limits, Skills, Rules): some were stretched to their row's height,
+  some were smaller. A tool's use reads "used 12× in the last 7 days".
+- Overview › Import a setup: one button of the page's own, "Choose the setup file", in place of the browser's grey
+  "Choose file… No file chosen".
+- The Limits tab's lists of words are switches, like every other on/off of the page.
+- Nothing else changes: no tab, no setting and no wording of a message moved.
+
 ## 0.12.500
 
 - Every date on the Agent's page is in the villa's time and written as the messages write it ("10/11/2026 09:01").

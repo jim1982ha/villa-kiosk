@@ -42,7 +42,7 @@ export function h(tag, attrs = {}, ...kids) {
     else if (k === "checked") el.checked = !!v;
     else el.setAttribute(k, v === true ? "" : v);
   }
-  for (const kid of kids.flat()) if (kid !== null && kid !== undefined && kid !== false)
+  for (const kid of kids.flat(Infinity)) if (kid !== null && kid !== undefined && kid !== false)
     el.append(kid instanceof Node ? kid : document.createTextNode(String(kid)));
   return el;
 }
@@ -141,14 +141,14 @@ export function dropdown(options, value, pick, label) {
 // says its width (a <col>, which the page's CSP allows where a style attribute is blocked) and where it goes
 // on a phone, a line of its own each: "ab" the first, "cd" the second, "ef" the third (app.css .ph-*).
 // The remove button is always at the end of the first line. Returns [table, its Add button].
-export function editTable(rows, { cls, columns, cell: draw, blank, add, changed = () => {}, per = PER_PAGE }) {
+export function editTable(rows, { columns, cell: draw, blank, add, changed = () => {}, per = PER_PAGE }) {
   const body = h("tbody");
   const touched = () => { changed(); markDirty(); };
   const pager = pagedBlock(() => rows.length, (from, to) => body.replaceChildren(...rows.slice(from, to).map((row, k) => tableRow([
     ...columns.map((c, j) => ({ cls: `ph-${c.phone}`, v: draw(row, j, touched, () => pager.redraw()) })),
-    { cls: "x ph-x", v: h("button", { class: "btn icon ghost", title: "Remove", onclick: () => { rows.splice(from + k, 1); pager.redraw(); touched(); } }, "×") }]))), per);
+    { cls: "x ph-x", v: button("icon", { title: "Remove", onclick: () => { rows.splice(from + k, 1); pager.redraw(); touched(); } }, "×") }]))), per);
   pager.redraw();
-  return [table([...columns.map((c) => c.title), ""], body, { cls: `edit ${cls}`, widths: [...columns.map((c) => c.width), "44"] }), pager.nav, h("div", { class: "actions" }, h("button", { class: "btn ghost", onclick: () => { rows.push(blank()); pager.last(); touched(); } }, add))];
+  return [table([...columns.map((c) => c.title), ""], body, { cls: "edit", widths: [...columns.map((c) => c.width), "44"] }), pager.nav, h("div", { class: "actions" }, button("", { onclick: () => { rows.push(blank()); pager.last(); touched(); } }, add))];
 }
 
 // A file the person picked, as base64 for a JSON body (an imported setup, a .skill file): read in slices, so a large
@@ -213,7 +213,7 @@ export async function saveWith(probs, send, okText) {
 }
 
 // replaceChildren() prints a null as the text "null": the optional parts are filtered first.
-export function fill(el, ...kids) { el.replaceChildren(...kids.flat().filter((k) => k !== null && k !== undefined && k !== false)); }
+export function fill(el, ...kids) { el.replaceChildren(...kids.flat(Infinity).filter((k) => k !== null && k !== undefined && k !== false)); }
 
 // what every tab shows while its answer is on the way (its tabbed sections are drawn again after it: none shown yet)
 export const loading = () => { page.shown.clear(); fill($view, h("p", { class: "muted" }, "Loading…")); };
@@ -258,34 +258,101 @@ export function toast(text) {
   clearTimeout(toast.t); toast.t = setTimeout(() => ($toast.hidden = true), 3500);
 }
 
+// ---------------------------------------------------------------- the page's pieces, each drawn by one builder
+// ⚠️ ONE DEFINITION PER PIECE (owner, 2026-11-10: "only 1 definition for all similar UI elements … changing 1 code
+// will naturally waterfall and apply by design to all UI elements using this code"). A button, a pill, a switch, a
+// note, a heading, an empty state: each is built here and styled once in app.css; a tab never writes their classes.
+
+// ⚠️ ONE STATUS TABLE: a status is a NAME, its look is here (its two colours once in app.css, read by whatever shows
+// a status: .chip, .note, .dot). The server names a status too (history.CHIPS, limits_tab.TOLD), never a look.
+// Red is "alert", needs attention, and nothing else: a tool switched off or never available is quiet, not wrong.
+const STATUS = {
+  "": "",             // fine, or simply a name: the page's green
+  warn: "warn",       // worth a look: amber
+  alert: "alert",     // needs attention: red
+  gray: "gray",       // quiet: off, locked, nobody is told
+};
+const look = (base, status) => `${base} ${STATUS[status || ""] ?? ""}`.trim();
+
+// the one pill of words: a status ("Not working"), or a name (a device, a skill, a tool); `title`: its tooltip
+export const chip = (words, status = "", title = null) => h("span", { class: look("chip", status), title }, words);
+
+// The one button. `kind`: "" the usual one, "primary" the screen's main action, "danger" one that deletes, "icon" a
+// square one ("×"); its place on its line may follow ("danger push-right").
+export const button = (kind, attrs, ...words) => h("button", { type: "button", class: `btn ${kind}`.trim(), ...attrs }, ...words);
+// the one small pill-shaped button: a run's "3 steps ▸" (moreButton), a command's Offline Test, a list's "more ▾"
+export const pillButton = (attrs, ...words) => h("button", { type: "button", class: "pill-btn", ...attrs }, ...words);
+
+// The one switch. `change(on, input)` on a press (none: it is only shown, locked); `label` names it for a screen
+// reader; `words` are said beside it.
+export function toggle(on, change, label, { disabled = false, title = null, cls = "", words = null } = {}) {
+  return h("label", { class: `switch ${cls}`.trim(), title }, h("input", { type: "checkbox", checked: on, disabled, "aria-label": label,
+    onchange: change ? (e) => change(e.target.checked, e.target) : null }), words);
+}
+
+// The one file chooser: a button of the page's own, the browser's input behind it (its "Choose file… No file chosen"
+// follows no theme). `picked(file)` on a choice; the same file may be chosen again.
+export function fileButton(accept, picked, label) {
+  const input = h("input", { type: "file", accept, hidden: true, onchange: () => {
+    const file = input.files[0];
+    input.value = "";
+    if (file) picked(file);
+  } });
+  return [button("", { onclick: () => input.click() }, label), input];
+}
+
+// The one note over what it is about: a bold line, its words or its list, its buttons at the right. "alert": refused
+// or broken (problemsBox); "warn": it works, and there is something to look at or to do.
+export function note(status, title, words = null, actions = null) {
+  return h("div", { class: look("note", status) }, h("div", {}, h("b", {}, title), words),
+    actions ? h("div", { class: "actions" }, actions) : null);
+}
+export const bullets = (list) => h("ul", {}, list.map((l) => h("li", {}, l)));
 export function problemsBox(list, title = "Not saved:") {
   if (!list || !list.length) return null;
-  return h("div", { class: "problems" }, h("b", {}, title), h("ul", {}, list.map((p) => h("li", {}, p))));
+  return note("alert", title, bullets(list));
 }
+
+// The one heading inside a card (the card's own title is its h2): a group of tools, a part of a skill's About, the
+// cost per day. `words`: a quiet note after it ("2 of 3 on").
+export const heading = (title, words = null) => h("h3", {}, title, words ? h("span", { class: "muted" }, ` ${words}`) : null);
+// The one group inside a card: a hairline, its heading, what it holds. `folded`: the same, opened and closed by a
+// press on its heading.
+export const group = (title, words, ...kids) => h("div", { class: "group" }, heading(title, words), ...kids);
+export const folded = (title, words, open, ...kids) => h("details", { class: "group", open }, h("summary", {}, heading(title, words)), ...kids);
+// the one small round mark of a status, beside a name (a file that differs from the release) and in its legend
+export const dot = (status = "") => h("span", { class: look("dot", status) });
+// a title and how many it holds: "Pumps (11)"
+export const counted = (title, n) => `${title} (${n})`;
+
+// ⚠️ NOTHING TO SHOW IS SAID ONE WAY: "—" where a value is missing, a few words where a list is empty ("None", "No
+// change made here yet."); `tag` "p" when it stands alone under a title.
+export const DASH = "—";
+export const none = (words = DASH, tag = "span") => h(tag, { class: "none" }, words);
 
 // A card: its title, and what it is about behind an (i) beside it (owner, 2026-10-06: no description paragraph
 // under every title). Hover shows it; a tap (a phone has no hover) opens it under the title. A card with nothing
 // else in it (an empty state) keeps its text in view: there it IS the content.
+// No title: a card that is one place's whole screen (an open skill), its heading drawn by its caller.
+const cardBox = (head, kids) => h("section", { class: "card" }, head, ...kids);
 export function card(title, lead, ...kids) {
   const content = kids.flat().filter((k) => k !== null && k !== undefined && k !== false);
-  if (!lead || !content.length) return h("section", { class: "card" }, h("h2", {}, title), lead ? h("p", { class: "lead" }, lead) : null, ...kids);
-  return h("section", { class: "card" }, titleWithInfo(title, lead), ...kids);
+  if (!title) return cardBox(null, kids);
+  if (!lead || !content.length) return cardBox([h("h2", {}, title), lead ? h("p", { class: "lead" }, lead) : null], kids);
+  return cardBox(cardTitle(title, lead), kids);
 }
 
-// A card whose title's line holds a control, on the right: Costs' period, Allowed actions' Approve time, Limits' Back.
+// A card whose title's line holds a control, on the right: Costs' period, Allowed actions' Approve time, Limits' Back,
+// the switch of "The agent may act".
 export function cardWith(right, title, lead, ...kids) {
-  return h("section", { class: "card" }, titleWithInfo(title, lead, "h2", right), ...kids);
+  return cardBox(cardTitle(title, lead, right), kids);
 }
 
 // A title, its (i), and an optional control on the same line, right-aligned (cardWith).
 // ⚠️ THE TEXT IS A TOOLTIP, NEVER INSERTED IN THE PAGE (owner, 2026-10-06): it floats over the page on hover or
 // keyboard focus, and on a tap (a phone has no hover); a second tap, a tap elsewhere, Escape or scrolling closes it.
-export function titleWithInfo(title, text, tag = "h2", right = null) {
-  // a text, or a node when it shows a value a person can change (core.setting): read aloud as its words
-  const words = text instanceof Node ? text.textContent : text;
-  const btn = h("button", { type: "button", class: "info", "aria-label": `About ${title}: ${words}`, "aria-expanded": "false" }, "i");
-  infoTip(btn, text);
-  return h("div", { class: "card-title" }, h(tag, {}, title, btn), right ? h("div", { class: "card-title-right" }, right) : null);
+function cardTitle(title, text, right = null) {
+  return h("div", { class: "card-title" }, h("h2", {}, title, infoButton(title, text)), right ? h("div", { class: "card-title-right" }, right) : null);
 }
 
 // a label with its (i) — a column heading, a field: the (i) takes the size of the text it sits in (app.css em units)
@@ -309,8 +376,7 @@ export function tileCard(title, { chip = null, words = null, meta = null, side =
 // not a line of its own)
 export function toggleCard(on, onChange, title, { chip = null, words = null, meta = null, label = null, action = null } = {}, disabled = false) {
   let card = null;
-  const sw = h("label", { class: "switch" }, h("input", { type: "checkbox", checked: on, disabled, "aria-label": label || title,
-    onchange: (e) => { card.classList.toggle("is-on", e.target.checked); onChange(e.target.checked, e.target); } }));
+  const sw = toggle(on, (checked, input) => { card.classList.toggle("is-on", checked); onChange(checked, input); }, label || title, { disabled });
   card = tileCard(title, { chip, words, meta, side: action ? h("div", { class: "tool-card-side" }, action, sw) : sw, on,
                            cls: disabled ? "locked" : "" });
   return card;
@@ -318,16 +384,20 @@ export function toggleCard(on, onChange, title, { chip = null, words = null, met
 
 // an alert's (!): the (i)'s behaviour — hover, tap — in the alert colour, for what went wrong (owner, 2026-10-07: "api error
 // 400" was a pill in the table)
-export function alertButton(about, text) {
-  const btn = h("button", { type: "button", class: "info alert", "aria-label": `${about}: details`, "aria-expanded": "false" }, "!");
-  infoTip(btn, text, "alert");
-  return btn;
-}
+export const alertButton = (about, text) => tipButton("alert", `${about}: details`, text);
 
 // the (i) itself, its text shown on hover and on a tap (infoTip)
 export function infoButton(about, text) {
-  const btn = h("button", { type: "button", class: "info", "aria-label": `About ${about}`, "aria-expanded": "false" }, "i");
-  infoTip(btn, text);
+  // read aloud with its words when they are known now: a text, or a node showing a value a person can change
+  // (core.setting); a text made when it opens is only named
+  const words = text instanceof Node ? text.textContent : typeof text === "string" ? text : "";
+  return tipButton("", words ? `About ${about}: ${words}` : `About ${about}`, text);
+}
+
+// the round button both are: `kind` "" the (i), "alert" the (!)
+function tipButton(kind, label, text) {
+  const btn = h("button", { type: "button", class: `info ${kind}`.trim(), "aria-label": label, "aria-expanded": "false" }, kind ? "!" : "i");
+  infoTip(btn, text, kind);
   return btn;
 }
 
@@ -359,10 +429,13 @@ export function figures(pairs) {
     pairs.map(([label, value]) => h("div", { class: "kpi" }, h("div", { class: "n" }, value), h("div", { class: "l" }, label))));
 }
 
-export function field(label, input, hint) {
+// `hint`: a small note under it; `after`: what follows the input on its own line (a unit, an (i)): the label, the
+// input and they then sit on one line
+export function field(label, input, hint = null, after = null) {
   // a <label> forwards a click inside it to its first control: a picker (a box and a list) is in a <div>
   const tag = input && input.classList && input.classList.contains("picker") ? "div" : "label";
-  return h(tag, { class: "field" }, h("span", {}, label), input, hint ? h("span", { class: "hint" }, hint) : null);
+  return h(tag, { class: "field" + (after ? " row-inline" : "") }, h("span", {}, label), input, after,
+    hint ? h("span", { class: "muted small" }, hint) : null);
 }
 
 // A table of many rows, 10 to a page (owner, 2026-10-01): `head` the column titles, `rows` arrays of cells;
@@ -371,7 +444,8 @@ export function field(label, input, hint) {
 // ⚠️ "NEWER / OLDER" ONLY WHERE THE LIST IS BY TIME (UI scan, 2026-11-10): it was the default, so the Limits tab, a
 // skill's "When it runs" and the Costs tab's tables by skill, by model and by tool turned to "Older" pages.
 export const NEWEST_FIRST = ["‹ Newer", "Older ›", "rows"];
-export function paged(head, rows, per = PER_PAGE, { cls = "", widths = null, nav = ["‹ Previous", "Next ›", "rows"] } = {}) {
+const NAV = ["‹ Previous", "Next ›", "rows"];
+export function paged(head, rows, per = PER_PAGE, { cls = "", widths = null, nav = NAV } = {}) {
   const body = h("tbody");
   // each cell carries its column's name: on a phone the row becomes a card, every value on its own line, its name on
   // the left (app.css; owner, 2026-10-31: no two columns sharing a line any more, their values left and right)
@@ -397,7 +471,7 @@ export function paged(head, rows, per = PER_PAGE, { cls = "", widths = null, nav
 
 // The button that opens a paged row's `more` (the line under it): "11 steps ▸", "▾" while open.
 export function moreButton(label) {
-  const btn = h("button", { type: "button", class: "more-btn", "aria-expanded": "false" }, label, h("span", { class: "caret" }, "▸"));
+  const btn = pillButton({ "aria-expanded": "false" }, label, h("span", { class: "caret" }, "▸"));
   btn.addEventListener("click", () => {
     const more = btn.closest("tr")?.nextElementSibling;
     if (!more || !more.classList.contains("row-more")) return;
@@ -436,16 +510,17 @@ export function table(head, body, { cls = "", widths = null } = {}) {
 export function subTabs(items, current, pick) {
   return h("div", { class: "subtabs", role: "tablist" }, items.filter(Boolean).map(([k, l, info]) => {
     const tab = h("button", { type: "button", role: "tab", class: k === current ? "on" : "", "aria-selected": String(k === current), onclick: () => pick(k) }, l);
-    return info ? h("span", { class: "subtab-with-info" + (k === current ? " on" : "") }, tab, infoButton(l, info)) : tab;
+    return info ? h("span", { class: "subtab-with-info" }, tab, infoButton(l, info)) : tab;
   }));
 }
 
 // A small switch between a few views (Skills › Files: Formatted / Raw), drawn like the Light / Auto / Dark one.
-// `options`: [[value, label], …]; `pick(value)` on a press.
+// `options`: [[value, label, its tooltip?], …]; `pick(value)` on a press. The header's Light / Auto / Dark is one too
+// (app.js: its markup was a second copy in index.html).
 export function segmented(options, value, pick, label) {
   const box = h("div", { class: "seg", role: "radiogroup", "aria-label": label || null });
-  const draw = (v) => fill(box, options.map(([k, l]) => h("button", { type: "button", role: "radio", class: k === v ? "on" : "",
-    "aria-checked": String(k === v), onclick: () => { draw(k); pick(k); } }, l)));
+  const draw = (v) => fill(box, options.map(([k, l, title]) => h("button", { type: "button", role: "radio", class: k === v ? "on" : "",
+    title: title || null, "aria-checked": String(k === v), onclick: () => { draw(k); pick(k); } }, l)));
   draw(value);
   return box;
 }
@@ -480,7 +555,7 @@ export function tabbedCard(title, id, tabs, lead = null) {
 // `draw(slice, offset)` fills the page; returns [box, nav, api]: api.redraw() after a change, api.last() to show the
 // last page (after Add).
 const PER_PAGE = 10;
-export function pagedBlock(count, draw, per = PER_PAGE, [prev, next, unit] = ["‹ Previous", "Next ›", "lines"]) {
+export function pagedBlock(count, draw, per = PER_PAGE, [prev, next, unit] = NAV) {
   const nav = h("div", { class: "pager" });
   let page = 0;
   const pages = () => Math.max(1, Math.ceil(count() / per));
@@ -488,9 +563,9 @@ export function pagedBlock(count, draw, per = PER_PAGE, [prev, next, unit] = ["�
     page = Math.min(page, pages() - 1);
     draw(page * per, Math.min(count(), page * per + per));
     nav.replaceChildren(...(pages() > 1 ? [
-      h("button", { type: "button", class: "btn ghost", disabled: page === 0, onclick: () => { page--; redraw(); } }, prev),
+      button("", { disabled: page === 0, onclick: () => { page--; redraw(); } }, prev),
       h("span", { class: "muted" }, `Page ${page + 1} of ${pages()} · ${count()} ${unit}`),
-      h("button", { type: "button", class: "btn ghost", disabled: page >= pages() - 1, onclick: () => { page++; redraw(); } }, next)] : []));
+      button("", { disabled: page >= pages() - 1, onclick: () => { page++; redraw(); } }, next)] : []));
   };
   return { nav, redraw, last: () => { page = pages() - 1; redraw(); } };
 }
@@ -515,12 +590,12 @@ export function ask({ title, text = "", ok = "OK", cancel = "Cancel", danger = f
     const lines = Array.isArray(text) ? text : [text];
     const dlg = h("dialog", { class: "ask" },
       h("form", { method: "dialog" },
-        h("h3", {}, title),
-        lines.length > 1 ? h("ul", {}, lines.map((l) => h("li", {}, l))) : (lines[0] ? h("p", {}, lines[0]) : null),
+        h("h2", {}, title),
+        lines.length > 1 ? bullets(lines) : (lines[0] ? h("p", {}, lines[0]) : null),
         field,
         h("div", { class: "actions" },
-          cancel ? h("button", { class: "btn ghost", value: "cancel", type: "submit" }, cancel) : null,
-          h("button", { class: "btn " + (danger ? "danger" : "primary"), value: "ok", type: "submit" }, ok))));
+          cancel ? button("", { value: "cancel", type: "submit" }, cancel) : null,
+          button(danger ? "danger" : "primary", { value: "ok", type: "submit" }, ok))));
     dlg.addEventListener("close", () => {
       const yes = dlg.returnValue === "ok";
       dlg.remove();
@@ -537,8 +612,8 @@ export const tell = (title, text) => ask({ title, text, cancel: null });
 // same <dialog> as ask(), wider, closed by its Close button, Escape or a click on the backdrop.
 export function popup(title, body, info = null) {
   const dlg = h("dialog", { class: "ask wide" },
-    h("div", { class: "popup-head" }, h("h3", {}, info ? withInfo(title, info) : title),
-      h("button", { type: "button", class: "btn ghost", autofocus: true, onclick: () => dlg.close() }, "Close")),
+    h("div", { class: "popup-head" }, h("h2", {}, info ? withInfo(title, info) : title),
+      button("", { autofocus: true, onclick: () => dlg.close() }, "Close")),
     body);
   dlg.addEventListener("click", (e) => { if (e.target === dlg) dlg.close(); });
   dlg.addEventListener("close", () => dlg.remove());
@@ -561,8 +636,8 @@ export function showBar() {
   if (!barState) { $bar.hidden = true; return; }
   $bar.hidden = false;
   $bar.append(h("span", { class: "msg" }, page.dirty ? "Unsaved changes" : barState.idle || ""),
-    barState.discard ? h("button", { class: "btn ghost", disabled: !page.dirty, onclick: barState.discard }, "Discard") : null,
-    h("button", { class: "btn primary", disabled: !page.dirty, onclick: barState.save }, barState.label || "Save"));
+    barState.discard ? button("", { disabled: !page.dirty, onclick: barState.discard }, "Discard") : null,
+    button("primary", { disabled: !page.dirty, onclick: barState.save }, barState.label || "Save"));
 }
 
 // ---------------------------------------------------------------- AI jobs not set
@@ -571,14 +646,13 @@ export function showBar() {
 // written by the agent (POST api/jobs/missing): the page no longer reads, changes and writes the whole form for it
 export function jobsBanner(names, after) {
   if (!names || !names.length) return null;
-  const btn = h("button", { class: "btn primary", onclick: async () => {
+  const btn = button("primary", { onclick: async () => {
     btn.disabled = true;
     try { await api("POST", "api/jobs/missing", {}); toast("AI jobs added. Change their skill's brain or limit under Rules."); after(); }
     catch (e) { btn.disabled = false; tell("Not added", e.problems); }
   } }, "Add them");
-  return h("div", { class: "banner" },
-    h("div", {}, h("b", {}, `${names.length} AI job${names.length > 1 ? "s are" : " is"} not set: ${names.length > 1 ? "they don't" : "it doesn't"} run.`),
-      h("div", { class: "muted" }, names.join(", "), ": their skill needs a brain and a spending limit per run.")), btn);
+  return note("warn", `${plural(names.length, "AI job is", "AI jobs are")} not set: ${names.length > 1 ? "they don't" : "it doesn't"} run.`,
+    h("div", { class: "muted" }, names.join(", "), ": their skill needs a brain and a spending limit per run."), btn);
 }
 
 // `place`: the tab's own place in it, as the address keeps it (placed); none: the tab as it opens
@@ -622,12 +696,14 @@ async function goBack() {
   window.scrollTo({ top: b.y });
 }
 
-// the Back button itself: "‹ Back", named after the tab it returns to
-export function backButton() {
+// The Back button itself: "‹ Back", named after the tab it returns to. `words` and `back`: another way back, said
+// by its own words (Skills on a phone: "‹ All skills").
+export function backButton(words = null, back = null) {
+  if (back) return button("", { onclick: back }, words);
   if (!page.back) return null;
   const label = document.querySelector(`.tabs button[data-tab="${page.back.tab.replace("-file", "")}"]`)?.textContent?.trim();
-  return h("button", { type: "button", class: "btn ghost", title: label ? `Back to ${label}` : "Back",
-    "aria-label": label ? `Back to ${label}` : "Back", onclick: goBack }, "‹ Back");
+  const title = label ? `Back to ${label}` : "Back";
+  return button("", { title, "aria-label": title, onclick: goBack }, "‹ Back");
 }
 
 // ⚠️ ONE "MEASURED ON THE PAGE" (UI scan, 2026-11-10: a role's pill and a skill's line of files each wired it): `fit`
@@ -642,7 +718,7 @@ export function measured(node, fit) {
 
 // a link to another card of the Rules page: scrolls to it and outlines it a moment
 export function jump(id, label) {
-  return h("a", { href: `#${id}`, class: "jump", onclick: (e) => {
+  return h("a", { href: `#${id}`, class: "link", onclick: (e) => {
     e.preventDefault();
     const el = document.getElementById(id);
     if (!el) return;
@@ -650,4 +726,10 @@ export function jump(id, label) {
     el.classList.add("flash"); setTimeout(() => el.classList.remove("flash"), 1600);
   } }, label);
 }
+
+// ---------------------------------------------------------------- the words of a figure, each written once
 export const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+export const usd = (v) => "US$ " + (v || 0).toFixed((v || 0) > 0 && v < 0.01 ? 4 : 2);
+export const seconds = (n) => `${n}s`;                          // a duration, its unit joined: "30s"
+export const lastDays = (n) => `last ${n} days`;                // a period, in a title or a sentence
+export const capital = (words) => words[0].toUpperCase() + words.slice(1);

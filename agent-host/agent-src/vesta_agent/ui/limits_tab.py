@@ -66,7 +66,8 @@ def unit_of(key: str) -> str:
 # policy.yaml's values, the Rules tab's, and the group's (i) says so
 GROUP_TITLES = {**limits.GROUPS, SKILL_GROUP: "Skill settings", POLICY_GROUP: "Agent rules"}
 GROUP_INFO = {POLICY_GROUP: "The agent's own rules (policy.yaml), the same values the Rules tab shows: never one of the villa's automations."}
-#: Who is told when a limit is reached: the pill's words and its look (app.css .chip: "" the page's own, "gray" quiet).
+#: Who is told when a limit is reached: the pill's words and its status, a NAME of the page's one status table
+#: (core.js STATUS: "" fine, "gray" quiet), never a colour or a CSS class.
 #: ⚠️ NOBODY TOLD IS NOT A PROBLEM (owner's UI scan, 2026-11-10): the page painted that pill red, found by its words
 #: ("Nobody…"); red is for what needs attention, and the look is said here, beside the words.
 TOLD = {"person": ("The person is told", ""), "ai": ("Only the AI is told", ""), "": ("Nobody is told", "gray")}

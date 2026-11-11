@@ -1,12 +1,12 @@
 // VESTA Agent page — the Limits tab: every limit on what the agent reads, says and keeps, on one page.
 // ⚠️ SAVED WHERE IT LIVES (owner, 2026-10-20): a limit of the code in limits.yaml, a skill's number in the skill's
 // settings, a rule in policy.yaml (ui/limits_tab.py) — so Rules and Skills show the same value, and this tab can go.
-import { api, backButton, cardWith, dropdown, fill, h, infoButton, loading, page, paged, problemsBox, saveNow, searchBox, tabbed, $view } from "./core.js";
+import { api, backButton, button, cardWith, chip, counted, DASH, dropdown, fill, h, infoButton, loading, none, page, paged, problemsBox, saveNow, searchBox, tabbed, toggle, $view } from "./core.js";
 
 let SEARCH = "", FILTER = "";       // the search as typed, and as matched
 
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
-const shown = (v) => (Array.isArray(v) ? v.join(", ") : v === null || v === undefined ? "—" : String(v));
+const shown = (v) => (Array.isArray(v) ? v.join(", ") : v === null || v === undefined ? DASH : String(v));
 // a value as the row's drop-down words it ([value, words] choices: "After 12h of silence"), else as written
 // (review L, 2026-10-25: the save line and "Changed from its usual" said "after_8h_silence")
 const said = (r, v) => ((r.choices || []).find((c) => Array.isArray(c) && same(c[0], v)) || [null, shown(v)])[1];
@@ -36,7 +36,7 @@ function timePicker(r, set) {
   return box;
 }
 
-// the value's field: a number, a choice, or a list of words (ticked from the words it may hold)
+// the value's field: a number, a choice, or a list of words (each a switch, among the words it may hold)
 function input(r, set) {
   if (r.kind === "measured") return h("b", {}, String(r.value));        // the villa's own setting: shown, never set here
   // a time of day, or a scheduled job's time (skill.yaml `when`): picked; one the file writes another way stays text
@@ -51,8 +51,8 @@ function input(r, set) {
   if (r.kind === "list") {
     const all = [...new Set([...(r.choices || []), ...(r.default || []), ...(r.value || [])])].sort();
     const now = new Set(r.value || []);
-    return h("div", { class: "limit-words" }, all.map((w) => h("label", { class: "limit-word" },
-      h("input", { type: "checkbox", checked: now.has(w), onchange: (e) => { e.target.checked ? now.add(w) : now.delete(w); set([...now].sort()); } }), w)));
+    return h("div", { class: "limit-words" }, all.map((w) => toggle(now.has(w),
+      (on) => { on ? now.add(w) : now.delete(w); set([...now].sort()); }, `${r.name}: ${w}`, { words: w })));
   }
   return h("input", { type: "number", step: "any", min: r.lo ?? null, max: r.hi ?? null, value: r.value, "aria-label": r.name,
     oninput: (e) => set(e.target.value === "" ? null : Number(e.target.value)) });
@@ -61,7 +61,7 @@ function input(r, set) {
 function row(r, probs, again) {
   let value = r.value;
   // the page's one save (core.saveNow): saved, the tab is drawn again; refused, the row keeps what was typed
-  const save = h("button", { class: "btn", disabled: true, onclick: async () => {
+  const save = button("", { disabled: true, onclick: async () => {
     save.disabled = true;
     if (await saveNow(probs, () => api("PUT", "api/limits", { id: r.id, value }),
                       `Saved: ${r.name} = ${said(r, value)}`, `${r.name} not saved:`)) again();
@@ -80,7 +80,7 @@ function row(r, probs, again) {
       r.reached ? h("div", { class: "limit-reached" }, `Reached: ${r.reached}`) : null,
       h("div", { class: "muted small" }, r.also,
         same(r.value, r.default) ? "" : ` Changed from its usual ${said(r, r.default)}.`)) },
-    r.told ? h("span", { class: `chip tiny ${r.told_chip || ""}` }, r.told) : h("span", { class: "muted" }, "—"),
+    r.told ? chip(r.told, r.told_chip) : none(),                   // its status: limits_tab.TOLD
     h("div", { class: "limit-value" }, field, r.unit ? h("span", { class: "muted" }, r.unit) : null,
       bounds ? h("span", { class: "muted small" }, bounds) : null, save),
   ];
@@ -108,8 +108,8 @@ export async function limits() {
     if (!rows.length) return null;
     const list = rows.filter(match);
     if (focus) list.sort((a, b) => (b === focus) - (a === focus));           // the row asked for comes first
-    return [key, `${title} (${list.length})`, (data.group_info || {})[key] || null,
-      () => (list.length ? table(list) : h("p", { class: "muted" }, "No limit here matches the search.")), list.length];
+    return [key, counted(title, list.length), (data.group_info || {})[key] || null,
+      () => (list.length ? table(list) : none("No limit here matches the search.", "p")), list.length];
   });
   const bar = h("div"), body = h("div");
   const draw = () => {

@@ -1,5 +1,5 @@
 // VESTA Agent page — the Skills tab.
-import { api, ask, dropdown, field, fileBase64, fill, guard, h, infoButton, loading, measured, page, paged, place, placed, plural, popup, problemsBox, reasons, setBar, setting, subTabs, tabbed, tell, tileCard, titleWithInfo, toast, toggleCard, $view, where } from "./core.js";
+import { api, ask, backButton, bullets, button, capital, card, chip, dot, dropdown, field, fileBase64, fileButton, fill, guard, h, heading, infoButton, loading, measured, none, note, page, paged, pillButton, place, placed, plural, popup, problemsBox, reasons, seconds, setBar, setting, subTabs, tabbed, tell, tileCard, toast, toggle, toggleCard, $view, where } from "./core.js";
 import { openTools } from "./rules.js";
 import { fileEditor } from "./viewer.js";
 
@@ -9,22 +9,20 @@ import { fileEditor } from "./viewer.js";
 export const STATE_WORDS = { follows: "Follows the releases", edited: "Edited here · updates paused", own: "This villa's own skill" };
 
 export function skillChips(s) {
-  return [s.off ? h("span", { class: "chip gray" }, "Off") : null,
-          !s.off && !s.ok ? h("span", { class: "chip off" }, "Not working") : null,
-          s.state === "edited" ? h("span", { class: "chip warn" }, "edited here") : null];
+  return [s.off ? chip("Off", "gray") : null,
+          !s.off && !s.ok ? chip("Not working", "alert") : null,
+          s.state === "edited" ? chip("edited here", "warn") : null];
 }
 
 export function skillSwitch(name, on, select) {
-  return h("label", { class: "switch skill-switch", title: on ? "On: the agent uses it" : "Off: kept, not used" },
-    h("input", { type: "checkbox", checked: on, "aria-label": `${name} on`, onchange: async (e) => {
-      const now = e.target.checked;
-      if (!now && !(await ask({ title: `Switch ${name} off?`, ok: "Switch off", danger: true,
-        text: "The agent stops using it at once: no schedule, no alert hook, not read in a chat. Its files are kept; switch it on again here." }))) { e.target.checked = true; return; }
-      if (!(await guard())) { e.target.checked = !now; return; }
-      try { await api("PUT", `api/skills/${encodeURIComponent(name)}/on`, { on: now }); toast(`${name} switched ${now ? "on" : "off"}.`);
-        skills(document.querySelector(".skill-item.on")?.dataset.skill || select); }     // the skill open NOW (show() moves it)
-      catch (err) { e.target.checked = !now; tell("Not changed", reasons(err)); }
-    } }));
+  return toggle(on, async (now, box) => {
+    if (!now && !(await ask({ title: `Switch ${name} off?`, ok: "Switch off", danger: true,
+      text: "The agent stops using it at once: no schedule, no alert hook, not read in a chat. Its files are kept; switch it on again here." }))) { box.checked = true; return; }
+    if (!(await guard())) { box.checked = !now; return; }
+    try { await api("PUT", `api/skills/${encodeURIComponent(name)}/on`, { on: now }); toast(`${name} switched ${now ? "on" : "off"}.`);
+      skills(document.querySelector(".skill-item.on")?.dataset.skill || select); }     // the skill open NOW (show() moves it)
+    catch (err) { box.checked = !now; tell("Not changed", reasons(err)); }
+  }, `${name} on`, { cls: "skill-switch", title: on ? "On: the agent uses it" : "Off: kept, not used" });
 }
 
 export async function skills(select = null, at = undefined) {
@@ -32,16 +30,15 @@ export async function skills(select = null, at = undefined) {
   const { skills: list } = await api("GET", "api/skills");
   if (select && !list.some((s) => s.name === select)) select = null;      // an address kept from before the skill was deleted
   placed();
-  const side = h("div", { class: "card" },
-    titleWithInfo("Skills", "Each skill is a folder of files. A change counts at the agent's next use, no restart. The switch beside a skill turns it on or off for this villa."),
+  const side = card("Skills", "Each skill is a folder of files. A change counts at the agent's next use, no restart. The switch beside a skill turns it on or off for this villa.",
     // each skill: its name and line (opens it), and its On/Off switch beside it (owner, 2026-10-06)
     list.length ? list.map((s) => h("div", { class: "skill-item" + (s.name === select ? " on" : "") + (s.off ? " is-off" : ""), "data-skill": s.name },
       h("button", { type: "button", class: "skill-open", onclick: () => show(s.name) },
         h("div", { class: "skill-name" }, h("b", {}, s.name), ...skillChips(s)),
         // the agent's verdict on its tools under the description, when it has one (tool_access.health `line`)
         h("div", { class: "d" }, s.off ? "Off · kept, not used" : s.ok ? [s.description, s.line ? h("div", { class: "muted small" }, s.line) : null] : s.line)),
-      skillSwitch(s.name, !s.off, select))) : h("p", { class: "muted" }, "No skill yet. The starter skills are copied at the agent's first start."),
-    h("div", { class: "actions" }, h("button", { class: "btn ghost", onclick: newSkill }, "New skill"), importSkillButton()));
+      skillSwitch(s.name, !s.off, select))) : none("No skill yet. The starter skills are copied at the agent's first start.", "p"),
+    h("div", { class: "actions" }, button("", { onclick: newSkill }, "New skill"), importSkillButton()));
   const pane = h("div");
   side.classList.add("skills-side");
   fill($view, h("div", { class: "skills" }, side, pane));
@@ -99,14 +96,13 @@ export function tryPanel(name, d, script, command = null) {
         : Array.isArray(kind)
         ? dropdown([["", "not set"], ...kind.map((k) => [k, k])], values[flag] || "", (v) => { values[flag] = v; }, label)
         : kind === "switch"
-          ? h("label", { class: "switch" }, h("input", { type: "checkbox", checked: !!values[flag], "aria-label": label,
-              onchange: (e) => { values[flag] = e.target.checked; } }), "yes")
+          ? toggle(!!values[flag], (on) => { values[flag] = on; }, label, { words: "yes" })
           : h("input", { type: "text", value: values[flag] || "", placeholder: FLAG_HELP[kind] || "", "aria-label": label,
               oninput: (e) => { values[flag] = e.target.value.trim(); } });
-      return field(label[0].toUpperCase() + label.slice(1), input,
+      return field(capital(label), input,
         kind === "infile" ? `${flag} · a file an earlier step left` : kind === "outfile" ? `${flag} · saved for a next step`
           : Array.isArray(kind) ? `one of: ${kind.join(", ")}` : flag);
-    }) : h("p", { class: "muted small" }, "This command takes no options."));
+    }) : none("This command takes no options.", "p"));
   };
   // the answer is asked for every second: a command may run for minutes (nightly.py), longer than a page request lives
   const sleep = (ms) => new Promise((ok) => setTimeout(ok, ms));
@@ -117,7 +113,7 @@ export function tryPanel(name, d, script, command = null) {
       if (!r.pending) return r;
       const s = Math.round((Date.now() - t0) / 1000);
       if (!r.started && s > 30) return { ok: false, error: "The agent did not start it: it is stopped, or waiting for a setting (see its log)." };
-      fill(out, h("p", { class: "muted" }, r.started ? `Running on the villa… ${s}s` : "Waiting for the agent…"));
+      fill(out, h("p", { class: "muted" }, r.started ? `Running on the villa… ${seconds(s)}` : "Waiting for the agent…"));
       await sleep(1000);
     }
   }
@@ -130,24 +126,23 @@ export function tryPanel(name, d, script, command = null) {
       try { d.out_files = (await api("GET", `api/skills/${encodeURIComponent(name)}`)).out_files; draw(); } catch { /* kept */ }
       fill(out, r.ok === false && r.exit === undefined ? problemsBox([r.error], "Not run:") : [
         // the verdict is the agent's (script_run.py), the same for every run: not worked out again here
-        h("div", { class: "try-result" }, h("span", { class: "chip" + ({ done: "", nothing: " warn" }[r.verdict] ?? " off") },
-          r.verdict_words || r.verdict),
-          h("span", { class: "muted small" }, `${r.seconds}s · the script's own answer · nothing was sent`)),
+        h("div", { class: "try-result" }, chip(r.verdict_words || r.verdict, { done: "", nothing: "warn" }[r.verdict] ?? "alert"),
+          h("span", { class: "muted small" }, `${seconds(r.seconds)} · the script's own answer · nothing was sent`)),
         r.error ? problemsBox([r.error], "The script stopped:") : null,
         h("pre", { class: "out" }, pretty(r.output))]);
     } catch (e) { fill(out, problemsBox(reasons(e), "Not run:")); }
   }
   draw();
-  return h("div", { class: "skill-sec" },
+  return h("div", {},
     opts,
-    h("div", { class: "actions" }, h("button", { class: "btn primary", onclick: run }, "Run")),
+    h("div", { class: "actions" }, button("primary", { onclick: run }, "Run")),
     out);
 }
 
 // The pill on a command's card that opens its Offline Test (only while the AI may run it: switched off, it is not
 // what the AI would run)
 export function offlineTestPill(name, d, script, command) {
-  return h("button", { type: "button", class: "pill-btn", onclick: () =>
+  return pillButton({ onclick: () =>
     // the title names the script too: two scripts may share a command name (compose.py and facts.py both have fm-weekly);
     // no subtitle and no "Options" heading under it (owner, 2026-10-08: redundant)
     popup(`Offline Test · ${command ? `${script.script} ${command}` : script.script}`, tryPanel(name, d, script, command), OFFLINE_TEST_INFO) },
@@ -174,14 +169,17 @@ export function shown(rows, around = 2) {
 // was not there. The banner and the Compare tab both draw this one.
 const TAKE_RELEASE_TEXT = () => `The skill's files are replaced by the release's; this villa's own files (villa.*) are kept. Your edits are moved to skills/.trash, and Undo (${where("changes")}) brings them back.`;
 export function takeReleaseButton(name) {
-  const btn = h("button", { class: "btn primary", onclick: async () => {
+  return button("primary", { onclick: async () => {
     if (!(await ask({ title: "Take the release version?", ok: "Take the release version", danger: true,
       text: TAKE_RELEASE_TEXT() }))) return;
     try { await api("POST", `api/skills/${encodeURIComponent(name)}/take-release`); toast("The release's version is in place."); skills(name); }
     catch (err) { tell("Not changed", reasons(err)); }
   } }, "Take the release version");
-  return btn;
 }
+
+// One of a skill's files, in a list of them (Files, Compare): the open one lit; `marks`: its dots
+const fileChoice = (words, on, pick, title = null, marks = null) =>
+  h("button", { type: "button", class: on ? "on" : "", title, onclick: pick }, words, marks);
 
 // Skills › Compare: an edited starter skill's file beside the release's, and the way back to the release's version
 export async function comparePanel(name, rel) {
@@ -191,8 +189,9 @@ export async function comparePanel(name, rel) {
   const draw = async () => {
     const { rows } = await api("GET", `api/skills/${encodeURIComponent(name)}/compare?path=${encodeURIComponent(file)}`);
     fill(box,
-      h("div", { class: "files" }, list.map((f) => h("button", { class: f === file ? "on" : "", onclick: () => { file = f; draw(); } },
-        f + ((rel.only_here || []).includes(f) ? " · only here" : (rel.only_release || []).includes(f) ? " · only in the release" : "")))),
+      h("div", { class: "files" }, list.map((f) => fileChoice(
+        f + ((rel.only_here || []).includes(f) ? " · only here" : (rel.only_release || []).includes(f) ? " · only in the release" : ""),
+        f === file, () => { file = f; draw(); }))),
       h("div", { class: "compare" },
         h("div", { class: "compare-head" }, h("b", {}, "Here"), h("b", {}, "The release")),
         // only the changed lines and 2 around each; "…" where the files agree (on a phone: one column, labelled)
@@ -202,8 +201,8 @@ export async function comparePanel(name, rel) {
       h("div", { class: "actions" }, takeReleaseButton(name),
         infoButton("Take the release version", TAKE_RELEASE_TEXT())));
   };
-  if (file) await draw(); else fill(box, h("p", { class: "muted" }, "No file differs."));
-  return h("div", { class: "skill-sec" }, box);
+  if (file) await draw(); else fill(box, none("No file differs.", "p"));
+  return box;
 }
 
 export async function newSkill() {
@@ -216,17 +215,15 @@ export async function newSkill() {
 // ⚠️ A .skill FILE MADE OFFLINE (owner, 2026-10-25: "the same way Claude allows to import .skill file"): the zip of
 // one skill folder Claude makes; read and checked by the agent (setup_copy.read_skill), never replacing a skill here
 export function importSkillButton() {
-  const input = h("input", { type: "file", accept: ".skill,.zip,application/zip", hidden: true, onchange: async () => {
-    const file = input.files[0]; input.value = "";
-    if (!file || !(await guard())) return;
+  return fileButton(".skill,.zip,application/zip", async (file) => {
+    if (!(await guard())) return;
     try {
       const r = await api("POST", "api/skills/import", { data: await fileBase64(file) });
       toast(`Skill ${r.name} imported.`);
       if (r.notes.length) tell(`${r.name} imported`, r.notes);
       skills(r.name);
     } catch (e) { tell("Not imported", reasons(e)); }
-  } });
-  return [h("button", { class: "btn ghost", onclick: () => input.click() }, "Import skill"), input];
+  }, "Import skill");
 }
 
 export let filesOpen = false;
@@ -250,37 +247,36 @@ export async function openSkill(name, pane, info, path = ABOUT) {
   pane.closest(".skills")?.classList.add("has-open");
 
   // ---- the head (a phone only: the list is hidden there) and the state pill, which sits on the tabs' line
-  const pill = rel.state ? h("span", { class: "chip" + (rel.state === "edited" ? " warn" : rel.state === "own" ? " gray" : "") }, STATE_WORDS[rel.state]) : null;
-  const back = h("button", { class: "btn ghost back-to-list", onclick: async () => { if (await guard()) skills(); } }, "‹ All skills");
+  const pill = rel.state ? chip(STATE_WORDS[rel.state], { edited: "warn", own: "gray" }[rel.state] || "") : null;
+  const back = backButton("‹ All skills", async () => { if (await guard()) skills(); });
+  back.classList.add("back-to-list");
   const head = h("div", { class: "skill-head" },
     h("div", { class: "skill-title" }, h("h2", {}, name), pill ? pill.cloneNode(true) : null,     // the phone's place for the pill
-      d.off ? h("span", { class: "chip gray" }, "Off") : !d.ok ? h("span", { class: "chip off" }, "Not working") :
-        d.without && d.without.length ? h("span", { class: "chip warn" }, "Works without a tool") : null),
+      d.off ? chip("Off", "gray") : !d.ok ? chip("Not working", "alert") :
+        d.without && d.without.length ? chip("Works without a tool", "warn") : null),
     skillSwitch(name, !d.off, name));
 
   // ---- what needs the owner's attention, above everything
-  // a tool it uses that is switched off: it still works, without it (owner, 2026-10-10: who asks decides, never the skill)
+  // a tool it uses that is switched off: it still works, without it (owner, 2026-10-10: who asks decides, never the skill).
+  // ⚠️ A WARNING, NEVER AN ERROR (the rules: red means "needs attention"): the same amber as the head's
+  // "Works without a tool" pill
   const fixes = (d.without || []).filter((b) => b.fix);
-  const blocked = d.without && d.without.length ? h("div", { class: "problems" },
-    h("b", {}, "The agent uses this skill without:"),
-    h("ul", {}, d.without.map((b) => h("li", {}, b.why))),
-    h("p", { class: "muted" }, "Its reports still run and the AI works without it; switch it on for the whole skill."),
-    h("div", { class: "actions" },
-      ...fixes.map((b) => h("button", { class: "btn primary", onclick: async () => {
-        // 2C's one-press fix: the agent switches the tool on where its switch is (tool_access.switch_on), same checks as a save
-        try { await api("POST", "api/tools/on", { tool: b.tool }); toast(`${b.label} switched on.`); skills(name); } catch (err) { tell("Not changed", reasons(err)); }
-      } }, `Switch ${b.label} on`)),
-      h("button", { class: "btn ghost", onclick: async () => { if (await guard()) openTools(); } }, `Open ${where("tools")}`))) : null;
+  const blocked = d.without && d.without.length ? note("warn", "The agent uses this skill without:",
+    [bullets(d.without.map((b) => b.why)),
+     h("div", { class: "muted" }, "Its reports still run and the AI works without it; switch it on for the whole skill.")],
+    [fixes.map((b) => button("primary", { onclick: async () => {
+       // 2C's one-press fix: the agent switches the tool on where its switch is (tool_access.switch_on), same checks as a save
+       try { await api("POST", "api/tools/on", { tool: b.tool }); toast(`${b.label} switched on.`); skills(name); } catch (err) { tell("Not changed", reasons(err)); }
+     } }, `Switch ${b.label} on`)),
+     button("", { onclick: async () => { if (await guard()) openTools(); } }, `Open ${where("tools")}`)]) : null;
   const notLoaded = info && !info.ok && !d.off ? problemsBox([info.problem], "The agent does not use this skill:") : null;
-  const releaseBanner = rel.state === "edited" && !rel.kept ? h("div", { class: "banner" },
-    h("div", {}, h("b", {}, "This version of the agent has another version of this skill."),
-      h("div", { class: "muted" }, `It was edited here, so it was kept as it is (${plural(rel.differs.length, "file differs", "files differ")}).`)),
-    h("div", { class: "actions" },
-      h("button", { class: "btn ghost", onclick: () => goTo(COMPARE) }, "Compare"),
-      h("button", { class: "btn ghost", onclick: async () => {
-        try { await api("POST", `api/skills/${enc}/keep`); toast("Kept as it is."); skills(name); } catch (err) { tell("Not kept", reasons(err)); }
-      } }, "Keep mine"),
-      takeReleaseButton(name))) : null;
+  const releaseBanner = rel.state === "edited" && !rel.kept ? note("warn", "This version of the agent has another version of this skill.",
+    h("div", { class: "muted" }, `It was edited here, so it was kept as it is (${plural(rel.differs.length, "file differs", "files differ")}).`),
+    [button("", { onclick: () => goTo(COMPARE) }, "Compare"),
+     button("", { onclick: async () => {
+       try { await api("POST", `api/skills/${enc}/keep`); toast("Kept as it is."); skills(name); } catch (err) { tell("Not kept", reasons(err)); }
+     } }, "Keep mine"),
+     takeReleaseButton(name)]) : null;
 
   // ---- the views
   const FILES = "\u0000files";             // the Files tab stands for whichever file is open
@@ -289,8 +285,11 @@ export async function openSkill(name, pane, info, path = ABOUT) {
                        (k) => goTo(k === FILES ? (isFile ? path : "SKILL.md") : k));
   // ⚠️ NO TITLE, NO DESCRIPTION, NO SWITCH HERE ON A WIDE SCREEN (owner, 2026-10-06): the list beside it holds the
   // name, the line and the switch. The name and the switch come back on a phone, where the list is hidden.
-  const card = (...kids) => fill(pane, h("div", { class: "card skill-pane" }, back, head, blocked, notLoaded, releaseBanner,
-    h("div", { class: "skill-bar" }, tabs, pill), ...kids));
+  const draw = (...kids) => {
+    const box = card(null, null, back, head, blocked, notLoaded, releaseBanner, h("div", { class: "skill-bar" }, tabs, pill), ...kids);
+    box.classList.add("skill-pane");
+    fill(pane, box);
+  };
 
   // the skill's one Delete, on About and on Files alike (owner, 2026-10-20: "Delete Skill", on About too)
   const delSkill = async () => {
@@ -299,10 +298,10 @@ export async function openSkill(name, pane, info, path = ABOUT) {
     try { await api("DELETE", `api/skills/${enc}`); page.dirty = false; toast(`Skill ${name} deleted.`); skills(); }
     catch (e) { tell("Not deleted", reasons(e)); }
   };
-  const delSkillButton = () => h("button", { class: "btn danger push-right", onclick: delSkill }, "Delete Skill");
+  const delSkillButton = () => button("danger push-right", { onclick: delSkill }, "Delete Skill");
 
-  if (path === ABOUT) { card(aboutSkill(name, d), h("div", { class: "actions" }, delSkillButton())); setBar(null); return; }
-  if (path === COMPARE) { card(await comparePanel(name, rel)); setBar(null); return; }
+  if (path === ABOUT) { draw(aboutSkill(name, d), h("div", { class: "actions" }, delSkillButton())); setBar(null); return; }
+  if (path === COMPARE) { draw(await comparePanel(name, rel)); setBar(null); return; }
 
   // ---- Files: the list, the editor, the file's actions
   const probs = h("div");
@@ -318,9 +317,10 @@ export async function openSkill(name, pane, info, path = ABOUT) {
   // to the front): when the open file would be hidden off that line, the list opens instead.
   const differs = new Set(rel.differs || []), villa = new Set(rel.villa || []);
   const fileList = h("div", { class: "files" + (filesOpen ? "" : " collapsed") },
-    files.map((x) => h("button", { class: x.path === path ? "on" : "", title: [differs.has(x.path) ? "differs from the release" : "", villa.has(x.path) ? "this villa's own file, kept by updates" : ""].filter(Boolean).join(" · ") || null,
-      onclick: () => goTo(x.path) }, x.path, differs.has(x.path) ? h("span", { class: "dot warn" }) : null, villa.has(x.path) ? h("span", { class: "dot" }) : null)));
-  const more = h("button", { class: "btn ghost files-more", hidden: true, onclick: () => {
+    files.map((x) => fileChoice(x.path, x.path === path, () => goTo(x.path),
+      [differs.has(x.path) ? "differs from the release" : "", villa.has(x.path) ? "this villa's own file, kept by updates" : ""].filter(Boolean).join(" · ") || null,
+      [differs.has(x.path) ? dot("warn") : null, villa.has(x.path) ? dot() : null])));
+  const more = pillButton({ hidden: true, onclick: () => {
     filesOpen = !filesOpen; fileList.classList.toggle("collapsed", !filesOpen); fits(); } });
   const fits = () => {
     const on = fileList.querySelector("button.on"), first = fileList.firstElementChild;
@@ -345,14 +345,14 @@ export async function openSkill(name, pane, info, path = ABOUT) {
     try { await api("DELETE", `api/skills/${enc}/file?path=${encodeURIComponent(path)}`); page.dirty = false; toast(`${path} deleted.`); openSkill(name, pane, info, "SKILL.md"); }
     catch (e) { fill(probs, problemsBox(reasons(e), "Not deleted:")); }
   };
-  card(h("div", { class: "files-row" }, fileList, more),
+  draw(h("div", { class: "files-row" }, fileList, more),
     (differs.size || villa.size || view.toggle) ? h("div", { class: "file-bar" }, (differs.size || villa.size) ? h("p", { class: "muted small legend" },
-      differs.size ? [h("span", { class: "dot warn" }), " differs from the release  "] : null,
-      villa.size ? [h("span", { class: "dot" }), " this villa's own file, kept by updates"] : null) : null, view.toggle) : null,
-    probs, path ? [ta, view.box] : h("p", { class: "muted" }, "No file."),
+      differs.size ? [dot("warn"), " differs from the release  "] : null,
+      villa.size ? [dot(), " this villa's own file, kept by updates"] : null) : null, view.toggle) : null,
+    probs, path ? [ta, view.box] : none("No file.", "p"),
     h("div", { class: "actions" },
-      h("button", { class: "btn ghost", onclick: newFile }, "New file"),
-      files.find((x) => x.path === path)?.deletable ? h("button", { class: "btn ghost", onclick: delFile }, "Delete this file") : null,
+      button("", { onclick: newFile }, "New file"),
+      files.find((x) => x.path === path)?.deletable ? button("", { onclick: delFile }, "Delete this file") : null,
       delSkillButton()));
   setBar({ save, discard: () => load(path), idle: path ? `Editing ${path}. Saves are checked before they are written.` : "" });
   if (path) await load(path);
@@ -374,13 +374,14 @@ export function aboutSkill(name, d) {
   // a scheduled job's time is a setting: its link to the Limits tab's row (`ref`; the other rows have none)
   const acts = () => paged(["When", "What runs"], d.acts.map((a) => [setting(a.when, a.ref),
     [a.job ? h("b", {}, a.job) : a.script ? h("code", {}, a.script) : h("span", { class: "muted" }, a.note || ""),
-     a.kind ? h("span", { class: "chip gray tiny" }, KIND[a.kind]) : null]]), 10, { cls: "skill-runs" });
-  // Skill tools: the agent's one verdict (tool_access.health: its `line`, drawn as it is — the same line the skills
-  // list shows), then every tool as a card — core.tileCard, the commands' own card without their switch (a tool is
+     a.kind ? chip(KIND[a.kind], "gray") : null]]), 10, { cls: "skill-runs" });
+  // Skill tools: the agent's one verdict (tool_access.health: its `line`, drawn as it is, as the skills list shows it:
+  // what is wrong is said once, by the note over the tabs), then every tool as a card — core.tileCard, the commands' own card without their switch (a tool is
   // switched on or off in Rules, for every skill at once: the tab's (i), `where_tools`, says so in the agent's words)
-  const tools = () => [d.line ? h("p", {}, h("b", { class: "warn-text" }, d.line)) : null,
+  // a tool switched off or never given is quiet; one the villa's system no longer has needs attention
+  const tools = () => [d.line ? h("p", { class: "muted" }, d.line) : null,
       h("div", { class: "tool-grid three" }, d.tools.map((n) => tileCard(n.label, {
-        on: n.on, chip: n.on ? null : h("span", { class: "chip off tiny" }, n.words),
+        on: n.on, chip: n.on ? null : chip(n.words, n.state === "missing" ? "alert" : "gray"),
         words: h("div", { class: "muted" }, h("code", {}, n.tool)) })))];
   // Skill commands: a card per command (core.toggleCard), three a line, each with its Offline Test
   const runs = () => (d.scripts || []).map((sc) => h("div", { class: "cmd-group" },
@@ -406,6 +407,6 @@ export function aboutSkill(name, d) {
   return h("div", { class: "about" },
     // the skill's whole description first (owner, 2026-10-20): the list on the left cuts it to a few lines
     d.description ? h("p", { class: "about-desc" }, d.description) : null,
-    h("section", { class: "about-sec" }, h("h3", {}, place("skill_when", { skill: name })), acts()),   // the open skill named
+    h("section", { class: "about-sec" }, heading(place("skill_when", { skill: name })), acts()),   // the open skill named
     tabs ? h("section", { class: "about-sec" }, tabs.bar, tabs.body) : null);
 }

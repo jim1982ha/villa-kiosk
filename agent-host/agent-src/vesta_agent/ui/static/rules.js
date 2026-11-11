@@ -1,5 +1,5 @@
 // VESTA Agent page — the Rules tab (policy.yaml): the forms, the file, and AI tools.
-import { api, card, cardWith, dropdown, editTable, field, fill, floating, go, h, infoButton, inOrder, jobsBanner, jump, loading, markDirty, measured, page, pagedBlock, place, plural, problemsBox, reasons, saveWith, setBar, tabbed, table, tableRow, tell, toast, toggleCard, $view, where, withInfo } from "./core.js";
+import { api, button, capital, card, cardWith, chip, dropdown, editTable, field, fill, floating, folded, go, group, h, infoButton, inOrder, jobsBanner, jump, lastDays, loading, markDirty, measured, none, page, pagedBlock, place, plural, problemsBox, reasons, saveWith, setBar, tabbed, table, tableRow, tell, toast, toggle, toggleCard, usd, $view, where, withInfo } from "./core.js";
 import { fileEditor } from "./viewer.js";
 
 // ---------------------------------------------------------------- rules (policy.yaml)
@@ -55,13 +55,11 @@ export function rulesForms(doc, jobs = [], tools = null) {
   const on = (fn) => (e) => { fn(e.target); markDirty(); };
   const num = (v) => (v === "" || v === null ? null : Number(v));
 
-  // acting: the title, its (i), then the switch — as every other title with a switch (owner, 2026-10-07: the
-  // switch came first, and a line repeated what the (i) says); how long an Approve button works sits with the
-  // services that ask for one (Allowed actions)
-  const acting = h("section", { class: "card" }, h("div", { class: "card-title" },
-    h("h2", {}, place("acting"), infoButton(place("acting"), `Off: the agent informs only, and never offers to do anything. On: it may act, within the agent rules below; every action still goes through "${place("actions")}".`),
-      h("label", { class: "switch title-switch" }, h("input", { type: "checkbox", checked: f.act_enabled, "aria-label": W("act_enabled"),
-        onchange: on((t) => { f.act_enabled = t.checked; }) })))),
+  // acting: the title, its (i), then the switch, on the title's line as every card with a control there (cardWith;
+  // owner, 2026-10-07: the switch came first, and a line repeated what the (i) says); how long an Approve button
+  // works sits with the services that ask for one (Allowed actions)
+  const acting = cardWith(toggle(f.act_enabled, (v) => { f.act_enabled = v; markDirty(); }, W("act_enabled")), place("acting"),
+    `Off: the agent informs only, and never offers to do anything. On: it may act, within the agent rules below; every action still goes through "${place("actions")}".`,
     // what the owner must watch in the villa's critical automations (owner, 2026-10-17, after the 14:41 alert storm: a
     // newer rule template reached an older Agent; 2026-10-18, in his words: what to pay attention to, never the inside —
     // and the #41/#55 entity-ID change, which the desk now closes itself: desk.rule_gone)
@@ -89,7 +87,7 @@ export function rulesForms(doc, jobs = [], tools = null) {
   const limitNote = () => {
     const n = jobs.reduce((s, j) => s + ((pairOf(j.skill) || {}).limit_usd || 0) * j.runs_per_month, 0);
     return `The most ONE reply or ONE run may cost: one chat reply, or one run of a job, not a monthly budget. At their limits, `
-      + `the scheduled runs cost at most about US$ ${n.toFixed(2)} a month. Chat replies, and reports asked for in a chat, come on top: `
+      + `the scheduled runs cost at most about ${usd(n)} a month. Chat replies, and reports asked for in a chat, come on top: `
       + "see the Costs tab for what was really spent.";
   };
   // a line of the table (core.table): its cells, each a node, nodes, or {v, cls, colspan}
@@ -119,15 +117,15 @@ export function rulesForms(doc, jobs = [], tools = null) {
     // chat, what that person may use there. Its skill's list is shown on the skill's page, as what it uses.
     const got = { cls: "tools-got", v: h("span", { class: "muted" }, "By who asks") };
     if (!pair) {
-      return tableRow([what, { colspan: 2, cls: "muted", v: "Not set: its AI jobs do not run." }, got,
-        { cls: "x", v: h("button", { class: "btn icon ghost", title: "Set this skill's AI jobs", onclick: () => {
+      return tableRow([what, { colspan: 2, v: none("Not set: its AI jobs do not run.") }, got,
+        { cls: "x", v: button("icon", { title: "Set this skill's AI jobs", onclick: () => {
           f.settings.skill_ai[skill] = { ...its[0].skill_default }; drawAi(); markDirty(); } }, "+") }]);
     }
     return tableRow([what,
       sel(PROFILES, pair.brain, (v) => (own(skill).brain = v), `Brain of the ${skill} skill's AI jobs`),
       limitInput(pair.limit_usd, (v) => (own(skill).limit_usd = v), `Limit per run of the ${skill} skill's AI jobs (USD)`, "for each run"),
       got,
-      { cls: "x", v: h("button", { class: "btn icon ghost", title: "Stop this skill's AI jobs", onclick: () => {
+      { cls: "x", v: button("icon", { title: "Stop this skill's AI jobs", onclick: () => {
         delete f.settings.skill_ai[skill];
         // an older file's entries for them go too, or they would still be read
         for (const j of its) if (f.settings.jobs) delete f.settings.jobs[j.name];
@@ -148,14 +146,13 @@ export function rulesForms(doc, jobs = [], tools = null) {
   // ID … and also the language selection?"); the agent reads them (server._people: one row per chat) and edits nothing.
   // a role's pill on ONE line (owner, 2026-11-03: "rename Facility Manager to FM if the pill width can't fit Facility
   // Manager on 1 line"): its long words while they fit, else the alert card's short ones (server._people role_short)
-  const peopleRows = (doc.people || []).map((p) => [p.name, fitWords(h("span", { class: "chip" }, p.role), p.role, p.role_short), p.language]);
+  const peopleRows = (doc.people || []).map((p) => [p.name, fitWords(chip(p.role), p.role, p.role_short), p.language]);
   const people = card(W("people"), `Set in ${doc.lists_where}, each chat with its language. Every chat in its lists gets the messages of its list's role, in its language, and acts with that role: a person's private chat, or a group, where everyone acts with the group's role; a chat in both lists has both. A person must have sent /start to the bot once before it can write to them. The agent reads the lists and never edits them.`,
     peopleRows.length
-      ? table(["Name", "Role", "Language"], peopleRows, { cls: "people", widths: ["40%", "30%", null] })
-      : [h("div", { class: "chips" }, h("span", { class: "muted" }, "None")),
-         h("p", { class: "muted" }, doc.lists_read
-           ? `The lists name no Telegram chat: the agent answers nobody and posts nowhere. Set them in ${doc.lists_where}.`
-           : `Empty until the lists are set in ${doc.lists_where}.`)]);
+      ? table(["Name", "Role", "Language"], peopleRows, { widths: ["40%", "30%", null] })
+      : none(doc.lists_read
+        ? `None. The lists name no Telegram chat: the agent answers nobody and posts nowhere. Set them in ${doc.lists_where}.`
+        : `None. Empty until the lists are set in ${doc.lists_where}.`, "p"));
 
   // devices: chosen from the villa's own, by name (owner, 2026-10-01: "free form text inputs are not
   // suitable"). A box like a menu shows what is chosen; it opens a list with a search and a checkbox per
@@ -171,8 +168,8 @@ export function rulesForms(doc, jobs = [], tools = null) {
     const drawShown = () => {
       const cur = get();
       shown.replaceChildren(cur.length
-        ? h("span", { class: "picker-chosen" }, cur.map((id) => h("span", { class: "tag" + (ENT.byId[id] ? "" : " unknown"), title: id }, label(id))))
-        : h("span", { class: "muted" }, one ? "None, choose one…" : "None, choose…"),
+        ? h("span", { class: "picker-chosen" }, cur.map((id) => chip(label(id), ENT.byId[id] ? "" : "alert", id)))
+        : none(one ? "None, choose one…" : "None, choose…"),
         h("span", { class: "caret" }, "▾"));
     };
     const drawList = () => {
@@ -194,8 +191,8 @@ export function rulesForms(doc, jobs = [], tools = null) {
         markDirty(); drawShown();
         if (one) close(); else drawList();
       }));
-      if (!rows.length) list.append(h("p", { class: "muted pad" }, "No device matches."));
-      if (rows.length > 300) list.append(h("p", { class: "muted pad" }, `${rows.length - 300} more: type to narrow the list.`));
+      if (!rows.length) list.append(none("No device matches.", "p"));
+      if (rows.length > 300) list.append(h("p", { class: "muted" }, `${rows.length - 300} more: type to narrow the list.`));
     };
     let float = null;
     function close() { if (float) float.close(); }
@@ -209,7 +206,7 @@ export function rulesForms(doc, jobs = [], tools = null) {
     search.addEventListener("input", () => { drawList(); if (float) float.place(); });
     panel.append(search, list,
       one ? null : h("div", { class: "picker-foot" }, h("span", { class: "muted" }, "Tick as many as needed."),
-                                                    h("button", { type: "button", class: "btn ghost", onclick: close }, "Done")));
+                                                    button("", { onclick: close }, "Done")));
     drawShown();
     box.append(shown);
     return box;
@@ -219,13 +216,13 @@ export function rulesForms(doc, jobs = [], tools = null) {
   // "Allowed lists" card; the list opens where the rule that needs it is chosen). A domain's list is shared by its
   // services (switch.turn_on and switch.turn_off): it is shown at the first of them, the others point to it.
   const svcRows = Object.entries(f.allowed_services);
-  const ruleChoices = Object.entries(SCHEMA.rules).map(([k, l]) => [k, l[0].toUpperCase() + l.slice(1)]);
+  const ruleChoices = Object.entries(SCHEMA.rules).map(([k, l]) => [k, capital(l)]);
   const listOf = Object.fromEntries(SCHEMA.lists.flatMap((l) => l.domains.map((d) => [d, l])));
   const devicesCell = (row) => {
     const dom = (row[0] || "").split(".")[0];
     const l = listOf[dom];
-    if (row[1] !== "listed") return h("span", { class: "muted small na" }, "—");      // nothing to choose (hidden on a phone)
-    if (!l) return h("span", { class: "chip off" }, `no list for ${dom || "this service"}`);
+    if (row[1] !== "listed") return none();                 // nothing to choose (its line is left out on a phone)
+    if (!l) return chip(`no list for ${dom || "this service"}`, "alert");
     const first = svcRows.find(([k, r]) => r === "listed" && k.split(".")[0] === dom);
     if (first && first !== row) return h("span", { class: "muted small" }, `same list as ${first[0]}`);
     const box = many(l.key, l.domains);
@@ -234,13 +231,13 @@ export function rulesForms(doc, jobs = [], tools = null) {
   };
   // how long an Approve button works: with the services that ask for one, on the title's line (owner, 2026-10-06)
   // its (i) after the unit (owner, 2026-10-07): "Approve buttons work for [15] min (i)"
-  const ttl = h("label", { class: "field row-inline" }, h("span", {}, W("approval_ttl_minutes").replace(/ \(minutes\)$/, "")),
+  const ttl = field(W("approval_ttl_minutes").replace(/ \(minutes\)$/, ""),
     h("input", { type: "number", ...bounds("approval_ttl_minutes"), value: f.approval_ttl_minutes, "aria-label": W("approval_ttl_minutes"),
-                 oninput: on((t) => (f.approval_ttl_minutes = num(t.value))) }), h("span", {}, "min"),
-    infoButton(W("approval_ttl_minutes"), "An Approve or Refuse button older than this does nothing: the person asks again."))
+                 oninput: on((t) => (f.approval_ttl_minutes = num(t.value))) }), null,
+    [h("span", {}, "min"), infoButton(W("approval_ttl_minutes"), "An Approve or Refuse button older than this does nothing: the person asks again.")]);
   const services = cardWith(ttl, place("actions"), "One line per service of the villa's system, and who decides. Anything not listed is refused. Restarts, shell commands, toggles and the like are refused whatever this says. For \"Only the devices chosen beside it\", choose the devices on the same line: the agent may act only on those, and still asks for approval.",
     ...editTable(svcRows, {
-      cls: "svc", add: "Add a service", blank: () => ["", "any"], per: 10,      // 10 lines a page (owner, 2026-10-06)
+      add: "Add a service", blank: () => ["", "any"], per: 10,      // 10 lines a page (owner, 2026-10-06)
       changed: () => { f.allowed_services = Object.fromEntries(svcRows.filter(([k]) => k)); },
       columns: [{ title: "Service", width: "26%", phone: "ab" }, { title: "Who decides", width: "36%", phone: "cd" }, { title: "Devices it may act on", phone: "ef" }],
       cell: (row, k, touched, refresh) => [
@@ -286,8 +283,8 @@ export function toolsCard(f, t, reload) {
   // core.toggleCard, the one card for a switch: saved with the form, then the tab drawn again
   const toolCard = (on, set, title, parts, disabled = false) =>
     toggleCard(on, (v) => { set(v); markDirty(); draw(); }, title, parts, disabled);
-  // counted over a setting's days (page.tool_usage_days), said as they are now
-  const used = (n) => (n ? h("span", { class: "badge" }, `used ${n}× in ${t.usage_days || 7} days`) : null);
+  // counted over a setting's days (page.tool_usage_days), said as they are now: the server's number, no copy here
+  const used = (n) => (n ? chip(`used ${n}× in the ${lastDays(t.usage_days)}`, "gray") : null);
   // the Home Assistant tools tab's (i), worked out when it opens: the count follows the switches
   const haInfo = () => {
     const on = new Set(f.ha_read_tools);
@@ -296,15 +293,15 @@ export function toolsCard(f, t, reload) {
   };
   const ha = () => {
     const on = new Set(f.ha_read_tools);
-    const refresh = h("button", { class: "btn ghost", onclick: async () => {
+    const refresh = button("", { onclick: async () => {
       refresh.disabled = true; refresh.textContent = "Reading…";
       try { Object.assign(t, await api("POST", "api/tools/refresh")); toast("The list was read again."); }
       catch (e) { tell("Not read", reasons(e)); }
       draw();
     } }, "Read the list again");
     // how many are on, and where the list comes from: the (i) of the tab (haInfo), not a line here (owner, 2026-10-08)
-    const head = h("div", { class: "tools-head" }, h("div"),
-      t.new_off ? h("span", { class: "chip warn" }, `${plural(t.new_off, "new tool", "new tools")} since an update, off`) : null, refresh);
+    const head = h("div", { class: "tools-head" },
+      t.new_off ? chip(`${plural(t.new_off, "new tool", "new tools")} since an update, off`, "warn") : null, refresh);
     // every tool in its group's order, 16 cards a page (four rows of four); a group's heading where its cards start
     const lines = t.groups.flatMap((g) => g.tools.map((x) => ({ g, x })));
     const list = h("div");
@@ -314,26 +311,23 @@ export function toolsCard(f, t, reload) {
         if (!parts.length || parts[parts.length - 1].g !== g) parts.push({ g, cards: [] });
         parts[parts.length - 1].cards.push(toolCard(on.has(x.name),
           (v) => { f.ha_read_tools = v ? [...f.ha_read_tools, x.name] : f.ha_read_tools.filter((n) => n !== x.name); }, x.title,
-          { chip: x.new ? h("span", { class: "chip warn" }, "New") : null, words: h("div", { class: "muted" }, x.description),
-            meta: [h("code", {}, x.name), x.note ? h("span", { class: "badge" }, x.note) : null, used(x.used)] }));
+          { chip: x.new ? chip("New", "warn") : null, words: h("div", { class: "muted" }, x.description),
+            meta: [h("code", {}, x.name), x.note ? chip(x.note, "gray") : null, used(x.used)] }));
       }
-      list.replaceChildren(...parts.flatMap(({ g, cards }) => [
-        h("div", { class: "tool-group-head tool-group" }, h("b", {}, g.label),
-          h("span", { class: "muted" }, ` ${g.tools.filter((y) => on.has(y.name)).length} of ${g.tools.length} on`)),
-        h("div", { class: "tool-grid" }, cards)]));
+      list.replaceChildren(...parts.map(({ g, cards }) =>
+        group(g.label, `${g.tools.filter((y) => on.has(y.name)).length} of ${g.tools.length} on`, h("div", { class: "tool-grid" }, cards))));
     }, 16, ["‹ Previous", "Next ›", "tools"]);
     pages.redraw();
     const groups = [list, pages.nav];
     const unknown = t.unknown.length ? problemsBox(t.unknown.map((n) => `${n}: named in the file, but the villa's system has no such tool.`), "Not in the villa's system:") : null;
-    const never = t.never.length ? h("details", { class: "tool-group never" },
-      h("summary", {}, h("b", {}, "Never available"), h("span", { class: "muted" }, ` ${plural(t.never.length, "tool", "tools")} that change the villa's system, locked by the agent, whatever is chosen here`)),
-      h("div", { class: "chips" }, t.never.map((x) => h("span", { class: "chip off", title: x.description }, x.title)))) : null;
+    // locked, not wrong: quiet pills (the rules: red means "needs attention")
+    const never = t.never.length ? folded("Never available", `${plural(t.never.length, "tool", "tools")} that change the villa's system, locked by the agent, whatever is chosen here`, false,
+      h("div", { class: "chips" }, t.never.map((x) => chip(x.title, "gray", x.description)))) : null;
     return [head, unknown, ...groups, never];
   };
   const own = () => {
     const kinds = [["choose", "You choose", null], ["elsewhere", "Set elsewhere", null], ["always", "Always on", "the agent cannot work without them"]];
-    return kinds.map(([kind, title, sub]) => h("div", { class: "tool-group" },
-      h("div", { class: "tool-group-head" }, h("b", {}, title), sub ? h("span", { class: "muted" }, `, ${sub}`) : null),
+    return kinds.map(([kind, title, sub]) => group(sub ? `${title},` : title, sub,
       h("div", { class: "tool-grid" }, t.own.filter((x) => x.kind === kind).map((x) => {
         // the form says on/off for each (policy_doc.to_form): where the file keeps it is the agent's business
         const on = kind !== "choose" ? true : f.agent_tools[x.key];
@@ -353,13 +347,12 @@ export function toolsCard(f, t, reload) {
     return [
       table(["Tools", SCHEMA.roles.owner, SCHEMA.roles.fm, "Guest"], t.roles.map((g) => [
           [h("b", {}, g.label), h("span", { class: "muted" }, ` (${g.from})`)],
-          h("label", { class: "switch" }, h("input", { type: "checkbox", checked: true, disabled: true, "aria-label": `${g.label}: owner` })),
-          h("label", { class: "switch" }, h("input", { type: "checkbox", checked: fm[g.key], "aria-label": `${g.label}: facility manager`,
-            onchange: (e) => { fm[g.key] = e.target.checked; markDirty(); } })),
+          toggle(true, null, `${g.label}: owner`, { disabled: true }),
+          toggle(fm[g.key], (v) => { fm[g.key] = v; markDirty(); }, `${g.label}: facility manager`),
           // what a guest's run keeps of this row: the agent's own answer (tool_access.allowed_for), never decided here
           g.guest.length
-            ? h("label", { class: "switch", title: g.guest.join(", ") }, h("input", { type: "checkbox", checked: true, disabled: true, "aria-label": `${g.label}: guest` }))
-            : { cls: "muted", v: h("span", { title: "Not given to a guest" }, "—") }]),
+            ? toggle(true, null, `${g.label}: guest`, { disabled: true, title: g.guest.join(", ") })
+            : Object.assign(none(), { title: "Not given to a guest" })]),
         { cls: "roles", widths: [null, { width: "18%", cls: "owner" }, { width: "18%", cls: "fm" }, { width: "14%", cls: "guest" }] })];
     // (owner, 2026-10-20: the line about who approves an action is "Allowed actions"' own — not this table's)
   };

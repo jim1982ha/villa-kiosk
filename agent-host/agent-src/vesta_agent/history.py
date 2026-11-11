@@ -66,7 +66,8 @@ class History:
             self.db.commit()
             return c.lastrowid
 
-    #: where a change was made, and its chip's colour on the page (the page held this table, architecture review 9)
+    #: where a change was made, and its pill's status: a NAME of the page's one status table (core.js STATUS), never
+    #: a colour or a CSS class (the page held this table, architecture review 9)
     CHIPS = {"Rules": "", "Limits": "", "Skills": "warn", "Release": "gray", "Import": "", "Undo": "gray"}
 
     def rows(self, most: int | None = None) -> list[dict]:

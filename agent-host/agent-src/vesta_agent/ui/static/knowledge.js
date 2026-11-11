@@ -4,7 +4,7 @@
 // Device links as the tabs of one tabbed section (places.TABBED; owner, 2026-10-31: the two cards were tabs too). Each
 // is saved where it lives, at once (no save bar): a kind and a link through the page's one writer (ui/kinds.py,
 // ui/links.py: in Page changes, undoable), the translations forgotten in the agent's memory.
-import { api, ask, card, dropdown, fill, h, inOrder, loading, paged, place, plural, reasons, saveNow, searchBox, tabbed, tabbedIn, tell, toast, withInfo, $view } from "./core.js";
+import { api, ask, button, card, chip, counted, DASH, dropdown, fill, folded, h, inOrder, loading, none, paged, place, plural, reasons, saveNow, searchBox, tabbed, tabbedIn, tell, toast, withInfo, $view } from "./core.js";
 
 // a (i) in readable sections (owner, 2026-10-30: "barely understandable and very poorly formatted"): a heading, then
 // its sentences or a list of [bold words, the rest]
@@ -22,9 +22,9 @@ const found = (data, text) => {
 };
 const deviceSearch = (data, text, typed) => (data.rows.length ? searchBox("Search the devices", text, typed) : null);
 // what the list says when it has nothing to show: no device read, or none the search keeps (null: draw `shown`)
-const noDevice = (data, shown) => (shown.length ? null : h("p", { class: "muted" },
+const noDevice = (data, shown) => (shown.length ? null : none(
   !data.rows.length ? (data.built ? "No device with a power or energy reading." : "The agent has not read the villa's devices yet.")
-    : "No device matches the search."));
+    : "No device matches the search.", "p"));
 // a choice made here saved at once (core.saveNow): the answer is the tab's new data, the toast the line Page changes
 // keeps (the answer's `what`, ui/kinds.saved) — never a copy of it
 const saveChoice = async (data, probs, r, path, body) => {
@@ -32,7 +32,10 @@ const saveChoice = async (data, probs, r, path, body) => {
   if (res) Object.assign(data, res);
 };
 // the way back from a choice made here to what the agent found (a device gone from the villa: its choice removed)
-const useFound = (r, undo) => h("button", { type: "button", class: "btn ghost", onclick: undo }, r.gone ? "Remove" : "Use the one found");
+const useFound = (r, undo) => button("", { onclick: undo }, r.gone ? "Remove" : "Use the one found");
+// where a kind or a link comes from, drawn one way on both lists (UI scan, 2026-11-10: a pill here, grey words there):
+// your choice lit, what the agent found quiet
+const setBy = (chosen, found = "Found by name") => chip(chosen ? "Set by you" : found, chosen ? "" : "gray");
 
 export async function knowledge() {
   loading();
@@ -98,18 +101,17 @@ export function kindsCard(data, probs) {
       r.parts ? h("span", { class: "muted" }, ` · ${r.parts}`) : null],
     dropdown(data.kinds.map(([k, name]) => [k, k === r.guess ? `${name} (${fromShort(r)})` : name]), r.kind, (v) => save(r, v), `${r.name}, kind`),
     h("span", { class: "chips" },
-      r.gone ? h("span", { class: "chip warn" }, "No longer found")
-        : h("span", { class: r.chosen ? "chip" : "chip gray" }, r.chosen ? "Set by you" : from(r)),
+      r.gone ? chip("No longer found", "warn") : setBy(r.chosen, from(r)),
       r.chosen ? useFound(r, () => save(r, null)) : null),
   ];
   const draw = () => {
     const shown = found(data, KIND_SEARCH);
     fill(list, noDevice(data, shown) || paged(["Device", "Kind", "Set by"], shown.map(row), 10,
-      { cls: "kinds", widths: ["44%", "26%", "30%"], nav: DEVICES_NAV }));
+      { widths: ["44%", "26%", "30%"], nav: DEVICES_NAV }));
   };
   draw();
   // which devices, said on the card itself too (owner, 2026-10-30: "where the device list is coming from?")
-  const which = h("p", { class: "muted" }, `${data.rows.length} devices that measure their own power or energy.`);
+  const which = h("p", { class: "muted" }, `${plural(data.rows.length, "device that measures its", "devices that measure their")} own power or energy.`);
   const c = card(place("kinds"), info, which, deviceSearch(data, KIND_SEARCH, (text) => { KIND_SEARCH = text; draw(); }), list);
   c.id = "knowledge-kinds";
   return c;
@@ -137,7 +139,7 @@ export function linksCard(data, probs) {
     ...part("Where a link comes from", items([
       ["Found by name:", "a helper of the villa's system whose name follows the agent's rule (the device's name, then what it is)."],
       ["Set by you:", "your choice, which always wins, None included."],
-      ["—:", "nothing found or set. That link does nothing."],
+      [`${DASH}:`, "nothing found or set. That link does nothing."],
       ["No longer in the villa's system:", "the helper was deleted or renamed there. That link does nothing until you pick another, or None."]])),
     ...part("To change a link",
       h("p", {}, "Press Set or Change on its device, then pick the helper in its list, or None to switch the link off. It applies from the next night check. \"Use the one found\" undoes your choice.")));
@@ -150,7 +152,7 @@ export function linksCard(data, probs) {
     if (!b) return;
     const editing = LINK_EDITING === r.slug;
     roles.forEach((role, i) => fill(b.links[i], editing ? editCell(r, role) : readCell(r, role)));
-    fill(b.button, h("button", { type: "button", class: editing ? "btn" : "btn ghost",
+    fill(b.button, button("", {
       onclick: () => { const was = LINK_EDITING; LINK_EDITING = editing ? null : r.slug;
         if (editing) draw(); else { if (was && rowOf(was)) show(rowOf(was)); show(r); } } },
       editing ? "Done" : r.links.schedule?.value || r.gone ? "Change" : "Set"));
@@ -161,16 +163,15 @@ export function linksCard(data, probs) {
     const now = rowOf(r.slug);
     if (now) show(now); else { LINK_EDITING = null; draw(); }       // a gone device's last link removed: its row goes
   };
-  const source = (l) => (l.source === "chosen" ? "Set by you" : "Found by name");
   // ⚠️ A HELPER GONE FROM THE VILLA IS SAID (architecture review 20, card 3): a schedule deleted or renamed there read as
   // its id, "Set by you", and was offered as an ordinary choice; its line says so now (ui/links.py's `gone`)
   const GONE = "No longer in the villa's system";
   // what VESTA uses: the helper's name and where it comes from, or a dash
   const readCell = (r, role) => {
     const l = r.links[role.k] || { value: null, source: "none" };
-    if (!l.value) return h("span", { class: "muted" }, l.source === "chosen" ? "None, set by you" : "—");
-    return h("span", { class: "link-read" }, h("span", {}, l.name || l.value),
-      l.gone ? h("span", { class: "chip warn" }, GONE) : h("span", { class: "muted small" }, source(l)));
+    if (!l.value && l.source !== "chosen") return none();
+    return h("span", { class: "link-read" }, l.value ? h("span", {}, l.name || l.value) : none("None"),
+      l.gone ? chip(GONE, "warn") : setBy(l.source === "chosen"));
   };
   const editCell = (r, role) => {
     const l = r.links[role.k] || { value: null, source: "none" };
@@ -178,8 +179,7 @@ export function linksCard(data, probs) {
     if (l.value && !opts.some(([i]) => i === l.value)) opts.push([l.value, `${l.name || l.value} (${GONE.toLowerCase()})`]);
     return h("div", { class: "link-cell" },
       r.gone ? readCell(r, role) : dropdown(opts, l.value || "", (v) => save(r, role.k, v), `${r.name}, ${role.name}`),
-      l.source === "chosen" ? h("span", { class: "chips" }, h("span", { class: "chip" }, "Set by you"),
-        useFound(r, () => save(r, role.k, null))) : null);
+      l.source === "chosen" ? h("span", { class: "chips" }, setBy(true), useFound(r, () => save(r, role.k, null))) : null);
   };
   const row = (r) => {
     const b = { links: roles.map(() => h("div")), button: h("div") };
@@ -190,9 +190,8 @@ export function linksCard(data, probs) {
   };
   const head = ["Device", ...roles.map((r) => withInfo(r.name, r.words)), ""];
   const group = (title, rows, open) => rows.length
-    ? h("details", { class: "tool-group link-group", open },
-        h("summary", {}, h("b", {}, `${title} (${rows.length})`)),
-        paged(head, rows.map(row), 10, { cls: "links", widths: ["24%", null, null, null, "88px"], nav: DEVICES_NAV }))
+    ? folded(counted(title, rows.length), null, open,
+        paged(head, rows.map(row), 10, { widths: ["24%", null, null, null, "88px"], nav: DEVICES_NAV }))
     : null;
   const draw = () => {
     boxes.clear();
@@ -206,7 +205,7 @@ export function linksCard(data, probs) {
       group("No longer found", shown.filter((r) => r.gone), true)]);
   };
   draw();
-  const which = h("p", { class: "muted" }, `${data.rows.length} devices, and the helpers of the villa's system that belong to each.`);
+  const which = h("p", { class: "muted" }, `${plural(data.rows.length, "device", "devices")}, and the helpers of the villa's system that belong to each.`);
   const c = card(place("links"), info, which, deviceSearch(data, LINK_SEARCH, (text) => { LINK_SEARCH = text; draw(); }), list);
   c.id = "knowledge-links";
   return c;
@@ -217,9 +216,7 @@ export function linksCard(data, probs) {
 // (vesta_shared.asleep) and never edits it, so it is shown, never offered as a field to change
 function asleepCard(rows) {
   return card(place("asleep"), "Set in the VESTA UI (Advanced Settings › Devices › Asleep between reports). The agent never reports these devices offline and reads their last real state.",
-    h("div", { class: "chips" }, rows.length
-      ? rows.map((r) => h("span", { class: "chip", title: r.id }, r.name))
-      : [h("span", { class: "muted" }, "None")]));
+    rows.length ? h("div", { class: "chips" }, rows.map((r) => chip(r.name, "", r.id))) : none("None"));
 }
 
 // ---------------------------------------------------------------- knowledge › translations
@@ -229,13 +226,13 @@ function asleepCard(rows) {
 function translationsCard(v) {
   const box = h("div");
   const draw = () => {
-    if (!v.translations) return fill(box, h("p", { class: "muted" }, "No skill puts its alert cards in the chats' language."));
+    if (!v.translations) return fill(box, none("No skill puts its alert cards in the chats' language.", "p"));
     const langs = Object.entries(v.translations).filter(([, n]) => n > 0);
     fill(box,
       langs.length
         ? h("ul", {}, langs.map(([k, n]) => h("li", { class: "block" }, `${(v.languages || {})[k] || k}: ${plural(n, "sentence kept", "sentences kept")}`)))
-        : h("p", { class: "muted" }, "No translation kept yet."),
-      h("button", { type: "button", class: "btn ghost", disabled: !langs.length, onclick: forget }, "Forget Translations"));
+        : none("No translation kept yet.", "p"),
+      button("", { disabled: !langs.length, onclick: forget }, "Forget Translations"));
   };
   async function forget() {
     if (!(await ask({ title: "Forget every translation?", ok: "Forget", danger: true,
