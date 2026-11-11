@@ -31,7 +31,7 @@ import {
   // MapIcon, not Map: the bare name shadows the global Map constructor,
   // which this file also uses.
   Settings, Map as MapIcon, PersonStanding,
-  Minus, Plus, CircleHelp, TriangleAlert, Bot, Wrench,
+  Minus, Plus, CircleHelp, TriangleAlert, Bot, Wrench, LayoutGrid,
 } from "lucide-react";
 import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
@@ -334,13 +334,23 @@ export default function HUD({
   // The same status as a .status-dot's tone — the phone menu's role badge.
   const connTone = connClass === "online" ? "on" : connClass === "connecting" ? "pending" : "danger";
 
-  /** Settings, then "Logout (<role>)": the rows the phone's menu ends with and
+  /** Rooms, Settings, then "Logout (<role>)": the rows the phone's menu ends with and
    *  the desktop's account menu holds — written once (owner, 2026-10-12). The
    *  logout row wears the role's round badge with the connection dot, and goes
    *  to the profile screen (beginSwitch: the villa stays loaded under the PIN
-   *  pad). `close`: the menu it sits in. */
+   *  pad). `close`: the menu it sits in.
+   *  ⚠️ "Rooms" IS THE ROOMS WINDOW'S VISIBLE WAY IN (UI scan, 2026-11-10): it was reached only by holding a floor
+   *  button and then pressing the dial's own button, which nobody on a phone finds. The hold still opens the dial. */
   const accountRows = (close: () => void) => (
     <>
+      <button
+        role="menuitem"
+        className="hud-menu-item"
+        onClick={() => { close(); onOpenTeleport(); }}
+      >
+        <LayoutGrid size={18} />
+        <span>Rooms</span>
+      </button>
       {doors.settings && (
         <button
           role="menuitem"
@@ -788,7 +798,10 @@ export default function HUD({
         </div>
       </div>
 
-      {legendOpen && <LegendModal onClose={() => setLegendOpen(false)} />}
+      {legendOpen && (
+        <LegendModal onClose={() => setLegendOpen(false)} listable={visibleCategories}
+          onListCategory={(category) => { setLegendOpen(false); onOpenCategory(category); }} />
+      )}
 
 
       {/* Left column: the floor toggle (1F / 2F — the ONLY entry to the

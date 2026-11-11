@@ -17,6 +17,9 @@ import { overviewKeyHelp } from "@/babylon/overviewKeys";
 import { healthPill } from "@/babylon/colors";
 import type { RoomHealth } from "@/babylon/summaryLook";
 import ModalFooter from "@/components/common/ModalFooter";
+import IconButton from "@/components/common/IconButton";
+import { List } from "lucide-react";
+import type { Category } from "@/types/scene.types";
 
 /** What the MAP badge says — drawn by the badge renderer itself (babylon/badgeIcons.badgeImage), so this legend
  *  cannot describe a badge the app no longer draws. A representative category ("light") stands in for "whichever
@@ -68,7 +71,14 @@ const STATUS_ITEMS: { label: string; swatch: string; note: string }[] = [
   { label: "Alert", swatch: STATUS_COLOR.alert, note: "Needs attention (e.g. unlocked door, jammed lock, leak), or a detection (motion, occupancy), which is not a fault" },
 ];
 
-export default function LegendModal({ onClose }: { onClose: () => void }) {
+export default function LegendModal({ onClose, listable, onListCategory }: {
+  onClose: () => void;
+  /** The categories this profile may list. */
+  listable: readonly Category[];
+  /** A category's device list: what holding its icon in the top bar opens (UI scan, 2026-11-10: a list reached only
+   *  by a hold gets something to press). */
+  onListCategory: (category: Category) => void;
+}) {
   const { config } = useConfig();
   // Focus trap + Escape + focus restore (see useModalA11y).
   // Every swatch below is a colour composited in JS from the theme's tokens,
@@ -89,7 +99,8 @@ export default function LegendModal({ onClose }: { onClose: () => void }) {
         <div className="settings-section-title">Device category (badge colour when on)</div>
         <p className="muted body-text" style={{ marginTop: 4 }}>
           A device's badge is plain at rest, its icon in its category
-          colour, the whole square takes the colour once it is on.
+          colour, the whole square takes the colour once it is on. The list
+          icon beside a category lists its devices.
         </p>
         <div className="legend-grid">
           {CATEGORY_ORDER.map((c) => (
@@ -99,6 +110,11 @@ export default function LegendModal({ onClose }: { onClose: () => void }) {
                 style={{ background: categorySurface(c, "active").fill, border: `1.5px solid ${categorySurface(c, "active").ring}` }}
               />
               <span>{CATEGORY_LABELS[c]}</span>
+              {listable.includes(c) && (
+                <IconButton small label={`List the ${CATEGORY_LABELS[c]} devices`} onClick={() => onListCategory(c)}>
+                  <List size={16} />
+                </IconButton>
+              )}
             </div>
           ))}
         </div>

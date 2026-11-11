@@ -58,7 +58,7 @@ import type { ActivePanel } from "@/types/panel.types";
 import type { TeleportPoint } from "@/types/scene.types";
 import { VillaModelProvider, useVillaModelValue, useVillaSets, useDeviceIdentity } from "@/config/VillaModel";
 import { deviceOf } from "@/config/deviceGroups";
-import { categoryMembers } from "@/config/villaVisibility";
+import { categoryMembers, roomMembers, type ListSource } from "@/config/villaVisibility";
 import AskDialog from "@/components/common/AskDialog";
 import { readSceneMirror } from "./sceneMirror";
 
@@ -420,13 +420,19 @@ export default function Dashboard() {
   // "!" is a card its own Cockpit lists, as the window's warning sign reads (VillaModel marksFor). The map is the same
   // for everyone.
   const windowMarks = useMemo(() => villa.marksFor(role), [villa, role]);
+  // What a category's list and a room's are drawn from: one source, so the two cannot list a device differently.
+  const listSource = useMemo<ListSource>(() => ({
+    entityMap: config.entityMap, entities, dismissed: dismissedIds,
+    suppressed: suppressedEntityIds, mapped: mappedEntityIds,
+    isHidden, deviceOf: (id) => deviceOf(identity.folding, id),
+  }), [config.entityMap, entities, suppressedEntityIds, mappedEntityIds, dismissedIds, isHidden, identity.folding]);
   const categoryGroupEntityIds = useMemo(
-    () => (categoryGroup ? categoryMembers(role, categoryGroup, {
-      entityMap: config.entityMap, entities, dismissed: dismissedIds,
-      suppressed: suppressedEntityIds, mapped: mappedEntityIds,
-      isHidden, deviceOf: (id) => deviceOf(identity.folding, id),
-    }) : []),
-    [categoryGroup, role, config.entityMap, entities, suppressedEntityIds, mappedEntityIds, dismissedIds, isHidden, identity.folding]);
+    () => (categoryGroup ? categoryMembers(role, categoryGroup, listSource) : []),
+    [categoryGroup, role, listSource]);
+  /** A room's devices, for the Rooms window's "list" button on each room: what holding the room's chip lists. */
+  const roomDevices = useCallback(
+    (room: string) => roomMembers(role, room, { ...listSource, roomOf: (id) => deviceRoom(resolvedRooms, id) }),
+    [role, listSource, resolvedRooms]);
   // The open device as it is set NOW (components/panels/openDevice): its window, header and actions all read this, so a
   // change made in Advanced Settings or on another tablet shows at once. Removed, or no longer this profile's to see:
   // the window closes.
@@ -787,6 +793,11 @@ export default function Dashboard() {
           currentFloor={currentFloor}
           onClose={() => closeSurface("rooms")}
           onTeleport={handleTeleport}
+          devicesOf={roomDevices}
+          onListDevices={(room, entityIds) => {
+            closeSurface("rooms");
+            go({ type: "openList", list: { kind: "room", room, entityIds } });
+          }}
         />
       )}
 

@@ -21,8 +21,8 @@
 .tp-card .scrim { position: absolute; inset: 0; background: linear-gradient(180deg, transparent, var(--card-scrim)); }
 .tp-card span { position: relative; font-family: var(--font-display); font-size: var(--text-xl); font-weight: 400; color: #fff; }
 .tp-card .floor-tag { position: absolute; top: 10px; right: 12px; font-size: var(--text-2xs); color: #fff; background: rgba(0,0,0,0.4); padding: 3px 8px; border-radius: 6px; }
-/* a room card's bin (.media-btn small), in its corner */
-.tp-card .tp-delete { position: absolute; top: 8px; left: 10px; }
+/* a room card's own buttons (.media-btn small: its device list, its bin), in its corner */
+.tp-card .tp-card-tools { position: absolute; top: 8px; left: 10px; display: flex; gap: 8px; }
 .tp-card.tp-add { align-items: center; justify-content: center; flex-direction: column; gap: 8px; color: var(--accent); border-style: dashed; background: transparent; }
 .tp-card.tp-add span { font-family: var(--font-ui); font-size: var(--text-base); color: var(--accent); }
 /* --- Modals / wizard --- */

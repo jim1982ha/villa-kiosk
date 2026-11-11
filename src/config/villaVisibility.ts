@@ -10,6 +10,7 @@ import type { HassEntity } from "@/types/ha.types";
 import type { Role } from "@/auth/roles";
 import { isMappingAllowed, listedDevices } from "@/auth/permissions";
 import { effectiveCategory, subjectOf } from "./EntityCategories";
+import { roomKey } from "./roomKey";
 import type { Category } from "@/types/scene.types";
 
 interface IdSet { has(id: string): boolean }
@@ -69,25 +70,19 @@ export function visibleTo(
   };
 }
 
-/**
- * The devices a profile's long-press CATEGORY list shows: every mapped device
- * of that category the profile may see, dismissed ones out, and a hidden or
- * diagnostic one only while it is ON THE MAP (a UniFi AP's diagnostic
- * "State" sensor someone bound to a mesh stays; an orphan RSSI sensor does
- * not). Lived inline in the Dashboard, held to SummaryGroupPanel's own rules
- * by a comment (2.496.229).
- */
-export function categoryMembers(
-  role: Role | null, category: Category,
-  ctx: {
-    entityMap: Record<string, EntityMapping>; entities: Record<string, HassEntity>;
-    dismissed: IdSet; suppressed: IdSet; mapped: IdSet;
-    /** Hidden in the villa's system (VillaDevices.isHidden): never listed, placed on the map or not. */
-    isHidden?: (id: string) => boolean;
-    /** The device `id` belongs to (deviceGroups.deviceOf): a member of another device is that device's row. */
-    deviceOf?: (id: string) => string;
-  },
-): string[] {
+/** What a list of the villa's devices is drawn from (the Dashboard's, as it is now). */
+export interface ListSource {
+  entityMap: Record<string, EntityMapping>; entities: Record<string, HassEntity>;
+  dismissed: IdSet; suppressed: IdSet; mapped: IdSet;
+  /** Hidden in the villa's system (VillaDevices.isHidden): never listed, placed on the map or not. */
+  isHidden?: (id: string) => boolean;
+  /** The device `id` belongs to (deviceGroups.deviceOf): a member of another device is that device's row. */
+  deviceOf?: (id: string) => string;
+}
+
+/** The villa's devices a profile's list may show, among them the `wanted` ones: the one rule under a category's list
+ *  and a room's (below). */
+function listMembers(role: Role | null, ctx: ListSource, wanted: (id: string, mapping: EntityMapping) => boolean): string[] {
   if (role === null) return [];
   return Object.entries(ctx.entityMap)
     .filter(([id, mapping]) => {
@@ -99,8 +94,30 @@ export function categoryMembers(
       if (ctx.deviceOf && ctx.deviceOf(id) !== id) return false;
       if (ctx.dismissed.has(id)) return false;
       if (!isMappingAllowed(role, id, mapping, ctx.entities[id])) return false;
-      if (effectiveCategory(subjectOf(id, mapping, ctx.entities[id])) !== category) return false;
-      return !ctx.suppressed.has(id) || ctx.mapped.has(id);
+      return wanted(id, mapping);
     })
     .map(([id]) => id);
+}
+
+/**
+ * The devices a profile's CATEGORY list shows (a category icon held, or its line in "Map colours & keys"): every
+ * mapped device of that category the profile may see, dismissed ones out, and a hidden or
+ * diagnostic one only while it is ON THE MAP (a UniFi AP's diagnostic
+ * "State" sensor someone bound to a mesh stays; an orphan RSSI sensor does
+ * not). Lived inline in the Dashboard, held to SummaryGroupPanel's own rules
+ * by a comment (2.496.229).
+ */
+export function categoryMembers(role: Role | null, category: Category, ctx: ListSource): string[] {
+  return listMembers(role, ctx, (id, mapping) =>
+    effectiveCategory(subjectOf(id, mapping, ctx.entities[id])) === category
+    && (!ctx.suppressed.has(id) || ctx.mapped.has(id)));
+}
+
+/** The devices of one room a profile's list shows, as the Rooms window opens it: the ones on the map there, which is
+ *  what the room's chip stands for. `roomOf`: where a device resolved (devicePlace.deviceRoom). */
+export function roomMembers(
+  role: Role | null, room: string, ctx: ListSource & { roomOf: (id: string) => string },
+): string[] {
+  const key = roomKey(room);
+  return listMembers(role, ctx, (id) => ctx.mapped.has(id) && roomKey(ctx.roomOf(id)) === key);
 }
