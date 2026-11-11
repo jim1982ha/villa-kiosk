@@ -44,7 +44,7 @@ export default function CoverPanel({ entity, mapping, onClose }: PanelProps) {
       {/* Position slider only when the device reports current_position. */}
       {hasPosition && (
         <div className="field">
-          <label className="entity-label">Position · {position.value}%</label>
+          <label className="eyebrow">Position · {position.value}%</label>
           <input
             type="range" min={0} max={100} {...position.rangeProps}
           />

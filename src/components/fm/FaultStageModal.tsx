@@ -20,7 +20,7 @@
 // progress until it is filled in gets satisfied with junk, or the fault is
 // left where it is — both worse than a thin but honest record.
 
-import Window, { FormBody } from "@/components/common/Window";
+import Window, { FormBody, WindowHeader } from "@/components/common/Window";
 import ModalFooter from "@/components/common/ModalFooter";
 import { useState } from "react";
 
@@ -100,9 +100,7 @@ export default function FaultStageModal({
     // a window about ONE device's faults fits its content, as the device's own window does (owner, 2026-10-22: "Open a
     // ticket" was the full window height)
     <Window kind="device" label={copy.title} onClose={onClose} style={{ maxWidth: 520 }}>
-      <div className="modal-header">
-        <h2>{copy.title}</h2>
-      </div>
+      <WindowHeader title={copy.title} />
       <FormBody className="fm-stack">
         {/* the fault as its card names it (fmEngine.faultTitle: "#5 · …", a duration worded now) — not the stored title */}
         {tickets.map((t) => <div key={t.id} className="fm-banner">{faultTitle(t)}</div>)}

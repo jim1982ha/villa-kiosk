@@ -134,7 +134,7 @@ export default function NumericHistory({ series, named = false, name }: {
         <div className="field" key={s.id}>
           {i === 0
             ? header(`${s.label}, ${range.title.toLowerCase()}`)
-            : <label className="entity-label">{s.label}, {range.title.toLowerCase()}<ChartStep words={step} about={about} /></label>}
+            : <label className="eyebrow">{s.label}, {range.title.toLowerCase()}<ChartStep words={step} about={about} /></label>}
           {/* the larger one carries the toggle whichever chart it is: it changes them all, as the first one's does */}
           <ExpandableChart title={s.label} head={header(`${s.label}, ${range.title.toLowerCase()}`)}
             chart={oneLine(s, `${s.label} history`)} />

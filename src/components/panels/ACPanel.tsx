@@ -46,7 +46,7 @@ export default function ACPanel({ entity, mapping, onClose }: PanelProps) {
       </div>
 
         <div className="field">
-          <label className="entity-label">Mode</label>
+          <label className="eyebrow">Mode</label>
           <DeviceChoice label="Mode" active={entity?.state ?? null}
             send={(m) => HAServices.setHvacMode(ws, mapping.entityId, m)}
             options={hvacModes.map((m) => ({ key: m, label: MODE_LABELS[m] ?? m }))} />
@@ -54,7 +54,7 @@ export default function ACPanel({ entity, mapping, onClose }: PanelProps) {
 
       {fanModes.length > 0 && (
         <div className="field">
-          <label className="entity-label">Fan speed</label>
+          <label className="eyebrow">Fan speed</label>
           <DeviceChoice label="Fan speed" active={typeof a?.fan_mode === "string" ? a.fan_mode : null}
             send={(f) => HAServices.setFanMode(ws, mapping.entityId, f)}
             options={fanModes.map((f) => ({ key: f, label: f }))} />

@@ -119,7 +119,7 @@ export function TipTitle({ title, after, tip }: {
 }) {
   const info = <InfoTip label={`About ${typeof title === "string" ? title : "this section"}`}>{tip}</InfoTip>;
   return (
-    <div className={`settings-section-title${tip ? " with-tip" : ""}`}>
+    <div className={`section-title${tip ? " with-tip" : ""}`}>
       {title}
       {/* the counts and the (i) one unit: on a narrow screen they go under the title together, never the (i) alone */}
       {after ? <span className="title-after">{after}{tip && info}</span> : tip && info}

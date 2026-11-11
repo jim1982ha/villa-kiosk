@@ -77,7 +77,7 @@ function Tile({ t, onOpen }: { t: SummaryTile; onOpen: (t: SummaryTile) => void 
     >
       <span className="summary-tile-icon"><Icon size={20} /></span>
       <span className="summary-tile-text">
-        <span className="summary-tile-label">{t.label}</span>
+        <span className="eyebrow summary-tile-label">{t.label}</span>
         <span className="summary-tile-value">{t.value}</span>
       </span>
     </button>

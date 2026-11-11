@@ -68,7 +68,7 @@ export function ListSection({ title, count, summary, views, open, onToggle, tip,
     <section className="messages-section">
       <div className="cockpit-issues-head">
         <div className="with-tip">
-          <FoldToggle className="messages-section-toggle settings-section-title" open={open} onToggle={onToggle}>
+          <FoldToggle className="messages-section-toggle section-title" open={open} onToggle={onToggle}>
             <span className="fold-toggle-words">{withCount(title, count)}</span>
             {summary && !views && <span className="section-summary">{summary}</span>}
           </FoldToggle>

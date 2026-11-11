@@ -471,11 +471,13 @@ button {
 
 /* --- Typography scale --- */
 .room-title { font-family: var(--font-display); font-size: var(--text-2xl); font-weight: 300; letter-spacing: 0.05em; }
-/* Small section caption ("LAST 24 HOURS", …). Slightly smaller and lighter
-   than it was: at 13px/500 it competed with the actual content underneath it
-   instead of quietly labelling it. */
-/* Same eyebrow, same contrast fix as .summary-tile-label — see its comment. */
-.entity-label { font-family: var(--font-ui); font-size: var(--text-2xs); font-weight: 600; text-transform: uppercase; letter-spacing: 0.09em; color: var(--text-secondary); }
+/* ⚠️ THE EYEBROW, ONE LOOK (UI scan, 2026-11-11; the rules: "controls that do the same job look the same and are one
+   definition"): the small capitals over ONE value, control or chart ("FAN SPEED", "LAST 24 HOURS", a weather tile's
+   name, a settings card's field name, the room over a window's title, a bottom-bar tile's name). They were five rules
+   (11px or 12px, weights 400 to 700, four letter spacings). Quiet on purpose: at 13px/500 it competed with the
+   content under it. --text-secondary, never --text-dim (2.4:1 on the light bar, hard to read). The capitals over a
+   GROUP of rows are `.section-title` (04-modals.css). */
+.eyebrow { font-family: var(--font-ui); font-size: var(--text-2xs); font-weight: 600; text-transform: uppercase; letter-spacing: var(--tracking-label); color: var(--text-secondary); }
 .value-large { font-family: var(--font-ui); font-size: var(--text-display-lg); font-weight: 200; line-height: 1; }
 .value-unit { font-family: var(--font-ui); font-size: var(--text-lg); font-weight: 400; color: var(--text-secondary); }
 .body-text { font-family: var(--font-ui); font-size: var(--text-md); line-height: 1.5; }

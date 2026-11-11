@@ -42,6 +42,32 @@ export function useTypedForm(): { onChange: () => void } {
   return { onChange: () => setTyped(true) };
 }
 
+/** ⚠️ A WINDOW'S HEADER, WRITTEN ONCE (UI scan, 2026-11-11; the rules: "controls that do the same job look the same and
+ *  are one definition"): thirteen windows each wrote the header's markup, in two shapes (the title alone, or in a
+ *  `.title` row that keeps a long one on one line). Its title, what stands before it (a device's badge), the eyebrow
+ *  under it (a device's room), and its buttons at the right (`children`). A title too long for its line is cut with "…"
+ *  and says itself whole under the mouse (the TipLayer shows a text marked with itself only when it IS cut).
+ *  `focus`: the title takes the window's first focus (useModalA11y's data-autofocus), for a window whose first button
+ *  would otherwise take it: a device's badge is the Owner's recolour BUTTON, and focusing it on open drew the phone's
+ *  own focus ring round it, an amber border that read as a device state (owner, 2026-10-05); an (i) would pop its
+ *  card on open. tabIndex={-1} keeps the title out of Tab. */
+export function WindowHeader({ title, icon, under, focus, children }: {
+  title: ReactNode; icon?: ReactNode; under?: ReactNode; focus?: boolean; children?: ReactNode;
+}) {
+  return (
+    <div className="modal-header">
+      <div className="title">
+        {icon}
+        <div className="title-words">
+          <h2 data-tip={typeof title === "string" ? title : undefined} {...(focus ? { tabIndex: -1, "data-autofocus": true } : {})}>{title}</h2>
+          {under && <div className="eyebrow">{under}</div>}
+        </div>
+      </div>
+      {children && <div className="modal-header-actions">{children}</div>}
+    </div>
+  );
+}
+
 /** A window's body that is a form ("Report a problem", "Open a ticket"). */
 export function FormBody({ className, children }: { className?: string; children: ReactNode }) {
   return <div className={`modal-body${className ? ` ${className}` : ""}`} {...useTypedForm()}>{children}</div>;

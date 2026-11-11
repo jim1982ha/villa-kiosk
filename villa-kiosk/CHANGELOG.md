@@ -1,3 +1,19 @@
+## 2.496.774
+
+What you will see:
+- **Every window's header is the same height.** A window with only a title, a device's window, the Cockpit and
+  Settings had headers of four heights (a few pixels apart), so the tabs and the first line under them sat at
+  different places from one window to the next. They are now one height, on a phone and on a wide screen.
+- **A long window title is cut with "…" on one line** in every window (a chart's window, "Open a ticket") as it
+  already was in a device's window; under a mouse it says itself whole.
+- **The small capitals are two looks, not nine.** The heading over a group of lines ("Dashboard title" in Settings,
+  "Also on this device" in a device's window, "Scenes for this room" and "Not on the map" in a room's list) is one
+  look everywhere. The small caption over one value, control or chart ("Fan speed", "Today, hour by hour", a settings
+  card's "Linked entity", the room over a device window's title, the bottom bar's "Lights") is the other.
+  "Not on the map" keeps its colour, and its explanation is behind an (i) beside it.
+- Nothing else changed. Each of these is now written once, so a later change to a header, a heading or a caption
+  shows in every window at once.
+
 ## 2.496.773
 
 What you will see:

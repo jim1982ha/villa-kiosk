@@ -7,7 +7,7 @@
 // There's no HA URL/token here anymore: the kiosk always reaches Home Assistant
 // token-less through the add-on's Supervisor proxy, so there's nothing to enter.
 
-import Window from "@/components/common/Window";
+import Window, { WindowHeader } from "@/components/common/Window";
 import { eyeHeightOf } from "@/babylon/walkerSpawn";
 import ModalFooter, { footerExits } from "@/components/common/ModalFooter";
 import RemoteReplacedNote from "./RemoteReplacedNote";
@@ -115,8 +115,7 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor, ta
 
   return (
     <Window kind="content" label="Settings" onClose={closeModal} className="settings-modal">
-      <div className="modal-header">
-        <h2>Settings</h2>
+      <WindowHeader title="Settings">
         {/* Theme selector lives in the header, icon-only + right-aligned —
             self-explanatory glyphs, no Save step (applies and persists
             instantly). The day/night preview override used to sit here too
@@ -149,16 +148,16 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor, ta
             actually missing. Do not "de-duplicate" these by deleting one —
             that removes real capability. */}
         {can("customizeAppearance") && (
-          <div className="settings-header-control">
+          <>
             <span className="settings-inline-label">Interface</span>
           <SegmentedGroup ariaLabel="Interface theme" layout="natural" active={v.theme} onChange={(theme) => slice.set({ theme }, { now: true })} options={[
             { key: "light", title: "Light interface theme", label: <Sun size={17} /> },
             { key: "dark", title: "Dark interface theme", label: <Moon size={17} /> },
             { key: "auto", title: "Auto, follows the system, and dims to the night theme after dark", label: <Monitor size={17} /> },
           ]} />
-          </div>
+          </>
         )}
-      </div>
+      </WindowHeader>
       {/* every profile that opens Settings: the Cockpit's gear opens it on Messages for the same profiles (doors.settings) */}
       <ModalTabs tabs={TABS} active={tab} onSelect={onTab} label="Settings sections" />
 
@@ -212,7 +211,7 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor, ta
       {/* RBAC: shared branding — administration, not personal taste. */}
       {can("editConfig") && (
         <>
-          <div className="settings-section-title" style={{ marginTop: 0 }}>Dashboard title</div>
+          <div className="section-title" style={{ marginTop: 0 }}>Dashboard title</div>
           <input
             value={v.siteTitle}
             onChange={(e) => applySiteTitle(e.target.value)}
@@ -236,7 +235,7 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor, ta
           shows its own live value, so resetting a look that's no longer a
           multi-dial preset just means dragging them back — not worth a
           dedicated button. Day/night warmth is handled automatically. */}
-      <div className="settings-section-title">Render quality &amp; look</div>
+      <div className="section-title">Render quality &amp; look</div>
 
       {/* ⚠️ ONE LINE PER SETTING (owner, 2026-11-03: "show the other menu (toggle, slider, etc) with the same layout, for
           consistency"): each is common/SettingRow, its icon and name at the left, its control at the right in a column
@@ -315,7 +314,7 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor, ta
       </div>
 
       {/* ── Camera & movement: first-person walk-through comfort (Natural scrolling, a bird's-eye setting, is above). */}
-      <div className="settings-section-title">First-person view</div>
+      <div className="section-title">First-person view</div>
       <div className="setting-line">
         <SettingSlider icon={<Eye size={16} />} label="Eye height" value={settingValue.metres(eyeHeight)}
           min={0.8} max={2.2} step={0.05} at={eyeHeight} onChange={applyEyeHeight} />

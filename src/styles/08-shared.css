@@ -514,7 +514,7 @@ body:has(.camera-fullscreen) .vesta-notice.below-camera { display: none; }
   border-color: color-mix(in srgb, var(--tone) var(--tone-edge), var(--hairline));
 }
 .messages-section .fm-list { margin-top: 8px; }
-.messages-section .cockpit-issues-head .settings-section-title { margin: 0; }
+.messages-section .cockpit-issues-head .section-title { margin: 0; }
 /* VESTA's conversation, its own window (ticket 21 of "One inbox"; owner, 2026-10-29: beside the robot, the windows' own
    frame): its lines scroll above the box to ask, the person's own lines set apart, as in any chat */
 /* ⚠️ ONLY THE LINES SCROLL (owner, 2026-10-30: a spoken question's line and VESTA's dots sat half hidden at the

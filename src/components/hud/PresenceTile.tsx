@@ -3,7 +3,7 @@
 // screen, the villa's name in the top bar is not), and a tap tells why (owner, 2026-10-18). WHAT it says is
 // config/presence's (by value, tested); this draws it. No sensor picked in Settings › Villa: no tile.
 
-import Window from "@/components/common/Window";
+import Window, { WindowHeader } from "@/components/common/Window";
 import { CircleQuestionMark, House, Users } from "lucide-react";
 import { presenceHeading, presenceStateWords, stageColor, stageWords, type Presence, type PresenceWhy } from "@/config/presence";
 import { sinceWords as since, usePresence, usePresenceWhy } from "@/config/usePresence";
@@ -114,7 +114,7 @@ export function PresencePanel({ presence: p, when, why, showPeople, showMovement
   const opener = (id: string) => (canOpen(id) ? onOpenEntity : undefined);
   return (
     <Window kind="content" label="Villa presence" onClose={onClose} className="settings-modal presence-modal">
-      <div className="modal-header"><h2>Villa presence</h2></div>
+      <WindowHeader title="Villa presence" />
       <div className="modal-body">
         <div className="presence-now" style={{ "--tone": head.color } as React.CSSProperties}>
           <strong>{head.label}</strong>{head.when ? <span className="muted"> · since {head.when}</span> : null}
@@ -123,7 +123,7 @@ export function PresencePanel({ presence: p, when, why, showPeople, showMovement
         {/* Latest movement before People (owner, 2026-11-03: "Move the latest movement section above the people section") */}
         {showMovement && (
           <>
-            <div className="settings-section-title">Latest movement</div>
+            <div className="section-title">Latest movement</div>
             {act ? (
               <>
                 {/* ⚠️ NOT A BUTTON, AND NO CHART OF ITS OWN (owner, 2026-10-20: its "Clear" band was read as the
@@ -138,7 +138,7 @@ export function PresencePanel({ presence: p, when, why, showPeople, showMovement
         )}
         {showPeople && (
           <>
-            <div className="settings-section-title">People</div>
+            <div className="section-title">People</div>
             {why.people === null ? <EmptyLine>This sensor does not list the people it watches.</EmptyLine>
               : why.people.length === 0 ? <EmptyLine>None of the people this sensor watches is known.</EmptyLine> : (
                 <ul className="presence-list">
@@ -150,7 +150,7 @@ export function PresencePanel({ presence: p, when, why, showPeople, showMovement
         )}
         {why.settings.length > 0 && (
           <>
-            <div className="settings-section-title">What decides it</div>
+            <div className="section-title">What decides it</div>
             <ul className="presence-list">
               {why.settings.map((x) => <Row key={x.entityId} entityId={x.entityId} name={x.name} onOpen={opener(x.entityId)}
                 said={x.said} tip={x.explain || undefined} />)}

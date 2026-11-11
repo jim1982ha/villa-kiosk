@@ -36,7 +36,7 @@
 // open with the text intact and the reason under the field.
 
 import ModalFooter from "@/components/common/ModalFooter";
-import Window from "@/components/common/Window";
+import Window, { WindowHeader } from "@/components/common/Window";
 import { useState } from "react";
 
 interface Props {
@@ -84,7 +84,7 @@ export default function AskDialog({
     // render a two-line question edge-to-edge with square corners.
     <Window kind="question" label={title} onClose={onCancel} className="panel-modal" layer="panel-modal-backdrop"
       zIndex={90} style={{ maxWidth: 420 }}>
-      <div className="modal-header"><div className="title"><h2>{title}</h2></div></div>
+      <WindowHeader title={title} />
       <div className="modal-body">
         {message && <p style={{ margin: input ? "0 0 14px" : 0 }}>{message}</p>}
         {input && (

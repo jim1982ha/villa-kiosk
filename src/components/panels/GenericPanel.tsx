@@ -18,7 +18,7 @@ export default function GenericPanel({ entity, mapping, onClose }: PanelProps) {
         </div>
       )}
       <div className="field">
-        <label className="entity-label">Entity</label>
+        <label className="eyebrow">Entity</label>
         <div className="body-text muted">{mapping.entityId}</div>
       </div>
     </BasePanel>

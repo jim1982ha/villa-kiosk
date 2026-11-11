@@ -103,7 +103,7 @@ function NowView({ station, r }: { station: WeatherStation; r: Readings }) {
       {r.t !== undefined && (
         <div className="weather-feels">
           <div>
-            <div className="weather-eyebrow">How it feels</div>
+            <div className="eyebrow">How it feels</div>
             <div className="weather-headline">{comfortHeadline(r.t, r.dew, r.wind)}</div>
           </div>
           <div className="weather-big">{f1(r.t)}°</div>
@@ -166,7 +166,7 @@ function NowView({ station, r }: { station: WeatherStation; r: Readings }) {
 function Tile({ title, center, k, children }: { title: string; center?: boolean; k: string; children: ReactNode }) {
   return (
     <div className={`weather-tile k-${k}${center ? " center" : ""}`}>
-      <div className="weather-eyebrow">{title}</div>
+      <div className="eyebrow">{title}</div>
       {children}
     </div>
   );
@@ -431,7 +431,7 @@ function ChartTile({ title, legend, note, lines, win, status, stepMs, picker }: 
   const kept = useKeptFrom();
   const head = (
     <div className="weather-chart-head">
-      <div className="weather-eyebrow">{title}<ChartStep words={aggregationWords(stepMs, "avg")} about={chartAbout("average", stepMs, win.from, kept, drawsUnkept(present.map((l) => l.s)))} /></div>
+      <div className="eyebrow">{title}<ChartStep words={aggregationWords(stepMs, "avg")} about={chartAbout("average", stepMs, win.from, kept, drawsUnkept(present.map((l) => l.s)))} /></div>
       {legend && <div className="weather-legend">{legend.map(([n, c]) => <span key={n}><i className={`key ${c}`} />{n}</span>)}</div>}
       {note && <div className="weather-legend">{note}</div>}
     </div>
@@ -472,7 +472,7 @@ function RainTile({ s, win, status, stepMs, unit }: {
   return (
     <div className="weather-tile chart">
       <div className="weather-chart-head">
-        <div className="weather-eyebrow">Rain<ChartStep words={aggregationWords(stepMs, "sum")} about={chartAbout("total", stepMs)} /></div>
+        <div className="eyebrow">Rain<ChartStep words={aggregationWords(stepMs, "sum")} about={chartAbout("total", stepMs)} /></div>
         <div className="weather-legend">{unit}</div>
       </div>
       {n === 0

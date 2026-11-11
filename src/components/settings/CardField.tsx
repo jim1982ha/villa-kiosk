@@ -6,5 +6,5 @@
 import type { ReactNode } from "react";
 
 export default function CardField({ label, children }: { label: string; children: ReactNode }) {
-  return <div className="card-field"><span className="card-field-label">{label}</span>{children}</div>;
+  return <div className="card-field"><span className="eyebrow card-field-label">{label}</span>{children}</div>;
 }

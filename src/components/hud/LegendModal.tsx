@@ -6,7 +6,7 @@
 // place. A first-time user has to tap around and learn it by trial. This is
 // that reference, one tap away, not shown by default.
 
-import Window from "@/components/common/Window";
+import Window, { WindowHeader } from "@/components/common/Window";
 import { CATEGORY_ORDER, CATEGORY_LABELS, categorySurface, type DeviceSurfaceState } from "@/config/EntityCategories";
 import { badgeImage } from "@/babylon/badgeIcons";
 import type { BadgeMark, LinkPill } from "@/utils/deviceActivity";
@@ -92,11 +92,9 @@ export default function LegendModal({ onClose, listable, onListCategory }: {
     // the outer width too means this is a genuine "same modal, different
     // content" reuse instead of its own one-off sizing.
     <Window kind="content" label="Map colours and keys" onClose={onClose} className="settings-modal legend-modal" frameKey={theme}>
-      <div className="modal-header">
-        <h2>Map colours &amp; keys</h2>
-      </div>
+      <WindowHeader title="Map colours &amp; keys" />
       <div className="modal-body">
-        <div className="settings-section-title">Device category (badge colour when on)</div>
+        <div className="section-title">Device category (badge colour when on)</div>
         <p className="muted body-text" style={{ marginTop: 4 }}>
           A device's badge is plain at rest, its icon in its category
           colour, the whole square takes the colour once it is on. The list
@@ -119,7 +117,7 @@ export default function LegendModal({ onClose, listable, onListCategory }: {
           ))}
         </div>
 
-        <div className="settings-section-title">On the map (badge state)</div>
+        <div className="section-title">On the map (badge state)</div>
         <p className="muted body-text" style={{ marginTop: 4 }}>
           The square says what a device does. The top-right pill is the
           device itself: what is wrong with it, the most urgent first.
@@ -147,7 +145,7 @@ export default function LegendModal({ onClose, listable, onListCategory }: {
 
         {/* Drawn from the same owners as the chip: categorySurface("others", …)
             for the border, healthPill for the number. */}
-        <div className="settings-section-title">Room chips (zoomed out)</div>
+        <div className="section-title">Room chips (zoomed out)</div>
         <p className="muted body-text" style={{ marginTop: 4 }}>
           A room's name with its number of devices. The number's colour says
           whether the room is all right; the border, whether something is on.
@@ -180,7 +178,7 @@ export default function LegendModal({ onClose, listable, onListCategory }: {
 
         {/* The keyboard, as the current Natural Scroll setting makes it act
             (overviewKeys.overviewKeyHelp) — nowhere else says it. */}
-        <div className="settings-section-title">Moving around with a keyboard</div>
+        <div className="section-title">Moving around with a keyboard</div>
         <p className="muted body-text" style={{ marginTop: 4 }}>
           Bird's-eye view, hold a key to keep moving{config.naturalScrolling ? " (Natural Scroll is on)" : " (Natural Scroll is off)"}:
         </p>
@@ -193,7 +191,7 @@ export default function LegendModal({ onClose, listable, onListCategory }: {
           Walking: ↑ ↓ or W S walk, ← → or A D turn, Q / E step sideways, Shift + ↑ ↓ look up or down.
         </p>
 
-        <div className="settings-section-title">On a device panel (status pill)</div>
+        <div className="section-title">On a device panel (status pill)</div>
         <p className="muted body-text" style={{ marginTop: 4 }}>
           Shown when you open a device's controls.
         </p>

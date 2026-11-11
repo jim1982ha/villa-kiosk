@@ -111,7 +111,7 @@ export function HistoryHeader({ title, picker, step, about, note }: { title: str
   return (
     <>
       <div className="timeline-head">
-        <label className="entity-label"><span className="chart-range-words">{title}</span>
+        <label className="eyebrow"><span className="chart-range-words">{title}</span>
           <ChartStep words={step} about={`${title}, ${step}. ${about}`} /></label>
         {picker}
       </div>

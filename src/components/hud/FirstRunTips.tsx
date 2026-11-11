@@ -8,7 +8,7 @@
 // tour — dismiss by tapping the backdrop or "Got it", never shown again on
 // this device either way.
 
-import Window from "@/components/common/Window";
+import Window, { WindowHeader } from "@/components/common/Window";
 import { Armchair, Info, Layers } from "lucide-react";
 import { markFirstRunTipsSeen } from "@/utils/viewPrefs";
 import ModalFooter from "@/components/common/ModalFooter";
@@ -45,9 +45,7 @@ export default function FirstRunTips({ onClose }: { onClose: () => void }) {
     // big empty area below instead of centered like every other popup.
     <Window kind="content" label="Quick tips" onClose={dismiss} className="panel-modal first-run-tips"
       layer="panel-modal-backdrop first-run-backdrop">
-      <div className="modal-header">
-        <h2>Quick tips</h2>
-      </div>
+      <WindowHeader title="Quick tips" />
       <div className="modal-body">
         <ul className="first-run-tip-list">
           <li>

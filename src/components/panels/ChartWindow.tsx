@@ -6,7 +6,7 @@
 // caller's: the same header, toggle and slider, bound to the same choices, so the two views never disagree.
 
 import { useState, type ReactNode } from "react";
-import Window from "@/components/common/Window";
+import Window, { WindowHeader } from "@/components/common/Window";
 import ModalFooter from "@/components/common/ModalFooter";
 
 /** The plot's height in the window: what the screen leaves under the header, toggle and footer, within bounds. */
@@ -18,7 +18,7 @@ export default function ChartWindow({ title, onClose, children }: { title: strin
   return (
     <Window kind="content" label={title} onClose={onClose} className="settings-modal cockpit-modal chart-modal"
       layer="panel-modal-backdrop" zIndex={80}>
-      <div className="modal-header"><h2>{title}</h2></div>
+      <WindowHeader title={title} />
       <div className="modal-body">{children}</div>
       <ModalFooter onClose={onClose} />
     </Window>

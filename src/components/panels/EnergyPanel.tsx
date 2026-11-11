@@ -122,7 +122,7 @@ function NowView({ setup, costUnit, house, colourOf }: { setup: EnergyWindowSetu
     <div className="weather-now energy-now">
       <div className="weather-feels">
         <div>
-          <div className="weather-eyebrow">Today so far</div>
+          <div className="eyebrow">Today so far</div>
           <div className="weather-headline">{T.headline}</div>
         </div>
         <div className="energy-hero">
@@ -134,7 +134,7 @@ function NowView({ setup, costUnit, house, colourOf }: { setup: EnergyWindowSetu
       <ObservationCards cards={T.cards} />
 
       <div className="weather-tile chart energy-wide">
-        <div className="weather-chart-head"><div className="weather-eyebrow">Today, hour by hour<ChartStep words={aggregationWords(PERIOD_MS.hour, "sum")} about={chartAbout("total", PERIOD_MS.hour)} /></div><div className="weather-legend">kWh</div></div>
+        <div className="weather-chart-head"><div className="eyebrow">Today, hour by hour<ChartStep words={aggregationWords(PERIOD_MS.hour, "sum")} about={chartAbout("total", PERIOD_MS.hour)} /></div><div className="weather-legend">kWh</div></div>
         <BarChart label="Energy used today, hour by hour" fmt={kwh} unit="kWh"
           buckets={todayP.buckets.map((b) => ({ t: b.t, segs: segsOf(b, () => [{ key: "used", label: "Used", v: b.split!.used, cls: "e-used" }]) }))}
           stamp={(t) => fmtStepStamp(t, PERIOD_MS.hour, 24)}
@@ -144,7 +144,7 @@ function NowView({ setup, costUnit, house, colourOf }: { setup: EnergyWindowSetu
 
       <div className="weather-tile chart energy-wide">
         <div className="weather-chart-head">
-          <div className="weather-eyebrow">Last 7 days<ChartStep words={aggregationWords(PERIOD_MS.day, "sum")} about={chartAbout("total", PERIOD_MS.day)} /></div>
+          <div className="eyebrow">Last 7 days<ChartStep words={aggregationWords(PERIOD_MS.day, "sum")} about={chartAbout("total", PERIOD_MS.day)} /></div>
           <div className="weather-legend">{fmtKwh(T.weekTotal)} kWh{typical ? ` · typical day ${fmtKwh(typical)}` : ""}</div>
         </div>
         <BarChart label="Energy used, the last seven days" fmt={kwh} unit="kWh"
@@ -156,7 +156,7 @@ function NowView({ setup, costUnit, house, colourOf }: { setup: EnergyWindowSetu
 
       <div className="weather-tile chart energy-wide">
         <div className="weather-chart-head">
-          <div className="weather-eyebrow">Where today&apos;s {fmtKwh(split.used)} kWh went</div>
+          <div className="eyebrow">Where today&apos;s {fmtKwh(split.used)} kWh went</div>
         </div>
         <Flow split={split} rateKw={rateKw} house={house} colourOf={colourOf} />
         {overlapShows(split) && (
@@ -322,7 +322,7 @@ function HistoryView({ setup, costUnit, range: rangeKey, colourOf }: { setup: En
 
       <div className="weather-tile chart energy-wide">
         <div className="weather-chart-head">
-          <div className="weather-eyebrow">{hasCost ? `Energy and cost per ${unit}` : "Energy used, by device"}<ChartStep words={aggregationWords(PERIOD_MS[range.period], "sum")} about={chartAbout("total", PERIOD_MS[range.period])} /></div>
+          <div className="eyebrow">{hasCost ? `Energy and cost per ${unit}` : "Energy used, by device"}<ChartStep words={aggregationWords(PERIOD_MS[range.period], "sum")} about={chartAbout("total", PERIOD_MS[range.period])} /></div>
           <div className="weather-legend">
             {series.map((s) => <span key={s.id}><i className={`key ${s.cls}`} />{s.label}</span>)}
             {hasCost && <span><i className="key cost line" />Cost · {formatMoney(costTotal, costUnit)}</span>}
@@ -342,7 +342,7 @@ function HistoryView({ setup, costUnit, range: rangeKey, colourOf }: { setup: En
 
       <div className="weather-tile chart energy-wide">
         <div className="weather-chart-head">
-          <div className="weather-eyebrow">Every device</div>
+          <div className="eyebrow">Every device</div>
           <div className="energy-rank-tools">
             {shape === "list" && <span className="weather-legend">share of {fmtKwh(whole.used)} kWh</span>}
             {shapePicker}

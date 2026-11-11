@@ -32,7 +32,7 @@ import type { HassEntity } from "@/types/ha.types";
 import type { Category } from "@/types/scene.types";
 import { listSections, offersGrouping, summaryRows, type Grouping } from "@/config/summaryRows";
 import SegmentedGroup from "@/components/common/SegmentedGroup";
-import InfoTip from "@/components/common/InfoTip";
+import { TipTitle } from "@/components/common/InfoTip";
 import { useRoomFloors } from "@/config/useRoomFloors";
 import { deviceRoom, floorOfRoom } from "@/config/devicePlace";
 
@@ -200,8 +200,7 @@ export default function SummaryGroupPanel({
         <>
           {/* what each heading means is behind its (i), which a tap opens: it was a hover text (UI scan, 2026-11-10) */}
           <div className="summary-offmap-heading">
-            Not on the map
-            <InfoTip label="About Not on the map">The villa's system has these devices, but the villa's 3D model has no object for them.</InfoTip>
+            <TipTitle title="Not on the map" tip="The villa's system has these devices, but the villa's 3D model has no object for them." />
           </div>
           {renderRooms(offMap)}
         </>
@@ -209,11 +208,7 @@ export default function SummaryGroupPanel({
       {notInHa.length > 0 && (
         <>
           <div className="summary-offmap-heading summary-notinha-heading">
-            {NOT_IN_HA}
-            <InfoTip label={`About ${NOT_IN_HA}`}>
-              The villa's 3D model has objects named after these devices, but the villa's system has no such device: it
-              was removed there, or renamed. Update the model, or add the device back.
-            </InfoTip>
+            <TipTitle title={NOT_IN_HA} tip="The villa's 3D model has objects named after these devices, but the villa's system has no such device: it was removed there, or renamed. Update the model, or add the device back." />
           </div>
           {renderRooms(notInHa)}
         </>
@@ -223,7 +218,7 @@ export default function SummaryGroupPanel({
           scenes are a secondary shortcut for the same room. */}
       {!!roomScenes?.length && (
         <div className="summary-room-scenes">
-          <div className="summary-room-heading">Scenes for this room</div>
+          <div className="section-title">Scenes for this room</div>
           <div className="summary-room-scenes-row">
             {roomScenes.map((s) => (
               <button

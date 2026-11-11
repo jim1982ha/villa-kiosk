@@ -215,7 +215,7 @@ export default function SpendTab(
       {/* ⚠️ THE MONTHLY RECAP, A SECTION OF ITS OWN UNDER THE SPEND (owner, 2026-11-05): its title, then the Month on the
           same line as its recap's buttons (owner, 2026-10-14), its preview, its saved copies. The Month still chooses
           what this whole tab shows, the money card and the list above included, and the recap is of that month. */}
-      <div className="settings-section-title">Monthly recap</div>
+      <div className="section-title">Monthly recap</div>
       {/* ⚠️ THE RECAP'S THREE BUTTONS ARE ONE GROUP (owner, 2026-10-14: Download .md fell alone onto a second line): they
           never part; on a narrow screen the group goes under the Month as a whole. "Save", not "Save recap": beside
           "Generate recap" it says the same, and the three fit one line on the iPad. */}

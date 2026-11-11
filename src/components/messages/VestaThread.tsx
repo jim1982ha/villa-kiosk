@@ -9,7 +9,7 @@ import { momentText } from "@/utils/dateText";
 import { useEffect, useRef, useState } from "react";
 import { Mic, RotateCcw, Send, Square, Volume2 } from "lucide-react";
 import IconButton from "@/components/common/IconButton";
-import Window from "@/components/common/Window";
+import Window, { WindowHeader } from "@/components/common/Window";
 import ModalFooter from "@/components/common/ModalFooter";
 
 import { NEW_CONVERSATION, QUESTION_MAX, SPOKEN_WAITING, TALK_SAID, pressableOf, type Turn } from "@/messages/conversation";
@@ -87,14 +87,11 @@ export default function VestaWindow({ onClose, canOpenPage }: { onClose: () => v
 
   return (
     <Window kind="content" label="VESTA" onClose={onClose} className="settings-modal vesta-modal">
-      <div className="modal-header">
-        <h2>VESTA</h2>
-        <div className="modal-header-actions">
-          <button type="button" className="btn" disabled={sending} onClick={() => void send(NEW_CONVERSATION)}>
-            <RotateCcw size={16} aria-hidden /> New conversation
-          </button>
-        </div>
-      </div>
+      <WindowHeader title="VESTA">
+        <button type="button" className="btn" disabled={sending} onClick={() => void send(NEW_CONVERSATION)}>
+          <RotateCcw size={16} aria-hidden /> New conversation
+        </button>
+      </WindowHeader>
       <div className="modal-body vesta-thread">
       <div className="vesta-thread-lines" role="log" aria-live="polite">
         {thread.lines.length === 0 && <EmptyLine>Ask VESTA about the villa: what is on, what happened, what to check.</EmptyLine>}

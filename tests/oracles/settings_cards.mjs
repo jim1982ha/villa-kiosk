@@ -275,13 +275,13 @@ console.log("\n  one field per list (owner, 2026-11-06): it narrows the list and
 
 console.log("\n  Devices: its title's counts show its lists:");
 {
-  const head = (html) => inside(html, "settings-section-title");
+  const head = (html) => inside(html, "section-title");
   // what each list holds (its first few): the devices on the map, the devices no object shows (a group's member is
   // shown by its group's badge)
   const LISTS = { on: ["Kitchen Temperature", "Pool Pump", "Pool Pump Power"], off: ["Back Door", "Ceiling Fan"] };
   ck("its two counts after its title are the one segmented control, compact, the list shown filled (on the map first)",
      JSON.stringify(views(head(devices()))) === JSON.stringify([["4 on the map", true], ["2 not on the map", false]])
-     && /^<div class="settings-section-title with-tip">Auto-detected entity settings<span class="title-after"><div class="segmented segmented-compact section-views" role="group" aria-label="Auto-detected entity settings: which list">/.test(head(devices())), [views(head(devices())), head(devices()).slice(0, 200)]);
+     && /^<div class="section-title with-tip">Auto-detected entity settings<span class="title-after"><div class="segmented segmented-compact section-views" role="group" aria-label="Auto-detected entity settings: which list">/.test(head(devices())), [views(head(devices())), head(devices()).slice(0, 200)]);
   const devicesOf = (html) => cards(html).filter((c) => c.bar !== "Point it there").map((c) => c.name);
   ck("  ...each count shows its own list, one at a time",
      Object.entries(LISTS).every(([v, want], i) => { const html = devices(v); const shown = views(head(html)).map(([, s]) => s);
@@ -374,7 +374,7 @@ console.log("\n  every card for an entity: its friendly name in its strip, its i
 
 console.log("\n  every card's field: its name in the one column, its control beside it, as a device's Linked entity:");
 {
-  const named = (html, name) => [...(cards(html).find((c) => c.name === name)?.card ?? "").matchAll(/<div class="card-field"><span class="card-field-label">([^<]+)<\/span>/g)].map((m) => m[1]);
+  const named = (html, name) => [...(cards(html).find((c) => c.name === name)?.card ?? "").matchAll(/<div class="card-field"><span class="eyebrow card-field-label">([^<]+)<\/span>/g)].map((m) => m[1]);
   const FIELDS = [
     ["a device group", drawIn(h(GroupedDevices, { title: "Grouped devices" })), "Kitchen Temperature", ["Members"]],
     // owner, 2026-11-06: "3D object" first, right under the card's first line, above Type (it was the last)

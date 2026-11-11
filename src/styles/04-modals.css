@@ -121,11 +121,14 @@
 /* the whole screen (Window kind "screen"), over every other window and the camera: no card, no gutter */
 .modal-backdrop.backdrop-screen { z-index: 90; padding: 0; }
 .modal.window-screen { max-width: none; max-height: none; width: 100%; height: 100%; border: 0; border-radius: 0; box-shadow: none; background: var(--bg-base); }
-/* Header is a row: title left, the icon-only theme selector right. */
-/* min-height: the tallest thing a header holds (a 44px device icon) plus the
-   padding, so every header is the same height whether it carries an icon, the
-   theme selector or only a title. */
-.modal-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 24px 28px 16px; min-height: 84px; box-sizing: border-box; border-bottom: 1px solid var(--hairline); flex: 0 0 auto; }
+/* The header is a row (common/Window's WindowHeader, the only place its markup is written): the title left, its
+   buttons right. */
+/* ⚠️ min-height: THE TALLEST THING A HEADER HOLDS, the 48px pill group (Settings' theme control, Advanced Settings'
+   tools), plus the padding and the line under it, so every header is the same height whether it carries a device's
+   badge, a button, the pill group or only a title. It said 84 for "a 44px device icon", which a 44px thing already
+   passed by one pixel: measured side by side, a title alone was 84, a device window and the Cockpit 85, Settings 89,
+   and the tabs under them sat at three heights (UI scan, 2026-11-11). A phone: 05-layout.css. */
+.modal-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 24px 28px 16px; min-height: 89px; box-sizing: border-box; border-bottom: 1px solid var(--hairline); flex: 0 0 auto; }
 /* A window's tabs (common/ModalTabs): the band under the header, at the window's gutters, holding the one choice
    control in its tab shape. ⚠️ NEVER SHRINKS (owner, 2026-10-01): the window is a flex column, and a long tab's body
    squeezed the band below its own height, the chosen tab cut in half. */
@@ -134,7 +137,6 @@
    sun/moon triplets on one screen (this and Villa lighting) were reported as
    reading like the same duplicated control — see SettingsModal's note. The
    label is the fix; changing one glyph was tried first and was not enough. */
-.settings-header-control { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
 .settings-inline-label { font-size: var(--text-2xs); color: var(--text-secondary); white-space: nowrap; }
 /* Two sliders (or coordinate fields) side by side; stacks on narrow screens. */
 .slider-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 20px; align-items: start; }
@@ -167,13 +169,17 @@
    One plain line each (.problem-line). */
 .modal-footer-note { flex: 0 0 auto; display: flex; align-items: flex-start; gap: 8px; padding: 12px 28px 0; background: var(--bg-overlay); }
 .modal-footer-note-lines { flex: 1 1 auto; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-/* Section headings inside Settings — quiet, uppercase group labels. */
-.settings-section-title { font-size: var(--text-xs); text-transform: uppercase; letter-spacing: var(--tracking-eyebrow); color: var(--text-secondary); margin: 24px 0 12px; font-weight: 600; }
+/* ⚠️ A SECTION'S HEADING, ONE LOOK (UI scan, 2026-11-11; the rules: "controls that do the same job look the same and
+   are one definition"): the quiet capitals over a group of rows, in every window. "Also on this device", "Scenes for
+   this room" and "Not on the map" each had a rule of their own (11px or 12px, three letter spacings); they are this
+   class now, each place keeping its margin alone. The small capitals over ONE value, control or chart are `.eyebrow`
+   (01-base.css). */
+.section-title { font-size: var(--text-xs); text-transform: uppercase; letter-spacing: var(--tracking-eyebrow); color: var(--text-secondary); margin: 24px 0 12px; font-weight: 600; }
 /* ⚠️ `.settings-section-toggle` WENT WITH `CollapsibleSection`. Advanced
    Settings' sections were collapsible because there were six of them in one
    scroll; they are three tabs of two now, and a heading inside a tab has
    nothing left to hide. Nothing else in the app ever used the clickable
-   variant — the plain `.settings-section-title` above is what remains. */
+   variant — the plain `.section-title` above is what remains. */
 
 /* Screen-reader-only text — visually hidden, still announced. Used to
    describe a gesture-only secondary action (e.g. "hold to manage rooms")
@@ -280,7 +286,7 @@
      header owns it now. */
   margin-bottom: var(--field-label-gap);
 }
-.timeline-head .entity-label { margin: 0; white-space: nowrap; }
+.timeline-head .eyebrow { margin: 0; white-space: nowrap; }
 /* ⚠️ THE COMPACT SHAPE (SegmentedGroup layout="compact"): a choice beside a heading or in a card's line, at the
    line's own height: a chart's ranges, a section's counts (FoldedList SectionViewButtons), a card's On | Off. After
    .segmented's rules: same specificity, the later one wins. */
@@ -577,7 +583,7 @@
 /* A device panel's "Also on this device" (BasePanel, PanelActions.readings):
    the device's other readings, each a row that opens its own panel. */
 .panel-readings { margin-top: 18px; border-top: 1px solid var(--hairline); padding-top: 12px; }
-.panel-readings-title { font-size: var(--text-2xs); font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 6px; }
+.panel-readings .section-title { margin: 0 0 6px; }
 .panel-reading-row { display: flex; align-items: center; gap: 10px; width: 100%; min-height: var(--touch-min); padding: 6px 4px; border: none; background: none; color: var(--text-primary); text-align: left; cursor: pointer; border-radius: 10px; }
 .panel-reading-row + .panel-reading-row { border-top: 1px solid var(--hairline); border-radius: 0; }
 /* "Show all (n)" — the rest of a busy device's readings, on request (DeviceReadings). */
@@ -635,8 +641,8 @@
    width, every control at the card's left. */
 .card-field { display: grid; grid-template-columns: var(--card-field-label) minmax(0, 1fr); align-items: center; gap: 6px 12px;
   min-width: 0; padding: 5px 0; }
-.card-field-label { grid-column: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  color: var(--text-secondary); font-size: var(--text-2xs); text-transform: uppercase; letter-spacing: 0.04em; }
+/* its look is the eyebrow's (01-base.css .eyebrow); here, only its place */
+.card-field-label { grid-column: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .card-field > :not(.card-field-label) { grid-column: 2; min-width: 0; }
 .card-field > .unit-field { width: auto; }
 @container work-row (max-width: 519px) {
@@ -651,10 +657,10 @@
 .group-members-add { flex: 1 1 180px; min-width: 140px; }
 
 /* THE "this opens more" (common/FoldedList FoldToggle): a chevron before the words, no box; a section's in its title's
-   style (.settings-section-title), a list's inside a section in the body's. */
+   style (.section-title), a list's inside a section in the body's. */
 .fold-toggle { display: inline-flex; align-items: center; gap: 6px; min-height: var(--touch-min); padding: 0; border: 0;
   background: none; font-family: inherit; color: var(--text-secondary); cursor: pointer; text-align: left; }
-.fold-toggle:not(.settings-section-title) { font-size: var(--text-sm); font-weight: 500; }
+.fold-toggle:not(.section-title) { font-size: var(--text-sm); font-weight: 500; }
 @media (hover: hover) { .fold-toggle:hover { color: var(--text-primary); } }
 .fold-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
 .fold-toggle > svg { flex: 0 0 auto; }

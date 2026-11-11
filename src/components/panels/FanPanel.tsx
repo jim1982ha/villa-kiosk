@@ -35,7 +35,7 @@ export default function FanPanel({ entity, mapping, onClose }: PanelProps) {
       <ControlFrame entity={entity} mapping={mapping} power>
       {levels.length > 0 && (
         <div className="field">
-          <label className="entity-label">Speed</label>
+          <label className="eyebrow">Speed</label>
           <DeviceChoice label="Speed" active={on && closestLevel ? String(closestLevel.value) : null}
             send={(v) => HAServices.setFanPercentage(ws, mapping.entityId, Number(v))}
             options={levels.map((l) => ({ key: String(l.value), label: l.label }))} />
@@ -44,7 +44,7 @@ export default function FanPanel({ entity, mapping, onClose }: PanelProps) {
 
       {presets.length > 0 && (
         <div className="field">
-          <label className="entity-label">Preset</label>
+          <label className="eyebrow">Preset</label>
           <DeviceChoice label="Preset" active={currentPreset ?? null}
             send={(p) => HAServices.setFanPreset(ws, mapping.entityId, p)}
             options={presets.map((p) => ({ key: p, label: p }))} />

@@ -20,7 +20,7 @@
 // villa's whole fault history, including what it cost to fix things, is not
 // something a report button should hand out.
 
-import Window, { FormBody } from "@/components/common/Window";
+import Window, { FormBody, WindowHeader } from "@/components/common/Window";
 import { useRef, useState } from "react";
 import { Camera, Check, Wrench } from "lucide-react";
 import { useEntityLabel } from "@/hooks/useEntityLabel";
@@ -76,9 +76,7 @@ export default function GuestReportModal({
 
   return (
     <Window kind="content" label="Report a problem" onClose={onClose} className="guest-report">
-      <div className="modal-header">
-        <h2><Wrench size={18} /> Report a problem</h2>
-      </div>
+      <WindowHeader title={<><Wrench size={18} /> Report a problem</>} />
 
       {sent ? (
         // A confirmation, not a silent close: the guest has no way to check

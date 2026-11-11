@@ -21,7 +21,7 @@ export default function DeviceReadings() {
   if (!readings || readings.length === 0) return null;
   return (
     <div className="panel-readings">
-      <div className="panel-readings-title">Also on this device</div>
+      <div className="section-title">Also on this device</div>
       {list.visible.map((r) => (
         <button key={r.id} type="button" className="panel-reading-row"
           onClick={onOpenReading ? () => onOpenReading(r.id) : undefined} disabled={!onOpenReading}>
