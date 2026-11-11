@@ -36,6 +36,7 @@ import { QUIET_PILL } from "@/fm/tone";
 import { CockpitAttentionRow } from "./IssueCard";
 import { useCockpitIssues } from "./useVillaAttention";
 import { withCount } from "@/utils/countBadge";
+import EmptyLine from "@/components/common/EmptyLine";
 
 /** ⚠️ ONE CARD OF THE INBOX, WHATEVER IT HOLDS (owner, 2026-11-01: "NEVER add dedicated lines of code for specific
  *  cards"): whole under Issues (`opened`, no `onToggle`: the card itself is not pressed, its buttons are); a notification
@@ -145,14 +146,14 @@ export default function MessagesTab({ onOpenEntity, doors, onRaiseTicket, onEdit
         <ListSection title="Open issues" count={open.length} open={folds.issues} onToggle={() => fold("issues")}
           tip={canManage ? <FaultTiming /> : undefined}>
           {view.issues.map(card)}
-          {open.length === 0 && <p className="muted body-text messages-empty">Nothing needs attention.</p>}
+          {open.length === 0 && <EmptyLine>Nothing needs attention.</EmptyLine>}
         </ListSection>
       )}
       {showsNotes && (
         <ListSection title="Notifications" count={view.notifications.length} open={folds.notes} onToggle={() => fold("notes")}>
           {paged.page.map(card)}
           {view.notifications.length === 0
-            ? <p className="muted body-text messages-empty">{view.notificationsEmpty}</p>
+            ? <EmptyLine>{view.notificationsEmpty}</EmptyLine>
             : <Pager paged={paged} />}
         </ListSection>
       )}
@@ -161,7 +162,7 @@ export default function MessagesTab({ onOpenEntity, doors, onRaiseTicket, onEdit
         <ListSection title="Reports" count={view.reports.length} open={folds.reports} onToggle={() => fold("reports")}>
           {reportsPaged.page.map(card)}
           {view.reports.length === 0
-            ? <p className="muted body-text messages-empty">No report yet.</p>
+            ? <EmptyLine>No report yet.</EmptyLine>
             : <Pager paged={reportsPaged} />}
         </ListSection>
       )}

@@ -213,7 +213,8 @@ body:has(.camera-fullscreen) .vesta-notice.below-camera { display: none; }
 /* ⚠️ ONE SHAPE FOR THE LINE (owner, 2026-10-31: "the corners are not the same: style them all the same"): the filters
    are the one choice control (SegmentedGroup) and the button beside them the one worded button (.btn, a pill as its
    track is): nothing about it is written here. tests/oracles/live_issues.mjs */
-.messages-empty { padding: 8px 0; }
+/* THE "nothing here" line of a list, a chart or a section (common/EmptyLine): one look, one distance. */
+.empty-line { margin: 0; padding: 8px 0; color: var(--text-secondary); font-family: var(--font-ui); font-size: var(--text-md); line-height: 1.5; }
 /* an open notification or report is the Cockpit's one card (RecordCard, owner 2026-10-29): its words as an issue's
    lines, its "To:" and Status as an issue's story; the full-screen ring keeps its large text (.announcement-full-text) */
 .messages-card-body { display: flex; flex-direction: column; gap: 6px; }
@@ -261,10 +262,10 @@ body:has(.camera-fullscreen) .vesta-notice.below-camera { display: none; }
 .cockpit-attention-story { list-style: none; margin: 4px 0 0; padding: 10px 12px; border-radius: 12px; display: flex;
   flex-direction: column; gap: 6px; background: var(--bg-input); }
 
-/* The Cockpit header's updates count: a header button's look, nothing to press. */
-.header-icon-badge { cursor: default; position: relative; }
-/* its count at the bottom-right corner (owner, 2026-10-14) — the top bar's counts stay where they are */
-.header-icon-badge > .icon-btn-count { top: auto; bottom: 1px; }
+/* A count on a window's header button (the Cockpit's updates): at its bottom-right corner (owner, 2026-10-14); the
+   top bar's counts stay where they are. */
+.btn.icon-only { position: relative; }
+.btn.icon-only > .icon-btn-count { top: auto; bottom: 1px; }
 
 /* ── Telemetry log rows ────────────────────────────────────────────────────
    A diagnostic row is four parts: the event kind, which device/role/build sent

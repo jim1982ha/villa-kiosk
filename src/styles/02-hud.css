@@ -773,6 +773,7 @@
 /* HA-only devices (no geometry in this villa model) — listed after the mapped
    ones under this heading and tinted, so it's clear they're not on the map. */
 .summary-offmap-heading {
+  display: flex; align-items: center; gap: 6px;
   margin: 18px 0 8px; font-size: var(--text-xs); font-weight: 600;
   text-transform: uppercase; letter-spacing: 0.08em; color: var(--accent);
   border-top: 1px solid var(--hairline); padding-top: 14px;

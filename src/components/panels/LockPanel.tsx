@@ -9,6 +9,7 @@ import { lockBolt, lockButtons, lockPill, lostPillTone } from "@/config/reading"
 import { usePanelActions } from "./PanelActionsContext";
 import { tapFeedback, successFeedback } from "@/utils/haptics";
 import ControlFrame from "./ControlFrame";
+import StatusPill from "./StatusPill";
 import InlineConfirm from "@/components/common/InlineConfirm";
 import { useAskFirst } from "@/hooks/useAskFirst";
 import { switchAsk } from "@/utils/devicePower";
@@ -63,17 +64,12 @@ export default function LockPanel({ entity, mapping, onClose }: PanelProps) {
       {/* The shared frame: nothing to command when the villa's system has lost the lock (the window's notice says
           so: BasePanel), the state pill and the buttons otherwise (ControlFrame). */}
       <ControlFrame entity={entity} mapping={mapping}>
-      <div className="center" style={{ margin: "8px 0 20px" }}>
-        <span className={`status-pill ${pill.tone}`}>
-          {/* The open padlock is reserved for a lock that is genuinely NOT
-              secured. Mid-motion, jammed and unavailable all keep the closed
-              icon, for the same reason meshVariants falls an unauthored state
-              back to the closed pose: never imply a door is open on anything
-              short of the device saying so. */}
-          <PadIcon size={16} />
-          {pill.text}
-        </span>
-      </div>
+      {/* The open padlock is reserved for a lock that is genuinely NOT
+          secured. Mid-motion, jammed and unavailable all keep the closed
+          icon, for the same reason meshVariants falls an unauthored state
+          back to the closed pose: never imply a door is open on anything
+          short of the device saying so. */}
+      <StatusPill tone={pill.tone} icon={PadIcon}>{pill.text}</StatusPill>
       {/* the action its bolt calls for, large; both only while the lock cannot say (panelRules.lockButtons) */}
       {buttons.map((b, n) => {
         const ask = b === "lock" ? lock : unlock;

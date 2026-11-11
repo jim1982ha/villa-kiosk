@@ -7,6 +7,7 @@ import { HAServices } from "@/ha/HAServiceCalls";
 import { coverPill } from "@/config/reading";
 import { useLiveDraft } from "@/hooks/useLiveDraft";
 import ControlFrame from "./ControlFrame";
+import StatusPill from "./StatusPill";
 
 export default function CoverPanel({ entity, mapping, onClose }: PanelProps) {
   const { ws } = useHA();
@@ -23,9 +24,7 @@ export default function CoverPanel({ entity, mapping, onClose }: PanelProps) {
       {/* ab0ffb46 routed Cover through the shared notice in a comment only —
           the bespoke pill carried no detail. The notice, as every panel. */}
       <ControlFrame entity={entity} mapping={mapping}>
-        <div className="center" style={{ marginBottom: 16 }}>
-          <span className={`status-pill ${pill.tone}`}>{pill.text}</span>
-        </div>
+        <StatusPill tone={pill.tone}>{pill.text}</StatusPill>
 
       <div className="row-buttons">
         <button className="btn" style={{ flex: 1 }} onClick={() => HAServices.openCover(ws, mapping.entityId)}>

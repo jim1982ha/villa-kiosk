@@ -39,6 +39,7 @@ import FormActions from "./FormActions";
 import { TONE_OF, toneClass } from "@/fm/tone";
 import FmForm from "./FmForm";
 import { useListEditor } from "./ListEditor";
+import EmptyLine from "@/components/common/EmptyLine";
 
 export default function SpendTab(
   { onOpenEntity, deviceOptions, inputs }: {
@@ -188,9 +189,7 @@ export default function SpendTab(
       {editor.adding && form}
 
       <div className="fm-list">
-        {b.entries.length === 0 && (
-          <p className="muted body-text">No spend recorded for {monthLabel(month)}.</p>
-        )}
+        {b.entries.length === 0 && <EmptyLine>No spend recorded for {monthLabel(month)}.</EmptyLine>}
         {entries.page.map((c) => editor.inPlace(c.id, (
           // THE Cockpit card (RecordCard, architecture review 2026-10-15): the amount on the right, its receipt —
           // the whole point of attaching one is that somebody can later check it

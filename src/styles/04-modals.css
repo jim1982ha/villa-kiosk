@@ -130,9 +130,6 @@
    control in its tab shape. ⚠️ NEVER SHRINKS (owner, 2026-10-01): the window is a flex column, and a long tab's body
    squeezed the band below its own height, the chosen tab cut in half. */
 .modal-tabs { display: flex; min-width: 0; padding: 10px 28px; border-bottom: 1px solid var(--hairline); flex: 0 0 auto; }
-/* A header's icon button: smaller than the default .icon-btn (48px), which sat visibly taller than the header's
-   other controls in the same row. */
-.header-icon-btn { width: 40px; height: 40px; border-radius: 11px; }
 /* The header's theme control now carries a written word. Two icon-only
    sun/moon triplets on one screen (this and Villa lighting) were reported as
    reading like the same duplicated control — see SettingsModal's note. The
@@ -470,7 +467,6 @@
 /* A list's one field (common/SearchOrAdd): above its cards; what it says when it narrows them to nothing, with its offer */
 .search-or-add { margin-bottom: 14px; }
 .search-empty { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; }
-.search-empty > p { margin: 0; }
 /* Config Editor entity filter box. */
 .config-search {
   display: flex; align-items: center; gap: 8px; margin-bottom: 14px;

@@ -1,0 +1,37 @@
+// src/components/panels/StatusPill.tsx
+// THE state pill of a device window (.status-pill, 03-panels.css): its tone, its icon, its words, on its own centred
+// line (.status-line); `info`: what it means, behind the app's (i), which a tap opens (common/InfoTip).
+//
+// ⚠️ IT WAS FIVE COPIES (owner, 2026-11-10: "only 1 definition for all similar UI elements"): the lock's, the blind's,
+// the lost-contact notice's two and a reading's each wrote the span and their own line around it, four margins and two
+// sizes written inline. One line, one pill; `large` where the reading is all the window says (a door sensor's
+// "Closed"); `inline` inside a line of readings (a group's members), where the line is its place's.
+
+import type { ReactNode } from "react";
+import type { LucideIcon } from "lucide-react";
+import InfoTip from "@/components/common/InfoTip";
+
+export default function StatusPill({ tone, icon: Icon, large = false, inline = false, info, children }: {
+  /** A `.status-pill` tone: "on", "off", "danger", "transitional", "unavailable" (config/reading). */
+  tone: string;
+  icon?: LucideIcon;
+  large?: boolean;
+  inline?: boolean;
+  /** The (i) beside it: its name for a screen reader, and what its card says. */
+  info?: { label: string; text: ReactNode };
+  children: ReactNode;
+}) {
+  const pill = (
+    <span className={`status-pill ${tone}${large ? " large" : ""}`}>
+      {Icon && <Icon size={large ? 22 : 16} />}
+      {children}
+    </span>
+  );
+  if (inline) return pill;
+  return (
+    <div className="status-line">
+      {pill}
+      {info && <InfoTip label={info.label}>{info.text}</InfoTip>}
+    </div>
+  );
+}

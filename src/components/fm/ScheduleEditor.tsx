@@ -23,6 +23,7 @@ import TaskCard from "./TaskCard";
 import FmForm from "./FmForm";
 import { useListEditor } from "./ListEditor";
 import ProblemLine from "@/components/common/ProblemLine";
+import EmptyLine from "@/components/common/EmptyLine";
 
 export default function ScheduleEditor() {
   const { data, addSchedule, updateSchedule, removeSchedule } = useFmData();
@@ -115,9 +116,7 @@ export default function ScheduleEditor() {
       {editor.adding && form}
 
       <div className="fm-list">
-        {data.schedules.length === 0 && (
-          <p className="muted body-text">No tasks yet.</p>
-        )}
+        {data.schedules.length === 0 && <EmptyLine>No tasks yet.</EmptyLine>}
         {data.schedules.map((s) => {
           // Target date this task implies — from its last completion, or (if
           // never done) from when it was created. See fmEngine.scheduleStatus.

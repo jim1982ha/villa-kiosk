@@ -28,6 +28,7 @@ import { formatUnitValue } from "@/utils/entityValue";
 import { useChartPointer } from "./useChartPointer";
 import ChartTip from "./ChartTip";
 import YAxis, { ChartUnitLine, FitMark, useChartFit, type AxisTick } from "./ChartAxis";
+import EmptyLine from "@/components/common/EmptyLine";
 
 interface LineSpec {
   pts: readonly HistoryPoint[];
@@ -76,7 +77,7 @@ export function ChartEmpty({ status, height, bar }: { status: HistoryStatus; hei
   if (text === null) {
     return <div className={bar ? "state-timeline-skeleton" : "state-timeline-skeleton weather-chart"} style={height ? { height } : undefined} />;
   }
-  return <div className={bar ? "muted body-text" : "muted body-text weather-chart-empty"}>{text}</div>;
+  return <EmptyLine className={bar ? undefined : "weather-chart-empty"}>{text}</EmptyLine>;
 }
 
 /** The x labels, under the PLOT: start, middle and the end — "now" when the window ends within five minutes of it. In

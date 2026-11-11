@@ -113,13 +113,12 @@ export default function DeviceGroupPanel({ group, primaryMapping, onClose }: Pro
                     were previously two stacked block divs; now one line, unit
                     a bit smaller, matching how SensorPanel already does it. */}
                 {r.reading.pill
-                  // A pill at pill size — inside the large-number style an
+                  // The windows' pill at its own size (StatusPill) — inside the large-number style an
                   // alarm's capitals ("SMOKE DETECTED") broke awkwardly — kept
                   // inside its column: on a phone it wraps within the pill
                   // rather than running into its neighbour.
-                  ? <ReadingPill r={r.reading} size={18}
-                      icon={binarySensorClassInfo(entities[r.id]?.attributes.device_class).icon}
-                      style={{ fontSize: "var(--text-lg)", maxWidth: "100%", justifyContent: "center" }} />
+                  ? <ReadingPill r={r.reading} inline
+                      icon={binarySensorClassInfo(entities[r.id]?.attributes.device_class).icon} />
                   : <span style={{ color: r.reading.color }}>{r.reading.value}{r.reading.unit && <span className="value-unit" style={{ fontSize: "var(--text-md)", marginLeft: 3 }}>{r.reading.unit}</span>}</span>}
               </div>
               <div className="muted body-text">{r.label}</div>

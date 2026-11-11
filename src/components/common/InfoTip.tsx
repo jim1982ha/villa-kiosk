@@ -13,6 +13,8 @@
 //
 // ⚠️ AN ICON CAN BE ITS BUTTON (owner, 2026-11-06: "each card shows the specific icon's tooltip"): `trigger` draws a
 // card's source icon in place of the (i) (sourceIcons IconTip), the same card, placement, closing and hover grace.
+// ⚠️ ...OR A BUTTON OF ITS PLACE (`button`: the class of a window header's, "btn icon-only"): the Cockpit's updates
+// count said which updates on hover only; a tap now opens the same card (UI scan, 2026-11-10).
 // ⚠️ A PRESS ON IT IS ITS OWN: its button and its card (a portal is inside it in React's tree) stop the press, the
 // tap and the hold's keys from reaching what holds them — a card's tap opens it, its hold erases it (RecordCard,
 // ErasableRow) — as a card's bar does (ActionsRow). Outside-close and Escape listen before anything (useOutsideClose).
@@ -34,11 +36,13 @@ export const KEEP_PRESS = {
   onKeyDown: (e: React.KeyboardEvent) => { if (e.key === "Enter" || e.key === " ") e.stopPropagation(); },
 };
 
-export default function InfoTip({ label, children, className, width = INFO_TIP_WIDTH, trigger }: {
+export default function InfoTip({ label, children, className, width = INFO_TIP_WIDTH, trigger, button = "info-trigger" }: {
   /** What the button is for, read by a screen reader ("How this list is kept up to date"). */
   label: string;
   /** What the button shows in place of the (i): a card's source icon (sourceIcons IconTip). */
   trigger?: ReactNode;
+  /** With `trigger`: its button's look where it is one of its place's buttons, the bare icon unless said. */
+  button?: string;
   children: ReactNode;
   /** Extra class on the wrapper. */
   className?: string;
@@ -89,7 +93,7 @@ export default function InfoTip({ label, children, className, width = INFO_TIP_W
       onPointerEnter={hoverIn} onPointerLeave={hoverOut} {...KEEP_PRESS}>
       {/* the app's lone icon button, its card in place of a tip; a card's own icon (`trigger`) stays that icon */}
       {trigger
-        ? <button type="button" className="info-trigger" aria-label={label} aria-expanded={open} onClick={press}>{trigger}</button>
+        ? <button type="button" className={button} aria-label={label} aria-expanded={open} onClick={press}>{trigger}</button>
         : <IconButton small label={label} tip={null} aria-expanded={open} onClick={press}><Info size={16} /></IconButton>}
       {open && createPortal(
         <div ref={pop} className="info-pop" role="tooltip" style={pos ?? { visibility: "hidden", width: `min(${width}px, calc(100vw - 24px))` }}

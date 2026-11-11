@@ -32,6 +32,7 @@ import type { HassEntity } from "@/types/ha.types";
 import type { Category } from "@/types/scene.types";
 import { listSections, offersGrouping, summaryRows, type Grouping } from "@/config/summaryRows";
 import SegmentedGroup from "@/components/common/SegmentedGroup";
+import InfoTip from "@/components/common/InfoTip";
 import { useRoomFloors } from "@/config/useRoomFloors";
 import { deviceRoom, floorOfRoom } from "@/config/devicePlace";
 
@@ -43,6 +44,7 @@ import InlineConfirm from "@/components/common/InlineConfirm";
 import { NOT_SENT } from "@/ha/serviceOutcome";
 import { domainOf } from "@/utils/entityDomain";
 import { NOT_IN_HA } from "@/utils/stateColors";
+import EmptyLine from "@/components/common/EmptyLine";
 
 interface Props {
   group: SummaryGroup;
@@ -179,7 +181,7 @@ export default function SummaryGroupPanel({
       // visible, not scrolled past a long, room-grouped device list.
       headerActions={bulk && <BulkToggle devices={toggleables} looks={looks} />}
     >
-      {rows.length === 0 && <div className="muted body-text">No devices in this group.</div>}
+      {rows.length === 0 && <EmptyLine>No devices in this group.</EmptyLine>}
       {splits && (
         <SegmentedGroup ariaLabel="Group by" className="summary-grouping" active={grouping} onChange={setGrouping} options={[
           { key: "room", label: <><MapPin size={16} /> Per Room</> },
@@ -193,19 +195,22 @@ export default function SummaryGroupPanel({
       {onMap.length > 0 && renderRooms(onMap)}
       {offMap.length > 0 && (
         <>
-          <div className="summary-offmap-heading" data-tip="These devices exist but have no 3D geometry in this villa model">
+          {/* what each heading means is behind its (i), which a tap opens: it was a hover text (UI scan, 2026-11-10) */}
+          <div className="summary-offmap-heading">
             Not on the map
+            <InfoTip label="About Not on the map">The villa's system has these devices, but the villa's 3D model has no object for them.</InfoTip>
           </div>
           {renderRooms(offMap)}
         </>
       )}
       {notInHa.length > 0 && (
         <>
-          <div
-            className="summary-offmap-heading summary-notinha-heading"
-            data-tip="This villa model has 3D geometry named after these devices, but no such device exists, it was removed from the villa's system, or renamed, or it was renamed. Update the model, or add the device back."
-          >
+          <div className="summary-offmap-heading summary-notinha-heading">
             {NOT_IN_HA}
+            <InfoTip label={`About ${NOT_IN_HA}`}>
+              The villa's 3D model has objects named after these devices, but the villa's system has no such device: it
+              was removed there, or renamed. Update the model, or add the device back.
+            </InfoTip>
           </div>
           {renderRooms(notInHa)}
         </>

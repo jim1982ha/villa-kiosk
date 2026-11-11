@@ -13,6 +13,7 @@ import { useProfile } from "@/auth/ProfileContext";
 import { profileView } from "@/auth/permissions";
 import LastDayTimeline from "@/components/panels/LastDayTimeline";
 import InfoTip from "@/components/common/InfoTip";
+import EmptyLine from "@/components/common/EmptyLine";
 
 const ICON = { occupied: Users, empty: House, unknown: CircleQuestionMark };
 /** The tile's own short word (a 50 px rail): the panel's heading says it in full. */
@@ -132,14 +133,14 @@ export function PresencePanel({ presence: p, when, why, showPeople, showMovement
                     said={act.moving ? "moving now" : `quiet since ${since(act.at)}`} />
                 </ul>
               </>
-            ) : <p className="muted body-text">{why.listsSensors ? "None of the sensors this one watches reports." : "This sensor does not list the sensors it watches."}</p>}
+            ) : <EmptyLine>{why.listsSensors ? "None of the sensors this one watches reports." : "This sensor does not list the sensors it watches."}</EmptyLine>}
           </>
         )}
         {showPeople && (
           <>
             <div className="settings-section-title">People</div>
-            {why.people === null ? <p className="muted body-text">This sensor does not list the people it watches.</p>
-              : why.people.length === 0 ? <p className="muted body-text">None of the people this sensor watches is known.</p> : (
+            {why.people === null ? <EmptyLine>This sensor does not list the people it watches.</EmptyLine>
+              : why.people.length === 0 ? <EmptyLine>None of the people this sensor watches is known.</EmptyLine> : (
                 <ul className="presence-list">
                   {why.people.map((x) => <Row key={x.entityId} entityId={x.entityId} name={x.name} onOpen={opener(x.entityId)}
                     said={`${x.place}${since(x.since) ? ` · since ${since(x.since)}` : ""}`} />)}

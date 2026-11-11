@@ -174,7 +174,16 @@ input[type="range"]::-moz-range-thumb {
 }
 .light-effect { align-self: stretch; }
 
-.status-pill { display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; border-radius: 999px; font-weight: 600; }
+/* THE state pill of a device window (panels/StatusPill): one size wherever it sits (a line of large numbers gave it
+   theirs), kept inside its place: long words wrap inside the pill. `large`: the reading is all the window says. */
+.status-pill {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px; max-width: 100%;
+  padding: 8px 16px; border-radius: 999px; font-size: var(--text-md); font-weight: 600; line-height: 1.25;
+}
+.status-pill > svg { flex: none; }
+.status-pill.large { padding: 14px 24px; font-size: var(--text-xl); }
+/* ...and its line: centred, the (i) that explains it beside it, one distance to what follows (it was four). */
+.status-line { display: flex; align-items: center; justify-content: center; gap: 6px; margin: 8px 0 16px; }
 .status-pill.on { background: color-mix(in srgb, var(--status-on) 20%, transparent); color: var(--status-on); }
 .status-pill.off { background: var(--bg-input); color: var(--text-secondary); }
 .status-pill.danger { background: color-mix(in srgb, var(--status-danger) 22%, transparent); color: var(--status-danger); }

@@ -17,6 +17,7 @@ import { useConversation } from "@/messages/ConversationContext";
 import { followOf, unanswered, vestaWorking } from "@/messages/conversationModel";
 import { PageLink, PhotoRow, RecordButtons } from "./AnnouncementContent";
 import TalkButton from "./TalkButton";
+import EmptyLine from "@/components/common/EmptyLine";
 
 /** One line of the thread: who said it, when, its words, the camera pictures VESTA looked at and the page it attached
  *  ("Open the page" only for a profile the add-on serves pages to). A spoken question (hold to talk) carries the
@@ -96,9 +97,7 @@ export default function VestaWindow({ onClose, canOpenPage }: { onClose: () => v
       </div>
       <div className="modal-body vesta-thread">
       <div className="vesta-thread-lines" role="log" aria-live="polite">
-        {thread.lines.length === 0 && (
-          <p className="muted body-text messages-empty">Ask VESTA about the villa: what is on, what happened, what to check.</p>
-        )}
+        {thread.lines.length === 0 && <EmptyLine>Ask VESTA about the villa: what is on, what happened, what to check.</EmptyLine>}
         {thread.lines.map((t) => <TurnLine key={t.key} turn={t} canOpenPage={canOpenPage} onListen={listen}
           playing={!!t.speech && t.speech === playing} onStop={stopListening} />)}
         {vestaWorking(thread, Date.now()) && <WorkingBubble />}

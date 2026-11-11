@@ -44,6 +44,7 @@ import {
   type EnergyBucket, type EnergySplit,
 } from "@/config/energyModel";
 import { formatMoney } from "@/utils/money";
+import EmptyLine from "@/components/common/EmptyLine";
 
 
 export default function EnergyPanel({ onClose, fallback }: { onClose: () => void; fallback: () => ReactNode }) {
@@ -174,7 +175,7 @@ function NowView({ setup, costUnit, house, colourOf }: { setup: EnergyWindowSetu
 export function Flow({ split, rateKw, house, colourOf }: { split: EnergySplit; rateKw: (id: string | null) => number | undefined; house: string; colourOf: (id: string) => string }) {
   const [hover, setHover] = useState<number | null>(null);
   const tree = flowTree(split, house, colourOf);
-  if (tree.children.length === 0) return <div className="muted body-text">Nothing recorded yet today.</div>;
+  if (tree.children.length === 0) return <EmptyLine>Nothing recorded yet today.</EmptyLine>;
   const L = flowLayout(tree);
   const { W, H, nodeW } = L;
   const colRight = (d: number) => Math.min(W, ...L.boxes.filter((b) => b.depth === d + 1).map((b) => b.x), W);
@@ -228,7 +229,7 @@ export function DevicePie({ split, colourOf }: { split: EnergySplit; colourOf: (
   // Before any early return: a hook runs on every render or none.
   const paged = usePaged(slices, PAGE_CARDS);
   const total = slices.reduce((a, s) => a + s.kwh, 0);
-  if (!slices.length) return <div className="muted body-text">Nothing recorded.</div>;
+  if (!slices.length) return <EmptyLine>Nothing recorded.</EmptyLine>;
   const turns = sliceTurns(slices.map((s) => s.kwh));
   const cls = (i: number) => slices[i].cls;
   const R0 = 58, R1 = 92, C = 100;

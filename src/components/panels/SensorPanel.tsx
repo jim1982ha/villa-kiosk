@@ -37,21 +37,15 @@ export default function SensorPanel({ entity, mapping, onClose }: PanelProps) {
     <BasePanel title={mapping.label} entityId={mapping.entityId} icon={icon} onClose={onClose}
       history={<ReadingHistory entityId={mapping.entityId} mappingType={mapping.type} />}>
       {/* its reading, unless contact is lost: then the frame's notice (BasePanel), as in every device window */}
-      {r.contact !== "lost" && (
-      <div className="center" style={{ padding: "12px 0 6px", margin: isBinary ? undefined : "6px 0 12px" }}>
-        {r.pill ? (
-          <ReadingPill r={r} icon={BinaryIcon} size={22} style={{ fontSize: "var(--text-xl)", padding: "14px 24px" }} />
-        ) : (
-          <>
-            {/* ⚠️ THE SAME RULE THE BADGE USES (utils/entityValue, inside
-                config/reading): a 6570.989 W sensor reads "6.6 kW" here as on
-                the badge in the villa behind it. */}
-            <span className="value-large" style={{ color: r.color }}>{r.value}</span>{" "}
-            {r.unit && <span className="value-unit">{r.unit}</span>}
-          </>
-        )}
+      {r.contact !== "lost" && (r.pill ? <ReadingPill r={r} icon={BinaryIcon} large /> : (
+      <div className="center" style={{ padding: "12px 0 6px", margin: "6px 0 12px" }}>
+        {/* ⚠️ THE SAME RULE THE BADGE USES (utils/entityValue, inside
+            config/reading): a 6570.989 W sensor reads "6.6 kW" here as on
+            the badge in the villa behind it. */}
+        <span className="value-large" style={{ color: r.color }}>{r.value}</span>{" "}
+        {r.unit && <span className="value-unit">{r.unit}</span>}
       </div>
-      )}
+      ))}
     </BasePanel>
   );
 }
