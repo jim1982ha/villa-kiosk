@@ -25,8 +25,8 @@ $PY agent-host/tools/release.py ship -F msg.txt     # release
 `## x.y.z` heading IS the version, the only version and the only change list), stage what ships by name, then `ship`.
 It writes the version, runs the quick checks (seconds), commits, pushes `agent-dev`, follows the commit's CI run and waits
 for the store: exit 0 = published, 1 = CI failed (the failed step is named), 3 = pushed but not published yet, 2 =
-refused. The tests run once, in CI: never run `gates` or the whole suite locally before a ship (at most the one test
-file being written).
+refused. The tests run once, in CI: never run `gates` or the whole suite locally before a ship; run only the test
+files that name a file you changed (`grep -l <name> agent-host/agent-src/tests/*.py`, seconds; owner, 2026-11-11).
 
 **The gates** (listed once, in `release.py`): the Kiosk is untouched (`check_isolation.sh`), the app manifest
 (`check_manifest.py`), ruff (compile + undefined names) on the agent's code, and pytest (`agent-src/tests`, plus the
