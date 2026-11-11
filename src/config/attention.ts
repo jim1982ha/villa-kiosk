@@ -17,7 +17,7 @@ import { deviceRoom, deviceRoomOrRecord, firstRoom, recordRoomNow, roomLabel } f
 import { devicesFor, recordEntity, type VillaDevices } from "@/config/deviceGroups";
 import { alertNumberOf, closedAsLasting, DUE_WORDS, faultAlertLabel, faultBegan, faultName, fmAttention, helpIsLatest, stageOf, standingHelp, type FmStage, type HelpAsked } from "@/fm/fmEngine";
 import type { AgentCadence } from "@/agent/agentApi";
-import { watchedRecords } from "@/fm/faultConfirm";
+import { shownUntil, watchedRecords } from "@/fm/faultConfirm";
 import { faultMove, notedStory, type FaultMove } from "@/fm/faultNotes";
 import { deviceWorkKey, groupByDevice } from "@/fm/deviceWork";
 import { faultSource, type IssueSource } from "@/fm/issueSource";
@@ -454,7 +454,7 @@ interface AttentionInputs {
 /** What needs attention (`attentionItems`), and the devices whose live state is held as "Not a problem while it lasts"
  *  (`held`: their fault a person closed so, the state begun before that close) — the ONE answer the open issues and the
  *  Recap's checks read (owner, 2026-11-04: the Recap still said "1 unlocked" of a door closed "Not a problem"). */
-export function attentionOf(opts: AttentionInputs): Pick<VillaProblems, "attentionItems" | "held"> {
+export function attentionOf(opts: AttentionInputs): Pick<VillaProblems, "attentionItems" | "held" | "clearing"> {
   const { devices, entities, entityMap, resolvedRooms, fmData } = opts;
   const sinceOf = opts.sinceOf ?? (() => null);
   const items: AttentionItem[] = [];
@@ -586,10 +586,19 @@ export function attentionOf(opts: AttentionInputs): Pick<VillaProblems, "attenti
   // a live state of the device begun before the close (another of its entities, offline since)
   const heldLine = (i: AttentionItem) => live(i) && (Date.parse(i.openedAt ?? "") || 0) <= (lasting.get(devices.deviceOf(i.entityId!)) ?? -1);
   for (const i of items) if (heldLine(i)) held.add(devices.deviceOf(i.entityId!));
-  const attentionItems = items.filter((i) => (!i.entityId || !devices.isHidden(i.entityId))
+  const shown = items.filter((i) => (!i.entityId || !devices.isHidden(i.entityId))
     && !(live(i) && watched.has(devices.deviceOf(i.entityId!)))
     && !heldLine(i));
-  return { attentionItems, held };
+  // ⚠️ RIGHT AGAIN IS ON WATCH, NOT AN OPEN ISSUE (owner, 2026-11-12: a lock locked again stayed in Open issues for its
+  // 10-minute wait, "Locked since 01:29 · closes at about 01:41"; "move it directly in the Watch section, as soon as it
+  // enters this state … for every kind of 10min clear period"): a fault the VESTA Agent will close if it stays as it is
+  // (its `closing`, the alert desk's clear wait, the one wait of the kind) is on Watch, counted, marked and signed
+  // nowhere, as a Done waiting for VESTA's verdict is. Back to wrong before its moment: the Agent takes `closesAt` away
+  // at its next look and it is an open issue again. A moment the Agent never acted on (offline) is not kept past two of
+  // its looks (faultConfirm.shownUntil): it is an open issue again.
+  const now = opts.now ?? Date.now();
+  const isClearing = (i: AttentionItem) => i.kind === "fault" && !!i.closing && now <= shownUntil(Date.parse(i.closing.at), opts.cadence ?? null);
+  return { attentionItems: shown.filter((i) => !isClearing(i)), held, clearing: shown.filter(isClearing) };
 }
 
 /** The villa's problems, role-blind — what the villa model holds. Nothing
@@ -600,6 +609,9 @@ export interface VillaProblems {
   attentionItems: AttentionItem[];
   /** The devices whose live state is held as "Not a problem while it lasts" (attentionOf); absent: none. */
   held?: ReadonlySet<string>;
+  /** The open faults right again, waiting out the VESTA Agent's clear wait (their `closing`): on Watch, never counted
+   *  (attentionOf); absent: none. */
+  clearing?: AttentionItem[];
 }
 
 /** What needs attention as ONE PROFILE is shown it — and the profile's devices (`devices`: only those it may open,
@@ -639,6 +651,7 @@ export function attentionFor(att: VillaProblems, may: (entityId: string) => bool
   // Watched faults, asked the profile alone and showed one. The profile's lists read this one predicate.
   const shows = (id: string) => !att.devices.isHidden(id) && may(id);
   const attentionItems = att.attentionItems.filter((i) => !i.entityId || shows(i.entityId));
+  const clearing = (att.clearing ?? []).filter((i) => !i.entityId || shows(i.entityId));
   // Grouped AFTER the profile's filter, never before: a row is built only
   // from problems this profile may open, so it cannot name a hidden one.
   const attentionGroups = groupAttention(attentionItems);
@@ -646,6 +659,7 @@ export function attentionFor(att: VillaProblems, may: (entityId: string) => bool
     devices: devicesFor(att.devices, shows),
     attentionItems,
     ...(att.held ? { held: att.held } : {}),
+    clearing,
     attentionGroups,
     health: villaHealthFrom(attentionGroups),
     shows,
