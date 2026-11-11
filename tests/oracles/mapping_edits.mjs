@@ -114,7 +114,7 @@ console.log("\n  a removed device's 3D object, pointed at another entity:");
   const ed = readFileSync(new URL("../../src/components/settings/ConfigEditor.tsx", import.meta.url), "utf8");
   ck("Advanced Settings asks with the model's objects and re-points them all (\"Point it there\", its one caller)",
      /orphans: orphanIds \} = villa\.settings/.test(ed) && /useVillaModel\(\)/.test(ed) && (ed.match(/repointDevice\(/g) ?? []).length === 1
-     && /repointDevice\(id, to,/.test(ed));
+     && /repointDevice\(id, to,/.test(ed) && (ed.match(/pointAt\(id, to\)/g) ?? []).length === 2);
   // owner, 2026-11-06: the pencil that redirected a device's object is gone, with its edit's second caller
   ck("  ...and a device's card has no pencil: its 3D objects are added and taken off in its field (bindMesh, takeObjectOff)",
      /bindMesh\(object, id,/.test(ed) && /takeObjectOff\(object, id\)/.test(ed)
@@ -164,8 +164,9 @@ console.log("\n  a device's \"3D object\" field, on a model (owner, 2026-11-06):
      && (l0.byDevice.get("light.example_hall") ?? []).includes(B), Object.fromEntries(l0.byDevice));
   ck("  ...a curtain's poses one object, a lamp's parts one object", J(l0.byDevice.get("cover.example_curtain")) === J(["cover.example_curtain"])
      && J(l0.byDevice.get("fan.example_ceiling")) === J(["Spot"]), [l0.byDevice.get("cover.example_curtain"), l0.byDevice.get("fan.example_ceiling")]);
-  ck("  ...(c) shows nothing, and its search lists it first, \"shows nothing yet\"",
-     l0.shows.get(C) === null && D.objectOffers("", l0, "light.example_hall")[0].shows === null
+  ck("  ...(c) shows nothing, and its search lists it after the objects showing a device, \"shows nothing yet\"",
+     l0.shows.get(C) === null && D.objectOffers("", l0, "light.example_hall")[0].shows !== null
+     && D.objectOffers("", l0, "light.example_hall").at(-1).shows === null
      && D.objectOffers("mesh_unnamed", l0, "light.example_hall").map((o) => o.object).join() === C);
 
   const added = apply(config, me.bindMesh(C, "light.example_hall"));

@@ -38,6 +38,7 @@ import EntityMapRow from "./EntityMapRow";
 import EntityPicker from "./EntityPicker";
 import { countOf } from "@/utils/countOf";
 import EmptyLine from "@/components/common/EmptyLine";
+import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 
 /** The list shown: the devices on the map, or those no 3D object shows. */
 type ListView = "on" | "off";
@@ -143,6 +144,30 @@ export default function ConfigEditor({ title, tip, initialSearch }: { title: str
   // takes the object off it
   const addObject = useCallback((object: string, id: string) => update(bindMesh(object, id, entitiesRef.current[id])), [update]);
   const takeOff = useCallback((object: string, id: string) => update(takeObjectOff(object, id)), [update]);
+  // a device on the map given another entity by its field's search (renamed in the villa's system): its 3D objects and
+  // settings go there, asked first; the list then shows it under its new id
+  const confirm = useConfirmDialog();
+  const nameRef = useRef(nameOf);
+  nameRef.current = nameOf;
+  const objectsRef = useRef(links.byDevice);
+  objectsRef.current = links.byDevice;
+  const ask = confirm.ask;
+  // ONE move for both ("Point it there" on an object whose entity is gone): the list then shows it under its new id
+  const pointAt = useCallback((id: string, to: string) => {
+    update(repointDevice(id, to, entitiesRef.current[to]));
+    setSearch(to);
+  }, [update]);
+  const moveTo = useCallback((id: string, to: string) => {
+    if (id === to) return;
+    const name = nameRef.current(id), toName = nameRef.current(to);
+    const objects = objectsRef.current.get(id) ?? [];
+    ask({
+      title: "Move to another entity?",
+      message: `${name}'s ${objects.length === 1 ? "3D object" : "3D objects"} (${objects.join(", ")}) and settings move to ${toName} (${to}). ${id} leaves the map.`,
+      confirmLabel: "Move it",
+      run: () => pointAt(id, to),
+    });
+  }, [ask, pointAt]);
 
   // The list's one field also prepares a device (moved from Villa's "Bound 3D objects", 2026-11-06): its settings are
   // ready the moment a model with an object named after it is uploaded; an id the villa's system does not have yet is
@@ -163,9 +188,9 @@ export default function ConfigEditor({ title, tip, initialSearch }: { title: str
   const repoint = useCallback((id: string) => {
     const to = repointTo[id];
     if (!to || to === id) return;
-    update(repointDevice(id, to, entities[to]));
+    pointAt(id, to);
     setRepointTo((m) => ({ ...m, [id]: undefined }));
-  }, [repointTo, update, entities]);
+  }, [repointTo, pointAt]);
 
   const narrowed = search.trim() !== "";
   return (
@@ -239,6 +264,7 @@ export default function ConfigEditor({ title, tip, initialSearch }: { title: str
               links={links}
               onAddObject={addObject}
               onTakeObjectOff={takeOff}
+              onMoveTo={moveTo}
               entity={entities[key]}
               name={nameOf(key)}
               stale={staleSet.has(key)}
@@ -261,6 +287,7 @@ export default function ConfigEditor({ title, tip, initialSearch }: { title: str
         </div>
       ))}
       {view === "off" && <ShowAll list={offShown} noun="entity" plural="entities" />}
+      {confirm.dialog}
     </>
   );
 }

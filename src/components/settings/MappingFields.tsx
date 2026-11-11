@@ -141,6 +141,8 @@ export interface ObjectsFieldProps {
   links: ObjectLinks;
   onAdd: (object: string, entityId: string) => void;
   onTakeOff: (object: string, entityId: string) => void;
+  /** A device on the map: its objects and settings moved to another entity of the villa's system (its search's pick). */
+  onMoveTo?: (entityId: string, to: string) => void;
 }
 
 /**
@@ -149,8 +151,12 @@ export interface ObjectsFieldProps {
  * takeObjectOff), then a compact "Add a 3D object…" search, as a group's Members. The search lists the model's
  * objects, those showing nothing first, each saying what it shows; picking one shows this device on it (bindMesh).
  * It replaced Villa's "Bound 3D objects" lists and Devices' "· 3D object: …" with its pencil.
+ * ⚠️ ON THE MAP, ITS SEARCH LISTS THE VILLA'S ENTITIES (owner, 2026-11-11: a device renamed in the villa's system could
+ * not be given its new name here, the search listing only the model's objects): a device on the map with 3D objects
+ * moves them and its settings to the entity picked (mappingEdits.repointDevice, asked first); the model's objects are
+ * the search of a device not on the map, or of one no object shows yet.
  */
-export function ObjectsField({ entityId, name, objects, links, onAdd, onTakeOff }: ObjectsFieldProps) {
+export function ObjectsField({ entityId, name, objects, links, onAdd, onTakeOff, onMoveTo }: ObjectsFieldProps) {
   const nameOf = useEntityLabel();
   return (
     <div className="group-members">
@@ -158,12 +164,16 @@ export function ObjectsField({ entityId, name, objects, links, onAdd, onTakeOff 
         <RemovablePill key={o} label={o} removeLabel={`Take ${o} off ${name}`} onRemove={() => onTakeOff(o, entityId)} />
       ))}
       <div className="group-members-add">
+        {onMoveTo && objects.length > 0 ? (
+          <EntityPicker compact placeholder="Move to another entity…" exclude={entityId} onChange={(to) => onMoveTo(entityId, to)} />
+        ) : (
         <SearchPicker compact placeholder="Add a 3D object…" onPick={(o) => onAdd(o, entityId)}
           empty={links.shows.size === 0 ? "No 3D model loaded yet." : undefined}
           rows={(q) => objectOffers(q, links, entityId).map(({ object, shows }) => ({
             key: object, label: <IdText id={object} />,
             side: shows === null ? "shows nothing yet" : `shows ${nameOf(shows)}, moves it here`,
           }))} />
+        )}
       </div>
     </div>
   );

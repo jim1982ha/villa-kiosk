@@ -47,6 +47,8 @@ interface Props {
   links: ObjectsFieldProps["links"];
   onAddObject: ObjectsFieldProps["onAdd"];
   onTakeObjectOff: ObjectsFieldProps["onTakeOff"];
+  /** A device on the map: its objects and settings moved to another entity (its "3D object" field's search). */
+  onMoveTo?: ObjectsFieldProps["onMoveTo"];
   matchedRowRef?: RefObject<HTMLDivElement>;
   /** The device's name on every screen (useEntityLabel, read by the list: a row reads no live table of its own). */
   name: string;
@@ -55,9 +57,9 @@ interface Props {
 }
 
 function EntityMapRow({
-  entryKey, mapping, entity, stale, objects, links, onAddObject, onTakeObjectOff, matchedRowRef, name, onRemove,
+  entryKey, mapping, entity, stale, objects, links, onAddObject, onTakeObjectOff, onMoveTo, matchedRowRef, name, onRemove,
 }: Props) {
-  const field: ObjectsFieldProps = { entityId: entryKey, name, objects, links, onAdd: onAddObject, onTakeOff: onTakeObjectOff };
+  const field: ObjectsFieldProps = { entityId: entryKey, name, objects, links, onAdd: onAddObject, onTakeOff: onTakeObjectOff, onMoveTo };
   // ⚠️ THE COCKPIT'S CARD (owner, 2026-11-06: "the same card in Settings and Advanced Settings"): the device's name in
   // its strip; its first line of words the decided one (owner, 2026-11-05: the shown box, the id at most 2 lines, the
   // toggle at its right; on a phone the toggle on a line of its own under it: 04-modals.css); its fields always shown

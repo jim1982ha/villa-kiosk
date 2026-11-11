@@ -1,3 +1,15 @@
+## 2.496.780
+
+What you will see, in Advanced Settings › Devices:
+- **A device on the map can be given another entity**: the search beside its 3D object now lists the villa's entities
+  (type "tapo" to find them). Picking one asks first, then moves the device's 3D objects and settings (type,
+  category, label, linked entity) to that entity, and the list shows it under its new name. For a device renamed in
+  the villa's system.
+- **A device not on the map finds the model's objects**: its 3D object search lists the objects that already show a
+  device first (for example "camera.storage_room", "shows Storage Room, moves it here"), then the objects that show
+  nothing.
+- A device on the map with no 3D object yet keeps the object search, so it can still be given one.
+
 ## 2.496.778
 
 What you will see:
