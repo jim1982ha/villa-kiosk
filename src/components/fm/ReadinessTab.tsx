@@ -121,7 +121,7 @@ export function ReadinessChecks({ readiness, label, onOpenEntity, onOpenCheck, o
                 </button>
               ) : undefined}
               body={<>
-                <div className="fm-row-sub muted"><CheckDetail check={c} onGo={onGo} /></div>
+                <div className="fine-print"><CheckDetail check={c} onGo={onGo} /></div>
                 {chips && c.entityIds && <CheckDevices ids={c.entityIds} label={label} onOpenEntity={onOpenEntity} />}
               </>} />
           );

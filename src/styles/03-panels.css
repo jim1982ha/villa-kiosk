@@ -683,9 +683,12 @@ button[aria-busy="true"] { animation: command-waiting 0.9s ease-in-out infinite;
 .weather-charts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
 .weather-tile.chart { min-height: 220px; justify-content: flex-start; }
 /* .weather-chart-head: a title with its controls at the far end (07-facility.css, with .cockpit-issues-head). */
-.weather-legend { display: flex; gap: 12px; font-size: var(--text-xs); color: var(--text-secondary); }
-.weather-legend .key { display: inline-block; width: 14px; height: 3px; border-radius: 2px; margin-right: 5px; vertical-align: middle; }
-.weather-legend .key.area { height: 8px; opacity: 0.45; }
+/* ⚠️ A CHART'S KEY, ONE ROW (UI scan, 2026-11-11): what each colour drawn is, in the fine print (01-base.css), its
+   marks wrapping as a row. The weather and energy charts wrote it as `.weather-legend`; a device's history and its
+   state band each typed the same row where they drew it. */
+.chart-key { display: flex; flex-wrap: wrap; gap: 4px 12px; }
+.chart-key .key { display: inline-block; width: 14px; height: 3px; border-radius: 2px; margin-right: 5px; vertical-align: middle; }
+.chart-key .key.area { height: 8px; opacity: 0.45; }
 .key:is(.out, .in, .water, .warm, .ink, .uv) { background: var(--series); }
 /* ── Charts: the parts every chart shares (LineChart, BarChart, StateTimeline,
    ChartTip, the energy flow). ONE place, and BEFORE the per-window rules below
@@ -845,7 +848,7 @@ button[aria-busy="true"] { animation: command-waiting 0.9s ease-in-out infinite;
 .bar-chart-dot { position: absolute; width: 7px; height: 7px; border-radius: 50%; transform: translate(-50%, -50%); border: 1.5px solid var(--bg-panel); pointer-events: none; }
 .bar-chart-dot.hover { width: 11px; height: 11px; }
 .bar-chart-dot.cost, .key.cost { background: var(--series); }
-.weather-legend .key.line { height: 3px; border-radius: 2px; }
+.chart-key .key.line { height: 3px; border-radius: 2px; }
 .bar-chart-note { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: var(--text-sm); color: var(--text-secondary); pointer-events: none; }
 .bar-chart-axis { position: relative; height: 1.4em; font-size: var(--text-xs); color: var(--text-secondary); font-variant-numeric: tabular-nums; }
 .bar-chart-axis span { position: absolute; top: 0; white-space: nowrap; }
@@ -904,7 +907,7 @@ button[aria-busy="true"] { animation: command-waiting 0.9s ease-in-out infinite;
 .energy-pie-legend b { margin-left: auto; font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .energy-pie-legend .key { flex: 0 0 auto; }
 
-.weather-legend .key.e-used, .weather-legend .key[class*="e-s"], .weather-legend .key.e-untracked { height: 8px; }
+.chart-key .key.e-used, .chart-key .key[class*="e-s"], .chart-key .key.e-untracked { height: 8px; }
 .energy-pie-legend .key { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
 .energy-flow { width: 100%; height: auto; }
 .energy-band { opacity: 0.55; transition: opacity 120ms; }
@@ -921,7 +924,6 @@ button[aria-busy="true"] { animation: command-waiting 0.9s ease-in-out infinite;
 .energy-rank-row { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 2fr) auto 3.2em; grid-template-areas: "name bar kwh pct"; gap: 4px 12px; align-items: center; }
 .energy-rank-name { grid-area: name; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .energy-rank-name.muted { color: var(--text-secondary); }
-.energy-rank-note { color: var(--text-secondary); font-size: var(--text-xs); }
 .energy-rank-chevron { color: var(--text-secondary); vertical-align: -2px; margin-right: 4px; transition: transform 0.15s ease; }
 .energy-rank-chevron.open { transform: rotate(90deg); }
 /* A main device without devices inside keeps the chevron's column. */

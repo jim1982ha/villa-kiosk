@@ -222,7 +222,6 @@
 /* A row's own "sure?" (the fault's one-step close): a line of its own under
    the record, its question and buttons wrapping on a phone. */
 .fm-row-confirm { flex: 1 1 100%; }
-.fm-row-sub { font-size: var(--text-xs); }
 /* A record that opens for editing when tapped. The cursor and hover lift are
    the whole affordance — a per-row "Edit" button would compete with the status
    action already in these rows, and on a phone there is no width for both. */
@@ -452,7 +451,7 @@
 .fm-cap-bar { height: 8px; border-radius: 999px; background: var(--bg-input); overflow: hidden; }
 .fm-cap-bar > span { display: block; height: 100%; background: var(--status-on); }
 :is(.tone-warn, .tone-danger) .fm-cap-bar > span { background: var(--tone); }
-.fm-cap-note { margin: 0; font-size: var(--text-sm); color: var(--text-secondary); }
+.fm-cap-note { margin: 0; }
 
 /* Evidence thumbnails */
 .fm-evidence { display: flex; flex-direction: column; gap: 6px; }

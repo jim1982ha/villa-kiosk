@@ -115,7 +115,7 @@ export function HistoryHeader({ title, picker, step, about, note }: { title: str
           <ChartStep words={step} about={`${title}, ${step}. ${about}`} /></label>
         {picker}
       </div>
-      {note && <div className="chart-note">{note}</div>}
+      {note && <div className="fine-print chart-note">{note}</div>}
     </>
   );
 }

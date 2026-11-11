@@ -472,7 +472,6 @@ body:has(.camera-fullscreen) .vesta-notice.below-camera { display: none; }
 
 /* The small grey line under a field — what it is linked to, what will happen, what the setting does. Same
    specificity as .body-text (01-base.css) and later, so its size wins. */
-.field-hint { margin-top: 6px; font-size: var(--text-xs); }
 
 /* ── THE DROPDOWN (common/Dropdown.tsx) ──────────────────────────────────
    The app's own list in place of the platform's picker (2.496.275). The

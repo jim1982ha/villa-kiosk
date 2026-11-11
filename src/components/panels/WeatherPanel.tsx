@@ -432,8 +432,8 @@ function ChartTile({ title, legend, note, lines, win, status, stepMs, picker }: 
   const head = (
     <div className="weather-chart-head">
       <div className="eyebrow">{title}<ChartStep words={aggregationWords(stepMs, "avg")} about={chartAbout("average", stepMs, win.from, kept, drawsUnkept(present.map((l) => l.s)))} /></div>
-      {legend && <div className="weather-legend">{legend.map(([n, c]) => <span key={n}><i className={`key ${c}`} />{n}</span>)}</div>}
-      {note && <div className="weather-legend">{note}</div>}
+      {legend && <div className="fine-print chart-key">{legend.map(([n, c]) => <span key={n}><i className={`key ${c}`} />{n}</span>)}</div>}
+      {note && <div className="fine-print">{note}</div>}
     </div>
   );
   return (
@@ -473,7 +473,7 @@ function RainTile({ s, win, status, stepMs, unit }: {
     <div className="weather-tile chart">
       <div className="weather-chart-head">
         <div className="eyebrow">Rain<ChartStep words={aggregationWords(stepMs, "sum")} about={chartAbout("total", stepMs)} /></div>
-        <div className="weather-legend">{unit}</div>
+        <div className="fine-print">{unit}</div>
       </div>
       {n === 0
         ? <ChartEmpty status={status} />

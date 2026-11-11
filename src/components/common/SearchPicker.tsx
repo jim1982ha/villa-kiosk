@@ -110,9 +110,9 @@ export default function SearchPicker({
             <button key={r.key} className={`row picker-option${r.strong ? " strong" : ""}`} onClick={() => pick(r.key)}>
               <span style={{ flex: 1, textAlign: "left" }}>
                 {r.label}
-                {r.sub !== undefined && <div className="muted" style={{ fontSize: "var(--text-2xs)" }}>{r.sub}</div>}
+                {r.sub !== undefined && <div className="fine-print">{r.sub}</div>}
               </span>
-              {r.side !== undefined && <span className="muted" style={{ fontSize: "var(--text-2xs)" }}>{r.side}</span>}
+              {r.side !== undefined && <span className="fine-print">{r.side}</span>}
             </button>
           ))}
         </div>

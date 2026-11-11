@@ -45,7 +45,7 @@ export default function UnavailableNotice({ entityId }: Props) {
             {missingAdvice(mappedEntityIds.has(entityId!), seen)}
           </p>
         )}
-        <p className="muted" style={{ marginTop: 6, fontSize: "var(--text-2xs)" }}>
+        <p className="fine-print under">
           Its id in the villa's system: <code>{entityId}</code>
         </p>
       </div>

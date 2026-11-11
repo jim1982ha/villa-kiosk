@@ -181,7 +181,7 @@ export default function SpendTab(
           </div>
         )}
         {/* the cap's sentence, ONE per state (fmEngine.capNotes) — the statement's and the cost banner's too */}
-        {capNotes(b).map((note) => <p key={note} className="fm-cap-note">{note}</p>)}
+        {capNotes(b).map((note) => <p key={note} className="fine-print fm-cap-note">{note}</p>)}
       </div>
 
 

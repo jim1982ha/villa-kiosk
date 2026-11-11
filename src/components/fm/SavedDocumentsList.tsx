@@ -51,7 +51,7 @@ export function SavedDocumentRows({ kind, docs: all, onOpen, onRemove }: {
 
   return (
     <div className="fm-stack">
-      <div className="fm-row-sub muted" style={{ marginTop: 4 }}>
+      <div className="fine-print under">
         {withCount(`Saved ${plural}`, docs.length)}
       </div>
       <div className="fm-list">

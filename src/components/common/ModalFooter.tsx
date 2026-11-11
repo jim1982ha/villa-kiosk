@@ -112,7 +112,7 @@ export default function ModalFooter({
     : leading !== undefined && leading !== null && leading !== false
     ? leading
     : note
-      ? <span className="muted body-text" style={{ fontSize: "var(--text-xs)" }}>{note}</span>
+      ? <span className="fine-print">{note}</span>
       : <span />;
 
   // ⚠️ ONE GROUP, ONE PAIR (owner, 2026-10-22: one footer; 2026-11-10: one definition): every footer's buttons sit in

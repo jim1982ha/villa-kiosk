@@ -193,7 +193,7 @@ export default function BasePanel({ title, entityId, icon, className, headerActi
             </button>
             <div style={{ minWidth: 0 }}>
               <div className="panel-linked-label" data-tip={linked.label}>{linked.label}</div>
-              <div className="muted" style={{ fontSize: "var(--text-2xs)" }}>
+              <div className="fine-print">
                 {linkedStateWords(linked)} · linked entity
               </div>
             </div>

@@ -135,7 +135,7 @@ export default function DeviceSearchPicker({
         clear={!!value && { label: "Clear device", run: onClear }}
       />
       {!matchedEntityId && value.trim() && !open && (
-        <div className="muted body-text field-hint">
+        <div className="fine-print under">
           No matching device, this will be saved as free text.
         </div>
       )}

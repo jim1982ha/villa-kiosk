@@ -237,7 +237,7 @@
 .legend-badge { width: 32px; height: 32px; flex-shrink: 0; display: block; transform: scale(var(--badge-picture-scale)); }
 /* The room chip's count, drawn as the chip draws it (colors.reportingPill). */
 /* The line under each row's name. */
-.legend-note { display: block; font-size: var(--text-xs); }
+.legend-note { display: block; }
 .legend-count { display: inline-flex; align-items: center; justify-content: center; font-size: var(--text-2xs); font-weight: 700; }
 @media (max-width: 480px) {
   .legend-grid { grid-template-columns: 1fr; }
@@ -330,7 +330,7 @@
   .segmented-compact button { padding: 0 6px; }
 }
 /* the moved window's last report: under the heading, never in it (HistoryHeader `note`) */
-.chart-note { font-size: var(--text-xs); color: var(--text-secondary); margin: calc(-1 * var(--field-label-gap) + 2px) 0 var(--field-label-gap); }
+.chart-note { margin: calc(-1 * var(--field-label-gap) + 2px) 0 var(--field-label-gap); }
 
 
 /* THE line of one setting (common/SettingRow; owner, 2026-11-03: "the same layout, for consistency"): its icon and

@@ -145,7 +145,7 @@ function NowView({ setup, costUnit, house, colourOf }: { setup: EnergyWindowSetu
       <div className="weather-tile chart energy-wide">
         <div className="weather-chart-head">
           <div className="eyebrow">Last 7 days<ChartStep words={aggregationWords(PERIOD_MS.day, "sum")} about={chartAbout("total", PERIOD_MS.day)} /></div>
-          <div className="weather-legend">{fmtKwh(T.weekTotal)} kWh{typical ? ` · typical day ${fmtKwh(typical)}` : ""}</div>
+          <div className="fine-print">{fmtKwh(T.weekTotal)} kWh{typical ? ` · typical day ${fmtKwh(typical)}` : ""}</div>
         </div>
         <BarChart label="Energy used, the last seven days" fmt={kwh} unit="kWh"
           buckets={weekP.buckets.map((b, i) => ({ t: b.t, segs: segsOf(b, () => [{ key: "used", label: "Used", v: b.split!.used, cls: standout?.index === i ? "e-standout" : "e-used" }]) }))}
@@ -323,7 +323,7 @@ function HistoryView({ setup, costUnit, range: rangeKey, colourOf }: { setup: En
       <div className="weather-tile chart energy-wide">
         <div className="weather-chart-head">
           <div className="eyebrow">{hasCost ? `Energy and cost per ${unit}` : "Energy used, by device"}<ChartStep words={aggregationWords(PERIOD_MS[range.period], "sum")} about={chartAbout("total", PERIOD_MS[range.period])} /></div>
-          <div className="weather-legend">
+          <div className="fine-print chart-key">
             {series.map((s) => <span key={s.id}><i className={`key ${s.cls}`} />{s.label}</span>)}
             {hasCost && <span><i className="key cost line" />Cost · {formatMoney(costTotal, costUnit)}</span>}
           </div>
@@ -344,7 +344,7 @@ function HistoryView({ setup, costUnit, range: rangeKey, colourOf }: { setup: En
         <div className="weather-chart-head">
           <div className="eyebrow">Every device</div>
           <div className="energy-rank-tools">
-            {shape === "list" && <span className="weather-legend">share of {fmtKwh(whole.used)} kWh</span>}
+            {shape === "list" && <span className="fine-print">share of {fmtKwh(whole.used)} kWh</span>}
             {shapePicker}
           </div>
         </div>
@@ -424,7 +424,7 @@ function RankRow({ label, kwh, of, used, cls, muted, depth = 0, note, toggle = n
 }) {
   const name = (
     <>
-      {label}{note ? <small className="energy-rank-note"> · {note}</small> : null}
+      {label}{note ? <small className="fine-print"> · {note}</small> : null}
     </>
   );
   const Row = toggle ? "button" : "div";

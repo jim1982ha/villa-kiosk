@@ -483,6 +483,13 @@ button {
 .value-large { font-family: var(--font-ui); font-size: var(--text-display-lg); font-weight: 200; line-height: 1; }
 .value-unit { font-family: var(--font-ui); font-size: var(--text-lg); font-weight: 400; color: var(--text-secondary); }
 .body-text { font-family: var(--font-ui); font-size: var(--text-md); line-height: 1.5; }
+/* ⚠️ THE FINE PRINT, ONE LOOK (UI scan, 2026-11-11; the rules: "controls that do the same job look the same and are one
+   definition"): the small grey line that adds a fact to what it sits beside or under (a footer's note, the second
+   line of a choice in a list, a chart's note or unit, what a number is a share of, "linked entity" under a name, a
+   device's id, a legend's line under its name). It was seven rules and five sizes typed where they were used: 11px,
+   12px or 13px for the same job. `.under`: its gap when it sits under what it is about. */
+.fine-print { font-family: var(--font-ui); font-size: var(--text-xs); line-height: 1.4; color: var(--text-secondary); }
+.fine-print.under { margin-top: 6px; }
 
 /* --- App shell --- */
 /* The shell is pinned to the viewport, and paints the theme's own background

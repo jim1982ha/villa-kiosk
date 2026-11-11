@@ -133,13 +133,13 @@ export default function LegendModal({ onClose, listable, onListCategory }: {
               />
               <span>
                 <strong>{b.label}</strong>
-                <span className="muted legend-note">{b.note}</span>
+                <span className="fine-print legend-note">{b.note}</span>
               </span>
             </div>
           ))}
           <div className="legend-row">
             <span className="legend-badge" aria-hidden />
-            <span className="muted legend-note">A device hidden in the villa's system has no badge.</span>
+            <span className="fine-print legend-note">A device hidden in the villa's system has no badge.</span>
           </div>
         </div>
 
@@ -159,7 +159,7 @@ export default function LegendModal({ onClose, listable, onListCategory }: {
               }} />
               <span>
                 <strong>{r.label}</strong>
-                <span className="muted legend-note">{r.note}</span>
+                <span className="fine-print legend-note">{r.note}</span>
               </span>
             </div>
           ))}
@@ -170,7 +170,7 @@ export default function LegendModal({ onClose, listable, onListCategory }: {
               }}>3</span>
               <span>
                 <strong>{n.label}</strong>
-                <span className="muted legend-note">{n.note}</span>
+                <span className="fine-print legend-note">{n.note}</span>
               </span>
             </div>
           ))}
@@ -201,7 +201,7 @@ export default function LegendModal({ onClose, listable, onListCategory }: {
               <span className="legend-swatch legend-swatch-round" style={{ background: s.swatch }} />
               <span>
                 <strong>{s.label}</strong>
-                <span className="muted legend-note">{s.note}</span>
+                <span className="fine-print legend-note">{s.note}</span>
               </span>
             </div>
           ))}
