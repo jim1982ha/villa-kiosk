@@ -1,3 +1,19 @@
+## 2.496.775
+
+What you will see:
+- **Every box you type or pick in is one box.** A question's answer, a form's field ("Report a problem", "Open a
+  ticket", a visit, a cost), a device's card in Advanced Settings, a search box, a number with its unit, a choice
+  list and "Ask VESTA" were seven looks: heights from 36 to 46, two corners, with or without an edge, two text
+  sizes. They are now the same height, corner, edge and text everywhere. The most visible change is in Advanced
+  Settings: a device card's fields are a little taller and have the edge every other box has.
+- **A field's name sits the same distance above its box in every form.** In "Report a problem" and the Facility
+  forms some names touched their box while others kept a gap, and the fields were unevenly spaced. Settings'
+  "Dashboard title", a question's answer and the villa's Latitude and Longitude are named the same way.
+- **The captions in a device's window ("Mode", "Fan speed", "Position", "Last 24 hours") are the size of every
+  other caption.** The last update said captions were one look; these were still drawn larger. They are now.
+- Sliders, the tick box on a device's card and the colour pickers look as before.
+- Each of these is written once, so a later change to a box or to a field's name shows in every window at once.
+
 ## 2.496.774
 
 What you will see:
