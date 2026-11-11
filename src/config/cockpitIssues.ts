@@ -10,11 +10,11 @@
 // (VillaAttention.shows: not hidden, and the profile may open it).
 
 import type { AgentCadence } from "@/agent/agentApi";
-import { confirmingFaults } from "@/fm/faultConfirm";
+import { clearingFault, confirmingFaults, type ConfirmingFault } from "@/fm/faultConfirm";
 import type { FmData } from "@/fm/fmTypes";
 import type { HassEntity } from "@/types/ha.types";
-import type { VillaAttention } from "./attention";
-import { CARD_TONE_RANK, closedCards, cockpitCard, confirmingCards, type CardView } from "./cockpitCard";
+import type { AttentionItem, VillaAttention } from "./attention";
+import { CARD_TONE_RANK, closedCards, cockpitCard, confirmingCards, holdsText, type CardView } from "./cockpitCard";
 import type { labelOf } from "./EntityMap";
 
 export interface CockpitIssues {
@@ -26,9 +26,20 @@ export interface CockpitIssues {
   closed: CardView[];
 }
 
+/** Everything on Watch: the faults right again (`clearing`), still open, and the closed faults VESTA confirms
+ *  (faultConfirm.confirmingFaults), the soonest close first, those awaiting their moment last. */
+function watchList(clearing: readonly AttentionItem[], fmData: FmData, cadence: AgentCadence | null, now: Date): ConfirmingFault[] {
+  const right = clearing.flatMap((i) => {
+    const t = i.closing && fmData.tickets.find((x) => x.id === i.ticketId);
+    return t && i.closing ? [clearingFault(t, Date.parse(i.closing.at), holdsText(i.closing), cadence, now.getTime())] : [];
+  });
+  const order = (c: ConfirmingFault) => (Number.isNaN(c.at) ? Infinity : c.at);
+  return [...right, ...confirmingFaults(fmData, cadence, now.getTime())].sort((a, b) => order(a) - order(b));
+}
+
 /** Every card Open issues draws for the profile whose view is `view` (useVillaAttention). `fmData`: the fault
  *  records; `cadence`: the VESTA Agent's own timing (null: it did not say); `now`: the moment the cards are read at. */
-export function cockpitIssues(view: Pick<VillaAttention, "attentionGroups" | "devices" | "shows">, opts: {
+export function cockpitIssues(view: Pick<VillaAttention, "attentionGroups" | "devices" | "shows" | "clearing">, opts: {
   fmData: FmData;
   cadence: AgentCadence | null;
   now: Date;
@@ -43,7 +54,9 @@ export function cockpitIssues(view: Pick<VillaAttention, "attentionGroups" | "de
     // grouping's own order (attention.groupAttention), a stable sort
     open: view.attentionGroups.map((g) => cockpitCard(g, cadence, now))
       .sort((a, b) => CARD_TONE_RANK[a.tone ?? "warn"] - CARD_TONE_RANK[b.tone ?? "warn"]),
-    watched: confirmingCards(confirmingFaults(fmData, cadence, now.getTime()), cards),
+    // ⚠️ RIGHT AGAIN IS ON WATCH (owner, 2026-11-12): a fault waiting out the Agent's clear wait (attention's `clearing`)
+    // beside the closed faults VESTA confirms, one card per device, the soonest close first
+    watched: confirmingCards(watchList(view.clearing ?? [], fmData, cadence, now), cards),
     closed: closedCards(fmData, cadence, now, cards),
   };
 }

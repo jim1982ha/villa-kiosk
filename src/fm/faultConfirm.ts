@@ -59,6 +59,18 @@ export interface ConfirmingFault extends ClosedFault {
   lookMinutes: number | null;
   /** About to be watched: closed, the Agent's moment (confirmsBy) not written yet; `at` is NaN, no moment is said. */
   awaiting: boolean;
+  /** STILL OPEN, RIGHT AGAIN (owner, 2026-11-12): waiting out the VESTA Agent's clear wait (closesAt), `at` its moment;
+   *  `said` what its device reads and since when ("Locked since 01:29", or "Back to normal"), `word` that reading
+   *  ("Locked"); absent on a closed fault. */
+  holds?: { said: string; word?: string };
+}
+
+/** A fault right again on Watch (attention's `clearing`): still open, closed by the VESTA Agent at `at` (its closesAt)
+ *  if it stays so, its reading `holds`. */
+export function clearingFault(t: FmTicket, at: number, holds: { said: string; word?: string }, cadence: AgentCadence | null,
+  now: number = Date.now()): ConfirmingFault {
+  const lookMinutes = cadence && cadence.checkMinutes > 0 ? cadence.checkMinutes : null;
+  return { ticket: t, word: "Cleared", who: "", closedAt: NaN, at, due: now >= at, lookMinutes, awaiting: false, holds };
 }
 
 /** The last moment a fault confirmed by `at` is still shown: two of the Agent's looks after it while the Agent says its
@@ -176,6 +188,16 @@ export function confirmParts(c: ConfirmingFault): { did: string; when: string; t
       tip: "VESTA says at its next look whether this is watched or closed." };
   }
   const by = clockTime(c.at);
+  // right again, still open: what it reads now, and what happens if it changes (it is an open issue again)
+  if (c.holds) {
+    const stays = c.holds.word ? `stays ${c.holds.word.toLowerCase()}` : "stays so";
+    return {
+      did: c.holds.said,
+      when: `Closes ${c.due && c.lookMinutes ? withinLook({ checkMinutes: c.lookMinutes }) : by}`,
+      tip: c.due ? `VESTA closes this at its next look if it ${stays}.`
+        : `VESTA closes this at ${by} if it ${stays}; if it changes before then, it is back in Open issues as the same problem.`,
+    };
+  }
   return {
     did: closedWords(c),
     when: `Closes ${c.due && c.lookMinutes ? withinLook({ checkMinutes: c.lookMinutes }) : by}`,

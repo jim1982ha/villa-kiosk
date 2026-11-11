@@ -1,3 +1,16 @@
+## 2.496.781
+
+What you will see, in the Cockpit's Messages:
+- **A problem that is right again moves to Watch at once.** When VESTA sees that what an alert reported is over (a
+  door locked again, a device back online, a temperature back in range), the card leaves Open issues and goes to
+  Watch straight away. It says what the device reads ("Locked since 01:29") and when VESTA closes it ("Closes 01:41").
+  Before, it stayed in Open issues for those 10 minutes.
+- While it is on Watch it is not counted in the top bar, and its device has no amber mark on the map and no warning
+  in its window: nothing is left to do.
+- If it goes wrong again before then, it is back in Open issues as the same alert, at VESTA's next look. At the time
+  on the card VESTA closes it as before ("Cleared … Watch 1h" on Telegram), and the card stays on Watch for that hour.
+- Telegram is unchanged.
+
 ## 2.496.780
 
 What you will see, in Advanced Settings › Devices:

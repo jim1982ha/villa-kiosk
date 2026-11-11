@@ -266,6 +266,14 @@ function closingText(c: AttentionItem["closing"], now: Date): string | null {
   return `${c.word}${since} · ${when} if it stays ${c.word.toLowerCase()}`;
 }
 
+/** What a fault right again reads, on its Watch card (attention's `clearing`): "Locked since 14:38", or "Back to normal"
+ *  when the device cannot say; `word` the reading ("Locked"). The open card's closingText says the same, with its close. */
+export function holdsText(c: NonNullable<AttentionItem["closing"]>): { said: string; word?: string } {
+  if (!c.word) return { said: "Back to normal" };
+  const said = sinceText(c.since ?? null, clockTime, docDate);
+  return { said: `${c.word}${said ? ` since ${said}` : ""}`, word: c.word };
+}
+
 /** One problem's line inside the card. */
 export interface CardLine {
   key: string;

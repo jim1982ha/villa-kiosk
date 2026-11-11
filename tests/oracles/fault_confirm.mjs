@@ -433,4 +433,34 @@ console.log("\n  a reopen in the Kiosk takes the watch away (architecture review
      /A reopen by either side removes it\./.test(contract.ticket.fields.confirmsBy));
 }
 
+{
+  // owner, 2026-11-12: a lock locked again stayed in Open issues for its 10-minute wait ("Locked since 01:29 · closes at
+  // about 01:41"): right again, it is on Watch at once, counted and marked nowhere; wrong again (the Agent takes closesAt
+  // away), or a moment the Agent never acted on, it is an open issue again
+  const { cockpitIssues } = await import("@/config/cockpitIssues");
+  const doors = devicesOf({ ids: ["lock.door", "binary_sensor.leak"] });
+  const ents = { "lock.door": { entity_id: "lock.door", state: "locked", attributes: { friendly_name: "Door" } },
+    "binary_sensor.leak": { entity_id: "binary_sensor.leak", state: "off", attributes: { friendly_name: "Leak" } } };
+  const fault = (closesAt) => ({ id: "c1", title: "Door unlocked", status: "open", openedAt: at(-30), entityId: "lock.door", photoIds: [],
+    alertNumber: 162, origin: "alert", check: "minutes", source: "vesta_agent", updates: [opened], ...(closesAt ? { closesAt } : {}) });
+  const view = (closesAt, now = NOW) => {
+    const fmData = { ...EMPTY_FM_DATA, tickets: [fault(closesAt), active] };
+    const att = attentionFor({ devices: doors, ...attentionOf({ devices: doors, entities: ents, entityMap: {}, resolvedRooms: {}, fmData, cadence: CADENCE, now }) }, () => true);
+    return { att, cards: cockpitIssues(att, { fmData, cadence: CADENCE, now: new Date(now), entities: ents, entityMap: {}, resolvedRooms: {} }) };
+  };
+  const right = view(at(10)), wrong = view(undefined), forgotten = view(at(-11));
+  const openKeys = (v) => v.cards.open.map((c) => c.entityId).join();
+  ck("right again (closesAt): not an open issue, not counted, no amber mark; the leak still is",
+     openKeys(right) === "binary_sensor.leak" && right.att.attentionGroups.length === 1
+     && !deviceIssues(right.att.attentionGroups).amber.has("lock.door"), openKeys(right));
+  const card = right.cards.watched.find((c) => c.entityId === "lock.door");
+  ck("  ...on Watch, saying what it reads and when VESTA closes it, its alert's number kept (VESTA's card joins it there)",
+     !!card && card.lines[0].closing === "Locked" && card.nextCheck?.pill === `Closes ${clockTime(NOW + 10 * 60_000)}`
+     && card.lines[0].alertNumber === 162 && card.lines[0].actions.length === 0, card);
+  ck("  ...wrong again (the Agent took closesAt away): an open issue, off Watch",
+     openKeys(wrong).split(",").includes("lock.door") && !wrong.cards.watched.some((c) => c.entityId === "lock.door"), openKeys(wrong));
+  ck("  ...a moment past by more than two of the Agent's looks (it never acted): an open issue again",
+     openKeys(forgotten).split(",").includes("lock.door") && !forgotten.cards.watched.some((c) => c.entityId === "lock.door"), openKeys(forgotten));
+}
+
 done("✅ a fault being confirmed is listed last among the open issues, marked, never counted, and goes as the Agent says");

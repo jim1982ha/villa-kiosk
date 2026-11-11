@@ -173,7 +173,7 @@ export default function MessagesTab({ onOpenEntity, doors, onRaiseTicket, onEdit
         <>
           <FoldedList title="Watch" rows={view.watched} open={folds.watch}
             onToggle={() => fold("watch")} empty="Nothing is being watched."
-            tip="Cleared problems VESTA still watches: VESTA closes each at the time on its card if all is still well; a problem back before then reopens as the same problem.">
+            tip="Problems right again, and cleared problems VESTA still watches: VESTA closes each at the time on its card if all is still well; a problem back before then is open again as the same problem.">
             {card}
           </FoldedList>
           {/* what is finished (placeOf, closedCards): faults and alerts that ended, requests and rings answered or over; folded, last */}
