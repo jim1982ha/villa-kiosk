@@ -8,6 +8,8 @@ Keep this file short: add a rule only when the owner states one, and remove rule
 - Approval means build it. Once a cause is found, fix and ship; ask only for a real choice between behaviours.
 - Ship each fix as soon as it is ready. Do small, located fixes directly; use a sub-agent only for a real
   investigation, with the files already named.
+- Asked whether something makes sense: first say whether it did what its settings say, with its timeline; a change
+  of behaviour comes after, as an offer.
 - The owner installs updates and checks the result with screenshots: say what to look at, on which screen.
 - Talk in the screen's words, in plain English: no file names, function names or version ids unless the owner needs
   them to decide. At most three short questions at a time.

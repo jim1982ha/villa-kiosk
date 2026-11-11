@@ -26,7 +26,9 @@ the proxy (`ship` runs it when the proxy is staged). Never move it under `tests/
 - The hooks refuse commits and pushes to `main` (`git config core.hooksPath tools/hooks` once per clone).
 - **Release**: write the new entry at the top of `villa-kiosk/CHANGELOG.md` (what the owner will see, plain words; its
   `## x.y.z` heading is the version), stage what ships by name, then `npm run ship -- -F msg.txt`. Exit 0 means the
-  store offers it; anything else is not shipped. CI runs every check before the image is built.
+  store offers it; anything else is not shipped. CI runs every check before the image is built. Before `ship`, run only
+  the test files that name a file you changed (`grep -l <name> tests/oracles/*.mjs`, then `node --test` on them;
+  owner, 2026-11-11: a second file pinning the old screen failed a release), never the whole suite.
 - Commit messages: a subject of at most 72 characters, a blank line, then the body.
 
 ## Hard rules
