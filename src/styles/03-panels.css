@@ -66,10 +66,14 @@ h2[data-autofocus]:focus { outline: none; }
 .field > label { display: block; margin-bottom: var(--field-label-gap); }
 
 /* --- Sliders --- */
+/* ⚠️ THE BAR A SLIDER IS, SAID HERE (UI scan, 2026-11-11). This rule used to say a 4px track, which no screen ever
+   drew: every slider is in a window, where the text box's old `.modal input` rule gave it the box's padding, border
+   and corner. The bar a person knows is that one (26px to aim at, the thumb stopping short of each end), now written
+   in the slider's own rule, so the text box's rule no longer reaches a slider. */
 input[type="range"] {
   -webkit-appearance: none; appearance: none;
-  width: 100%; height: 4px; border-radius: var(--radius-pill);
-  background: var(--bg-input); outline: none;
+  width: 100%; height: 26px; padding: 0 var(--field-pad); border-radius: var(--field-radius);
+  background: var(--bg-input); border: 1px solid var(--hairline); outline: none;
 }
 /* The thumb is the only part of a slider you aim at, so it is filled rather
    than hollow — with the THEME accent, not the device's colour: a slider is a
@@ -146,16 +150,11 @@ button[aria-busy="true"] { animation: command-waiting 0.9s ease-in-out infinite;
 }
 .light-choices { flex: 1 1 220px; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
 .light-choices .field { margin: 0; }
-/* ⚠️ ONE GRID, EVERY SWATCH ITS CELL (owner, 2026-10-20: "align better the colour bubbles"): a wrapping row let the
-   last swatch — a <label>, the colour picker — take the modal's label margins (.modal-body label: 14 px above) and
-   sit lower and smaller than the presets. Equal columns of one size, the picker in the next cell like any other. */
+/* ⚠️ ONE GRID, EVERY SWATCH ITS CELL (owner, 2026-10-20: "align better the colour bubbles"): equal columns of one
+   size, the picker (a <label>) in the next cell like any other. The rule that made every <label> in a window a
+   block with margins is gone (04-modals.css "a field's name over its box"), and with it the rule that undid it here. */
 .light-swatches { display: grid; grid-template-columns: repeat(auto-fill, 36px); gap: 10px; align-items: center; }
 /* 36 px: a fingertip's target on an iPhone, nine to a row on an iPad's window. */
-.light-swatches .light-swatch {
-  margin: 0; box-sizing: border-box; font-size: inherit; width: 36px; height: 36px;
-  display: inline-flex; align-items: center; justify-content: center;
-}
-.light-swatches .light-swatch-custom { color: var(--text-primary); }
 .light-swatch {
   position: relative; width: 36px; height: 36px; flex: 0 0 auto; padding: 0;
   border: none; border-radius: 50%; cursor: pointer;

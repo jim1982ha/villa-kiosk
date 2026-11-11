@@ -481,11 +481,8 @@ body:has(.camera-fullscreen) .vesta-notice.below-camera { display: none; }
    above every window (z 400: the topmost layer is 300). */
 .dropdown {
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
-  width: 100%; min-height: 44px; padding: 10px 14px; border-radius: 10px;
-  background: var(--bg-input); color: var(--text-primary); border: 1px solid var(--hairline);
-  font: inherit; font-size: var(--text-md); text-align: left; cursor: pointer;
+  font-family: inherit; text-align: left; cursor: pointer;
 }
-.dropdown:focus-visible, .dropdown.is-open { border-color: var(--accent); outline: none; }
 .dropdown:disabled { opacity: 0.5; cursor: default; }
 .dropdown-value { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .dropdown-caret { flex: none; color: var(--text-secondary); transition: transform 0.15s ease; }
@@ -534,8 +531,7 @@ body:has(.camera-fullscreen) .vesta-notice.below-camera { display: none; }
 .vesta-turn-text { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: var(--text-base); }
 .vesta-thread-ask { display: flex; gap: 8px; align-items: flex-end; flex: 0 0 auto; padding-top: 6px;
   background: var(--bg-modal); }
-.vesta-thread-ask textarea { flex: 1 1 auto; min-width: 0; resize: vertical; font: inherit; font-size: var(--text-base);
-  padding: 8px 10px; border-radius: 10px; border: 1px solid var(--hairline); background: var(--bg-input); color: var(--text-primary); }
+.vesta-thread-ask textarea { flex: 1 1 auto; width: auto; min-width: 0; resize: vertical; }
 /* VESTA answering: three dots in its bubble, rising in turn, as every chat app shows "typing" (VestaThread WorkingBubble) */
 .vesta-working { flex-direction: row; align-items: center; gap: 5px; padding: 14px 16px; }
 .vesta-working-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text-secondary);

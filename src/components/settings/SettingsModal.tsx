@@ -210,15 +210,15 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor, ta
       <>
       {/* RBAC: shared branding — administration, not personal taste. */}
       {can("editConfig") && (
-        <>
-          <div className="section-title" style={{ marginTop: 0 }}>Dashboard title</div>
+        <label className="named-field">
+          <span>Dashboard title</span>
           <input
             value={v.siteTitle}
             onChange={(e) => applySiteTitle(e.target.value)}
             onBlur={slice.flush}
             placeholder={haConfig?.location_name || DEFAULT_SITE_TITLE}
           />
-        </>
+        </label>
       )}
 
       {/* ── Visual & UI tuning ──────────────────────────────────────────

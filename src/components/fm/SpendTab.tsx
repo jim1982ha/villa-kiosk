@@ -106,7 +106,7 @@ export default function SpendTab(
   const form = (
     <FmForm>
       <h3>{editingId ? "Edit spend entry" : "Record maintenance spend"}</h3>
-      <div className="fm-field">
+      <div className="named-field">
         <span className="with-tip">Device
           <InfoTip label="About the device">Search, or type one not listed; leave it blank for a whole-villa expense.</InfoTip></span>
         <DeviceSearchPicker
@@ -114,7 +114,7 @@ export default function SpendTab(
           options={deviceOptions}
         />
       </div>
-      <label className="fm-field">
+      <label className="named-field">
         <span>What the spend is about</span>
         <input value={label} onChange={(e) => setLabel(e.target.value)}
           placeholder="e.g. Gas top-up and filter clean" />
@@ -131,7 +131,7 @@ export default function SpendTab(
       <CostFields amount={amount} onAmount={setAmount} category={category} onCategory={setCategory}
         replacing={editingId ?? undefined} />
 
-      <div className="fm-field">
+      <div className="named-field">
         <span>Receipt / photo</span>
         <EvidenceRow photoIds={photoIds} onChange={setPhotoIds} />
       </div>

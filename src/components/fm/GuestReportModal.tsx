@@ -98,7 +98,7 @@ export default function GuestReportModal({
         <>
           <FormBody className="fm-stack">
             {deviceLabel && (
-              <div className="fm-field">
+              <div className="named-field">
                 <span>Device</span>
                 <div className="fm-chiprow">
                   <Tip text={entityId}>
@@ -107,7 +107,7 @@ export default function GuestReportModal({
                 </div>
               </div>
             )}
-            <label className="fm-field">
+            <label className="named-field">
               <span>What&apos;s wrong?</span>
               {/* One line, same as the operator form's summary: this becomes
                   the fault's headline in the work queue. Anything longer
@@ -127,7 +127,7 @@ export default function GuestReportModal({
               onChange={setNote}
               placeholder="When it started, how often it happens, anything you've already tried…"
             />
-            <div className="fm-field">
+            <div className="named-field">
               <span>Photo (optional)</span>
               {/* No thumbnail: evidence photos are readable by the owner and
                   facility manager only (a deliberate access decision), so a

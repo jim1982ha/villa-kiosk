@@ -60,32 +60,32 @@ export default function ScheduleEditor() {
     <FmForm>
       <h3>{editingId ? "Edit task" : "New maintenance task"}</h3>
 
-      <label className="fm-field">
+      <label className="named-field">
         <span>Task</span>
         <input value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })}
           placeholder="e.g. Generator service" />
       </label>
 
-      <div className="fm-field">
+      <div className="named-field">
         <span>How often</span>
         <SegmentedGroup ariaLabel="How often" active={SCHEDULE_PRESETS.some((p) => p.days === days) ? String(days) : null}
           onChange={(everyDays) => setDraft({ ...draft, everyDays })}
           options={SCHEDULE_PRESETS.map((p) => ({ key: String(p.days), label: p.label }))} />
       </div>
 
-      <label className="fm-field" style={{ maxWidth: 200 }}>
+      <label className="named-field" style={{ maxWidth: 200 }}>
         <span>Interval in days</span>
         <input value={draft.everyDays} inputMode="numeric"
           onChange={(e) => setDraft({ ...draft, everyDays: e.target.value })} />
       </label>
 
-      <label className="fm-field" style={{ maxWidth: 260 }}>
+      <label className="named-field" style={{ maxWidth: 260 }}>
         <span>Room (optional)</span>
         <Dropdown value={draft.room} ariaLabel="Room" onChange={(room) => setDraft({ ...draft, room })}
           options={[{ value: "", label: "Whole villa" }, ...rooms.map((r) => ({ value: r, label: r }))]} />
       </label>
 
-      <label className="fm-field" style={{ maxWidth: 260 }}>
+      <label className="named-field" style={{ maxWidth: 260 }}>
         <span>Contract reference (optional)</span>
         <input value={draft.clause} onChange={(e) => setDraft({ ...draft, clause: e.target.value })}
           placeholder="e.g. 3.7(i)" />

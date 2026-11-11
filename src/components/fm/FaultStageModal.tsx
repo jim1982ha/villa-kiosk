@@ -105,7 +105,7 @@ export default function FaultStageModal({
         {/* the fault as its card names it (fmEngine.faultTitle: "#5 · …", a duration worded now) — not the stored title */}
         {tickets.map((t) => <div key={t.id} className="fm-banner">{faultTitle(t)}</div>)}
         {/* the name typed, never offered (WorkerName) */}
-        <div className="fm-field">
+        <div className="named-field">
           <span>Who{asksCost ? " did the work" : "'s handling it"} (optional)</span>
           <WorkerName value={who} onChange={setWho} />
         </div>
@@ -118,7 +118,7 @@ export default function FaultStageModal({
             ? "e.g. Replaced the capacitor and cleaned the filters"
             : "e.g. Contractor booked for Thursday morning"}
         />
-        <div className="fm-field">
+        <div className="named-field">
           <span>Photo (optional)</span>
           {/* Kept on the FAULT as well as this step, so the before/after
               pair lives on one record instead of scattered across steps. */}

@@ -39,13 +39,13 @@ export default function CostFields({ amount, onAmount, category = "minor", onCat
   const money = (n: number) => formatMoney(n, terms.currency);
   return (
     <>
-      <label className="fm-field">
+      <label className="named-field">
         <span className="with-tip">Cost{terms.currency ? ` (${terms.currency})` : ""}{optional ? ", optional" : ""}
           {optional && <InfoTip label="About the cost">Leave it blank if nothing was spent.</InfoTip>}</span>
         <input value={amount} inputMode="decimal" onChange={(e) => onAmount(e.target.value)} placeholder="0" />
       </label>
       {onCategory && (!optional || value > 0) && (
-        <label className="fm-field">
+        <label className="named-field">
           <span>Category</span>
           {/* Neutral words: which contract clause or account a category maps
               to is one villa's arrangement (hard-rules.py, 3b). */}

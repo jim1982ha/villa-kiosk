@@ -67,9 +67,38 @@
    but an accidental, UA-dependent size next to that title's deliberately
    tuned one, which read as "two different fonts" even though it never was. */
 .modal h2 { font-family: var(--font-display); font-weight: 500; font-size: var(--text-xl); margin: 0; letter-spacing: var(--tracking-tight); }
-.modal label { display: block; font-size: var(--text-sm); color: var(--text-secondary); margin: 14px 0 6px; }
-.modal input { width: 100%; padding: 12px 14px; border-radius: 10px; background: var(--bg-input); color: var(--text-primary); border: 1px solid var(--hairline); font-size: var(--field-text); font-weight: 400; }
-.modal input:focus { border-color: var(--accent); outline: none; }
+
+/* ⚠️ THE BOX A PERSON TYPES OR PICKS IN, ONE LOOK (UI scan, 2026-11-11; the rules: "controls that do the same job look
+   the same and are one definition, so one change shows everywhere"). Seven rules drew it, each for its own window:
+   measured side by side a question's answer was 46px high, a form's field 42, a device card's field 36 with no
+   border and a smaller corner, a search box 42, a number with its unit 40, a choice 44 in bigger text. Every one is
+   this box: a typed line, a typed block, the app's own choice list (common/Dropdown), a search (its glass inside)
+   and a number with its unit (common/UnitField). A rule elsewhere says only where its box sits (a width, a flex).
+   :where() keeps it light: a place's own rule (a narrow number, a pill-shaped search) still wins without a fight.
+   A tick box, a slider, a colour and a file are other controls with their own rules: the old `.modal input` reached
+   them too, so each had to undo the text box, and a slider was drawn by it (03-panels.css "the bar a slider is"). */
+.modal :where(input:not([type="checkbox"], [type="range"], [type="color"], [type="file"]), textarea),
+.dropdown, .config-search, .unit-field {
+  box-sizing: border-box; width: 100%; min-height: var(--touch-min); padding: 10px var(--field-pad);
+  border-radius: var(--field-radius); background: var(--bg-input); color: var(--text-primary);
+  border: 1px solid var(--hairline); font-size: var(--field-text); font-weight: 400;
+}
+/* the one sign a field is being typed or set in: its edge in the accent (a slider's and a tick box's too) */
+.modal :where(input, textarea):focus, .dropdown:focus-visible, .dropdown.is-open,
+:is(.config-search, .unit-field):focus-within { border-color: var(--accent); outline: none; }
+.modal :where(input, textarea)::placeholder { color: var(--text-dim); }
+/* a box that holds its field with something beside it (a search's glass, a number's unit): the box is the look, the
+   field inside it is bare */
+.modal :is(.config-search, .unit-field) input { width: auto; min-height: 0; padding: 0; border: 0; border-radius: 0; background: transparent; }
+/* ⚠️ A FIELD'S NAME OVER ITS BOX, ONE STRUCTURE (UI scan, 2026-11-11): a <label class="named-field"> holding the name
+   (its <span>) and the box (04-modals.css "the box a person types or picks in"). A blanket `.modal-body label` rule
+   used to restyle every <label> in a window: it turned this one back into a block, so the name sat ON its box with
+   no gap and each field carried 21px of stray margin, while a bare <label> beside a box (a question's answer, the
+   villa's coordinates) kept the gap. That rule is gone; the gap is said here, once. */
+.named-field { display: flex; flex-direction: column; gap: var(--field-label-gap); min-width: 0; }
+.named-field > span { font-size: var(--field-label-size); color: var(--text-secondary); }
+/* a typed block grows downwards only: its width is the column's */
+.named-field > textarea { display: block; resize: vertical; }
 
 /* ── THE MODAL SHELL: header · body · footer ─────────────────────────────
    ⚠️ ONE DEFINITION FOR EVERY DIALOG (2.496.175). There were three: the
@@ -138,10 +167,8 @@
    reading like the same duplicated control — see SettingsModal's note. The
    label is the fix; changing one glyph was tried first and was not enough. */
 .settings-inline-label { font-size: var(--text-2xs); color: var(--text-secondary); white-space: nowrap; }
-/* Two sliders (or coordinate fields) side by side; stacks on narrow screens. */
+/* Two fields side by side; stacks on narrow screens. */
 .slider-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 20px; align-items: start; }
-.slider-pair > div { min-width: 0; }
-.slider-pair label { margin-top: 0; }
 @media (max-width: 560px) { .slider-pair { grid-template-columns: 1fr; } }
 /* overflow-x hidden: setting only overflow-y computes overflow-x to auto,
    so any absolutely-positioned child poking past the right edge (the
@@ -152,10 +179,6 @@
    the cards scroll through (08-shared.css .messages-toolbar). */
 .modal-body { --body-top: 8px; --body-left: 28px; --body-right: 28px;
   flex: 1 1 auto; overflow-y: auto; overflow-x: hidden; padding: var(--body-top) var(--body-right) 12px var(--body-left); }
-.modal-body label {
-  display: block; color: var(--text-secondary);
-  font-size: var(--field-label-size); margin: 14px 0 var(--field-label-gap);
-}
 /* No separator above this footer, same reasoning as .modal-footer (device
    panels) — the same visual rule applied once here since this ONE class
    already backs every settings-style modal (Settings, Advanced Settings,
@@ -286,7 +309,7 @@
      header owns it now. */
   margin-bottom: var(--field-label-gap);
 }
-.timeline-head .eyebrow { margin: 0; white-space: nowrap; }
+.timeline-head .eyebrow { white-space: nowrap; }
 /* ⚠️ THE COMPACT SHAPE (SegmentedGroup layout="compact"): a choice beside a heading or in a card's line, at the
    line's own height: a chart's ranges, a section's counts (FoldedList SectionViewButtons), a card's On | Off. After
    .segmented's rules: same specificity, the later one wins. */
@@ -372,9 +395,6 @@
    coordinates are no longer cut); on a phone the coordinates keep a line and the offset takes the next. */
 .villa-location-coord { flex: 1 1 140px; min-width: 0; }
 .villa-location-north { flex: 1 1 260px; min-width: 0; }
-/* A short number field (days, a percentage): its own width, never a stretched bar. */
-.field-narrow { max-width: 140px; }
-.villa-location-row label { margin-top: 0; }
 
 /* Inline (i) info button + hover/focus tooltip (replaces the model info block). */
 .info-tip { position: relative; display: inline-flex; }
@@ -404,7 +424,6 @@
 /* A title or a label with its (i) beside it — the ONE place an option's explanation lives in Settings, Advanced
    Settings and the Cockpit (owner, 2026-10-22: no visible description text). The (i) sits inline after the words. */
 .with-tip { display: flex; align-items: center; gap: 6px; }
-.modal-body label.with-tip { display: flex; }
 
 /* The (i)'s card: portalled to <body>, `fixed`, placed by InfoTip (infoTipPlacement: below the (i), or above when
    that has more room; never past the screen's edge). Opaque, above every window (a Dropdown's layer): the old
@@ -463,10 +482,6 @@
 /* --- A device's card in Devices (EntityMapRow, the Cockpit's RecordCard): its decided first line, then its fields when
    opened, each a name at the left and its control at the right (.card-field). The controls' own look, inside the card. */
 .device-card { display: flex; flex-direction: column; gap: 2px; min-width: 0; font-size: var(--text-base); }
-.device-card input:not([type="checkbox"]) {
-  min-width: 0; padding: 8px; border-radius: 8px;
-  background: var(--bg-input); color: var(--text-primary); border: none;
-}
 /* a device not shown in the 3D view: its card faded (its box unticked says why) */
 .fm-record-card.device-card-off { opacity: 0.5; }
 
@@ -474,34 +489,14 @@
 .search-or-add { margin-bottom: 14px; }
 .search-empty { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; }
 /* Config Editor entity filter box. */
-.config-search {
-  display: flex; align-items: center; gap: 8px; margin-bottom: 14px;
-  padding: 0 12px; border-radius: 10px; background: var(--bg-input);
-  border: 1px solid var(--hairline);
-}
+.config-search { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; padding-block: 0; }
 .config-search svg { flex: 0 0 auto; color: var(--text-dim); }
-.config-search input {
-  flex: 1 1 auto; min-width: 0; border: none; background: transparent;
-  padding: 10px 0; color: var(--text-primary); font-size: var(--field-text);
-}
-.config-search input:focus { outline: none; }
+.config-search input { flex: 1 1 auto; min-width: 0; align-self: stretch; }
 /* Compact variant — sized to sit inline at pill height (GroupedDevices'
    "add another member" row, alongside its 4px/8px-padded member pills)
    instead of the full standalone-field size above. */
-.config-search-compact { padding: 0 8px; border-radius: 999px; }
-.config-search-compact input { padding: 5px 0; font-size: var(--text-xs); }
-/* Inside a device's card, the generic
-   ".device-card input:not([type=checkbox])" rule (background: var(--bg-input))
-   outranks ".config-search input"'s own transparent background — same class
-   count, but one extra type selector via :not([type="checkbox"]) — so an
-   EntityPicker used as a table cell (e.g. "Linked entity") painted its INNER
-   input grey a second time inside the already-grey .config-search pill,
-   showing as two nested grey boxes. Scope a matching-specificity override
-   back to transparent so the pill is the ONLY background, same as every
-   other cell's plain select/input. */
-.device-card .config-search input {
-  background: transparent; padding: 10px 0; border-radius: 0;
-}
+.config-search-compact { min-height: 0; padding: 0 8px; border-radius: var(--radius-pill); font-size: var(--text-xs); }
+.modal .config-search-compact input { padding: 5px 0; font-size: inherit; }
 
 /* ⚠️ THE ID KEEPS A READABLE WIDTH (owner, 2026-11-03: on a phone "fan.cei / ling_fa / n_mas…" was cut every few
    letters beside "Confirm before toggling"): the id takes at least 180px, and the actions wrap onto their own line,
@@ -544,7 +539,7 @@
   -webkit-appearance: none;
   box-sizing: border-box;
   margin: 0;
-  padding: 0; /* drop inherited .modal input padding so the box stays square */
+  padding: 0;
   width: 20px;
   height: 20px;
   min-width: 20px;
@@ -623,8 +618,8 @@
 
 /* A setting whose name is a field's label (Days records are kept): the label reads as every name; its short field at the
    right, at the joined-unit field's width. */
-.modal-body .setting-row-label > label { display: inline; margin: 0; font: inherit; color: inherit; letter-spacing: inherit; text-transform: none; }
-.setting-row-control > input.field-narrow { flex: 0 0 var(--unit-field); width: var(--unit-field); text-align: center; }
+/* a short number alone in its box: as wide as a number with its unit (.unit-field) */
+.setting-row-control > input.field-narrow { flex: 0 0 var(--unit-field); width: var(--unit-field); padding-inline: 10px; text-align: center; }
 
 /* "Confirm" on a device card's own line, beside the pencil: the Settings toggle buttons' look, at the icon buttons'
    height (owner, 2026-10-22). */
@@ -686,11 +681,8 @@
 
 .modal { --unit-field: 76px; }
 /* A number and its unit joined in one box, "10s" (common/UnitField). */
-.unit-field { display: inline-flex; align-items: baseline; justify-content: center; width: var(--unit-field); box-sizing: border-box;
-  padding: 0 10px; border-radius: 10px; background: var(--bg-input); border: 1px solid var(--hairline); min-height: 40px; align-items: center; }
-.modal .unit-field input { flex: 0 1 auto; width: 4ch; min-width: 0; padding: 8px 0; border: 0; background: transparent; text-align: right; }
-.modal .unit-field input:focus { outline: none; }
-.unit-field:focus-within { outline: 2px solid var(--accent); outline-offset: 1px; }
+.unit-field { display: inline-flex; align-items: center; justify-content: center; width: var(--unit-field); padding: 0 10px; }
+.modal .unit-field input { flex: 0 1 auto; width: 4ch; min-width: 0; text-align: right; }
 .unit-field-unit { color: var(--text-secondary); }
 /* A list's title line with its add (common/AddOnLine): the title at the left, "+ Add …" at the right (Schedule's "Add a
    task" look), opening into the search box over the line's width; too narrow, the box takes a line under the title. */

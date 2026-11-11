@@ -89,19 +89,19 @@ function VillaCoordinates() {
   // writes nothing; the field simply lapses to the stored value.
   // ⚠️ THE TYPED TEXT WAITS IN THE DIALOG'S ONE PENDING STORE (usePendingField, 2.496.500): Save lights while it is
   // typed, and closing before the pause no longer drops it. What is no number is said (typedNumber).
-  const coord = (key: "latitude" | "longitude", id: string, label: string, field: PendingField<string>) => (
-    <div className="villa-location-coord">
-      <label htmlFor={id}>{label}</label>
-      <input id={id} inputMode="decimal"
+  const coord = (key: "latitude" | "longitude", label: string, field: PendingField<string>) => (
+    <label className="named-field villa-location-coord">
+      <span>{label}</span>
+      <input inputMode="decimal"
         {...typedNumber(field, coordinateText(config[key]), (text) => coordinateWrite(key, text), label, "a number")} />
-    </div>
+    </label>
   );
   const lat = usePendingField<string>("latitude", FIELD_COMMIT_MS);
   const lng = usePendingField<string>("longitude", FIELD_COMMIT_MS);
   return (
     <>
-      {coord("latitude", "villa-lat", "Latitude", lat)}
-      {coord("longitude", "villa-lng", "Longitude", lng)}
+      {coord("latitude", "Latitude", lat)}
+      {coord("longitude", "Longitude", lng)}
     </>
   );
 }

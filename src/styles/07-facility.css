@@ -430,34 +430,6 @@
 }
 .fm-form h3 { margin: 0; font-size: var(--text-md); }
 /* a form's opening words sit close to its fields: the form's own gap is the only space (owner, 2026-10-14) */
-.fm-field { display: flex; flex-direction: column; gap: var(--field-label-gap); }
-.fm-field > span { font-size: var(--field-label-size); color: var(--text-secondary); }
-/* DIRECT children only. A descendant selector here reached into every nested
-   component that happens to sit in a field — EvidenceRow's hidden file input
-   (which it un-hid, putting a stray "Choose files / No file chosen" control
-   under the photo strip) and DeviceSearchPicker's search box (which has its
-   own styling and does not want this one). A field styles its OWN control,
-   not whatever a child component renders.
-
-   textarea belongs in this list. Leaving it out meant every multi-line field
-   in the workspace kept the browser's UA defaults — a white box with black
-   text sized by the `cols` attribute — which is invisible until a form
-   actually has one. Grouping the three controls is also what stops the next
-   textarea from needing its own rule. */
-.fm-field > input, .fm-field > select, .fm-field > textarea {
-  padding: 10px 12px; border-radius: 10px; font-size: var(--field-text); font-weight: 400;
-  background: var(--bg-input); color: var(--text-primary); border: 1px solid var(--hairline);
-  /* Width comes from the column, never from `cols`; the border box keeps the
-     padding inside it so the field lines up with the inputs above and below. */
-  display: block; width: 100%; box-sizing: border-box;
-}
-.fm-field > input:focus, .fm-field > select:focus, .fm-field > textarea:focus {
-  border-color: var(--accent); outline: none;
-}
-/* All three, not just the textarea: a placeholder styled on one control and
-   left to the browser on the one directly above it is a visible mismatch in
-   the same form. */
-.fm-field > input::placeholder, .fm-field > textarea::placeholder { color: var(--text-dim); }
 
 .fm-banner {
   padding: 10px 12px; border-radius: 10px; font-size: var(--text-sm);

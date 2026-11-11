@@ -66,11 +66,11 @@ export default function ContractTermsEditor() {
         </InfoTip>
       </h3>
       <div className="slider-pair">
-        <label className="fm-field">
+        <label className="named-field">
           <span>Monthly cap on minor spend{terms.currency ? ` (${terms.currency})` : ""}</span>
           <input value={cap} inputMode="numeric" onChange={(e) => setCap(e.target.value)} placeholder="No cap" />
         </label>
-        <label className="fm-field">
+        <label className="named-field">
           <span>Warn when the month reaches (% of the cap)</span>
           <input value={warnAt} inputMode="numeric" onChange={(e) => setWarnAt(e.target.value)} placeholder={String(WARN_DEFAULT_PERCENT)} />
         </label>
