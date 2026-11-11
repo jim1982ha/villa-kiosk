@@ -1,3 +1,15 @@
+## 2.496.776
+
+What you will see:
+- **The small grey line that adds a detail is one look everywhere.** The note beside Save, the second line of a
+  choice when you search for a device, "linked entity" under a name in a device's window, a device's id when it
+  cannot be reached, the note under a chart, the lines under each name in the Legend, and the notes in Facility's
+  Spend and Readiness were written in three sizes. They are one size and one grey. Three were a little smaller
+  (the search results, "linked entity", a device's id) and one a little larger (Spend's notes).
+- **A chart's key (what each colour is) is one row everywhere**: in Weather, in Energy and under a device's
+  history. Under a device's history its words are now grey like the others (they were white), and on a narrow
+  screen the key wraps instead of running off the edge.
+
 ## 2.496.775
 
 What you will see:
