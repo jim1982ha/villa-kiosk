@@ -89,6 +89,11 @@
 }
 .vesta-notice > svg:first-child { flex: 0 0 auto; color: var(--tone); }
 .vesta-notice-text { min-width: 0; overflow-wrap: anywhere; }
+/* ⚠️ AN ALERT'S NOTICE IS ITS CARD'S HEAD (UI scan, 2026-11-10; RecordCard RecordHead): the card's own strip and first
+   line, in the strip's colour (--tone is its --strip: 07-facility.css .strip-*). The notice is the band: the strip
+   brings no band, padding or height of its own, the first line reads on, at the notice's size, from the left. */
+.vesta-notice .fm-record-strip { min-height: 0; padding: 0; background: none; text-align: left; }
+.vesta-notice .fm-record-state { display: block; font-size: inherit; text-align: left; }
 /* ⚠️ AN ANNOUNCEMENT'S PHOTOS, ONE ROW (AnnouncementContent PhotoRow; owner, 2026-11-06, "One visit, one story"): each
    a thumbnail with its camera and time under it, the main one first, a tap opens it full size; they wrap on a narrow
    phone. A photo alone keeps the size one photo had (a ring's snapshot, 2.496.562). The same row on every screen. */
@@ -140,6 +145,9 @@
 }
 .announcement-night-head .announcement-full-title { margin: 0; font-size: var(--text-2xl); color: var(--night-ink); }
 .announcement-night-text { margin: 0; color: var(--night-muted); font-size: var(--text-md); white-space: pre-line; overflow-wrap: anywhere; }
+/* its Status, the block its Inbox card draws (AnnouncementContent StatusLines), in the night's colours */
+.announcement-night-head .announcement-full-status { color: var(--night-muted); font-size: var(--text-md); overflow-wrap: anywhere; }
+.announcement-night-head .announcement-status-label { color: var(--night-ink); }
 .announcement-night .announcement-night-body { display: flex; overflow: hidden; padding: 20px 40px; }
 /* its main photo as large as the screen allows, the others in a row under it (PhotoRow `lead`) */
 .photo-row-lead { flex: 1 1 auto; min-height: 0; width: 100%; flex-direction: column; flex-wrap: nowrap; gap: 12px; }

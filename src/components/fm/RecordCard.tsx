@@ -254,6 +254,40 @@ function CardStrip({ lead, number, name, when, tone, remove }: {
   );
 }
 
+/** A card's first line: where it stands, in its tone's colour (rule 2), its (i) after it, its next check a pill at
+ *  its right; `children`: the first of its words after its state, " · " between (the head a notice draws: RecordHead).
+ *  None when it says nothing. */
+function StateLine({ status, tip, check, tone, children }: {
+  status: readonly RecordStatus[]; tip?: string; check?: { pill: string; tip: string }; tone: StripTone; children?: ReactNode;
+}) {
+  const said = status.some((s) => s.text);
+  if (!said && !check && !children) return null;
+  return (
+    <div className={`fm-record-state strip-${tone}`}>
+      <StateWords status={status} tip={tip} />
+      {children && <span className="fm-record-words">{said && " · "}{children}</span>}
+      {check && <CheckPill {...check} />}
+    </div>
+  );
+}
+
+/** ⚠️ A CARD'S HEAD, WHEREVER THE CARD IS TOLD (UI scan, 2026-11-10; the rules: "the same name and the same Status
+ *  everywhere"): its strip (its icons, its alert's name, its name, its time) and its first line (where it stands, then
+ *  `children`: the first of its words), by the card's own pieces. The alert's notice over the villa draws it
+ *  (hud/AnnouncementNotice): it had a bell, a title and a line of its own in the app's accent, an alarm and a doorbell
+ *  alike. `tone`: the strip's colour (stripTone), the one its notice wears. */
+export function RecordHead({ title, lead, number, when, status, statusTip, tone, children }: {
+  title: ReactNode; lead?: ReactNode; number?: string; when?: string;
+  status: readonly RecordStatus[]; statusTip?: string; tone: StripTone; children?: ReactNode;
+}) {
+  return (
+    <>
+      <CardStrip lead={lead} number={number} name={title} when={when} tone={tone} />
+      <StateLine status={status} tip={statusTip} tone={tone}>{children}</StateLine>
+    </>
+  );
+}
+
 /** A part's header line, in a card of several problems: its icons, its alert's name, its state, its check, its time. */
 function PartHead({ lead, number, status, check, when, tone }: {
   lead?: ReactNode; number?: string; status: readonly RecordStatus[]; check?: { pill: string; tip: string }; when?: string; tone: StripTone;
@@ -310,14 +344,7 @@ export default function RecordCard({ title, status, statusTip, lead, number, dev
     <>
       <CardStrip lead={lead} number={number} name={title} when={when} tone={strip} remove={remove} />
       <div className="fm-record-main">
-        {/* its first line: where it stands, in its tone's colour (rule 2), its next check a pill at its right; none
-            when it says nothing */}
-        {(statuses.some((s) => s.text) || check) && (
-          <div className={`fm-record-state strip-${strip}`}>
-            <StateWords status={statuses} tip={statusTip} />
-            {check && <CheckPill {...check} />}
-          </div>
-        )}
+        <StateLine status={statuses} tip={statusTip} check={check} tone={strip} />
         {/* its quiet line: " · " between its pieces (07-facility.css), nothing drawn when it has none */}
         {(device || room || pills) && (
           <div className="fm-record-meta">
