@@ -1,3 +1,20 @@
+## 2.496.772
+
+What you will see:
+- Four lists were reached only by holding a button, which nobody finds on a phone. Each now also has something to
+  press, and every hold still works:
+  - **Rooms**: a "Rooms" line in the menu (the gear's menu on a phone, the profile's menu on a wide screen). It opens
+    the Rooms window. In the dial that opens when a floor button is held, the fixed button reads "All rooms" (it said
+    "Manage rooms", and only the owner manages rooms there).
+  - **A room's devices**: in the Rooms window, each room has a small list button in its corner. It opens the list of
+    that room's devices (the list a hold on the room's group on the map opens). A room with no device has no button.
+    The owner's bin sits beside it.
+  - **A category's devices**: in "Map colours & keys" (the ? button), each category has a list button that opens
+    its list, as holding the category's icon in the top bar does.
+  - **Choosing a camera**: a list button beside the camera arrows opens the list of cameras, as holding the Next
+    arrow does.
+- Nothing else changed.
+
 ## 2.496.771
 
 What you will see:
