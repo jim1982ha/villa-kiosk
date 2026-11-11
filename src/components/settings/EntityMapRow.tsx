@@ -106,10 +106,7 @@ function DeviceFields({ entryKey, mapping, entity, stale, matchedRowRef, objects
           </span>
         </div>
       </div>
-      <MappingFields entryKey={entryKey} entityId={m.entityId} mapping={m} entity={entity} objects={objects}
-        cell={(key, label, field) => (
-          <CardField key={key} label={label}>{field}</CardField>
-        )} />
+      <MappingFields entryKey={entryKey} entityId={m.entityId} mapping={m} entity={entity} objects={objects} />
     </div>
   );
 }

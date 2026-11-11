@@ -74,7 +74,7 @@ export default function EnergyPanel({ onClose, fallback }: { onClose: () => void
   // FAILED, saying so: this was a skeleton forever (2.496.188).
   const loading = <ChartEmpty status={status === "failed" ? "failed" : "loading"} />;
   return (
-    <DataWindow title="Energy" icon={<Zap size={22} />} className="energy-modal" onClose={onClose}
+    <DataWindow title="Energy" icon={<Zap size={22} />} onClose={onClose}
       live={<LiveNote>Energy dashboard</LiveNote>} picker={picker}
       now={() => (setup ? <NowView setup={setup} costUnit={costUnit} house={house} colourOf={colourOf} /> : loading)}
       history={() => (setup ? <HistoryView setup={setup} costUnit={costUnit} range={range as EnergyRangeKey} colourOf={colourOf} /> : loading)} />
@@ -119,7 +119,7 @@ function NowView({ setup, costUnit, house, colourOf }: { setup: EnergyWindowSetu
   const { split, cost, typical, standout } = T;
 
   return (
-    <div className="weather-now energy-now">
+    <div className="weather-now">
       <div className="weather-feels">
         <div>
           <div className="eyebrow">Today so far</div>
@@ -134,7 +134,7 @@ function NowView({ setup, costUnit, house, colourOf }: { setup: EnergyWindowSetu
       <ObservationCards cards={T.cards} />
 
       <div className="weather-tile chart energy-wide">
-        <div className="weather-chart-head"><div className="eyebrow">Today, hour by hour<ChartStep words={aggregationWords(PERIOD_MS.hour, "sum")} about={chartAbout("total", PERIOD_MS.hour)} /></div><div className="weather-legend">kWh</div></div>
+        <div className="weather-chart-head"><div className="eyebrow">Today, hour by hour<ChartStep words={aggregationWords(PERIOD_MS.hour, "sum")} about={chartAbout("total", PERIOD_MS.hour)} /></div><div className="fine-print">kWh</div></div>
         <BarChart label="Energy used today, hour by hour" fmt={kwh} unit="kWh"
           buckets={todayP.buckets.map((b) => ({ t: b.t, segs: segsOf(b, () => [{ key: "used", label: "Used", v: b.split!.used, cls: "e-used" }]) }))}
           stamp={(t) => fmtStepStamp(t, PERIOD_MS.hour, 24)}
@@ -203,7 +203,7 @@ export function Flow({ split, rateKw, house, colourOf }: { split: EnergySplit; r
           <g key={`n${b.node.id}`} onPointerEnter={() => setHover(i)} onPointerDown={() => setHover(i)}>
             {/* The whole row beside the bar answers the pointer, not only the bar. */}
             <rect x={b.x} y={b.y} width={colRight(b.depth) - b.x} height={slotH} className="energy-hit" />
-            <rect x={b.x} y={b.y} width={nodeW} height={b.h} rx="3" className={`energy-node ${b.node.cls}`} />
+            <rect x={b.x} y={b.y} width={nodeW} height={b.h} rx="3" className={b.node.cls} />
             {/* Name and kWh only, as HA's diagram: a middle column's label
                 runs over the links, and "now" beside it ran into the next
                 column's names. The power "now" is in the tooltip and the

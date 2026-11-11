@@ -47,8 +47,7 @@ h2[data-autofocus]:focus { outline: none; }
 }
 
 /* Badge colour picker — sizing comes from .panel-modal (see BadgeColorModal.tsx,
-   same treatment as the device panel it opens from) — .badge-color-modal is
-   just a styling hook, no rules of its own needed right now. */
+   same treatment as the device panel it opens from). */
 .badge-swatch-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; }
 .badge-swatch {
   width: 100%; aspect-ratio: 1; border-radius: 10px; border: 2px solid transparent;
@@ -74,6 +73,8 @@ input[type="range"] {
   -webkit-appearance: none; appearance: none;
   width: 100%; height: 26px; padding: 0 var(--field-pad); border-radius: var(--field-radius);
   background: var(--bg-input); border: 1px solid var(--hairline); outline: none;
+  /* the browser's own 2px around a slider: its bar's ends are the ends of every other box in its column */
+  margin: 0;
 }
 /* The thumb is the only part of a slider you aim at, so it is filled rather
    than hollow — with the THEME accent, not the device's colour: a slider is a

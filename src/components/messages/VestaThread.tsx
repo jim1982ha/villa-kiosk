@@ -29,7 +29,7 @@ export function TurnLine({ turn, canOpenPage, onListen, playing = false, onStop 
   /** Its sound is being said now: Stop in Listen's place (onStop: Stop pressed). */
   playing?: boolean; onStop?: () => void }) {
   return (
-    <div data-turn={turn.key} className={`vesta-turn ${turn.from === "person" ? "asked" : "answered"}${turn.voice ? " vesta-turn-spoken" : ""}`}>
+    <div data-turn={turn.key} className={`vesta-turn${turn.from === "person" ? " asked" : ""}${turn.voice ? " vesta-turn-spoken" : ""}`}>
       <div className="vesta-turn-head">
         <b>{turn.from === "person" ? "You" : "VESTA"}</b>
         {turn.voice && <Mic size={14} aria-label="spoken" />}
@@ -58,7 +58,7 @@ export function TurnLine({ turn, canOpenPage, onListen, playing = false, onStop 
 /** VESTA answering: its bubble with three dots, as every chat app shows "typing" (conversationModel.vestaWorking). */
 export function WorkingBubble() {
   return (
-    <div className="vesta-turn answered vesta-working" role="status" aria-label="VESTA is answering">
+    <div className="vesta-turn vesta-working" role="status" aria-label="VESTA is answering">
       <span className="vesta-working-dot" /><span className="vesta-working-dot" /><span className="vesta-working-dot" />
     </div>
   );

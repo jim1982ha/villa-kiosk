@@ -43,7 +43,7 @@ export default function FirstRunTips({ onClose }: { onClose: () => void }) {
     // these it fell through to the base full-screen top-anchored sheet meant
     // for long forms (Settings), which is why it rendered up at the top with a
     // big empty area below instead of centered like every other popup.
-    <Window kind="content" label="Quick tips" onClose={dismiss} className="panel-modal first-run-tips"
+    <Window kind="content" label="Quick tips" onClose={dismiss} className="panel-modal"
       layer="panel-modal-backdrop first-run-backdrop">
       <WindowHeader title="Quick tips" />
       <div className="modal-body">

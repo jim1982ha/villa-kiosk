@@ -70,7 +70,6 @@ export default function RoomChoiceSheet({
     <BasePanel
       title="Which room?"
       icon={<MapPin size={22} />}
-      className="room-choice-modal"
       onClose={onClose}
     >
       <div className="room-choice-list">

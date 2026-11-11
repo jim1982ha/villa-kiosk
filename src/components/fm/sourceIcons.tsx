@@ -140,7 +140,7 @@ const SOURCE_TIP_WIDTH = 320;
  *  common/InfoTip, its icon the button). */
 export function IconTip({ k, icon }: { k: TimingKey; icon: ReactNode }) {
   return (
-    <InfoTip label={`${timingWords(k)}: what it means`} trigger={icon} className="source-icon-tip" width={SOURCE_TIP_WIDTH}>
+    <InfoTip label={`${timingWords(k)}: what it means`} trigger={icon} width={SOURCE_TIP_WIDTH}>
       <SourceTip k={k} />
     </InfoTip>
   );

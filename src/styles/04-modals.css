@@ -640,6 +640,14 @@
 .card-field-label { grid-column: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .card-field > :not(.card-field-label) { grid-column: 2; min-width: 0; }
 .card-field > .unit-field { width: auto; }
+/* a name with its (i) (.with-tip): the (i)'s finger area and focus ring are not cut by the name's column */
+.card-field-label.with-tip { overflow: visible; }
+/* ...and its (i) adds no height to the name's line, so a name with one and a name without are the same line */
+.card-field-label.with-tip > .info-tip { margin-block: -4px; }
+/* a slider in a card: its track, then its value at a width that holds its longest ("-100%"), so the track never moves */
+.card-slider { display: flex; align-items: center; min-width: 0; }
+.card-slider > input { flex: 1 1 auto; min-width: 0; }
+.card-slider > .setting-row-value { min-width: 5ch; text-align: right; }
 @container work-row (max-width: 519px) {
   .card-field { grid-template-columns: minmax(0, 1fr); gap: 4px; }
   .card-field > :not(.card-field-label) { grid-column: 1; }

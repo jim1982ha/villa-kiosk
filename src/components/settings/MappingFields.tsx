@@ -9,14 +9,14 @@
 // stop disagreeing"; the label still committed two ways (a 500 ms debounce in
 // one, on blur in the other), and the linked entity's hint said "ring only" in
 // one table while the other, correctly, said it adds an on/off switch. The
-// fields, their drafts and their words are here once; the card supplies only
-// its layout — a cell per field (`cell`).
+// fields, their drafts and their words are here once, each a field of the card
+// (CardField), what it is for in its name's (i).
 
-import type { ReactNode } from "react";
 import { ShieldCheck } from "lucide-react";
 import OnOffToggle from "@/components/common/OnOffToggle";
 import Dropdown from "@/components/common/Dropdown";
 import EntityPicker from "./EntityPicker";
+import CardField from "./CardField";
 import RemovablePill from "@/components/common/RemovablePill";
 import SearchPicker from "@/components/common/SearchPicker";
 import IdText from "@/components/common/IdText";
@@ -29,9 +29,6 @@ import { CONFIRM_GATE_TYPES } from "@/utils/quickAction";
 import { labelField } from "@/config/EntityMap";
 import { ENTITY_DOMAINS, type HassEntity } from "@/types/ha.types";
 import type { Category, EntityMapping, EntityType } from "@/types/scene.types";
-
-/** One field's place in the row's layout. */
-type FieldCell = (key: string, label: string, field: ReactNode, opts?: { wide?: boolean }) => ReactNode;
 
 /** How long a click on a device's field waits before it is written (a run of clicks is one write). */
 const FIELD_COMMIT_MS = 350;
@@ -57,14 +54,13 @@ export function useMappingDraft(entryKey: string, mapping: EntityMapping) {
   return { draftField, m };
 }
 
-export default function MappingFields({ entryKey, entityId, mapping, entity, cell, objects }: {
+export default function MappingFields({ entryKey, entityId, mapping, entity, objects }: {
   /** The device's key in the map: what its changes are written to. */
   entryKey: string;
   entityId: string;
   mapping: EntityMapping;
   /** This row's own live entity (its device_class decides the category). */
   entity: HassEntity | undefined;
-  cell: FieldCell;
   /** Its "3D object" field: the objects that show it. */
   objects: ObjectsFieldProps;
 }) {
@@ -80,54 +76,54 @@ export default function MappingFields({ entryKey, entityId, mapping, entity, cel
     <>
       {/* ⚠️ "3D OBJECT" FIRST (owner, 2026-11-06): right under the card's first line, above Type; a device not on the
           map shows it alone, so the field is at the same place on both lists' cards */}
-      {cell("objects", OBJECT_FIELD, <ObjectsField {...objects} />, { wide: true })}
-      {cell("type", "Type", (
-        <Dropdown<EntityType> value={m.type} title="Panel type" ariaLabel="Panel type"
+      <CardField label={OBJECT_FIELD}><ObjectsField {...objects} /></CardField>
+      <CardField label="Type" tip="What kind of device this is: it decides the window that opens for it.">
+        <Dropdown<EntityType> value={m.type} ariaLabel="Type"
           onChange={(type) => draftField({ type })}
           options={ENTITY_DOMAINS.map((t) => ({ value: t, label: t }))} />
-      ))}
-      {cell("category", "Category", (
+      </CardField>
+      <CardField label="Category" tip="Which of the map's filter groups this device belongs to.">
         <Dropdown<Category> value={effectiveCategory(subjectOf(entityId, m, entity))}
           // `categoryPicked` records that this was CHOSEN. Without it the pick
           // round-trips through the legacy-default discard and the dropdown
           // snaps straight back — six of the options were unselectable.
           onChange={(category) => draftField({ category, categoryPicked: true })}
-          title="Which map filter group this device belongs to" ariaLabel="Category"
+          ariaLabel="Category"
           options={CATEGORY_ORDER.map((c) => ({ value: c, label: CATEGORY_LABELS[c] }))} />
-      ))}
-      {cell("label", "Label", (
-        // Saved half a second after typing stops, or at once on leaving the field.
-        <input placeholder={named.placeholder} data-tip="Display name, leave empty to use the device's own name"
+      </CardField>
+      <CardField label="Label" tip="The name shown for this device. Leave it empty to use the device's own name.">
+        {/* Saved half a second after typing stops, or at once on leaving the field. */}
+        <input placeholder={named.placeholder} aria-label="Label"
           value={label.shown ?? named.value}
           onChange={(e) => label.draft(e.target.value, patchMapping(entryKey, { label: e.target.value }))}
           onBlur={label.flush} />
-      ), { wide: true })}
-      {m.type === "light" && cell("intensity", "Intensity", (
-        <div className="row" style={{ gap: 8, width: "100%", flex: "1 1 220px", minWidth: 180 }}>
-          <input type="range" min={-100} max={100} step={5} value={pct} style={{ flex: 1 }}
-            onChange={(e) => {
-              const r = Number(e.target.value) / 100;
-              intensity.draft(r, patchMapping(entryKey, { lightIntensityRatio: r }));
-            }}
-            onMouseUp={intensity.flush}
-            onTouchEnd={intensity.flush}
-            data-tip="Per-light brightness override on top of this light's live brightness and the global Light effect strength setting. 0% = no change."
-            aria-label={`Intensity override for ${entityId}`} />
-          <span className="muted" style={{ fontSize: "var(--text-xs)", minWidth: 40, textAlign: "right" }}>
-            {pct > 0 ? "+" : ""}{pct}%
-          </span>
-        </div>
-      ))}
+      </CardField>
+      {m.type === "light" && (
+        <CardField label="Intensity" tip="This light's glow on the map, more or less than its live brightness and the Light effect strength setting give it. 0% changes nothing.">
+          {/* its value right of its track, as a Settings slider's on a wide screen (.setting-row-value) */}
+          <div className="card-slider">
+            <input type="range" min={-100} max={100} step={5} value={pct}
+              onChange={(e) => {
+                const r = Number(e.target.value) / 100;
+                intensity.draft(r, patchMapping(entryKey, { lightIntensityRatio: r }));
+              }}
+              onMouseUp={intensity.flush}
+              onTouchEnd={intensity.flush}
+              aria-label={`Intensity override for ${entityId}`} />
+            <span className="setting-row-value">{pct > 0 ? "+" : ""}{pct}%</span>
+          </div>
+        </CardField>
+      )}
       {/* ONE link for every type (owner, 2026-10-22: a camera's "Motion sensor" merged into it) — see
           EntityMapping.linkedEntityId. What it drives follows what it is: a switch gets an on/off in the device's
           window, a motion sensor linked to a camera drives its beam; every one is the badge's bottom-right pill. */}
-      {cell("linked", "Linked entity", (
+      <CardField label="Linked entity">
         <EntityPicker value={m.linkedEntityId}
           onChange={(id) => draftField({ linkedEntityId: id })}
           onClear={() => draftField({ linkedEntityId: undefined })}
           allowCustom
           placeholder={m.type === "camera" ? "Linked entity, its motion sensor or a switch…" : "Linked entity, a switch or a sensor…"} />
-      ), { wide: true })}
+      </CardField>
     </>
   );
 }

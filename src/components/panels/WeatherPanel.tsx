@@ -215,7 +215,7 @@ export function Barometer({ hpa }: { hpa: number }) {
   // No "CHANGE" over the arc (owner, 2026-09-26: redundant — the needle
   // between RAIN and FAIR says it), so the frame starts at the arc's top.
   return (
-    <svg className="weather-dial baro" viewBox="0 30 230 166" role="img" aria-label={`Pressure ${hpa.toFixed(1)} hPa`}>
+    <svg className="weather-dial" viewBox="0 30 230 166" role="img" aria-label={`Pressure ${hpa.toFixed(1)} hPa`}>
       <path d="M 30 160 A 90 90 0 1 1 200 160" className="baro-track" />
       <path d="M 30 160 A 90 90 0 0 1 60 58" className="baro-zone rain" />
       <path d="M 170 58 A 90 90 0 0 1 200 160" className="baro-zone fair" />
@@ -332,7 +332,7 @@ export function SunUv({ r, peak }: { r: Readings; peak: { v: number; t: number }
       <div className="weather-uv-foot">
         {peak && <div><span>Peak today</span><b>{f0(peak.v)} at {fmtChartTime(peak.t)}</b></div>}
         {r.solar !== undefined && (
-          <div className="weather-sunshine">
+          <div>
             <span>Sunshine</span>
             <span className="weather-sunshine-bar" aria-hidden="true"><i style={{ width: `${sunshineFraction(r.solar) * 100}%` }} /></span>
             <b>{f0(r.solar)} W/m²</b>

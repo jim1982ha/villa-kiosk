@@ -91,7 +91,7 @@ export default function LegendModal({ onClose, listable, onListCategory }: {
     // card. It already reuses .modal-header/-body/-footer below; sharing
     // the outer width too means this is a genuine "same modal, different
     // content" reuse instead of its own one-off sizing.
-    <Window kind="content" label="Map colours and keys" onClose={onClose} className="settings-modal legend-modal" frameKey={theme}>
+    <Window kind="content" label="Map colours and keys" onClose={onClose} className="settings-modal" frameKey={theme}>
       <WindowHeader title="Map colours &amp; keys" />
       <div className="modal-body">
         <div className="section-title">Device category (badge colour when on)</div>

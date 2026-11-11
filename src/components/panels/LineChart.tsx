@@ -198,7 +198,7 @@ export default function LineChart({ lines, window, height = 150, status, label, 
             })}
             {/* What the range leaves out, hatched OVER the grid and the line: above its top and below its bottom. */}
             {on && (
-              <g className="chart-range-out">
+              <g>
                 <defs>
                   <pattern id={hatch} width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
                     <rect width="6" height="6" className="chart-range-hatch-bg" />

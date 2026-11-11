@@ -312,7 +312,7 @@ console.log("\n  a device of Devices: never folded, no room line, its toggle und
   const card = cards(html).find((c) => c.name === "Pool Pump")?.card ?? "";
   // owner, 2026-11-06: what the chevron opened is always shown; its room under its name said nothing more
   ck("its fields always shown (Type, Category, Label…), no chevron, nothing to expand",
-     /card-field-label">Type</.test(card) && /card-field-label">Label</.test(card) && !/lucide-chevron|aria-expanded|role="button"/.test(inside(card, "device-first-line")), inside(card, "device-first-line"));
+     /card-field-label[^"]*">Type</.test(card) && /card-field-label[^"]*">Label</.test(card) && !/lucide-chevron|aria-expanded|role="button"/.test(inside(card, "device-first-line")), inside(card, "device-first-line"));
   ck("  ...no quiet line (its room)", card !== "" && !/fm-record-meta/.test(card), card);
   ck("  ...its id line: the box, the id, its Confirm before toggling (a switch, which a tap turns); no pencil, no \"3D object: …\"",
      /type="checkbox"[\s\S]*entity-id-text[\s\S]*entity-id-confirm/.test(inside(card, "device-first-line"))
@@ -374,7 +374,9 @@ console.log("\n  every card for an entity: its friendly name in its strip, its i
 
 console.log("\n  every card's field: its name in the one column, its control beside it, as a device's Linked entity:");
 {
-  const named = (html, name) => [...(cards(html).find((c) => c.name === name)?.card ?? "").matchAll(/<div class="card-field"><span class="eyebrow card-field-label">([^<]+)<\/span>/g)].map((m) => m[1]);
+  const named = (html, name) => [...(cards(html).find((c) => c.name === name)?.card ?? "").matchAll(/<div class="card-field"><span class="eyebrow card-field-label[^"]*">([^<]+)</g)].map((m) => m[1]);
+  // UI scan, 2026-11-11: what a field is for was said on hover only (a title, a tip on its box), which a finger never sees
+  const tipped = (html, name) => [...(cards(html).find((c) => c.name === name)?.card ?? "").matchAll(/aria-label="About ([^"]+)"/g)].map((m) => m[1]);
   const FIELDS = [
     ["a device group", drawIn(h(GroupedDevices, { title: "Grouped devices" })), "Kitchen Temperature", ["Members"]],
     // owner, 2026-11-06: "3D object" first, right under the card's first line, above Type (it was the last)
@@ -386,6 +388,8 @@ console.log("\n  every card's field: its name in the one column, its control bes
   ];
   for (const [kind, html, name, want] of FIELDS)
     ck(`${kind}: ${want.map((w) => `"${w}"`).join(", ")}`, JSON.stringify(named(html, name)) === JSON.stringify(want), named(html, name));
+  ck("  ...what a light's fields are for is each name's (i), a tap away: Type, Category, Label, Intensity",
+     JSON.stringify(tipped(devices("on", "terrace"), "Terrace Lamp")) === JSON.stringify(["Type", "Category", "Label", "Intensity"]), tipped(devices("on", "terrace"), "Terrace Lamp"));
   const group = cards(drawIn(h(GroupedDevices, { title: "Grouped devices" }))).find((c) => c.name === "Kitchen Temperature")?.card ?? "";
   ck("  ...a group's members and its \"Add another entity…\" inside its Members field", /card-field-label">Members<\/span><div class="group-members">/.test(group), group);
 }

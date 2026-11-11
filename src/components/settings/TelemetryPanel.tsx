@@ -549,7 +549,7 @@ export default function TelemetryPanel() {
       {!!events?.length && (
         // ⚠️ TIME FIRST, THEN THE KIND, THE DEVICE, THE WORDS (owner, 2026-11-06): a log read down its times; the time and
         // the kind in columns of one width (the page's longest kind), so the rows align; on a phone the words under them
-        <div className="telemetry-list" style={{ ["--telemetry-kind" as string]: `${Math.max(...paged.page.map((e) => e.kind.length))}ch` }}>
+        <div style={{ ["--telemetry-kind" as string]: `${Math.max(...paged.page.map((e) => e.kind.length))}ch` }}>
           {paged.page.map((e, i) => <TelemetryRow key={i} e={e} />)}
         </div>
       )}

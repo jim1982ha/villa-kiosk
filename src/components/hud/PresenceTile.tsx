@@ -113,7 +113,7 @@ export function PresencePanel({ presence: p, when, why, showPeople, showMovement
   const head = presenceHeading(p, when, why.stages, since);
   const opener = (id: string) => (canOpen(id) ? onOpenEntity : undefined);
   return (
-    <Window kind="content" label="Villa presence" onClose={onClose} className="settings-modal presence-modal">
+    <Window kind="content" label="Villa presence" onClose={onClose} className="settings-modal">
       <WindowHeader title="Villa presence" />
       <div className="modal-body">
         <div className="presence-now" style={{ "--tone": head.color } as React.CSSProperties}>

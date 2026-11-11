@@ -1,3 +1,16 @@
+## 2.496.777
+
+What you will see:
+- **Advanced Settings, a device's card: Type, Category, Label and a light's Intensity each have an (i) after their
+  name.** It says what the field is for. This was said only when a mouse rested on the box, which a finger never
+  sees.
+- **A light's Intensity shows its value as Settings' sliders do**, at the right of its track.
+- **A slider's bar ends where the boxes above and under it end**, in every window (it stopped 2px short at each end).
+- **Put right from the last update:** in Energy, "kWh" at the right of "Today, hour by hour" was drawn larger and
+  white in 2.496.776. It is the small grey line again.
+- Nothing else looks different: names in the code that nothing read, and a rule for a button state that no longer
+  exists, are removed.
+
 ## 2.496.776
 
 What you will see:

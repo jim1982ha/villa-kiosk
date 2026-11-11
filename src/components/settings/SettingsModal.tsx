@@ -286,8 +286,8 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor, ta
           size, {settingValue.times(config.entityIconScale)}, is set with the +/- buttons in the top bar.
         </>}>
           <SegmentedGroup ariaLabel="Floating badge style" active={v.badgeStyle} onChange={(badgeStyle) => slice.set({ badgeStyle }, { now: true })} options={[
-            { key: "classic", title: "Icon badge style, the reading sits on a small pill under the icon", label: <><Circle size={16} /> <span className="badge-btn-label">Icon</span></> },
-            { key: "card", title: "Card badge style, the reading sits inline beside the icon (default)", label: <><CreditCard size={16} /> <span className="badge-btn-label">Card</span></> },
+            { key: "classic", title: "Icon badge style, the reading sits on a small pill under the icon", label: <><Circle size={16} /> Icon</> },
+            { key: "card", title: "Card badge style, the reading sits inline beside the icon (default)", label: <><CreditCard size={16} /> Card</> },
           ]} />
         </SettingRow>
         <OnOffToggle ariaLabel="Summary bar" title="The summary bar at the bottom of the screen"
