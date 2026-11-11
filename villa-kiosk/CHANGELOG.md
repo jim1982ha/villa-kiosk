@@ -1,4 +1,4 @@
-## 2.496.779
+## 2.496.780
 
 What you will see, in Advanced Settings › Devices:
 - **A device on the map can be given another entity**: the search beside its 3D object now lists the villa's entities

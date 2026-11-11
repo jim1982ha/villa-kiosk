@@ -328,14 +328,21 @@ console.log("\n  a device's \"3D object\" field (owner, 2026-11-06): its objects
   ck("an object bound by hand shows on its device's card, its ✕ \"Take <object> off <device>\"",
      JSON.stringify(pills(lamp)) === JSON.stringify([["Lamp_Kitchen", "Take Lamp_Kitchen off Terrace Lamp"]]), pills(lamp));
   ck("  ...an object linked by its name the same, with the same ✕", JSON.stringify(pills(pump)) === JSON.stringify([["switch.example_pool_pump", "Take switch.example_pool_pump off Pool Pump"]]), pills(pump));
-  ck("  ...then the compact search, \"Add a 3D object…\", in the same field",
-     /<div class="group-members-add"><div class="picker"><div class="config-search config-search-compact">[\s\S]*?placeholder="Add a 3D object…"/.test(field(lamp)), field(lamp));
+  // owner, 2026-11-11: on the map, the search gives the device another entity (renamed in the villa's system)
+  ck("  ...then the compact search, \"Move to another entity…\", in the same field",
+     /<div class="group-members-add"><div class="picker"><div class="config-search config-search-compact">[\s\S]*?placeholder="Move to another entity…"/.test(field(lamp)), field(lamp));
+  const rowsOf = (card) => [...field(card).matchAll(/<button class="row picker-option">([\s\S]*?)<\/button>/g)].map((m) => text(m[1].replace(/<wbr\/>/g, "")).replace(/^\||\|$/g, "").replace(/\|/g, " / "));
   globalThis.__open = true;
   const open = cards(devices("on", "terrace")).find((c) => c.name === "Terrace Lamp")?.card ?? "";
+  const offOpen = cards(devices("off")).find((c) => c.name === "Ceiling Fan")?.card ?? "";
   globalThis.__open = false;
-  const rows = [...field(open).matchAll(/<button class="row picker-option">([\s\S]*?)<\/button>/g)].map((m) => text(m[1].replace(/<wbr\/>/g, "")).replace(/^\||\|$/g, "").replace(/\|/g, " / "));
-  ck("  ...its search lists the model's objects not showing it: those showing nothing first, each saying what picking it does",
-     JSON.stringify(rows) === JSON.stringify(["Mesh_Unnamed_042 / shows nothing yet", "Wall_01 / shows nothing yet", "switch.example_pool_pump / shows Pool Pump, moves it here"]), rows);
+  const rows = rowsOf(open);
+  ck("  ...its search lists the villa's entities, never the device itself",
+     rows.length > 0 && rows.some((r) => r.startsWith("Pool Pump / switch.example_pool_pump")) && !rows.some((r) => r.includes("light.example_terrace_lamp")), rows);
+  const objRows = rowsOf(offOpen), firstNothing = objRows.findIndex((r) => r.endsWith("shows nothing yet"));
+  ck("  ...a device not on the map's lists the model's objects: those showing a device first, each saying what picking it does",
+     objRows.includes("switch.example_pool_pump / shows Pool Pump, moves it here") && firstNothing > 0
+     && objRows.slice(firstNothing).every((r) => r.endsWith("shows nothing yet")), objRows);
   const off = cards(devices("off")).find((c) => c.name === "Ceiling Fan")?.card ?? "";
   ck("a device not on the map: the same card, its id alone under its name, its \"3D object\" field empty, no box, no bin",
      text(inside(off, "fm-record-meta")).replace(/\|/g, "") === "fan.example_ceiling_fan" && pills(off).length === 0 && /placeholder="Add a 3D object…"/.test(field(off))

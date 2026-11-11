@@ -165,7 +165,7 @@ export function ObjectsField({ entityId, name, objects, links, onAdd, onTakeOff,
       ))}
       <div className="group-members-add">
         {onMoveTo && objects.length > 0 ? (
-          <EntityPicker compact placeholder="Move to another entity…" onChange={(to) => onMoveTo(entityId, to)} />
+          <EntityPicker compact placeholder="Move to another entity…" exclude={entityId} onChange={(to) => onMoveTo(entityId, to)} />
         ) : (
         <SearchPicker compact placeholder="Add a 3D object…" onPick={(o) => onAdd(o, entityId)}
           empty={links.shows.size === 0 ? "No 3D model loaded yet." : undefined}

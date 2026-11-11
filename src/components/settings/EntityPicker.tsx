@@ -40,11 +40,13 @@ interface Props {
   compact?: boolean;
   /** Drawn open, the focus in its box (SearchPicker startOpen). */
   startOpen?: boolean;
+  /** An entity never listed (the device the pick is for). */
+  exclude?: string;
 }
 
 
 export default function EntityPicker({
-  value, onChange, domains, placeholder, allowCustom, onClear, compact, startOpen,
+  value, onChange, domains, placeholder, allowCustom, onClear, compact, startOpen, exclude,
 }: Props) {
   const { entities } = useHA();
   const { entityMap } = useConfig().config;
@@ -53,7 +55,7 @@ export default function EntityPicker({
   // the list's open state is the shell's (SearchPicker); the selection's words show while it is closed
   const [open, setOpen] = useState(!!startOpen);
 
-  const rows = (query: string): SearchRow[] => entitySearch(query, search, domains)
+  const rows = (query: string): SearchRow[] => entitySearch(query, search, domains).filter((id) => id !== exclude)
     // Worded as every other row (deviceRowText): "Normal", "21.4 °C" — not "off", "21.4"
     .map((id) => ({ key: id, label: nameOf(id), sub: id, side: deviceRowText(entities[id], domainOf(id)) }));
 
