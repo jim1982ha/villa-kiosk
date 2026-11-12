@@ -1,3 +1,14 @@
+## 2.496.782
+
+What you will see, in the Cockpit's Messages:
+- **An expected "has not run" alert waits on Watch.** When VESTA holds a "has not run" alert because it is expected
+  (a pump that only runs when people are in, while the villa is empty), its card is on Watch with VESTA's reason, in
+  place of Open issues. Nobody is asked about it, it is not counted in the top bar and its device has no amber mark.
+- It stays there until VESTA says otherwise: if the device still has not run once people have been back long enough,
+  it is an open issue again and the facility manager is asked as usual. While VESTA is offline it is an open issue,
+  as before.
+- Needs VESTA Agent 0.12.503 or later.
+
 ## 2.496.781
 
 What you will see, in the Cockpit's Messages:

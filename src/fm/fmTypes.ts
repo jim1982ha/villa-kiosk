@@ -231,6 +231,10 @@ export interface FmTicket extends FmProvenance {
    *  villa's record's closes_at), moved later at each step (owner, 2026-11-07): its pill says "monitoring until 06:40"
    *  in place of its next check. Set and taken away by the VESTA Agent. */
   monitoredUntil?: string;
+  /** On an OPEN alert fault the VESTA Agent holds instead of asking anyone, because it is expected (a pump that runs
+   *  only when people are in, silent while the villa is empty): why, in the Agent's words. On Watch, never counted,
+   *  while the Agent is online (config/attention). Set and taken away by the VESTA Agent at its looks, as closesAt. */
+  expected?: string;
   /** On a fault a PERSON closed (a Done on Telegram, a Close in the Cockpit): when the VESTA Agent reads it again to
    *  confirm the close (its alert desk's wait, owner 2026-10-23) — an ISO moment; absent once read, or on a fault nobody
    *  watches. The Overview lists it last among the open issues (fm/faultConfirm); it is resolved in every count. */

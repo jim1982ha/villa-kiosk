@@ -61,13 +61,14 @@ export interface ConfirmingFault extends ClosedFault {
   awaiting: boolean;
   /** STILL OPEN, RIGHT AGAIN (owner, 2026-11-12): waiting out the VESTA Agent's clear wait (closesAt), `at` its moment;
    *  `said` what its device reads and since when ("Locked since 01:29", or "Back to normal"), `word` that reading
-   *  ("Locked"); absent on a closed fault. */
-  holds?: { said: string; word?: string };
+   *  ("Locked"); absent on a closed fault. `expected`: held by the Agent because it is expected (FmTicket.expected),
+   *  `said` the Agent's words and `at` NaN: no moment is known, it lasts until the Agent says otherwise. */
+  holds?: { said: string; word?: string; expected?: true };
 }
 
-/** A fault right again on Watch (attention's `clearing`): still open, closed by the VESTA Agent at `at` (its closesAt)
- *  if it stays so, its reading `holds`. */
-export function clearingFault(t: FmTicket, at: number, holds: { said: string; word?: string }, cadence: AgentCadence | null,
+/** A fault held on Watch (attention's `clearing`): still open, right again and closed by the VESTA Agent at `at` (its
+ *  closesAt) if it stays so, or held while it is expected (`holds.expected`, `at` NaN); its reading `holds`. */
+export function clearingFault(t: FmTicket, at: number, holds: NonNullable<ConfirmingFault["holds"]>, cadence: AgentCadence | null,
   now: number = Date.now()): ConfirmingFault {
   const lookMinutes = cadence && cadence.checkMinutes > 0 ? cadence.checkMinutes : null;
   return { ticket: t, word: "Cleared", who: "", closedAt: NaN, at, due: now >= at, lookMinutes, awaiting: false, holds };
@@ -186,6 +187,11 @@ export function confirmParts(c: ConfirmingFault): { did: string; when: string; t
   if (c.awaiting) {
     return { did: closedWords(c), when: `Closes ${c.lookMinutes ? withinLook({ checkMinutes: c.lookMinutes }) : "at VESTA's next look"}`,
       tip: "VESTA says at its next look whether this is watched or closed." };
+  }
+  // held because it is expected (owner, 2026-11-12): VESTA's reason, no moment — it lasts until VESTA says otherwise
+  if (c.holds?.expected) {
+    return { did: c.holds.said, when: "Expected",
+      tip: "VESTA holds this alert while it is expected: nobody is asked. It becomes an open issue again if it is still there once that changes." };
   }
   const by = clockTime(c.at);
   // right again, still open: what it reads now, and what happens if it changes (it is an open issue again)
