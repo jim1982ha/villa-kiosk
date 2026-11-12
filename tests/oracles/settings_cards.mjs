@@ -323,14 +323,21 @@ console.log("\n  a device of Devices: never folded, no room line, its toggle und
 console.log("\n  a device's \"3D object\" field (owner, 2026-11-06): its objects, each with its ✕, then a search to add one:");
 {
   const field = (card) => inside(card.slice(card.indexOf('card-field-label">3D object<')), "group-members");
-  const pills = (card) => [...field(card).matchAll(/<span class="fm-entity-chip fm-chip-static fm-chip-removable">([^<]*)<[\s\S]*?aria-label="([^"]*)"/g)].map((m) => [m[1], unescape(m[2])]);
+  if (globalThis.__peek) console.log(field(cards(devices("on", "terrace")).find((c) => c.name === "Terrace Lamp")?.card ?? "").slice(0, 1500));
+  // a pill: its object's name (after its cube, ObjectName) and its ✕'s words
+  const pills = (card) => [...field(card).matchAll(/<span class="fm-entity-chip fm-chip-static fm-chip-removable"[^>]*>[\s\S]*?<span class="object-name">[\s\S]*?<\/svg><span>([\s\S]*?)<\/span><\/span>[\s\S]*?aria-label="([^"]*)"/g)].map((m) => [m[1].replace(/<wbr\/>/g, ""), unescape(m[2])]);
   const lamp = cards(devices("on", "terrace")).find((c) => c.name === "Terrace Lamp")?.card ?? "", pump = cards(devices()).find((c) => c.name === "Pool Pump")?.card ?? "";
   ck("an object bound by hand shows on its device's card, its ✕ \"Take <object> off <device>\"",
      JSON.stringify(pills(lamp)) === JSON.stringify([["Lamp_Kitchen", "Take Lamp_Kitchen off Terrace Lamp"]]), pills(lamp));
   ck("  ...an object linked by its name the same, with the same ✕", JSON.stringify(pills(pump)) === JSON.stringify([["switch.example_pool_pump", "Take switch.example_pool_pump off Pool Pump"]]), pills(pump));
   // owner, 2026-11-11: on the map, the search gives the device another entity (renamed in the villa's system)
-  ck("  ...then the compact search, \"Move to another entity…\", in the same field",
-     /<div class="group-members-add"><div class="picker"><div class="config-search config-search-compact">[\s\S]*?placeholder="Move to another entity…"/.test(field(lamp)), field(lamp));
+  // owner, 2026-11-12: it says what it moves — its object by name
+  ck("  ...then the compact search, \"Point Lamp_Kitchen at another entity…\", in the same field",
+     /<div class="group-members-add"><div class="picker"><div class="config-search config-search-compact">[\s\S]*?placeholder="Point Lamp_Kitchen at another entity…"/.test(field(lamp)), field(lamp));
+  // each object by its cube, never as an entity: the model's object, whom it shows on hover
+  ck("  ...each object pill drawn as a 3D object (its cube) with the hover saying whom it shows",
+     /<span class="object-name"><svg[\s\S]*?Lamp_Kitchen/.test(field(lamp))
+     && /3D object of the model, named Lamp_Kitchen: it shows Terrace Lamp/.test(field(lamp)), field(lamp));
   const rowsOf = (card) => [...field(card).matchAll(/<button class="row picker-option">([\s\S]*?)<\/button>/g)].map((m) => text(m[1].replace(/<wbr\/>/g, "")).replace(/^\||\|$/g, "").replace(/\|/g, " / "));
   globalThis.__open = true;
   const open = cards(devices("on", "terrace")).find((c) => c.name === "Terrace Lamp")?.card ?? "";
@@ -341,7 +348,8 @@ console.log("\n  a device's \"3D object\" field (owner, 2026-11-06): its objects
      rows.length > 0 && rows.some((r) => r.startsWith("Pool Pump / switch.example_pool_pump")) && !rows.some((r) => r.includes("light.example_terrace_lamp")), rows);
   const objRows = rowsOf(offOpen), firstNothing = objRows.findIndex((r) => r.endsWith("shows nothing yet"));
   ck("  ...a device not on the map's lists the model's objects: those showing a device first, each saying what picking it does",
-     objRows.includes("switch.example_pool_pump / shows Pool Pump, moves it here") && firstNothing > 0
+     objRows.includes("[icon] / switch.example_pool_pump / shows Pool Pump, moves it here") && firstNothing > 0
+     && objRows.every((r) => r.startsWith("[icon] / "))          // each by its cube, as its pill (owner, 2026-11-12)
      && objRows.slice(firstNothing).every((r) => r.endsWith("shows nothing yet")), objRows);
   const off = cards(devices("off")).find((c) => c.name === "Ceiling Fan")?.card ?? "";
   ck("a device not on the map: the same card, its id alone under its name, its \"3D object\" field empty, no box, no bin",

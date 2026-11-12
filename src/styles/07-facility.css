@@ -61,6 +61,9 @@
    its time; it breaks only where IdText puts a <wbr> (after a "." or "_"), never inside a word, the name's "anywhere"
    not inherited */
 .named-id { color: var(--text-secondary); font-weight: 500; overflow-wrap: normal; word-break: normal; }
+/* a 3D object's name (IdText ObjectName): its cube, then the name */
+.object-name { display: inline-flex; align-items: center; gap: 5px; min-width: 0; }
+.object-name > svg { flex: none; color: var(--text-secondary); }
 .fm-record-when { margin-left: auto; font-size: var(--text-xs); font-weight: 500; color: var(--text-secondary); }
 /* a Settings card's remove (RecordCard `remove`, owner 2026-11-06): the lone icon button (.icon-quiet) at the strip's right end,
    where a Cockpit card says its time; drawn 30px into the strip's padding so the band keeps its height, its touch
