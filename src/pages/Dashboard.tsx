@@ -91,6 +91,7 @@ export default function Dashboard() {
   const resolvedRoomsRef = useRef(resolvedRooms);
   resolvedRoomsRef.current = resolvedRooms;
 
+  // The canvas's view of its scene (babylon/sceneHandle): once that scene is torn down, a call on it does nothing.
   const [manager, setManager] = useState<SceneManager | null>(null);
   // WHAT IS ON SCREEN — the windows, the open device panel and where its Back
   // goes, the open room or category list, the Cockpit's tab, the fault and
@@ -178,11 +179,9 @@ export default function Dashboard() {
   // SummaryGroupPanel to somehow guess.
   // (the category's members: computed below, once the villa's hidden devices and its fold are known)
   const [modelKey, setModelKey] = useState(0); // bump to force canvas remount
-  // ⚠️ THE OLD SCENE LET GO IN THE SAME RENDER AS ITS CANVAS (2.496.784, owner's report: "Cannot read properties of null
-  // (reading 'setDeviceMarks')" reloading an edited model). The canvas disposes its scene as it unmounts and says so
-  // (onManager(null)) only in the NEXT render: an effect of this page whose own value changed in the reload's render
-  // (the marks, the model's mappings just saved) ran with the disposed scene. Dropped here, every effect sees none.
-  const reloadModel = useCallback(() => { setManager(null); setModelKey((k) => k + 1); }, []);
+  // A reload's effects may still call the old scene before onManager(null) arrives: that call does nothing
+  // (babylon/sceneHandle), so nothing here drops the manager by hand.
+  const reloadModel = useCallback(() => { setModelKey((k) => k + 1); }, []);
   // Starts "overview" to match the actual landing view (see the one-shot
   // effect below): the HUD reads this to decide joystick vs. overview-help
   // in the bottom bar, and it used to default to "first-person" here, so the

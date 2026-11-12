@@ -295,7 +295,7 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor, ta
           icon={<PanelBottom size={16} />} label="Summary bar" tip="The row of tiles at the bottom of the screen." />
         {/* the day/night preview override (AppConfig's dayNightPreview) only means anything for BAKED villas, whose
             day/night is a pre-rendered atlas crossfade worth previewing */}
-        {(manager?.lightingMode().structureUnlit ?? false) && (
+        {(manager?.lightingMode()?.structureUnlit ?? false) && (
           // Sunrise, not Sun, for "Day": the Interface theme in the header uses Sun for its Light option. ⚠️ Distinct
           // from that INTERFACE theme: this relights the VILLA, that one themes the panels; the written name keeps
           // them apart.

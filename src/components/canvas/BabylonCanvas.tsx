@@ -5,6 +5,7 @@ import Notice from "@/components/hud/Notice";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle } from "lucide-react";
 import { SceneManager } from "@/babylon/SceneManager";
+import { sceneHandle } from "@/babylon/sceneHandle";
 import { formatProbe, registerProbeRunner } from "@/babylon/perfProbe";
 import { useConfig } from "@/config/ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
@@ -24,10 +25,11 @@ import { watchDisposed, staleDisposed } from "@/utils/leakWatch";
 import ModelUploader from "@/components/settings/ModelUploader";
 import ErrorReport from "@/components/ErrorReport";
 import {
-  isCrashLooping, crashLoopInfo, noteLoadStart, noteLoadPhase, noteModel,
-  noteLoadSuccess, noteLoadLeft, clearCrashLoop, noteContextLoss, captureError, buildReport,
+  isCrashLooping, crashLoopInfo, startLoadAttempt, noteLoadPhase, noteModel,
+  clearCrashLoop, noteContextLoss, captureError, buildReport,
 } from "@/utils/diagnostics";
 import { adoptDetected } from "@/config/mappingEdits";
+import { missingImagesMessage } from "@/utils/glbRoomDataExtractor";
 
 interface Props {
   onManager: (m: SceneManager | null) => void;
@@ -160,7 +162,8 @@ export default function BabylonCanvas({
       setStatus("crash-loop");
       return;
     }
-    noteLoadStart();
+    // Every way out of this load ends it (diagnostics.startLoadAttempt): only a page killed mid-load leaves it open.
+    const attempt = startLoadAttempt();
 
     // performance.now() is measured from timeOrigin = NAVIGATION START, so this
     // single read is "how long the page took to get here": HTML, the ~6.6MB JS
@@ -201,26 +204,28 @@ export default function BabylonCanvas({
       });
     } catch (err) {
       // WebGL unavailable/blocked — show a clear message, not a blank canvas.
+      attempt.end("failed");
       setReport(buildReport(captureError("WEBGL_INIT_FAILED", err, "SceneManager")));
       setStatus("error");
       return;
     }
     const tEngineDone = performance.now();
     managerRef.current = manager;
-    cbRef.current.onManager(manager);
+    // Only this view leaves the canvas; it is revoked before dispose(), so a late call from outside does nothing.
+    const handle = sceneHandle(manager);
+    cbRef.current.onManager(handle.view);
 
     // A lost GPU/WebGL context (often memory pressure) would otherwise freeze
     // the canvas. Record it; if it happens before the villa finished loading,
     // surface the error instead of hanging.
     let reachedReady = false;
-    // a load that ends without a crash is not one towards the crash loop (diagnostics.noteLoadLeft)
-    let left = false;
-    const leave = () => { if (!reachedReady && !left) { left = true; noteLoadLeft(); } };
+    const leave = () => { attempt.end("left"); };
     window.addEventListener("pagehide", leave);
     const onCtxLost = (e: Event) => {
       e.preventDefault();
       noteContextLoss();
       if (!reachedReady) {
+        attempt.end("failed");
         setReport(buildReport(captureError(
           "WEBGL_CONTEXT_LOST",
           new Error("The GPU/WebGL context was lost (commonly from memory pressure)."),
@@ -272,6 +277,7 @@ export default function BabylonCanvas({
 
     (async () => {
       let loadErrorCode = "MODEL_LOAD_FAILED";
+      let loadedBytes: ArrayBuffer | null = null; // for naming a missing image if the import fails
       try {
         noteLoadPhase("fetch-config");
         const tConfigStart = performance.now();
@@ -314,11 +320,13 @@ export default function BabylonCanvas({
         if (!got.ok) {
           // The add-on holds no model yet. Show an explanatory overlay (with
           // the owner's upload) instead of a blank blue scene.
+          attempt.end("left");
           setStatus("no-model");
           return;
         }
         const { data, cfg: addonCfg, source: loadedSource, prefetched: usedPrefetch, kept: modelKept } = got;
         noteModel({ bytes: data.byteLength });
+        loadedBytes = data;
         // Bytes are in hand — clear any lingering reconnecting notice even if
         // the successful fetch happened to report no progress fractions (a
         // cache hit / no Content-Length skips readWithProgress's onProgress).
@@ -725,13 +733,20 @@ export default function BabylonCanvas({
         // isn't mistaken for a loop, and stop the context-loss guard from
         // hijacking the screen once we're up.
         reachedReady = true;
-        noteLoadSuccess();
+        attempt.end("ready");
       } catch (err) {
         if (cancelled) return;
         console.error("[BabylonCanvas] model load failed", err);
-        leave();
-        setReport(buildReport(captureError(loadErrorCode, err, "loadModel")));
-        setErrorMsg((err as Error).message);
+        attempt.end("failed");
+        // the 3D view's own words for a texture without its image are an index ("/textures/364/source"): name the
+        // material instead, as the upload does (a model uploaded before it refused those can still be one)
+        const missing = loadedBytes ? missingImagesMessage(loadedBytes) : null;
+        const shown = missing
+          ? Object.assign(new Error(`${missing[0].toUpperCase()}${missing.slice(1)} (${(err as Error)?.message ?? err})`),
+            { stack: (err as Error)?.stack })
+          : err;
+        setReport(buildReport(captureError(loadErrorCode, shown, "loadModel")));
+        setErrorMsg((shown as Error).message);
         setStatus("error");
       }
     })();
@@ -741,6 +756,7 @@ export default function BabylonCanvas({
       window.removeEventListener("pagehide", leave);
       leave();
       canvasEl.removeEventListener("webglcontextlost", onCtxLost as EventListener, false);
+      handle.revoke();
       cbRef.current.onManager(null);
       // Grabbed BEFORE dispose() so the scene is still reachable to hand over.
       // Both are stored as WeakRefs, so this cannot itself retain anything —

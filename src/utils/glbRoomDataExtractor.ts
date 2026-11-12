@@ -69,6 +69,16 @@ export function materialsMissingImages(glb: ArrayBuffer): string[] {
   return names.length ? names : [...missing].map((i) => `texture ${i}`);
 }
 
+/** What a person reads about a GLB's missing images (materialsMissingImages), or null when it has none: the upload
+ *  that refuses it and the 3D view that failed on it say the same. */
+export function missingImagesMessage(glb: ArrayBuffer): string | null {
+  const broken = materialsMissingImages(glb);
+  if (!broken.length) return null;
+  return `${broken.length === 1 ? "an image" : `${broken.length} images`} of the model `
+    + `${broken.length === 1 ? "is" : "are"} missing (${broken.slice(0, 3).join(", ")}${broken.length > 3 ? "…" : ""}), so it `
+    + "cannot be shown. Export the model again.";
+}
+
 /**
  * Extract the embedded room/entity plan JSON from a GLB's glTF extras, or
  * null if this GLB carries none — an older pipeline's export, a hand-built

@@ -2752,16 +2752,16 @@ export class SceneManager {
     // `readonly` is a compile-time contract for CALLERS; it does not stop the
     // owner writing the field, and the cast below is what says so out loud.
     // After this, calling ANY method on a disposed manager throws a TypeError
-    // instead of quietly half-working. That is the accepted risk, and it is
-    // not covered by a blanket guard: only eight sites test `this.disposed`,
-    // so "every public method guards on it" — as an earlier version of this
-    // comment claimed — is FALSE. What makes it survivable is that nothing
-    // holds a live handle to a disposed manager by design: BabylonCanvas nulls
-    // both its ref and React's state in the same teardown, the window and
-    // document listeners are gone, the render loop is stopped, and
-    // `scene.dispose()` has already cleared onPointerObservable (scene.js:4310)
-    // so no input can arrive either. A call reaching here was already a bug;
-    // it will now be a loud one rather than a silent one.
+    // instead of quietly half-working, and only a few sites here test
+    // `this.disposed`. The guard is outside, in ONE place: nothing beyond
+    // BabylonCanvas holds the manager itself, only its sceneHandle view, which
+    // the canvas revokes before calling this; a call through it afterwards does
+    // nothing. ⚠️ AN EARLIER VERSION SAID NOTHING HOLDS A DISPOSED MANAGER, and
+    // React state did, for one render: a Dashboard effect then threw "reading
+    // 'setDeviceMarks'" (2.496.784). Inside, the window and document listeners
+    // are gone, the render loop is stopped, and `scene.dispose()` has cleared
+    // onPointerObservable (scene.js:4310), so no input arrives either. A call
+    // on the raw manager reaching here is a bug in BabylonCanvas, and a loud one.
     //
     // Mapped over `keyof SceneManager` rather than a list of strings, so
     // renaming a field is a compile error here instead of a silently missed

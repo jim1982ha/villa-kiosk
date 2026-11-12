@@ -9,7 +9,8 @@
 //      notes). The only way to break it is to detect the *pattern*: we record
 //      each scene-load attempt in localStorage (which DOES survive the crash,
 //      unlike sessionStorage), and after too many rapid attempts that never
-//      reached "ready", the canvas bails to a diagnostics screen instead of
+//      ended (no "ready", no error caught, no page leaving: see
+//      startLoadAttempt), the canvas bails to a diagnostics screen instead of
 //      loading the model again.
 //
 //   2. Rich, copyable error reports. For every *catchable* failure (WebGL
@@ -25,7 +26,7 @@ import { detectPointerClass } from "@/babylon/badgeMetrics";
 import { readJson, writeJson } from "@/utils/storedJson";
 
 const DIAG_KEY = "villa-kiosk:diag";
-// Two rapid failed attempts already in the window → the next mount is the 3rd,
+// Two rapid attempts that never ended already in the window → the next mount is the 3rd,
 // so we bail then. Window is short so an occasional real reload never trips it.
 const CRASH_LOOP_THRESHOLD = 2;
 const CRASH_LOOP_WINDOW_MS = 90_000;
@@ -46,18 +47,28 @@ export interface CapturedError {
   at: number;
 }
 
+/** One scene-load start. `id` tells two starts apart, so ending one never drops another's. */
+interface StoredAttempt { id: string; at: number }
+
 interface DiagState {
-  attempts: number[];               // epoch-ms of recent scene-load starts
+  attempts: StoredAttempt[];        // the scene-load starts that have not ended yet
   phase?: LoadPhase;                // furthest phase reached on the last attempt
   model?: { path?: string; bytes?: number; sha256?: string };
   lastError?: CapturedError | null; // most recent captured JS error (may predate a crash)
   contextLosses?: number;
 }
 
+/** A stored attempt, or none. A bare number is the format before attempts had an id: its start time is its id. */
+function storedAttempt(a: unknown): StoredAttempt[] {
+  if (typeof a === "number" && Number.isFinite(a)) return [{ id: String(a), at: a }];
+  const o = a as Partial<StoredAttempt> | null;
+  return o && typeof o === "object" && typeof o.id === "string" && typeof o.at === "number" ? [{ id: o.id, at: o.at }] : [];
+}
+
 function read(): DiagState {
   const s = readJson<DiagState>(DIAG_KEY, (v): v is DiagState => !!v && typeof v === "object");
   if (!s) return { attempts: [] };
-  return { ...s, attempts: Array.isArray(s.attempts) ? s.attempts : [] };
+  return { ...s, attempts: Array.isArray(s.attempts) ? s.attempts.flatMap(storedAttempt) : [] };
 }
 
 function write(patch: Partial<DiagState>): void {
@@ -65,9 +76,9 @@ function write(patch: Partial<DiagState>): void {
   writeJson(DIAG_KEY, { ...read(), ...patch });
 }
 
-/** Recent (in-window) load-start timestamps. */
-function recentAttempts(now = Date.now()): number[] {
-  return read().attempts.filter((t) => now - t < CRASH_LOOP_WINDOW_MS);
+/** Recent (in-window) load starts that never ended. */
+function recentAttempts(now = Date.now()): StoredAttempt[] {
+  return read().attempts.filter((a) => now - a.at < CRASH_LOOP_WINDOW_MS);
 }
 
 /** True when the scene has already failed to load repeatedly in quick
@@ -79,13 +90,45 @@ export function isCrashLooping(): boolean {
 
 export function crashLoopInfo(): { count: number; sinceMs: number } {
   const a = recentAttempts();
-  return { count: a.length, sinceMs: a.length ? Date.now() - Math.min(...a) : 0 };
+  return { count: a.length, sinceMs: a.length ? Date.now() - Math.min(...a.map((x) => x.at)) : 0 };
 }
 
-/** Record the start of a scene-load attempt (kept only within the window). */
-export function noteLoadStart(): void {
-  const now = Date.now();
-  write({ attempts: [...recentAttempts(now), now], phase: "engine-init" });
+/**
+ * How a load attempt ended. "ready": the villa is on screen (every attempt still open is dropped: this device copes
+ * with the model, so an earlier one cannot have been a crash). "failed": an error this page caught and shows itself
+ * (WebGL refused, a broken model, a fetch refused, the context lost before ready). "left": the load stopped by the
+ * page's own code (the canvas unmounted, the page hidden or closed, no model to show).
+ */
+export type LoadOutcome = "ready" | "failed" | "left";
+
+export interface LoadAttempt {
+  /** Ends the attempt; only the first call counts. True when this call ended it. */
+  end(outcome: LoadOutcome): boolean;
+  readonly ended: boolean;
+}
+
+/**
+ * Start a scene-load attempt. It is stored until it ends, and every way the load can stop ends it, so the only
+ * attempts left standing are the loads whose page was killed before it could run any code again (an out-of-memory
+ * kill): those, and only those, count towards the crash loop.
+ * ⚠️ A FAILURE THIS PAGE CAUGHT WAS CALLED OUT OF MEMORY (owner, 2026-11-12): a GLB with a texture missing its image
+ * failed at import twice with its own MODEL_LOAD_FAILED; the third opening said "The device most likely ran out of
+ * memory". A WebGL refusal never dropped its attempt at all, and the drop took the LAST attempt, not its own.
+ */
+export function startLoadAttempt(now = Date.now()): LoadAttempt {
+  const id = `${now}-${Math.random().toString(36).slice(2, 8)}`;
+  write({ attempts: [...recentAttempts(now), { id, at: now }], phase: "engine-init" });
+  let ended = false;
+  return {
+    get ended() { return ended; },
+    end(outcome) {
+      if (ended) return false;
+      ended = true;
+      if (outcome === "ready") write({ attempts: [], phase: "ready", lastError: null });
+      else write({ attempts: read().attempts.filter((a) => a.id !== id) });
+      return true;
+    },
+  };
 }
 
 export function noteLoadPhase(phase: LoadPhase): void {
@@ -94,26 +137,6 @@ export function noteLoadPhase(phase: LoadPhase): void {
 
 export function noteModel(model: DiagState["model"]): void {
   write({ model: { ...read().model, ...model } });
-}
-
-/** The scene reached "ready": clear the attempt counter + last error so a
- *  later legitimate reload isn't mistaken for a crash loop. */
-export function noteLoadSuccess(): void {
-  write({ attempts: [], phase: "ready", lastError: null });
-}
-
-/**
- * The load in progress ENDED WITHOUT A CRASH: it failed with an error this page caught and reports itself (a broken
- * model, a fetch refused), or the page went away by its own code (a reload, an update, a navigation, the app closed),
- * or the canvas unmounted. Its attempt is dropped, so only a load that never got to run any code again (an
- * out-of-memory kill) is counted towards the crash loop.
- * ⚠️ A BROKEN MODEL WAS CALLED OUT OF MEMORY (owner, 2026-11-12): a GLB with a texture missing its image failed at
- * import twice with its own MODEL_LOAD_FAILED; the third opening said "The device most likely ran out of memory".
- */
-export function noteLoadLeft(): void {
-  const s = read();
-  if (s.phase === "ready" || !s.attempts.length) return;
-  write({ attempts: s.attempts.slice(0, -1) });
 }
 
 /** Manual "try again": reset the loop counter so the next load runs normally. */

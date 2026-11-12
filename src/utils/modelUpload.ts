@@ -16,7 +16,7 @@
 
 import { EMPTY_ROOM_DATA, readRoomData } from "@/config/roomData";
 import type { ParsedRoomData } from "./sh3dParser";
-import { extractEmbeddedRoomDataJson, materialsMissingImages } from "./glbRoomDataExtractor";
+import { extractEmbeddedRoomDataJson, missingImagesMessage } from "./glbRoomDataExtractor";
 
 export type UploadKind = "glb" | "rooms";
 
@@ -48,12 +48,8 @@ export async function planModelUpload(files: readonly File[]): Promise<UploadPla
 
   const glbBytes = glb ? await glb.arrayBuffer() : null;
   // a model the 3D view would refuse whole is never sent: every tablet would then fail to load the villa
-  const broken = glbBytes ? materialsMissingImages(glbBytes) : [];
-  if (broken.length) {
-    return { ok: false, message: `${glb!.name}: ${broken.length === 1 ? "an image" : `${broken.length} images`} of the model `
-      + `${broken.length === 1 ? "is" : "are"} missing (${broken.slice(0, 3).join(", ")}${broken.length > 3 ? "…" : ""}), so it `
-      + "cannot be shown. Export the model again. Nothing was uploaded." };
-  }
+  const broken = glbBytes ? missingImagesMessage(glbBytes) : null;
+  if (broken) return { ok: false, message: `${glb!.name}: ${broken} Nothing was uploaded.` };
 
   let roomsText: string;
   let origin: UploadStep["origin"];
