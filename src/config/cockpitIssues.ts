@@ -30,8 +30,11 @@ export interface CockpitIssues {
  *  (faultConfirm.confirmingFaults), the soonest close first, those awaiting their moment last. */
 function watchList(clearing: readonly AttentionItem[], fmData: FmData, cadence: AgentCadence | null, now: Date): ConfirmingFault[] {
   const right = clearing.flatMap((i) => {
-    const t = i.closing && fmData.tickets.find((x) => x.id === i.ticketId);
-    return t && i.closing ? [clearingFault(t, Date.parse(i.closing.at), holdsText(i.closing), cadence, now.getTime())] : [];
+    const t = fmData.tickets.find((x) => x.id === i.ticketId);
+    if (!t) return [];
+    // held because it is expected: the Agent's words, no moment (sorted last); else right again, its close's moment
+    if (i.expected) return [clearingFault(t, NaN, { said: i.expected, expected: true as const }, cadence, now.getTime())];
+    return i.closing ? [clearingFault(t, Date.parse(i.closing.at), holdsText(i.closing), cadence, now.getTime())] : [];
   });
   const order = (c: ConfirmingFault) => (Number.isNaN(c.at) ? Infinity : c.at);
   return [...right, ...confirmingFaults(fmData, cadence, now.getTime())].sort((a, b) => order(a) - order(b));

@@ -71,6 +71,9 @@ export interface AttentionItem {
    *  reads now and since when — "Locked since 14:38 · closes at about 14:49 if it stays locked" (cockpitCard). `since`:
    *  read from its history (useStateSince), never its last_changed. */
   closing?: { at: string; word?: string; since?: Since };
+  /** Set on an alert fault the VESTA Agent holds because it is expected (FmTicket.expected): its words. On Watch while
+   *  the Agent is online, as a fault right again is (attentionOf's `clearing`). */
+  expected?: string;
   /** When this problem began, on EVERY kind of line (beganAt, a late task its due day): a fault when it was opened
    *  (FmTicket.openedAt): its row's time until something is told of it. Absent only for a device gone from the
    *  villa's system longer than it keeps, or until its history is read. */
@@ -496,6 +499,7 @@ export function attentionOf(opts: AttentionInputs): Pick<VillaProblems, "attenti
       source: faultSource(t),
       check: t.check,
       ...(t.monitoredUntil ? { monitoredUntil: t.monitoredUntil } : {}),
+      ...(t.expected ? { expected: t.expected } : {}),
       closing: closingOf(t.closesAt, entityId ? entities[entityId] : undefined, entityId, sinceOf, t.openedAt),
       // lost contact — isOffline, or an entity the villa's system no longer has (Missing), as devices.unavailable
       // reads it: the device's offline line takes it. ⚠️ A MISSING ENTITY TOO (architecture review, 2026-10-21): only
@@ -597,7 +601,11 @@ export function attentionOf(opts: AttentionInputs): Pick<VillaProblems, "attenti
   // at its next look and it is an open issue again. A moment the Agent never acted on (offline) is not kept past two of
   // its looks (faultConfirm.shownUntil): it is an open issue again.
   const now = opts.now ?? Date.now();
-  const isClearing = (i: AttentionItem) => i.kind === "fault" && !!i.closing && now <= shownUntil(Date.parse(i.closing.at), opts.cadence ?? null);
+  // ⚠️ EXPECTED IS ON WATCH TOO (owner, 2026-11-12: "a 'has not run' alert raised while the villa was empty … is held.
+  // It goes to Watch"): an alert the VESTA Agent holds because it is expected (`expected`, its words) is held on Watch
+  // the same way, while the Agent is online (a cadence); offline, nobody would end the hold: an open issue as before.
+  const isClearing = (i: AttentionItem) => i.kind === "fault" && ((!!i.closing && now <= shownUntil(Date.parse(i.closing.at), opts.cadence ?? null))
+    || (!!i.expected && !!opts.cadence));
   return { attentionItems: shown.filter((i) => !isClearing(i)), held, clearing: shown.filter(isClearing) };
 }
 
@@ -609,8 +617,8 @@ export interface VillaProblems {
   attentionItems: AttentionItem[];
   /** The devices whose live state is held as "Not a problem while it lasts" (attentionOf); absent: none. */
   held?: ReadonlySet<string>;
-  /** The open faults right again, waiting out the VESTA Agent's clear wait (their `closing`): on Watch, never counted
-   *  (attentionOf); absent: none. */
+  /** The open faults held on Watch, never counted (attentionOf): right again, waiting out the VESTA Agent's clear wait
+   *  (their `closing`), or held by the Agent because they are expected (their `expected`); absent: none. */
   clearing?: AttentionItem[];
 }
 

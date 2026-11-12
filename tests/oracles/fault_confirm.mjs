@@ -463,4 +463,38 @@ console.log("\n  a reopen in the Kiosk takes the watch away (architecture review
      openKeys(forgotten).split(",").includes("lock.door") && !forgotten.cards.watched.some((c) => c.entityId === "lock.door"), openKeys(forgotten));
 }
 
+{
+  // owner, 2026-11-12: "a 'has not run' alert raised while the villa was empty for most of the period is held. It goes to
+  // Watch with a note": an open alert fault the VESTA Agent holds because it is expected (`expected`, its words) is on
+  // Watch, counted and marked nowhere, while the Agent is online; offline (no cadence) nobody would end the hold, and
+  // the Agent taking the field away makes it an open issue again
+  const { cockpitIssues } = await import("@/config/cockpitIssues");
+  const pumps = devicesOf({ ids: ["sensor.pump_power", "binary_sensor.leak"] });
+  const ents = { "sensor.pump_power": { entity_id: "sensor.pump_power", state: "35", attributes: { friendly_name: "Pump Power" } },
+    "binary_sensor.leak": { entity_id: "binary_sensor.leak", state: "off", attributes: { friendly_name: "Leak" } } };
+  const WORDS = "Pump runs only when people are in, and they have been in for 2h since its last run. It becomes an alert after 6h with people in and still no run.";
+  const fault = (expected) => ({ id: "e1", title: "Pump has not run in over 1d", status: "open", openedAt: at(-30), entityId: "sensor.pump_power",
+    photoIds: [], alertNumber: 167, origin: "alert", check: "minutes", source: "vesta_agent", updates: [opened], ...(expected ? { expected } : {}) });
+  const view = (expected, cadence = CADENCE) => {
+    const fmData = { ...EMPTY_FM_DATA, tickets: [fault(expected), active] };
+    const att = attentionFor({ devices: pumps, ...attentionOf({ devices: pumps, entities: ents, entityMap: {}, resolvedRooms: {}, fmData, cadence, now: NOW }) }, () => true);
+    return { att, cards: cockpitIssues(att, { fmData, cadence, now: new Date(NOW), entities: ents, entityMap: {}, resolvedRooms: {} }) };
+  };
+  const held = view(WORDS), plainFault = view(undefined), offline = view(WORDS, null);
+  const openKeys = (v) => v.cards.open.map((c) => c.entityId).join();
+  ck("the agreement declares expected among the fault's fields (listed in /agent/v1/info ticket_fields, never before the list)",
+     typeof contract.ticket.fields.expected === "string" && !contract.ticket.fieldsBeforeList.includes("expected"));
+  ck("held because it is expected: not an open issue, not counted, no amber mark; the leak still is",
+     openKeys(held) === "binary_sensor.leak" && held.att.attentionGroups.length === 1
+     && !deviceIssues(held.att.attentionGroups).amber.has("sensor.pump_power"), openKeys(held));
+  const card = held.cards.watched.find((c) => c.entityId === "sensor.pump_power");
+  ck("  ...on Watch with VESTA's words, \"Expected\" in its pill, its alert's number kept, no buttons",
+     !!card && card.lines[0].closing === WORDS && card.nextCheck?.pill === "Expected"
+     && /nobody is asked/.test(card.nextCheck?.tip ?? "") && card.lines[0].alertNumber === 167 && card.lines[0].actions.length === 0, card);
+  ck("  ...without the field: an open issue, as before",
+     openKeys(plainFault).split(",").includes("sensor.pump_power") && !plainFault.cards.watched.some((c) => c.entityId === "sensor.pump_power"), openKeys(plainFault));
+  ck("  ...the VESTA Agent offline (no cadence): an open issue, a hold nobody ends never stays on Watch",
+     openKeys(offline).split(",").includes("sensor.pump_power") && !offline.cards.watched.some((c) => c.entityId === "sensor.pump_power"), openKeys(offline));
+}
+
 done("✅ a fault being confirmed is listed last among the open issues, marked, never counted, and goes as the Agent says");
