@@ -64,9 +64,17 @@ const MT = srcAt("components/cockpit/MessagesTab.tsx");
 const JSX = await import("../consistency/jsx.mjs");
 // the issue card's buttons, as IssueCard hands them to the one carrier of every step (WorkButtons)
 const [icButtons] = JSX.elements(JSX.parseTsx("components/cockpit/IssueCard.tsx"), "WorkButtons");
+// what each press does, by pressing it (fm/workPress.pressOutcome: the one answer every tab's buttons carry out)
+const P = await import("@/fm/workPress");
+const J = JSON.stringify;
+const lockActs = cardActions(lock), byKind = (acts, kind) => acts.find((a) => a.kind === kind);
+const raisedHere = (id) => ({ title: "Lock: Unlocked", entityId: id, photoIds: [] });
 ck("  ...pressed, Open Ticket opens the Tickets tab's ticket form pointed at the device (the one \"Open a ticket\" form, owner 2026-11-02); Done and Need help raise it in one write, at the device's place",
-   /a\.step\.kind === "raise" \? onRaiseTicket\(a\.ids\[0\]\)/.test(JSX.propText(icButtons, "onOpen") || "")
-   && JSX.propText(icButtons, "raised") === "(entityId) => raisedFor({ title: card.title, lines: [line] }, place(entityId, card.title))"
+   J(P.pressOutcome(byKind(lockActs, "raiseTicket"))) === J({ does: "go", go: { to: "raiseTicket", id: "lock.door" } })
+   && J(P.pressOutcome(byKind(lockActs, "doneNew"), { raised: raisedHere })) === J({ does: "write", write: { kind: "raise", fault: raisedHere("lock.door"), then: "done" } })
+   && J(P.pressOutcome(byKind(lockActs, "helpNew"), { raised: raisedHere })) === J({ does: "write", write: { kind: "raise", fault: raisedHere("lock.door"), then: "help" } })
+   && P.pressOutcome(byKind(lockActs, "doneNew")).does === "nothing"
+   && JSX.propText(icButtons, "onOpen") !== null && JSX.propText(icButtons, "raised") === "(entityId) => raisedFor({ title: card.title, lines: [line] }, place(entityId, card.title))"
    && /onRaiseTicket=\{onRaiseTicket\}/.test(MT) && !/<FaultForm /.test(MT));
 // owner, 2026-10-30: the Tickets tab's "Mark resolved" is the Inbox's Done (work done, its form kept), with Need help
 ck("a ticket in progress (Tickets): Close (its resolve form; owner, 2026-11-04), No action needed, Need help, never Not a problem (owner, 2026-11-04) — each on every record of it, its own Close question",
@@ -188,8 +196,27 @@ ck("a fault from a VESTA Agent alert carries \"#5\" for its card's strip, its wo
    numbered.find((i) => i.ticketId === "n")?.title === "House Pump Power has not run" && numbered.find((i) => i.ticketId === "n")?.alertLabel === "#5"
    && numbered.find((i) => i.ticketId === "p")?.title === "fault p" && numbered.find((i) => i.ticketId === "p")?.alertLabel === undefined,
    numbered.map((i) => [i.title, i.alertLabel]));
-ck("  ...and the same in the Tickets tab: its title the fault's name, its alert's name the strip's chip",
-   ((tt) => /<RecordCard[^>]*title=\{faultName\(t\)\}/.test(tt) && /<RecordCard[^>]*number=\{faultAlertLabel\(t\)\}/.test(tt))(readFileSync(new URL("../../src/components/fm/TicketsTab.tsx", import.meta.url), "utf8")));
+{
+  // ⚠️ ONE CARD HEAD FOR EVERY TAB (architecture review, 2026-11-13): the Inbox card and the Tickets card of the same
+  // record say the same head, read by value from what each draws (cockpitCard.cardFace, ticketFace)
+  const { cardFace, ticketFace, closedCards } = await import("@/config/cockpitCard");
+  const taken = { ...rec("t", "switch.pump", "in_progress"), title: "House Pump Power has not run", alertNumber: 5, alertPriority: "P2",
+    updates: [{ at: "2026-10-14T09:00:00.000Z", status: "in_progress", who: "Wayan", photoIds: [] }] };
+  const shut = { ...rec("s", "switch.pump", "resolved"), alertNumber: 6, resolvedAt: "2026-10-14T09:30:00.000Z",
+    updates: [{ at: "2026-10-14T09:30:00.000Z", status: "resolved", who: "Wayan", photoIds: [] }] };
+  const head = (f) => ({ number: f.number, status: f.status.map((x) => x.text).join(" · "), when: f.when, who: f.who });
+  const [row] = groupAttention(attentionOf({ devices: devicesOf(), entities: {}, entityMap: {}, resolvedRooms: {}, fmData: fm([taken]) }).attentionItems);
+  const inbox = cardFace(cockpitCard(row, null)).parts[0];
+  ck("  ...the Tickets card of a ticket in progress has its Inbox card's head: its alert's name, its state, its time, who moved it",
+     JSON.stringify(head(ticketFace(taken))) === JSON.stringify(head(inbox)) && inbox.number === "#5-P2" && inbox.status[0]?.text === "Ticket in progress"
+     && ticketFace(taken).title === "House Pump Power has not run", [head(ticketFace(taken)), head(inbox)]);
+  const [closed] = closedCards(fm([shut]), null, new Date("2026-10-15T00:00:00.000Z"),
+    { devices: { deviceOf: (id) => id }, entities: {}, entityMap: {}, resolvedRooms: {}, may: () => true });
+  const under = closed && cardFace(closed).parts[0];
+  ck("  ...and a closed one, under Closed in both tabs",
+     !!under && JSON.stringify(head(ticketFace(shut))) === JSON.stringify(head(under)) && /Wayan/.test(under.who ?? ""), [head(ticketFace(shut)), under && head(under)]);
+  ck("  ...a ticket's records after its first say neither its state nor who moved it again", ticketFace(taken, false).status.length === 0 && ticketFace(taken, false).who === null);
+}
 ck("  ...with its priority, named as Telegram names it (agent-contract.json ticket.alertLabel): \"#5-P2 · …\" (owner, 2026-10-28)",
    E.faultTitle({ title: "x", alertNumber: 5, alertPriority: "P2" }) === "#5-P2 · x"
    && E.faultTitle({ title: "x", alertNumber: 5, alertPriority: "high" }) === "#5 · x"
@@ -340,8 +367,9 @@ ck("lists that only grow are ONE folded, paged list (owner, 2026-10-14): Tickets
   ck("a ticket is ONE card: its first record says its stage, its buttons the card's bar, under every record, the closed one its Reopen, no device name above",
      /<RecordGroup key=\{g\.key\} actions=\{buttons\}>/.test(ticketsTab) && /const records = g\.records\.map\(workRecord\);/.test(ticketsTab)
      && /const buttons = <WorkButtons actions=\{ticketActions\(records\)\}/.test(ticketsTab)
-     && /if \(g\.records\.length === 1\) return <Fragment key=\{g\.key\}>\{record\(g\.records\[0\], stagePill\(g\.records\[0\]\), buttons\)\}<\/Fragment>;/.test(ticketsTab)
-     && /\{g\.records\.map\(\(t, i\) => record\(t, i === 0 \? stagePill\(t\) : undefined, undefined, false, i === 0\)\)\}\s*<\/RecordGroup>/.test(ticketsTab)
+     // its first record `stated` (its stage and who moved it: cockpitCard.ticketFace, checked by value above)
+     && /if \(g\.records\.length === 1\) return <Fragment key=\{g\.key\}>\{record\(g\.records\[0\], buttons\)\}<\/Fragment>;/.test(ticketsTab)
+     && /\{g\.records\.map\(\(t, i\) => record\(t, undefined, false, i === 0\)\)\}\s*<\/RecordGroup>/.test(ticketsTab)
      && JSX.propText(open, "actions") === "ticketActions(records)" && JSX.propText(shut, "actions") === "closedActions(workRecord(t), closedTold(t).reopen)"
      // its standing Need help said on it, from the same records as its buttons (checked by value below)
      && JSX.propText(open, "asked") === "helpAsked(records)"
@@ -363,8 +391,13 @@ ck("lists that only grow are ONE folded, paged list (owner, 2026-10-14): Tickets
   const row = (t) => recap.split("\n").find((l) => l.includes(`| ${t.title} |`)) ?? "";
   ck("  ...the recap's Status column says the SAME word as the pill, for both", row(taken).includes(`| ${pill(taken).text} |`)
      && row(closed).includes(`| ${pill(closed).text} |`) && !/\| in progress \|/.test(recap), [row(taken), row(closed)]);
-  ck("  ...the Tickets tab draws its pills from the table, no word of its own", /STAGE_WORDS\[stageOf\(t\)\]/.test(ticketsTab)
-     && !/"In progress"|"Resolved"|due-soon/.test(ticketsTab));
+  const { ticketFace } = await import("@/config/cockpitCard");
+  // nobody moved it: its stage's word from the table; moved: how (a ticket's stage, the table's word too)
+  const unmoved = rec("u", "x.y");
+  const stageSaid = (t) => ticketFace(t).status.map((x) => x.text).join();
+  ck("  ...the Tickets tab's pill is the table's word (cockpitCard.ticketFace), no word of its own",
+     stageSaid(unmoved) === E.STAGE_WORDS[E.stageOf(unmoved)].card && stageSaid(taken) === E.STAGE_WORDS.ticket.card
+     && !/"In progress"|"Resolved"|due-soon/.test(ticketsTab), [unmoved, taken].map(stageSaid));
 
   // THE RECAP'S OPEN FIGURES ARE THE TICKETS TAB'S CARDS (architecture review, 2026-10-19): the pump's power and energy
   // sensors are one device with two faults nobody took on and two records taken on together — ONE card with Open
@@ -463,8 +496,9 @@ ck("  ...and no figures above them (in progress, mean resolution, closed with no
   const tab = JSX.parseTsx("components/fm/TicketsTab.tsx");
   const card = JSX.elements(tab, "RecordCard").find((c) => JSX.propText(c, "who") !== null);
   ck("a ticket's card says its state once: its strip's stage and its who line only where the record is `stated`, the first of its card",
-     !!card && JSX.propText(card, "who") === "stated ? moveWho(move, said, when, momentText) : null" && JSX.propText(card, "status") === "state"
-     && /const state = stated \? moveState\(move\) \?\? status : undefined;/.test(tt) && JSX.elements(tab, "StatusPill").length === 0
+     // what `stated` says is checked by value (cockpitCard.ticketFace, "a ticket's records after its first" above)
+     !!card && JSX.propText(card, "who") === "face.who" && JSX.propText(card, "status") === "stated ? face.status : undefined"
+     && /const face = ticketFace\(t, stated\);/.test(tt) && JSX.elements(tab, "StatusPill").length === 0
      && /, false, i === 0\)\)\}/.test(tt), card && JSX.propText(card, "who"));
 }
 // owner, 2026-11-02: "Move the Open Ticket button from the Inbox page to the Tickets page"
@@ -557,8 +591,8 @@ ck("both tabs carry out their buttons' steps through the one useCardWork, never 
 console.log("\n  the buttons, drawn — ONE close-with-confirm for both tabs:");
 {
   const { default: WorkButtons } = await import("@/components/fm/WorkButtons");
-  const work = (asking, problem = null) => ({ asking, problemFor: (key) => (key === "device:x" ? problem : null), ask: () => {},
-    cancel: () => {}, close: async () => {}, run: () => {}, staging: null, endStaging: () => {} });
+  const work = (asking, problem = null) => ({ asking, problemFor: (key) => (key === "device:x" ? problem : null), press: () => {},
+    cancel: () => {}, staging: null, endStaging: () => {} });
   const drawButtons = (actions, asking = null, extra = {}) => draw(h(WorkButtons,
     { actions, cardKey: "device:x", work: work(asking, extra.problem ?? null), ...extra }));
   const ovActs = W.overviewActions([{ id: "a", stage: "fault" }]), tkActs = W.ticketActions([{ id: "a", stage: "ticket" }]);
@@ -628,7 +662,10 @@ console.log("\n  the buttons, drawn — ONE close-with-confirm for both tabs:");
   {
     // what a press does, on the drawn buttons themselves (WorkButtons draws with no hook: called, its tree is read)
     const calls = [];
-    const pressing = { ...work(null), ask: (key, kind) => calls.push(["ask", kind]), close: async (key, ids, asWork, lasting) => calls.push(["close", ids.join(), !!asWork, !!lasting]) };
+    // each button hands its own action to the one carrier (useCardWork.press), whose outcome is fm/workPress's
+    const { pressOutcome } = await import("@/fm/workPress");
+    const pressing = { ...work(null), press: (key, a, opts) => { const o = pressOutcome(a, opts);
+      calls.push(o.does === "write" ? [o.write.kind, o.write.ids.join(), !!o.write.work, !!o.write.lasting] : [o.does]); } };
     const tree = WorkButtons({ actions: ovActs, cardKey: "device:x", work: pressing });
     const buttons = [];
     const walk = (n) => { if (!n || typeof n !== "object") return; if (Array.isArray(n)) return n.forEach(walk);
@@ -689,19 +726,52 @@ console.log("\n  a Need help pressed is said on its card, and asked once (archit
   ck("  ...answered by VESTA (a line written after it, whatever its time), the card's own line goes and Need help is back",
      inbox(told).asked === null && said(inbox(told).actions).some((x) => x.startsWith("Need help")) && W.helpAsked(ticket(told)) === null,
      [inbox(told).asked, said(inbox(told).actions)]);
-  // what pressing does, through the one carrier (WorkButtons.stepWrite), with stand-in writers that record the call
-  const { stepWrite } = await import("@/components/fm/WorkButtons");
+  // what pressing does, through the one carrier (fm/workPress), with stand-in writers that record the call
+  const { pressOutcome, carryOut } = await import("@/fm/workPress");
   const calls = [];
   const writers = { helpTickets: async (ids) => (calls.push(`help ${[...ids].join(",")}`), { done: true }),
     addTicket: async (t, o) => (calls.push(`raise ${t.entityId} then ${o.then}`), { done: true }) };
+  const pressWrite = (a, raised) => { const o = pressOutcome(a, { raised }); return o.does === "write" ? carryOut(o.write, writers) : null; };
   const help = W.ticketActions(ticket(before)).find((a) => a.kind === "needHelp");
   const helpNew = W.overviewActions([], "light.example").find((a) => a.kind === "helpNew");
-  stepWrite(help, writers); stepWrite(helpNew, writers, (id) => ({ title: "x", entityId: id, photoIds: [] }));
+  await pressWrite(help); await pressWrite(helpNew, (id) => ({ title: "x", entityId: id, photoIds: [] }));
   ck("  ...pressed, Need help writes its step on the card's records; on a card with no record, raises it asking for help",
      calls.join(" | ") === "help b | raise light.example then help"
-     && stepWrite(W.ticketActions(ticket(before))[0], writers) === null, calls);
+     && pressWrite(W.ticketActions(ticket(before))[0]) === null, calls);
   const closed = { ...after, tickets: after.tickets.map((t) => ({ ...t, status: "resolved" })) };
   ck("  ...and a closed record holds no Need help", closed.tickets.every((t) => E.standingHelp(t) === undefined));
+}
+console.log("\n  every button, pressed (fm/workPress: one outcome per press, on every tab):");
+{
+  // ⚠️ architecture review, 2026-11-13: a close was carried out by the buttons, a raise or an edit by the Inbox's card
+  // alone, a stage change and the writes by useCardWork; each press is now one outcome, read here by pressing
+  const { pressOutcome, carryOut } = await import("@/fm/workPress");
+  const outcome = (a, opts) => { const o = pressOutcome(a, opts);
+    return o.does === "write" ? `write ${o.write.kind}${o.write.ids ? ` ${o.write.ids.join(",")}` : ""}${o.write.work ? " work" : ""}${o.write.lasting ? " lasting" : ""}`
+      : o.does === "stage" ? `stage ${o.ids.join(",")} → ${o.to}` : o.does === "go" ? `go ${o.go.to} ${o.go.id}` : o.does === "ask" ? `ask "${o.confirmLabel}"` : o.does; };
+  const pressAll = (acts) => acts.map((a) => `${a.label}: ${outcome(a)}`).join(" | ");
+  ck("an issue card's fault: Done closes it as work done, Not a problem closes it while it lasts, Open Ticket opens the stage form, Need help writes its step",
+     pressAll(W.overviewActions([{ id: "a", stage: "fault" }])) === "Done: write close a work | Not a problem: write close a lasting | Open Ticket: stage a → in_progress | Need help: write help a",
+     pressAll(W.overviewActions([{ id: "a", stage: "fault" }])));
+  ck("  ...its ticket: Edit Ticket opens that ticket's form, on any tab drawing it",
+     outcome(W.overviewActions([{ id: "t", stage: "ticket" }]).find((a) => a.kind === "editTicket")) === "go editTicket t");
+  const tk = W.ticketActions([{ id: "t", stage: "ticket" }]);
+  ck("a Tickets card: Close opens its resolve form, No action needed asks first and closes with nothing done on its yes, Need help writes its step",
+     pressAll(tk) === "Close: stage t → resolved | No action needed: ask \"No action needed\" | Need help: write help t"
+     && outcome(tk[1], { confirmed: true }) === "write close t", pressAll(tk));
+  ck("  ...and never Not a problem, whatever its records", !W.ticketActions([{ id: "t", stage: "ticket" }, { id: "f", stage: "fault" }]).some((a) => a.kind === "notAProblem"));
+  ck("a closed record's Reopen opens the stage form back to open", pressAll(W.closedActions({ id: "r", stage: "closed" }, true)) === "Reopen: stage r → open");
+  const calls = [];
+  const rec = (name) => async (...args) => (calls.push(`${name} ${J(args)}`), { done: name !== "helpTickets", note: name === "helpTickets" ? "Not saved" : null });
+  const writers = { closeTickets: rec("closeTickets"), advanceTickets: rec("advanceTickets"), helpTickets: rec("helpTickets"), addTicket: rec("addTicket"), send: null };
+  const done = await carryOut({ kind: "close", ids: ["a"], work: true }, writers);
+  await carryOut({ kind: "close", ids: ["a"], lasting: true }, writers); await carryOut({ kind: "close", ids: ["a"] }, writers);
+  const helped = await carryOut({ kind: "help", ids: ["a"] }, writers);
+  ck("  ...carried out: work done is the resolve step, while it lasts and no action are closes; a write that did not land says why",
+     J(calls) === J([`advanceTickets ${J([["a"], "resolved", { photoIds: [] }])}`, `closeTickets ${J([["a"], true])}`, `closeTickets ${J([["a"]])}`, `helpTickets ${J([["a"]])}`])
+     && done.done && !helped.done && helped.note === "Not saved", calls);
+  const tabs = [...JSX.elements(JSX.parseTsx("components/fm/TicketsTab.tsx"), "WorkButtons"), icButtons];
+  ck("  ...every tab drawing work buttons opens the forms a press asks for (its `onOpen`)", tabs.length === 3 && tabs.every((b) => JSX.propText(b, "onOpen") !== null));
 }
 ck("a ticket's notes wrap inside its card, never past its edge (owner, 2026-10-14: a long \"VESTA reads\" ran out)",
    /\.fm-record-main \{ display: flex; flex-direction: column; gap: 4px; min-width: 0;/.test(src("styles/07-facility.css"))

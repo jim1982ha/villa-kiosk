@@ -812,7 +812,9 @@ ck("  ...a report under Reports, an open alert a notification, a closed one in C
      [rowWhen(keptCard), firstMoment(over)]);
   // owner, 2026-11-07: the villa's card was named by its title's words and had no buttons, VESTA's by the device with
   // Done · Not a problem · Open Ticket · Need help
-  const { visitWrite } = await import("@/components/fm/WorkButtons");
+  // a press on it, as every work button's (fm/workPress): its outcome, carried out with a stand-in add-on
+  const { pressOutcome, carryOut } = await import("@/fm/workPress");
+  const visitWrite = (a, send) => { const o = pressOutcome(a); return o.does === "write" && o.write.kind === "visit" ? carryOut(o.write, { send }) : null; };
   const named = parseAnnouncement({ seq: 54, at: "2026-11-07T07:10:23+08:00", key: "visit:example-1", since: step1.at,
     device: "Test door", entity_id: "binary_sensor.example_door", record: "sensor.example_visit",
     message: layout("TEST: Test door opened while the villa is empty", ["Test door opened, 07:10"], "⚠️ New alert, monitoring until 07:40"), photos: [] });

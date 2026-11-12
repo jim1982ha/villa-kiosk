@@ -25,7 +25,7 @@ import { NO_NOTICE, noticeStep } from "@/messages/noticeModel";
 import { useAnnouncements } from "@/messages/AnnouncementsContext";
 import { announcementWords, cardWords, idOf } from "@/messages/messagesModel";
 import { PhotoRow, RecordButtons, StatusLines } from "@/components/messages/AnnouncementContent";
-import { cardTop, type CardView } from "@/config/cockpitCard";
+import { cardFace, type CardView } from "@/config/cockpitCard";
 import { RecordHead, stripTone } from "@/components/fm/RecordCard";
 import { cardLead } from "@/components/fm/sourceIcons";
 
@@ -46,8 +46,8 @@ export function AnnouncementNoticeView({ announcement, onDismiss, buttons, step 
   // its words as every screen says them (messagesModel.announcementWords): the title, then its first line or bottom line
   const { title, line } = announcementWords(announcement, { step });
   const words = line ? `${title} · ${line}` : title;
-  // an alert: what its card's strip and first line say (cockpitCard.cardTop), in the strip's colour
-  const top = card ? cardTop(card) : null;
+  // an alert: what its card's head says (cockpitCard.cardFace: its strip and first line), in the strip's colour
+  const top = card ? cardFace(card) : null;
   const strip = top ? stripTone(top.status, top.tone) : null;
   return (
     <NoticeView tone={strip ?? "info"} icon={strip ? null : <Bell size={16} />} onDismiss={onDismiss}>

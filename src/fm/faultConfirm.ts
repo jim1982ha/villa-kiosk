@@ -21,22 +21,20 @@
 // Close pressed in the Cockpit said "Closed on …" on a card that was not. Its pill now says what happens then, "Closes
 // 02:00", and a Close pressed in the Cockpit says "Cleared on … (Owner)" (since architecture review 23 the button's own
 // words, "No action needed on … (Owner)"): only a problem that is really over says Closed.
+//
+// Which of Open issues, Watch and Closed a fault is in, and until when, is fm/faultStanding's; how each says it, here.
 
 import { AGENT_STAMP, type AgentCadence } from "@/agent/agentApi";
 import { clockTime, momentText } from "@/utils/dateText";
-import { nextAt, withinLook } from "./faultTiming";
+import { withinLook } from "./faultTiming";
 import { NO_ACTION_NEEDED, NOT_A_PROBLEM } from "./deviceWork";
 import { agentOwned } from "./issueSource";
 import { closedAsLasting, isClearedStep, isTicketResolved, lastResolution } from "./fmEngine";
-import type { FmData, FmTicket } from "./fmTypes";
+import type { FmTicket } from "./fmTypes";
 import { authorWords } from "@/auth/roles";
 
-/** How many of the Agent's looks (cadence.checkMinutes) a fault past its confirms-by moment is still shown for: its
- *  verdict lands at its next look, the second covers a look that ran long. */
-const CONFIRM_GRACE_LOOKS = 2;
-
 /** How a closed fault was closed, in the words of its card. */
-interface ClosedFault {
+export interface ClosedFault {
   ticket: FmTicket;
   /** How it was cleared, by the action that cleared it: "Done" (a Done on Telegram, a repair recorded), "No action
    *  needed" (the Cockpit's, nothing done, with who pressed it), "Not a problem", "Cleared" (the VESTA Agent's own
@@ -66,19 +64,12 @@ export interface ConfirmingFault extends ClosedFault {
   holds?: { said: string; word?: string; expected?: true };
 }
 
-/** A fault held on Watch (attention's `clearing`): still open, right again and closed by the VESTA Agent at `at` (its
+/** A fault held on Watch while still open (fm/faultStanding): still open, right again and closed by the VESTA Agent at `at` (its
  *  closesAt) if it stays so, or held while it is expected (`holds.expected`, `at` NaN); its reading `holds`. */
 export function clearingFault(t: FmTicket, at: number, holds: NonNullable<ConfirmingFault["holds"]>, cadence: AgentCadence | null,
   now: number = Date.now()): ConfirmingFault {
   const lookMinutes = cadence && cadence.checkMinutes > 0 ? cadence.checkMinutes : null;
   return { ticket: t, word: "Cleared", who: "", closedAt: NaN, at, due: now >= at, lookMinutes, awaiting: false, holds };
-}
-
-/** The last moment a fault confirmed by `at` is still shown: two of the Agent's looks after it while the Agent says its
- *  cadence (it is online), `at` itself otherwise. */
-export function shownUntil(at: number, cadence: AgentCadence | null): number {
-  const look = cadence && cadence.checkMinutes > 0 ? cadence.checkMinutes * 60_000 : 0;
-  return at + CONFIRM_GRACE_LOOKS * look;
 }
 
 /** ⚠️ ONE TELLING OF A CLOSE, ON EVERY TAB (architecture review 23): Inbox › Closed said "Cleared on … (Owner)" with no
@@ -97,77 +88,6 @@ export function closedTold(t: FmTicket): ClosedFault & { reopen: boolean } {
     closedAt: Date.parse(close?.at ?? t.resolvedAt ?? ""),
     reopen: isTicketResolved(t) && (closedAsLasting(t) || !agentOwned(t)),
   };
-}
-
-/** ⚠️ EVERY DONE GOES TO WATCH (owner, 2026-11-02: "if a user clicks on done, the associated card and fault shall be
- *  considered as a watchlist for the relevant amount of time"): the Agent writes `confirmsBy` on the faults it follows;
- *  one a person raised has no task of its, so nothing wrote it and it left at once. Its watch is a night-check finding's,
- *  until the nightly check after its close, the time being the Agent's own: with no Agent, nothing watches. */
-function watchedUntil(t: FmTicket, cadence: AgentCadence | null): number {
-  // "Not a problem while it lasts": nothing is watched, it is closed (FmTicketUpdate.lasting)
-  if (closedAsLasting(t)) return NaN;
-  if (t.confirmsBy) return Date.parse(t.confirmsBy);
-  if (!t.resolvedAt || !cadence) return NaN;
-  if (agentOwned(t)) return NaN;
-  return nextAt(cadence.nightlyAt, new Date(t.resolvedAt))?.getTime() ?? NaN;
-}
-
-/** Where a resolved record stands after its close, as of `now`: "watch", being confirmed (watched until a moment, not shown
- *  past shownUntil); "awaiting", about to be watched: a fault of the Agent's just closed whose confirmsBy is not written
- *  yet, until it is or two of the Agent's looks pass (shownUntil of its close); "closed", over ("Not a problem while it
- *  lasts" among them: nothing is watched). null: not resolved.
- *  ⚠️ ONE PLACE PER RECORD (architecture review round 16, 2026-11-03): the Watch list, the Closed section and the
- *  records whose live state is hidden each had their own rule, and a fault the Agent owns, closed by Done, was in Closed
- *  for the seconds before the Agent wrote its confirmsBy (owner, 2026-11-02: closed at 02:49:25, confirmsBy at
- *  02:49:33), then jumped to Watch. confirmingFaults, closedFaults and watchedRecords all read this. */
-export type AfterClose =
-  | { place: "watch" | "awaiting"; fault: ConfirmingFault }
-  | { place: "closed"; fault: ClosedFault };
-
-export function afterClose(t: FmTicket, cadence: AgentCadence | null, now: number = Date.now()): AfterClose | null {
-  if (!isTicketResolved(t)) return null;
-  const closed = closedTold(t);
-  const lookMinutes = cadence && cadence.checkMinutes > 0 ? cadence.checkMinutes : null;
-  const at = watchedUntil(t, cadence);
-  if (!Number.isNaN(at)) {
-    return now > shownUntil(at, cadence) ? { place: "closed", fault: closed }
-      : { place: "watch", fault: { ...closed, at, due: now >= at, lookMinutes, awaiting: false } };
-  }
-  // its confirmsBy not written yet: on Watch, with no moment to say, until the Agent answers — ⚠️ unless the Agent
-  // closed it watching nothing (`notWatched`: a visit ends once; owner's drills 2026-11-06, one on Watch with no
-  // "Closes" line, another in Closed): Closed at once
-  const resolvedAt = Date.parse(t.resolvedAt ?? "");
-  if (!closedAsLasting(t) && !t.notWatched && agentOwned(t) && now <= shownUntil(resolvedAt, cadence)) {
-    return { place: "awaiting", fault: { ...closed, at: NaN, due: false, lookMinutes, awaiting: true } };
-  }
-  return { place: "closed", fault: closed };
-}
-
-/** On Watch: being confirmed, or about to be. */
-const onWatch = (p: AfterClose | null): p is Extract<AfterClose, { place: "watch" | "awaiting" }> =>
-  p?.place === "watch" || p?.place === "awaiting";
-
-/** Every fault on Watch now, the soonest verdict first, those still awaiting their moment last. */
-export function confirmingFaults(d: FmData, cadence: AgentCadence | null, now: number = Date.now()): ConfirmingFault[] {
-  const order = (c: ConfirmingFault) => (Number.isNaN(c.at) ? Infinity : c.at);
-  return d.tickets.flatMap((t) => { const p = afterClose(t, cadence, now); return onWatch(p) ? [p.fault] : []; })
-    .sort((a, b) => order(a) - order(b) || (a.closedAt || 0) - (b.closedAt || 0) || a.ticket.id.localeCompare(b.ticket.id));
-}
-
-/** ⚠️ WHAT LEFT THE WATCH LIST GOES TO CLOSED (owner, 2026-11-01: "i expect to see them go in the closed section"): a
- *  fault with no VESTA message of its own just left the Inbox. Every resolved fault no longer watched nor about to be,
- *  the last closed first; the server drops them after their retention window. */
-export function closedFaults(d: FmData, cadence: AgentCadence | null, now: number = Date.now()): ClosedFault[] {
-  return d.tickets.flatMap((t) => { const p = afterClose(t, cadence, now); return p?.place === "closed" ? [p.fault] : []; })
-    .sort((a, b) => (b.closedAt || 0) - (a.closedAt || 0));
-}
-
-/** The records whose device's live state is no open issue: those on Watch, and ⚠️ THOSE ABOUT TO BE (owner, 2026-11-02:
- *  closed at 02:49:25, the Agent's confirmsBy written at 02:49:33; in between the card came back as a live state with its
- *  own Done, and that second press raised a second fault): a fault of the Agent's just closed, until it answers
- *  (shownUntil: two of its looks). Exactly the records afterClose puts on Watch. */
-export function watchedRecords(d: FmData, cadence: AgentCadence | null, now: number = Date.now()): FmTicket[] {
-  return d.tickets.filter((t) => onWatch(afterClose(t, cadence, now)));
 }
 
 /** How it was closed, as the Agent's Telegram lines say it: what, when, then who. */

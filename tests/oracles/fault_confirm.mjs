@@ -8,7 +8,8 @@
 import { h, draw, inside } from "../consistency/screen.mjs";
 import { ck, done } from "../consistency/check.mjs";
 import { readFileSync } from "node:fs";
-const { confirmingFaults, confirmParts, shownUntil } = await import("@/fm/faultConfirm");
+const { confirmParts } = await import("@/fm/faultConfirm");
+const { confirmingFaults, faultStanding, shownUntil } = await import("@/fm/faultStanding");
 const confirmLine = (c) => { const { did, tip } = confirmParts(c); return `${did} · ${tip}`; };
 const { attentionOf, attentionFor, deviceIssues } = await import("@/config/attention");
 const { confirmingCards, cockpitCard } = await import("@/config/cockpitCard");
@@ -47,7 +48,7 @@ const watched = doneOn("w1", "lock.door", at(8));               // VESTA confirm
 const kiosk = closedIn("w2", "switch.pump", at(9));              // closed in the Cockpit, confirmed by 15:07
 const due = doneOn("w3", "lock.back", at(-3));                    // its moment past, the verdict at the next look
 const stale = doneOn("w4", "lock.gate", at(-11));                 // past by more than two looks: let go
-const plain = doneOn("w5", "lock.side", undefined);              // no field yet: about to be watched (afterClose)
+const plain = doneOn("w5", "lock.side", undefined);              // no field yet: about to be watched (faultStanding)
 const data = { ...EMPTY_FM_DATA, tickets: [active, watched, kiosk, due, stale, plain] };
 
 console.log("  which faults are being confirmed:");
@@ -258,19 +259,19 @@ console.log("\n  a hidden device: no card in any section (config/cockpitIssues, 
   ck("a person's fault Done stays on Watch until the nightly check after it, the Agent's own time; the Agent's is on Watch until it says (about to be); no Agent, no watch",
      shown(CADENCE) === "p1,p2" && shown(null) === "", [shown(CADENCE), shown(null)]);
   // the eight seconds at 02:49: its Done closed, its confirmsBy not written yet
-  const { watchedRecords } = await import("@/fm/faultConfirm");
+  const { watchedRecords } = await import("@/fm/faultStanding");
   const answering = (t) => watchedRecords({ ...EMPTY_FM_DATA, tickets: [t] }, CADENCE, NOW).length;
   ck("  ...the Agent's own, until it answers: its device's live state does not come back as a card with a Done; after two looks, it may",
      answering(agents) === 1 && answering({ ...agents, resolvedAt: at(-11) }) === 0);
 }
 
-console.log("\n  one place at every moment (architecture review round 16: faultConfirm.afterClose):");
+console.log("\n  one place at every moment (architecture review round 16: faultStanding):");
 {
   // ⚠️ owner, 2026-11-02: closed at 02:49:25, the Agent's confirmsBy written at 02:49:33. In between the fault sat under
   // Closed, then jumped to Watch. One record walked through the Done, the eight seconds, the Agent's moment written, that
   // moment past, two looks past it: at each step it is on exactly one list, and its offline device's live state is an
   // open issue exactly when the fault is closed.
-  const { afterClose, closedFaults, watchedRecords } = await import("@/fm/faultConfirm");
+  const { closedFaults, watchedRecords } = await import("@/fm/faultStanding");
   const T0 = NOW, LOOK = CADENCE.checkMinutes * 60_000, iso = (ms) => new Date(ms).toISOString();
   const devs = devicesOf({ ids: ["switch.example_pump"], unavailable: ["switch.example_pump"] });
   const ents = { "switch.example_pump": { entity_id: "switch.example_pump", state: "unavailable", attributes: {} } };
@@ -284,7 +285,8 @@ console.log("\n  one place at every moment (architecture review round 16: faultC
     const hidden = watchedRecords(d, CADENCE, now).map((x) => x.id);
     const live = attentionOf({ devices: devs, entities: ents, entityMap: {}, resolvedRooms: {}, fmData: d, cadence: CADENCE, now }).attentionItems
       .some((i) => i.kind === "unavailable" && i.entityId === "switch.example_pump");
-    return { place: afterClose(t, CADENCE, now)?.place, onWatch: onWatch.join(), inClosed: inClosed.join(), hidden: hidden.join(), live };
+    const s = faultStanding(t, CADENCE, now);
+    return { place: s.place === "watch" && s.fault.awaiting ? "awaiting" : s.place, onWatch: onWatch.join(), inClosed: inClosed.join(), hidden: hidden.join(), live };
   };
   const steps = [
     ["Done pressed (t0), no confirmsBy yet", done0, T0, "awaiting"],
@@ -396,7 +398,7 @@ console.log("\n  a reopen in the Kiosk takes the watch away (architecture review
   ck("  ...every other field kept (its alert number, its device, its steps)",
      r.alertNumber === 65 && r.entityId === "lock.front_door" && r.updates.length === 3 && r.check === "minutes");
   const closedAgain = applyFmCommand(reopenedHere, { type: "closeTickets", ids: ["w1"] }, k(2));
-  // ...on Watch, about to be (faultConfirm.afterClose), saying no moment until the Agent writes this close's
+  // ...on Watch, about to be (faultStanding), saying no moment until the Agent writes this close's
   const unsaid = (d, now) => confirmingFaults(d, CADENCE, now).every((c) => c.awaiting && Number.isNaN(c.at) && !/\d:\d\d/.test(confirmParts(c).when));
   ck("  ...a Cockpit Close a minute later: resolved, and NO watch time until the Agent writes one",
      closedAgain.tickets[0].status === "resolved" && unsaid(closedAgain, NOW + 2 * 60_000),
@@ -461,6 +463,19 @@ console.log("\n  a reopen in the Kiosk takes the watch away (architecture review
      openKeys(wrong).split(",").includes("lock.door") && !wrong.cards.watched.some((c) => c.entityId === "lock.door"), openKeys(wrong));
   ck("  ...a moment past by more than two of the Agent's looks (it never acted): an open issue again",
      openKeys(forgotten).split(",").includes("lock.door") && !forgotten.cards.watched.some((c) => c.entityId === "lock.door"), openKeys(forgotten));
+  // architecture review, 2026-11-13: the Watch card was found again by the fault's id in the records the Cockpit holds,
+  // and a fault taken out of Open issues was in neither list while those records were still empty (not arrived yet)
+  const late = cockpitIssues(right.att, { fmData: EMPTY_FM_DATA, cadence: CADENCE, now: new Date(NOW), entities: ents, entityMap: {}, resolvedRooms: {} });
+  const lateCard = late.watched.find((c) => c.entityId === "lock.door");
+  ck("  ...the Cockpit's fault records not arrived yet: still on Watch, the same card, never in neither list",
+     !!lateCard && lateCard.lines[0].closing === "Locked" && lateCard.nextCheck?.pill === `Closes ${clockTime(NOW + 10 * 60_000)}`
+     && !late.open.some((c) => c.entityId === "lock.door"), late);
+  // where it stands is one answer per record, read again a minute on: its moment past, "Closes within …"
+  const later = cockpitIssues(right.att, { fmData: EMPTY_FM_DATA, cadence: CADENCE, now: new Date(NOW + 11 * 60_000), entities: ents, entityMap: {}, resolvedRooms: {} });
+  ck("  ...read again past its moment: its pill says VESTA's next look",
+     /^Closes within/.test(later.watched.find((c) => c.entityId === "lock.door")?.nextCheck?.pill ?? ""), later.watched);
+  const standing = faultStanding(fault(at(10)), CADENCE, NOW, { at: at(10), word: "Locked" });
+  ck("  ...the record's one answer: on Watch until its close's moment", standing.place === "watch" && standing.fault.at === Date.parse(at(10)), standing);
 }
 
 {

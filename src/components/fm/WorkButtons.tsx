@@ -1,108 +1,75 @@
 // src/components/fm/WorkButtons.tsx
 // A card's buttons for its faults and tickets — the Inbox's and the Tickets tab's (architecture review, 2026-10-16).
-// WHICH buttons, on which records and with which question is fm/deviceWork's answer (tested by value); this draws it,
-// and CARRIES OUT every step a button names, for both tabs: No action needed and Done ask their question in place of the buttons
-// (Not a problem closes as pressed), a stage
-// change opens its form (FaultStageModal), Need help writes its step, Done or Need help on a card with no record raises
-// its fault in the same write. A step that did not land says why under the card; a Need help that stands says so.
+// WHICH buttons, on which records and with which question is fm/deviceWork's answer, and what a press does is
+// fm/workPress's (both tested by value); this draws them and CARRIES OUT that outcome, for every tab alike: a question
+// asked in place of the buttons, a write (its failure said under the card), the stage form (FaultStageModal), or a
+// form the card does not hold, opened by the tab (`onOpen`). A Need help that stands says so.
 //
 // ⚠️ EACH TAB CARRIED OUT ITS OWN STEPS (architecture review round 6, 2026-10-30): the Inbox's card and the Tickets tab
 // each wrote their own Need help, failure line and stage form around this, and neither showed what a Need help did —
-// pressed, the card stayed exactly as it was. Only the two steps that leave the card (open a ticket's form, edit one)
-// are still the caller's: they open a form the card does not hold.
+// pressed, the card stayed exactly as it was. ⚠️ AND THIS FILE SPLIT THEM AGAIN (architecture review, 2026-11-13): its
+// buttons carried out a close themselves, useCardWork a stage change and the writes, the caller a raise or an edit;
+// every press now goes through fm/workPress.pressOutcome, carried out in one place (useCardWork.press).
 
 import { useState, type ReactNode } from "react";
 import { Ban, BellOff, Check, LifeBuoy, Pencil, RotateCcw, Wrench } from "lucide-react";
-import { useFmData, type FmDataContextValue } from "@/fm/FmDataContext";
-import { DONE_STEP } from "@/fm/fmCommands";
-import type { FmSaveOutcome } from "@/fm/fmSave";
+import { useFmData } from "@/fm/FmDataContext";
 import { WORK_ACTIONS, helpLine, type WorkAction, type WorkActionKind } from "@/fm/deviceWork";
 import type { HelpAsked } from "@/fm/fmEngine";
 import type { FmTicket, FmTicketStatus } from "@/fm/fmTypes";
+import { carryOut, pressOutcome, type RaisedFault, type WorkGo } from "@/fm/workPress";
 import { momentText } from "@/utils/dateText";
 import FaultStageModal from "./FaultStageModal";
 import { CardAsk } from "./RecordCard";
-import { PRESS_SAID, pressVisit } from "@/messages/announcements";
 import { backendFetch } from "@/auth/sessionLost";
 import ProblemLine from "@/components/common/ProblemLine";
 
-/** The fault a card with no record raises for its device (IssueCard.raisedFor). */
-export type RaisedFault = Omit<FmTicket, "id" | "openedAt" | "status">;
+/** How a press reaches what the card does not hold: `raised`, the fault Done or Need help raises on a card with no
+ *  record; `onOpen`, the form a raise or an edit opens (the tab's). `confirmed`: its question was answered yes. */
+interface PressOpts { raised?: (entityId: string) => RaisedFault; onOpen?: (go: WorkGo) => void; confirmed?: boolean }
 
-/** The steps of one list's cards, carried out — one per list, keyed by card, so a second card's Close puts the first
- *  one's buttons back. */
+/** The presses of one list's cards, carried out — one per list, keyed by card, so a second card's question puts the
+ *  first one's buttons back. */
 interface CardWork {
-  /** The card whose close question is being asked, and which button asked it (Done, No action needed). */
+  /** The card whose close question is being asked, and which button asked it (No action needed). */
   asking: { key: string; kind: WorkActionKind } | null;
   /** Why the last step on this card did not land; null when it did, or none was tried. */
   problemFor: (cardKey: string) => string | null;
-  ask: (cardKey: string, kind: WorkActionKind) => void;
+  /** `action` pressed on the card: its outcome (fm/workPress.pressOutcome) carried out. */
+  press: (cardKey: string, action: WorkAction, opts?: PressOpts) => void;
   cancel: () => void;
-  /** `work`: resolved as work done (a completion), else closed with no action; `lasting`: closed with no action as
-   *  "Not a problem while it lasts" (FmTicketUpdate.lasting). */
-  close: (cardKey: string, ids: readonly string[], work?: boolean, lasting?: boolean) => Promise<void>;
-  /** A step that stays on the card: a stage change (its form), Need help, or a raise with Done or Need help
-   *  (`raised`: the fault to raise for the device the action names). */
-  run: (cardKey: string, action: WorkAction, raised?: (entityId: string) => RaisedFault) => void;
   /** The stage change whose form is open, and on which card. */
   staging: { key: string; tickets: FmTicket[]; to: FmTicketStatus } | null;
   endStaging: () => void;
 }
 
-/** The write a step that stays on the card makes: Need help's "help" step on its records, a raise with Done or Need
- *  help in one write — null for a step that writes nothing by itself (a stage change: its form writes). Pure: the
- *  oracle drives it with stand-in writers (tests/oracles/live_issues.mjs). */
-export function stepWrite(a: WorkAction, writers: Pick<FmDataContextValue, "helpTickets" | "addTicket">,
-  raised?: (entityId: string) => RaisedFault): Promise<FmSaveOutcome> | null {
-  const step = a.step;
-  if (step.kind === "help") return writers.helpTickets(a.ids);
-  if (step.kind === "raiseThen" && raised) return writers.addTicket(raised(a.ids[0]), { then: step.then });
-  return null;
-}
-
-/** A press on the villa's own visit card (a "visit" step): sent to the villa through the add-on, and what the card
- *  says when it did not get there (PRESS_SAID). null for any other step. Pure: the oracle passes its own `send`. */
-export function visitWrite(a: WorkAction, send: Parameters<typeof pressVisit>[2]): Promise<Pick<FmSaveOutcome, "done" | "note">> | null {
-  if (a.step.kind !== "visit") return null;
-  return pressVisit(a.ids[0], a.step.option, send)
-    .then(({ outcome }) => ({ done: outcome === "sent", note: outcome === "sent" ? null : PRESS_SAID[outcome] }));
-}
-
 export function useCardWork(): CardWork {
   const fm = useFmData();
-  const { data, closeTickets, advanceTickets } = fm;
   const [asking, setAsking] = useState<CardWork["asking"]>(null);
   const [problem, setProblem] = useState<{ key: string; text: string } | null>(null);
   const [staging, setStaging] = useState<CardWork["staging"]>(null);
-  /** A write, and why it did not land on its card. On success the records say it: the card leaves its list, or
-   *  shows its Need help. */
-  const said = async (key: string, write: Promise<Pick<FmSaveOutcome, "done" | "note">>) => {
-    setProblem(null);
-    const { done, note: why } = await write;
-    if (!done && why) setProblem({ key, text: why });
-  };
   return {
     asking,
     problemFor: (key) => (problem?.key === key ? problem.text : null),
-    ask: (key, kind) => { setProblem(null); setAsking({ key, kind }); },
-    cancel: () => setAsking(null),
-    close: async (key, ids, work, lasting) => {
-      setProblem(null);
-      const { done, note: why } = await (lasting ? closeTickets(ids, true)
-        : work ? advanceTickets(ids, "resolved", DONE_STEP) : closeTickets(ids));
-      setAsking(null);
-      if (!done && why) setProblem({ key, text: why });
-    },
-    run: (key, a, raised) => {
-      const step = a.step;
-      if (step.kind === "stage") {
-        setStaging({ key, to: step.to,
-          tickets: a.ids.map((id) => data.tickets.find((t) => t.id === id)).filter((t): t is FmTicket => !!t) });
+    press: (key, a, opts = {}) => {
+      const o = pressOutcome(a, opts);
+      if (o.does === "ask") { setProblem(null); setAsking({ key, kind: o.kind }); return; }
+      if (o.does === "stage") {
+        setStaging({ key, to: o.to, tickets: o.ids.map((id) => fm.data.tickets.find((t) => t.id === id)).filter((t): t is FmTicket => !!t) });
         return;
       }
-      const write = visitWrite(a, backendFetch) ?? stepWrite(a, fm, raised);
-      if (write) void said(key, write);
+      if (o.does === "go") { opts.onOpen?.(o.go); return; }
+      if (o.does !== "write") return;
+      // a write, and why it did not land on its card; on success the records say it: the card leaves its list, or
+      // shows its Need help. A close ends its card's question.
+      void (async () => {
+        setProblem(null);
+        const { done, note: why } = await carryOut(o.write, { ...fm, send: backendFetch });
+        if (o.write.kind === "close") setAsking(null);
+        if (!done && why) setProblem({ key, text: why });
+      })();
     },
+    cancel: () => setAsking(null),
     staging,
     endStaging: () => setStaging(null),
   };
@@ -157,16 +124,14 @@ export function WorkButton({ kind, onClick, main = false, ariaLabel }: {
  *  in the accent (2026-11-04); the strip now says a ticket is in progress, in that green. */
 const MAIN: Partial<Record<WorkActionKind, true>> = { done: true, doneNew: true, ticketDone: true };
 
-/** Does pressing it open a form the card does not hold (the caller's `onOpen`)? */
-const leavesCard = (a: WorkAction) => a.step.kind === "raise" || a.step.kind === "edit";
-
 export default function WorkButtons({ actions, cardKey, work, onOpen, raised, asked, name }: {
   actions: readonly WorkAction[];
   /** The card's key (deviceWork) — whose question is being asked, whose step did not land. */
   cardKey: string;
   work: CardWork;
-  /** Open Ticket on a card with no record (the ticket form for its device), Edit Ticket (the ticket's form). */
-  onOpen?: (action: WorkAction) => void;
+  /** The forms the card does not hold, opened by its tab: Open Ticket on a card with no record (the ticket form for its
+   *  device), Edit Ticket (the ticket's form). */
+  onOpen?: (go: WorkGo) => void;
   /** The fault Done or Need help raises on a card with no record. */
   raised?: (entityId: string) => RaisedFault;
   /** Its Need help that nothing has answered yet (deviceWork.helpAsked): said above the buttons. */
@@ -183,20 +148,14 @@ export default function WorkButtons({ actions, cardKey, work, onOpen, raised, as
   if (actions.length === 0) return after || null;
   const confirming = work.asking?.key === cardKey ? actions.find((a) => a.kind === work.asking?.kind) : undefined;
   if (confirming && confirming.step.kind === "close" && confirming.step.ask) {
-    const { ask: { question, confirmLabel }, work: asWork, lasting } = confirming.step;
+    const { question, confirmLabel } = confirming.step.ask;
     return <CardAsk question={question} confirmLabel={confirmLabel} icon={ICON[confirming.kind]}
-      onConfirm={() => work.close(cardKey, confirming.ids, asWork, lasting)} onCancel={work.cancel} />;
+      onConfirm={() => work.press(cardKey, confirming, { confirmed: true })} onCancel={work.cancel} />;
   }
-  /** A close with a question asks it; one without (Not a problem) closes as pressed. */
-  const closing = (a: WorkAction) => {
-    const step = a.step;
-    if (step.kind !== "close") return undefined;
-    return step.ask ? () => work.ask(cardKey, a.kind) : () => void work.close(cardKey, a.ids, step.work, step.lasting);
-  };
   const buttons = actions.map((a) => (
     <WorkButton key={a.kind} kind={a.kind} main={!!MAIN[a.kind]}
       ariaLabel={a.step.kind === "close" && name ? `${a.label} “${name}”` : a.short ? a.label : undefined}
-      onClick={closing(a) ?? (() => (leavesCard(a) ? onOpen?.(a) : work.run(cardKey, a, raised)))} />
+      onClick={() => work.press(cardKey, a, { raised, onOpen })} />
   ));
   return (
     <>

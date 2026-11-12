@@ -13,7 +13,7 @@ const { faultMove, moveState, moveWho } = await import("@/fm/faultNotes");
 // what a card draws of who last moved it (owner, 2026-11-05, the "Status on top" card): its state line, then its who
 // line, never the stage or the word twice (faultNotes.moveState, moveWho)
 const cardMove = (t, s) => { const m = faultMove(t), st = moveState(m); return [st?.text, moveWho(m, st ? [st.text] : [], undefined, s)].filter(Boolean).join(" | "); };
-const { confirmingFaults, watchedRecords } = await import("@/fm/faultConfirm");
+const { confirmingFaults, watchedRecords } = await import("@/fm/faultStanding");
 const { attentionOf } = await import("@/config/attention");
 const { WORK_ACTIONS, NOT_A_PROBLEM } = await import("@/fm/deviceWork");
 const { EMPTY_FM_DATA } = await import("@/fm/fmTypes");
@@ -47,7 +47,8 @@ ck("a plain close is on Watch until the next night; one that lasts is not, even 
    && confirmingFaults(fm(held), cadence, at).length === 0 && watchedRecords(fm(held), cadence).length === 0
    && confirmingFaults(fm({ ...held, confirmsBy: NOW }), cadence, at).length === 0);
 
-const { closedFaults, closedWords } = await import("@/fm/faultConfirm");
+const { closedWords } = await import("@/fm/faultConfirm");
+const { closedFaults } = await import("@/fm/faultStanding");
 ck("  ...it is Closed at once, said as it was closed", closedWords(closedFaults(fm(held), cadence, at)[0]).startsWith("Not a problem on "),
    closedFaults(fm(held), cadence, at).map(closedWords));
 
@@ -121,7 +122,8 @@ const wb = parseTsx("components/fm/WorkButtons.tsx");
 // owner, 2026-11-05: the card's own question, its bar [the main action][Cancel] (RecordCard CardAsk)
 const confirm = elements(wb, "CardAsk")[0];
 ck("  ...a question (Done's, No action needed's) closes as its button says; no question offers a second yes any more", !!confirm
-   && propText(confirm, "onConfirm") === "() => work.close(cardKey, confirming.ids, asWork, lasting)"
+   // its yes is the same press, answered (fm/workPress: a confirmed close writes; pressed by value in live_issues.mjs)
+   && propText(confirm, "onConfirm") === "() => work.press(cardKey, confirming, { confirmed: true })"
    && propText(confirm, "alternative") == null, confirm && propText(confirm, "onConfirm"));
 
 done();
