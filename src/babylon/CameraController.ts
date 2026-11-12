@@ -1038,6 +1038,16 @@ export class CameraController {
       .map((p) => ({ name: p.name, position: new Vector3(p.position.x, p.position.y, p.position.z) }));
   }
 
+  /** Face `lookAt` from where the camera is, LEVEL: its direction kept, its tilt none.
+   *  ⚠️ A WALKER ARRIVES LOOKING AHEAD (owner, 2026-11-12: FPS mode opened tilted slightly downwards). The point's
+   *  target was aimed at from the point's own height, then groundCamera() lowered the eye to standing height without
+   *  re-aiming — every arrival (the FPS switch, the spawn, a room tap) looked at the floor a little. The tilt is the
+   *  person's own, from the first drag. */
+  private faceLevel(lookAt: Vector3): void {
+    this.camera.setTarget(lookAt);
+    this.camera.rotation.x = 0;
+  }
+
   /** Smoothly move (or instantly jump) to a teleport point. */
   teleport(point: TeleportPoint, instant = false): void {
     const dest = new Vector3(point.position.x, point.position.y, point.position.z);
@@ -1045,7 +1055,7 @@ export class CameraController {
 
     if (instant) {
       this.camera.position.copyFrom(dest);
-      this.camera.setTarget(lookAt);
+      this.faceLevel(lookAt);
       this.groundCamera(); // stand on the real floor at eye height
       this.currentRoom = point.name;
       this.walker.room = point.name;
@@ -1068,8 +1078,8 @@ export class CameraController {
 
     this.animating = true;
     this.cb.onActivity();
-    // Re-aim while we glide so arrival faces the room.
-    this.camera.setTarget(lookAt);
+    // Re-aim while we glide so arrival faces the room, level.
+    this.faceLevel(lookAt);
     this.scene.beginDirectAnimation(this.camera, [posAnim], 0, 30, false, 1, () => {
       this.animating = false;
       this.groundCamera(); // settle to floor + eye height on arrival
