@@ -178,6 +178,11 @@ export default function Dashboard() {
   // SummaryGroupPanel to somehow guess.
   // (the category's members: computed below, once the villa's hidden devices and its fold are known)
   const [modelKey, setModelKey] = useState(0); // bump to force canvas remount
+  // ⚠️ THE OLD SCENE LET GO IN THE SAME RENDER AS ITS CANVAS (2.496.784, owner's report: "Cannot read properties of null
+  // (reading 'setDeviceMarks')" reloading an edited model). The canvas disposes its scene as it unmounts and says so
+  // (onManager(null)) only in the NEXT render: an effect of this page whose own value changed in the reload's render
+  // (the marks, the model's mappings just saved) ran with the disposed scene. Dropped here, every effect sees none.
+  const reloadModel = useCallback(() => { setManager(null); setModelKey((k) => k + 1); }, []);
   // Starts "overview" to match the actual landing view (see the one-shot
   // effect below): the HUD reads this to decide joystick vs. overview-help
   // in the bottom bar, and it used to default to "first-person" here, so the
@@ -742,7 +747,7 @@ export default function Dashboard() {
         onRoomChange={setRoom}
         // straight to where the upload button is (it opened Settings on General, which has none: UI scan, 2026-11-10)
         onNeedModel={() => openSurface("configEditor")}
-        onModelUploaded={() => setModelKey((k) => k + 1)}
+        onModelUploaded={reloadModel}
       />
 
       <RoomLabel room={room} />
@@ -951,7 +956,7 @@ export default function Dashboard() {
           onBack={() => closeSurface("configEditor")}
           // Over Settings, Settings' Save / Cancel own its changes; on its own (a device window's "edit"), its own do
           withinSettings={shown("settings")}
-          onModelChanged={() => setModelKey((k) => k + 1)}
+          onModelChanged={reloadModel}
           viewHeadingDeg={manager ? () => manager.viewHeadingDeg() : undefined}
         />
       )}

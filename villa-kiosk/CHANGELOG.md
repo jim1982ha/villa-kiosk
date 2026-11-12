@@ -1,3 +1,9 @@
+## 2.496.785
+
+- **Reloading the 3D model no longer stops with "Cannot read properties of null (reading 'setDeviceMarks')".** When
+  a reload also changed what the map marks (a model just edited), the page could still talk to the model being
+  closed for a moment and stop with that error. The old model is now let go in the same step that starts the reload.
+
 ## 2.496.784
 
 - **Advanced Settings › Devices, "3D object": the search says when an object was re-mapped.** When a 3D object
