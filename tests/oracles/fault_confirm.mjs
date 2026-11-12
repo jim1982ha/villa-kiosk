@@ -163,8 +163,8 @@ ck("  ...and a fault only a person closes has no next check: nothing checks it",
      && /view\.issues\.map\(card\)/.test(issuesSec?.getText() ?? "") && watch.getStart() > notesSec.getEnd() && notesSec.getStart() > issuesSec.getEnd()
      && closedSec.getStart() > watch.getEnd(),
      [!!issuesSec, !!notesSec, !!watch, !!closedSec]);
-  ck("  ...the count stays the open issues' (cockpitIssues' open cards), never the watched",
-     propText(issuesSec, "count") === "open.length", propText(issuesSec, "count"));
+  ck("  ...the count stays the open issues' (listedIssues' open cards), never the watched",
+     propText(issuesSec, "count") === "view.openCount", propText(issuesSec, "count"));
   const { ListSection, default: FoldedList } = await import("@/components/common/FoldedList");
   const drawn = (open) => draw(h(ListSection, { title: "Watch", count: 2, open, onToggle: () => {} }, h("p", null, "card 1")));
   ck("  ...a section folded shows its name and count, no card; open, its cards",

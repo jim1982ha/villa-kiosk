@@ -1,3 +1,9 @@
+## 2.496.787
+
+- **"Open issues" counts the villa's own alerts.** While the VESTA Agent was away, a visit alert showed its card under
+  Open issues, but the heading said 0 with "Nothing needs attention." right above it, and the top bar's Cockpit button
+  showed no number. The heading, the Issues filter, the top bar and the menu's "Cockpit (N)" now count the same list.
+
 ## 2.496.786
 
 - **A 3D model with a missing image is refused at upload, with the reason.** One texture written without its picture

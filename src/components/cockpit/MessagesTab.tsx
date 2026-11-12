@@ -143,10 +143,10 @@ export default function MessagesTab({ onOpenEntity, doors, onRaiseTicket, onEdit
         )}
       </div>
       {showsIssues && (
-        <ListSection title="Open issues" count={open.length} open={folds.issues} onToggle={() => fold("issues")}
+        <ListSection title="Open issues" count={view.openCount} open={folds.issues} onToggle={() => fold("issues")}
           tip={canManage ? <FaultTiming /> : undefined}>
           {view.issues.map(card)}
-          {open.length === 0 && <EmptyLine>Nothing needs attention.</EmptyLine>}
+          {view.openCount === 0 && <EmptyLine>Nothing needs attention.</EmptyLine>}
         </ListSection>
       )}
       {showsNotes && (

@@ -261,7 +261,7 @@ const hud = parseTsx("components/hud/HUD.tsx");
 const mark = elements(hud, "span").find((e) => propText(e, "className") === '"unread-mark"');
 ck("the light mark is drawn only while something is unread, the count read from the page's announcements",
    !!mark && guardsOf(mark).some((g) => /^unread > 0$/.test(g))
-   && /const \{ unread \} = useAnnouncements\(\);/.test(hud.getText()), mark && guardsOf(mark));
+   && /const \{ unread, openIssues \} = useAnnouncements\(\);/.test(hud.getText()), mark && guardsOf(mark));
 const buttons = elements(hud, "button");
 const holds = (pick) => buttons.filter(pick).some((b) => b.getText().includes("{unreadMark}"));
 ck("  ...on the robot, apart from its count of open issues", holds((b) => propText(b, "onClick") === "onOpenCockpit"));
@@ -749,6 +749,11 @@ ck("  ...a report under Reports, an open alert a notification, a closed one in C
   ck("a villa's alert told step by step (its key) is ONE open issue, its latest step; never a notification",
      view.issues.length === 1 && view.issues[0].kind === "issue" && view.issues[0].card.title.startsWith("Garden Door")
      && notes_.notifications.length === 0 && view.filters[0].count === 1, [view.issues, notes_.notifications]);
+  // architecture review, 2026-11-12: the heading said 0 with "Nothing needs attention." over this card, the top bar nothing
+  const { listedIssues } = await import("@/messages/messagesModel");
+  ck("  ...counted once everywhere: the filter, the Open issues heading (whatever filter is on) and the top bar's badge",
+     view.openCount === 1 && notes_.openCount === 1 && listedIssues({ open: [], watched: [] }, kept).open.length === 1,
+     [view.openCount, notes_.openCount]);
   const html = draw(h(AttentionCard, { card: view.issues[0].card, onOpenEntity: () => {} }));
   ck("  ...drawn as every alert's card: its state first, every line, every photo",
      html.includes("New alert") && html.includes("Seen at Parking, 07:09") && html.includes("Garden Door opened, 07:10")
