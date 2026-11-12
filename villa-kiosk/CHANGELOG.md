@@ -1,3 +1,12 @@
+## 2.496.786
+
+- **A 3D model with a missing image is refused at upload, with the reason.** One texture written without its picture
+  makes the 3D view refuse the whole model, and every tablet then failed to load the villa. Settings › 3D model now
+  says which material's image is missing and uploads nothing; the model in use stays.
+- **A model that fails to load is no longer called "out of memory".** After two failed loads with their own error
+  (a broken model, a refused download), the third opening said "The device most likely ran out of memory". Only a
+  load that never got to report anything counts towards that message now; otherwise the real error is shown again.
+
 ## 2.496.785
 
 - **Reloading the 3D model no longer stops with "Cannot read properties of null (reading 'setDeviceMarks')".** When

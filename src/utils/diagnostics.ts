@@ -102,6 +102,20 @@ export function noteLoadSuccess(): void {
   write({ attempts: [], phase: "ready", lastError: null });
 }
 
+/**
+ * The load in progress ENDED WITHOUT A CRASH: it failed with an error this page caught and reports itself (a broken
+ * model, a fetch refused), or the page went away by its own code (a reload, an update, a navigation, the app closed),
+ * or the canvas unmounted. Its attempt is dropped, so only a load that never got to run any code again (an
+ * out-of-memory kill) is counted towards the crash loop.
+ * ⚠️ A BROKEN MODEL WAS CALLED OUT OF MEMORY (owner, 2026-11-12): a GLB with a texture missing its image failed at
+ * import twice with its own MODEL_LOAD_FAILED; the third opening said "The device most likely ran out of memory".
+ */
+export function noteLoadLeft(): void {
+  const s = read();
+  if (s.phase === "ready" || !s.attempts.length) return;
+  write({ attempts: s.attempts.slice(0, -1) });
+}
+
 /** Manual "try again": reset the loop counter so the next load runs normally. */
 export function clearCrashLoop(): void {
   write({ attempts: [] });

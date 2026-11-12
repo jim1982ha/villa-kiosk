@@ -25,7 +25,7 @@ import ModelUploader from "@/components/settings/ModelUploader";
 import ErrorReport from "@/components/ErrorReport";
 import {
   isCrashLooping, crashLoopInfo, noteLoadStart, noteLoadPhase, noteModel,
-  noteLoadSuccess, clearCrashLoop, noteContextLoss, captureError, buildReport,
+  noteLoadSuccess, noteLoadLeft, clearCrashLoop, noteContextLoss, captureError, buildReport,
 } from "@/utils/diagnostics";
 import { adoptDetected } from "@/config/mappingEdits";
 
@@ -213,6 +213,10 @@ export default function BabylonCanvas({
     // the canvas. Record it; if it happens before the villa finished loading,
     // surface the error instead of hanging.
     let reachedReady = false;
+    // a load that ends without a crash is not one towards the crash loop (diagnostics.noteLoadLeft)
+    let left = false;
+    const leave = () => { if (!reachedReady && !left) { left = true; noteLoadLeft(); } };
+    window.addEventListener("pagehide", leave);
     const onCtxLost = (e: Event) => {
       e.preventDefault();
       noteContextLoss();
@@ -725,6 +729,7 @@ export default function BabylonCanvas({
       } catch (err) {
         if (cancelled) return;
         console.error("[BabylonCanvas] model load failed", err);
+        leave();
         setReport(buildReport(captureError(loadErrorCode, err, "loadModel")));
         setErrorMsg((err as Error).message);
         setStatus("error");
@@ -733,6 +738,8 @@ export default function BabylonCanvas({
 
     return () => {
       cancelled = true;
+      window.removeEventListener("pagehide", leave);
+      leave();
       canvasEl.removeEventListener("webglcontextlost", onCtxLost as EventListener, false);
       cbRef.current.onManager(null);
       // Grabbed BEFORE dispose() so the scene is still reachable to hand over.
