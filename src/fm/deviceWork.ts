@@ -68,7 +68,7 @@ export function ticketCards(records: readonly FmTicket[], deviceOfRecord: (field
 export type WorkActionKind = "done" | "needHelp" | "notAProblem" | "doneNew" | "helpNew" | "openTicket" | "raiseTicket"
   | "editTicket" | "ticketDone" | "closeTicket" | "reopen";
 
-/** What a button does once pressed: record a stage change (FaultStageModal, to `to`), open the record's form, open
+/** What a button does once pressed (carried out as fm/workPress.pressOutcome says): record a stage change (FaultStageModal, to `to`), open the record's form, open
  *  the ticket form pointed at a device, ask for help on the records (a "help" step: the VESTA Agent asks the owner to
  *  act), raise a fault for the device and close it or ask for help on it in the same write (`then`), or close the
  *  records (after its question, when it has one). */
@@ -79,7 +79,7 @@ type WorkStep =
   | { kind: "help" }
   | { kind: "raiseThen"; then: "done" | "help" }
   /** The villa's own visit card (VESTA away): the press goes to the villa as its Telegram press does, `option` the
-   *  villa's button (messagesModel.villaAlertCards, WorkButtons.visitWrite); the action's one id is the card's key. */
+   *  villa's button (messagesModel.villaAlertCards, fm/workPress); the action's one id is the card's key. */
   | { kind: "visit"; option: string }
   /** `work`: the records are resolved as work done (a completion with who did it, in Recent work, as a Done on Telegram
    *  records it: the Agent's resolve_ticket); without, closed with no action (no completion, no cost). `lasting`: closed
@@ -197,7 +197,7 @@ export function overviewActions(records: readonly WorkRecord[], device?: string)
 /** ⚠️ NOT A PROBLEM ONLY BEFORE ANYONE TAKES IT ON (owner, 2026-11-04: on a ticket "it's irrelevant"; architecture
  *  review 23): the Tickets card left it out, but the same device's Inbox card offered it while its ticket was in
  *  progress, and pressing it closed that ticket as "Not a problem while it lasts". Offered on records none of which is a
- *  ticket; asked by every card's buttons (overviewActions, ticketActions). */
+ *  ticket (overviewActions; a Tickets card's records are all tickets: ticketActions offers none). */
 function notAProblem(records: readonly WorkRecord[]): WorkAction[] {
   return records.length && records.every((r) => r.stage === "fault") ? [action("notAProblem", records.map((r) => r.id))] : [];
 }
@@ -210,7 +210,7 @@ function notAProblem(records: readonly WorkRecord[]): WorkAction[] {
 export function ticketActions(records: readonly WorkRecord[]): WorkAction[] {
   const tickets = records.filter((r) => r.stage === "ticket");
   const ids = tickets.map((r) => r.id);
-  return ids.length ? [action("ticketDone", ids), ...notAProblem(tickets), action("closeTicket", ids), ...needHelp(tickets)] : [];
+  return ids.length ? [action("ticketDone", ids), action("closeTicket", ids), ...needHelp(tickets)] : [];
 }
 
 /** A closed record's one button: "Reopen" — it is a fault again, back on the Inbox — when it may be taken back

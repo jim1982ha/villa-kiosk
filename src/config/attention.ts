@@ -17,7 +17,8 @@ import { deviceRoom, deviceRoomOrRecord, firstRoom, recordRoomNow, roomLabel } f
 import { devicesFor, recordEntity, type VillaDevices } from "@/config/deviceGroups";
 import { alertNumberOf, closedAsLasting, DUE_WORDS, faultAlertLabel, faultBegan, faultName, fmAttention, helpIsLatest, stageOf, standingHelp, type FmStage, type HelpAsked } from "@/fm/fmEngine";
 import type { AgentCadence } from "@/agent/agentApi";
-import { shownUntil, watchedRecords } from "@/fm/faultConfirm";
+import { faultStanding, watchedRecords, type FaultClosing } from "@/fm/faultStanding";
+import type { ConfirmingFault } from "@/fm/faultConfirm";
 import { faultMove, notedStory, type FaultMove } from "@/fm/faultNotes";
 import { deviceWorkKey, groupByDevice } from "@/fm/deviceWork";
 import { faultSource, type IssueSource } from "@/fm/issueSource";
@@ -70,7 +71,7 @@ export interface AttentionItem {
   /** Set on a fault the VESTA Agent will close if it stays as it is now (FmTicket.closesAt): when, and what its device
    *  reads now and since when — "Locked since 14:38 · closes at about 14:49 if it stays locked" (cockpitCard). `since`:
    *  read from its history (useStateSince), never its last_changed. */
-  closing?: { at: string; word?: string; since?: Since };
+  closing?: FaultClosing;
   /** Set on an alert fault the VESTA Agent holds because it is expected (FmTicket.expected): its words. On Watch while
    *  the Agent is online, as a fault right again is (attentionOf's `clearing`). */
   expected?: string;
@@ -593,21 +594,24 @@ export function attentionOf(opts: AttentionInputs): Pick<VillaProblems, "attenti
   const shown = items.filter((i) => (!i.entityId || !devices.isHidden(i.entityId))
     && !(live(i) && watched.has(devices.deviceOf(i.entityId!)))
     && !heldLine(i));
-  // ⚠️ RIGHT AGAIN IS ON WATCH, NOT AN OPEN ISSUE (owner, 2026-11-12: a lock locked again stayed in Open issues for its
-  // 10-minute wait, "Locked since 01:29 · closes at about 01:41"; "move it directly in the Watch section, as soon as it
-  // enters this state … for every kind of 10min clear period"): a fault the VESTA Agent will close if it stays as it is
-  // (its `closing`, the alert desk's clear wait, the one wait of the kind) is on Watch, counted, marked and signed
-  // nowhere, as a Done waiting for VESTA's verdict is. Back to wrong before its moment: the Agent takes `closesAt` away
-  // at its next look and it is an open issue again. A moment the Agent never acted on (offline) is not kept past two of
-  // its looks (faultConfirm.shownUntil): it is an open issue again.
+  // ⚠️ RIGHT AGAIN, OR HELD AS EXPECTED, IS ON WATCH, NOT AN OPEN ISSUE (owner, 2026-11-12): an open fault the VESTA
+  // Agent will close if it stays as it is (its `closing`), or holds because it is expected (`expected`), is on Watch,
+  // counted, marked and signed nowhere, as a Done waiting for VESTA's verdict is: where it stands is the record's one
+  // answer (fm/faultStanding), and its Watch card's fields come with it, from this very record
   const now = opts.now ?? Date.now();
-  // ⚠️ EXPECTED IS ON WATCH TOO (owner, 2026-11-12: "a 'has not run' alert raised while the villa was empty … is held.
-  // It goes to Watch"): an alert the VESTA Agent holds because it is expected (`expected`, its words) is held on Watch
-  // the same way, while the Agent is online (a cadence); offline, nobody would end the hold: an open issue as before.
-  const isClearing = (i: AttentionItem) => i.kind === "fault" && ((!!i.closing && now <= shownUntil(Date.parse(i.closing.at), opts.cadence ?? null))
-    || (!!i.expected && !!opts.cadence));
-  return { attentionItems: shown.filter((i) => !isClearing(i)), held, clearing: shown.filter(isClearing) };
+  const records = new Map(fm.unresolved.map((t) => [t.id, t]));
+  const onWatch = new Map<AttentionItem, ConfirmingFault>();
+  for (const i of shown) {
+    const t = i.kind === "fault" && i.ticketId ? records.get(i.ticketId) : undefined;
+    const s = t ? faultStanding(t, opts.cadence ?? null, now, i.closing) : null;
+    if (s?.place === "watch") onWatch.set(i, s.fault);
+  }
+  return { attentionItems: shown.filter((i) => !onWatch.has(i)), held,
+    clearing: [...onWatch].map(([item, fault]) => ({ item, fault })) };
 }
+
+/** An open fault on Watch (attentionOf's `clearing`): its line, and its Watch card's fields (fm/faultStanding). */
+export interface OnWatch { item: AttentionItem; fault: ConfirmingFault }
 
 /** The villa's problems, role-blind — what the villa model holds. Nothing
  *  counts or shows these directly: a profile's view is attentionFor's. */
@@ -619,7 +623,7 @@ export interface VillaProblems {
   held?: ReadonlySet<string>;
   /** The open faults held on Watch, never counted (attentionOf): right again, waiting out the VESTA Agent's clear wait
    *  (their `closing`), or held by the Agent because they are expected (their `expected`); absent: none. */
-  clearing?: AttentionItem[];
+  clearing?: OnWatch[];
 }
 
 /** What needs attention as ONE PROFILE is shown it — and the profile's devices (`devices`: only those it may open,
@@ -659,7 +663,7 @@ export function attentionFor(att: VillaProblems, may: (entityId: string) => bool
   // Watched faults, asked the profile alone and showed one. The profile's lists read this one predicate.
   const shows = (id: string) => !att.devices.isHidden(id) && may(id);
   const attentionItems = att.attentionItems.filter((i) => !i.entityId || shows(i.entityId));
-  const clearing = (att.clearing ?? []).filter((i) => !i.entityId || shows(i.entityId));
+  const clearing = (att.clearing ?? []).filter((c) => !c.item.entityId || shows(c.item.entityId));
   // Grouped AFTER the profile's filter, never before: a row is built only
   // from problems this profile may open, so it cannot name a hidden one.
   const attentionGroups = groupAttention(attentionItems);

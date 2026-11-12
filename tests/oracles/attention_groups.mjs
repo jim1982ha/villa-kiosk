@@ -23,8 +23,9 @@ const { devicesOf } = await import("../consistency/devices.mjs");
 const { cockpitCard } = await import("@/config/cockpitCard");
 const card = (g) => cockpitCard(g, null);
 const lineText = (g, n = 0) => card(g).lines[n]?.text;
-// where an open card draws a line's icons: config/cockpitCard.cardIcons, the one place (review round 4, 2026-10-30)
-const { cardIcons } = await import("@/config/cockpitCard");
+// where an open card draws a line's icons: its head, config/cockpitCard.cardFace, the one place (review round 4, 2026-10-30)
+const { cardFace } = await import("@/config/cockpitCard");
+const cardIcons = (c) => { const f = cardFace(c); return { head: f.icons, lines: f.parts.map((p) => p.icons) }; };
 const lineIcon = (g, n = 0) => cardIcons(card(g)).lines[n] ?? null;
 
 const ent = (id, state, name) => ({ entity_id: id, state, attributes: { friendly_name: name } });

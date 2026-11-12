@@ -3,18 +3,18 @@
 // Overview tab's list, one card per device; the Overview became Messages › Open issues (ticket 17 of "One inbox", owner
 // 2026-10-28). The villa by room / floor / category and Recent activity were removed before (owner, 2026-10-20).
 
-import { momentText, statusMoment } from "@/utils/dateText";
+import { statusMoment } from "@/utils/dateText";
 import type { ReactNode } from "react";
-import WorkButtons, { useCardWork, type RaisedFault } from "@/components/fm/WorkButtons";
+import WorkButtons, { useCardWork } from "@/components/fm/WorkButtons";
+import type { RaisedFault } from "@/fm/workPress";
 import { useRecordPlace } from "@/components/fm/useRecordPlace";
 import type { RecordPlace } from "@/fm/recordPlace";
-import { cardIcons, cardTop, lineStrip, rowWhen, toldShown, type CardLine, type CardView } from "@/config/cockpitCard";
+import { cardFace, toldShown, type CardLine, type CardView } from "@/config/cockpitCard";
 import { cardLead, SourceIcons } from "@/components/fm/sourceIcons";
 import RecordCard, { type CardPart, type RecordCardProps } from "@/components/fm/RecordCard";
 import { useFmDataOrNull } from "@/fm/FmDataContext";
 import { backendFetch } from "@/auth/sessionLost";
 import { eraseMessage, type Announcement } from "@/messages/announcements";
-import { moveWho } from "@/fm/faultNotes";
 import { AnnouncementContent } from "@/components/messages/AnnouncementContent";
 
 /** One card of the Live issues, ONE SHAPE whatever it holds (owner, 2026-10-10: "make sure each reported issue
@@ -69,7 +69,7 @@ export function cardErase(card: CardView, removeTicket: (id: string, token: stri
 /** The card itself, drawn — THE Cockpit card (RecordCard), as every list's (architecture review, 2026-10-15): its
  *  strip (its source icons, its alert's name, its name, its time), where it stands, its room and next check, its
  *  problems. Its name opens the device. Draws `card` (config/cockpitCard) and nothing else: what it says is decided
- *  there, by value (cardStrip, lineStrip, faultNotes.moveWho). Pure: a check draws it. */
+ *  there, by value (cockpitCard.cardFace). Pure: a check draws it. */
 export function AttentionCard({ card, onOpenEntity, buttons, focused, erase }: {
   /** The issue as told (messagesModel issueAsTold): a line holding VESTA's message of its alert draws it. */
   card: CardView;
@@ -81,21 +81,14 @@ export function AttentionCard({ card, onOpenEntity, buttons, focused, erase }: {
   /** What a hold on it erases (cardErase): a closed card's records. */
   erase?: RecordCardProps["erase"];
 }) {
-  const icons = cardIcons(card);
-  // its strip, its time and its first line (a Watch card's says when it closes; how it was cleared, when and by whom,
-  // is its who line), as the alert's notice over the villa says them too (cockpitCard.cardTop)
-  const top = cardTop(card);
+  // its whole head, as the alert's notice over the villa and the Tickets tab say it too (cockpitCard.cardFace)
+  const face = cardFace(card);
   const parts: CardPart[] = card.lines.map((line, i) => {
-    const own = lineStrip(line);
-    const alone = card.lines.length === 1;
-    // its time and its state as the card says them: the card's for one problem, its header's for one of several
-    const said = alone ? top.status : own.status, at = alone ? top.when : rowWhen({ lines: [line] });
+    const { icons, ...head } = face.parts[i];
     return {
-      key: line.key, status: own.status, number: own.number, when: at, tone: own.tone,
-      ...(line.check ? { check: { pill: line.check.pill, tip: line.check.tip } } : {}),
-      lead: icons.lines[i] ? <SourceIcons {...icons.lines[i]!} size={14} /> : undefined,
+      ...head,
+      lead: icons ? <SourceIcons {...icons} size={14} /> : undefined,
       text: <LineWords line={line} look={card.look} />,
-      who: line.who ?? (card.look === "watched" ? line.closing : moveWho(line.move, said.map((s) => s.text), at, momentText)),
       actions: buttons?.(line) ?? undefined,
     };
   });
@@ -105,20 +98,20 @@ export function AttentionCard({ card, onOpenEntity, buttons, focused, erase }: {
       title={card.entityId
         ? <button type="button" className="fm-title-link" onClick={() => onOpenEntity(card.entityId!)}>{card.title}</button> : card.title}
       // the time of its problem, the same as its ticket's (rowWhen)
-      when={top.when}
+      when={face.when}
       room={card.room}
-      status={top.status}
-      statusTip={top.statusTip}
-      number={top.number}
+      status={face.status}
+      statusTip={face.statusTip}
+      number={face.number}
       // where its problems come from, or the Watch list's check (sourceIcons.cardLead) — legend: the (i)
       lead={cardLead(card)}
       // when its problems are read again: a pill at the right of its first line (owner, 2026-11-06); hovering it says it
       // in words, with its date and time (owner, 2026-10-19). On the Watch list the first line says when it closes.
-      check={top.check}
+      check={face.check}
       parts={parts}
       erase={erase}
       // its strip's colour when nothing is said (cardStrip); a fault being confirmed: its frame marked (owner, 2026-10-23)
-      tone={[top.tone, card.look === "watched" ? "fault-watched" : "", focused ? "cockpit-focus" : ""].filter(Boolean).join(" ")}
+      tone={[face.tone, card.look === "watched" ? "fault-watched" : "", focused ? "cockpit-focus" : ""].filter(Boolean).join(" ")}
     />
   );
 }
@@ -163,7 +156,7 @@ function LineActions({ card, line, onEditTicket, onRaiseTicket }: {
   return (
     <WorkButtons actions={line.actions} cardKey={`${card.key}|${line.key}`} work={work} name={card.title}
       asked={line.asked} raised={(entityId) => raisedFor({ title: card.title, lines: [line] }, place(entityId, card.title))}
-      onOpen={(a) => (a.step.kind === "raise" ? onRaiseTicket(a.ids[0]) : onEditTicket(a.ids[0]))} />
+      onOpen={(go) => (go.to === "raiseTicket" ? onRaiseTicket(go.id) : onEditTicket(go.id))} />
   );
 }
 

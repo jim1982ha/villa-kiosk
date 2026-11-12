@@ -10,11 +10,12 @@
 // (VillaAttention.shows: not hidden, and the profile may open it).
 
 import type { AgentCadence } from "@/agent/agentApi";
-import { clearingFault, confirmingFaults, type ConfirmingFault } from "@/fm/faultConfirm";
+import type { ConfirmingFault } from "@/fm/faultConfirm";
+import { confirmingFaults, watchAsOf } from "@/fm/faultStanding";
 import type { FmData } from "@/fm/fmTypes";
 import type { HassEntity } from "@/types/ha.types";
-import type { AttentionItem, VillaAttention } from "./attention";
-import { CARD_TONE_RANK, closedCards, cockpitCard, confirmingCards, holdsText, type CardView } from "./cockpitCard";
+import type { OnWatch, VillaAttention } from "./attention";
+import { CARD_TONE_RANK, closedCards, cockpitCard, confirmingCards, type CardView } from "./cockpitCard";
 import type { labelOf } from "./EntityMap";
 
 export interface CockpitIssues {
@@ -26,16 +27,12 @@ export interface CockpitIssues {
   closed: CardView[];
 }
 
-/** Everything on Watch: the faults right again (`clearing`), still open, and the closed faults VESTA confirms
- *  (faultConfirm.confirmingFaults), the soonest close first, those awaiting their moment last. */
-function watchList(clearing: readonly AttentionItem[], fmData: FmData, cadence: AgentCadence | null, now: Date): ConfirmingFault[] {
-  const right = clearing.flatMap((i) => {
-    const t = fmData.tickets.find((x) => x.id === i.ticketId);
-    if (!t) return [];
-    // held because it is expected: the Agent's words, no moment (sorted last); else right again, its close's moment
-    if (i.expected) return [clearingFault(t, NaN, { said: i.expected, expected: true as const }, cadence, now.getTime())];
-    return i.closing ? [clearingFault(t, Date.parse(i.closing.at), holdsText(i.closing), cadence, now.getTime())] : [];
-  });
+/** Everything on Watch: the open faults right again or held as expected (`clearing`, each with its card's fields, made
+ *  from its own record: fm/faultStanding) and the closed faults VESTA confirms (faultStanding.confirmingFaults), the
+ *  soonest close first, those awaiting their moment last. ⚠️ NEVER LOOKED UP AGAIN (architecture review, 2026-11-13): a
+ *  fault right again was found again here by its id in `fmData`, and dropped when it was not there: in neither list. */
+function watchList(clearing: readonly OnWatch[], fmData: FmData, cadence: AgentCadence | null, now: Date): ConfirmingFault[] {
+  const right = clearing.map((c) => watchAsOf(c.fault, now.getTime()));
   const order = (c: ConfirmingFault) => (Number.isNaN(c.at) ? Infinity : c.at);
   return [...right, ...confirmingFaults(fmData, cadence, now.getTime())].sort((a, b) => order(a) - order(b));
 }

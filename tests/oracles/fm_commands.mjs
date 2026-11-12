@@ -119,10 +119,16 @@ console.log("\n  Done · Need help · Open Ticket on every issue card (owner, 20
        WORK_ACTIONS.done.step.kind === "close" && WORK_ACTIONS.done.step.work === true && !WORK_ACTIONS.done.step.ask
        && WORK_ACTIONS.closeTicket.step.kind === "close" && !WORK_ACTIONS.closeTicket.step.work
        && WORK_ACTIONS.doneNew.step.kind === "raiseThen" && WORK_ACTIONS.doneNew.step.then === "done");
-    const wb = (await import("node:fs")).readFileSync(new URL("../../src/components/fm/WorkButtons.tsx", import.meta.url), "utf8");
-    ck("  ...the one confirm flow sends a work Done through the resolving command, a Close through the no-action one",
-       /lasting \? closeTickets\(ids, true\)\s*: work \? advanceTickets\(ids, "resolved", DONE_STEP\) : closeTickets\(ids\)/.test(wb)
-       && /work\.close\(cardKey, confirming\.ids, asWork, lasting\)/.test(wb));
+    // pressed and carried out (fm/workPress), with stand-in writers that record the command each sends
+    const { pressOutcome, carryOut } = await import("@/fm/workPress");
+    const sent = [];
+    const writers = { advanceTickets: async (ids, to) => (sent.push(`advance ${to}`), { done: true }),
+      closeTickets: async (ids, lasting) => (sent.push(lasting ? "close lasting" : "close"), { done: true }) };
+    const carried = async (a, opts) => { const o = pressOutcome(a, opts); if (o.does === "write") await carryOut(o.write, writers); };
+    const act = (kind) => ({ kind, ids: ["a"], ...WORK_ACTIONS[kind] });
+    await carried(act("done")); await carried(act("closeTicket")); await carried(act("closeTicket"), { confirmed: true }); await carried(act("notAProblem"));
+    ck("  ...the one confirm flow sends a work Done through the resolving command, a Close through the no-action one (after its yes)",
+       sent.join(" | ") === "advance resolved | close | close lasting", sent);
   }
   ck("  ...Need help on it: raised and asked for help in ONE write, still open",
      helpNew.tickets[0].status === "open" && last(helpNew.tickets[0]).kind === "help", helpNew.tickets[0]);

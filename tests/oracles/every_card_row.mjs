@@ -305,8 +305,9 @@ ck("  ...a fault on that device: the fault's moment", rowWhen(cockpitCard(told, 
   ck("  ...a fault counting from when its device went offline: that moment, on its card and its ticket alike",
      rowWhen(cockpitCard(groupAttention([i])[0], null, new Date(now))) === momentText(since) && faultBegan(offline) === since
      && faultBegan({ openedAt }) === openedAt && faultBegan({ openedAt, since: "x" }) === openedAt);
-  const tab = readFileSync(new URL("../../src/components/fm/TicketsTab.tsx", import.meta.url), "utf8");
-  ck("  ...the Tickets tab asks the same", /const when = momentText\(faultBegan\(t\)\);/.test(tab) && /\bwhen=\{when\}/.test(tab));
+  // the Tickets tab's card says its head's time (cockpitCard.ticketFace)
+  const { ticketFace } = await import("@/config/cockpitCard");
+  ck("  ...the Tickets tab says the same", ticketFace(offline).when === momentText(since), ticketFace(offline).when);
 }
 
 console.log("\n  the wiring: every moment is actually read:");

@@ -1,3 +1,12 @@
+## 2.496.789
+
+- **A problem right again stays on Watch while the fault records are still loading.** Just after the page opened, a
+  fault that had come right (or was held because it was expected) could leave Open issues without appearing on Watch,
+  until the fault records arrived. It now shows on Watch straight away, with the same words.
+- **Behind the scenes:** a fault's place (Open issues, Watch, Closed), the head of a card, and what each card button
+  does are now each worked out in one place, for the Inbox, the notice and the Tickets tab alike. Nothing else changes
+  on screen.
+
 ## 2.496.788
 
 - **A screen that cannot start 3D is no longer told it "ran out of memory".** When the browser refused 3D (WebGL

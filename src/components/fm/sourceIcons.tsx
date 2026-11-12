@@ -15,7 +15,7 @@ import { ROLE_INITIALS, ROLE_LABELS, type Role } from "@/auth/roles";
 import type { AttentionSeverity } from "@/config/attention";
 import type { IssueSource } from "@/fm/issueSource";
 import type { AgentCadence } from "@/agent/agentApi";
-import { cardIcons, type CardView } from "@/config/cockpitCard";
+import type { CardView } from "@/config/cockpitCard";
 import { useAgentCadence } from "@/agent/AgentContext";
 import { confirmingRow, timingRow, TIMING_HEADS, type TimingKey } from "@/fm/faultTiming";
 import InfoTip from "@/components/common/InfoTip";
@@ -71,10 +71,9 @@ export function SourceIcons({ sources, severities, size = 16 }: {
  *  the Watch list the check, in the status vocabulary's green (owner, 2026-10-23; a closed card wears its source, in
  *  grey: cockpitCard.clearedCard). Nothing for a card with no source. The Cockpit's card and the alert's notice over
  *  the villa both wear these (RecordCard `lead`). */
-export function cardLead(card: Pick<CardView, "look" | "lead" | "lines">): ReactNode {
+export function cardLead(card: Pick<CardView, "look" | "lead">): ReactNode {
   if (card.look === "watched") return <IconTip k="watch" icon={<WatchedIcon size={18} />} />;
-  const { head } = cardIcons(card);
-  return head ? <SourceIcons {...head} /> : undefined;
+  return card.lead ? <SourceIcons {...card.lead} /> : undefined;
 }
 
 /** The sources of several faults on one line ("Check the ⏾ ⚑ faults in Messages", the Recap's readiness) — side by

@@ -22,9 +22,10 @@ import type { HelpAsked } from "@/fm/fmEngine";
 import { faultSource, type IssueSource } from "@/fm/issueSource";
 import { clockTime, docDate, momentText } from "@/utils/dateText";
 import { sinceText } from "./presence";
-import { closedFaults, closedTold, confirmParts, type ConfirmingFault } from "@/fm/faultConfirm";
-import { STAGE_WORDS, alertNumberOf, faultAlertLabel, faultBegan, faultName } from "@/fm/fmEngine";
-import { faultMove, moveState, type FaultMove } from "@/fm/faultNotes";
+import { closedTold, confirmParts, type ConfirmingFault } from "@/fm/faultConfirm";
+import { closedFaults } from "@/fm/faultStanding";
+import { STAGE_WORDS, alertNumberOf, faultAlertLabel, faultBegan, faultName, stageOf } from "@/fm/fmEngine";
+import { faultMove, moveState, moveWho, stagePillClass, type FaultMove } from "@/fm/faultNotes";
 import type { FmData, FmTicket } from "@/fm/fmTypes";
 import type { HassEntity } from "@/types/ha.types";
 import { alertStage, statusWords, type Announcement } from "@/messages/announcements";
@@ -88,14 +89,11 @@ function cardSources(items: readonly AttentionItem[]): LineSources | null {
  *  before the lines were put in their order, then patched three times (the first line's dropped for the name, given
  *  back to the alert drawn second, taken off the name, the emptied column padded). ⚠️ ONE ICON PER MEANING (owner,
  *  2026-10-13: "the icon is redundant"): a line never repeats an icon the name shows. Pure. */
-export function cardIcons(card: Pick<CardView, "lead" | "lines">): {
-  head: LineSources | null; lines: (LineSources | null)[];
-} {
+function partIcons(card: Pick<CardView, "lines">): (LineSources | null)[] {
   // ⚠️ THE STRIP SAYS EVERY SOURCE, EACH PROBLEM ITS OWN (owner, 2026-11-05, the "Status on top" card): the card's strip
   // carries every kind of problem it holds (cardSources); a card of several problems draws each one's own icons in that
   // problem's header line, beside its state and its time. One problem: its icons are the strip's, none repeated.
-  const owns = card.lines.map((l) => l.own ?? null);
-  return { head: card.lead, lines: card.lines.length > 1 ? owns : owns.map(() => null) };
+  return card.lines.map((l) => (card.lines.length > 1 ? l.own ?? null : null));
 }
 
 /** A line's source icons and the status colour of each (owner, 2026-10-14: the source as an icon, in place of the
@@ -205,6 +203,71 @@ export function cardTop(card: Pick<CardView, "lines" | "status" | "tone" | "look
   };
 }
 
+/** One part of a card's head (RecordCard's part, or a lone record's head): where it stands, its alert's name, its time,
+ *  its colour, its own pill, its icons, its who line. */
+export interface PartFace {
+  key: string;
+  status: RecordStatus[];
+  number?: string;
+  when?: string;
+  tone: string;
+  check?: { pill: string; tip: string };
+  icons: LineSources | null;
+  who: string | null;
+}
+
+/** ⚠️ ONE CARD HEAD FOR EVERY TAB (architecture review, 2026-11-13): an Inbox card's head was put together as it was
+ *  drawn (cockpit/IssueCard: its state the card's for one problem, its header's for one of several, the who line's
+ *  fallbacks), the notice over the villa read the card's top on its own, and the Tickets tab made its own of the same
+ *  record inline (its stage, its alert's name, who moved it): a fix of the card's name or its who line had to be made on
+ *  both paths. The whole head of a card, here: its top (cardTop), its icons, and each part's head. The Tickets tab's
+ *  record says the same through ticketFace. Pure: IssueCard and the notice draw it, a check reads it. */
+export interface CardFace extends ReturnType<typeof cardTop> {
+  /** The icons before its name (cardSources). */
+  icons: LineSources | null;
+  parts: PartFace[];
+}
+
+/** Who moved it, under its head: the move's words never saying its state or its time again (faultNotes.moveWho). */
+const whoUnder = (move: FaultMove | null | undefined, status: readonly RecordStatus[], when: string | undefined) =>
+  moveWho(move, status.map((s) => s.text), when, momentText);
+
+export function cardFace(card: CardView): CardFace {
+  const top = cardTop(card), icons = partIcons(card);
+  const alone = card.lines.length === 1;
+  return {
+    ...top,
+    icons: card.lead,
+    parts: card.lines.map((line, i) => {
+      const own = lineStrip(line);
+      // its time and its state as the card says them: the card's for one problem, its header's for one of several
+      const said = alone ? top.status : own.status, at = alone ? top.when : rowWhen({ lines: [line] });
+      return {
+        key: line.key, status: own.status, number: own.number, when: at, tone: own.tone,
+        ...(line.check ? { check: { pill: line.check.pill, tip: line.check.tip } } : {}),
+        icons: icons[i] ?? null,
+        // the record's own ending (the villa's visit card), a Watch card's how it was cleared, else who moved it
+        who: line.who ?? (card.look === "watched" ? line.closing : whoUnder(line.move, said, at)),
+      };
+    }),
+  };
+}
+
+/** A record of the Tickets tab, its head as its Inbox card says it (cardFace): its name, its alert's name (the strip's
+ *  chip), its time (when its problem began), its icon (where it comes from), where it stands (how it was last moved,
+ *  else its stage's word: fmEngine.STAGE_WORDS) and who moved it. `stated`: false for a ticket's records after its
+ *  first, whose card says its state and who once. Pure. */
+export function ticketFace(t: FmTicket, stated = true): Pick<PartFace, "status" | "number" | "when" | "who" | "icons"> & { title: string } {
+  const move = faultMove(t), when = momentText(faultBegan(t));
+  const stage = stageOf(t);
+  const status = stated ? [moveState(move) ?? { text: STAGE_WORDS[stage].card, tone: stagePillClass(stage) }] : [];
+  return {
+    title: faultName(t), when, status, who: stated ? whoUnder(move, status, when) : null,
+    ...(faultAlertLabel(t) ? { number: faultAlertLabel(t) } : {}),
+    icons: { sources: [faultSource(t)], severities: ["warn"] },
+  };
+}
+
 /** One problem of a card of several, as the card it would be alone: its own icons, state and colour (lineStrip's),
  *  the card's name, room and look. What the notice of ITS alert draws (messagesModel.cardOfMessage). Pure. */
 export function cardOfLine(card: CardView, line: CardLine): CardView {
@@ -266,14 +329,6 @@ function closingText(c: AttentionItem["closing"], now: Date): string | null {
   return `${c.word}${since} · ${when} if it stays ${c.word.toLowerCase()}`;
 }
 
-/** What a fault right again reads, on its Watch card (attention's `clearing`): "Locked since 14:38", or "Back to normal"
- *  when the device cannot say; `word` the reading ("Locked"). The open card's closingText says the same, with its close. */
-export function holdsText(c: NonNullable<AttentionItem["closing"]>): { said: string; word?: string } {
-  if (!c.word) return { said: "Back to normal" };
-  const said = sinceText(c.since ?? null, clockTime, docDate);
-  return { said: `${c.word}${said ? ` since ${said}` : ""}`, word: c.word };
-}
-
 /** One problem's line inside the card. */
 export interface CardLine {
   key: string;
@@ -285,7 +340,7 @@ export interface CardLine {
   actions: WorkAction[];
   /** The Need help pressed on it that nothing has answered yet (deviceWork.helpAsked): its buttons say so. */
   asked: HelpAsked | null;
-  /** Its own source icons (where they are drawn: cardIcons); absent for a line that has none to say. */
+  /** Its own source icons (where they are drawn: cardFace); absent for a line that has none to say. */
   own?: LineSources;
   /** What happened about it on Telegram, in time order — the alert sent, a reminder, an escalation, a button pressed
    *  (ticket 19 of "One inbox"); [] when nothing was told. */
@@ -382,7 +437,7 @@ export const ALSO = "Also: ";
 /** ⚠️ THE OTHER PROBLEM READ AS THE ALERT'S HISTORY (owner, 2026-10-30: the onsen pump's night-check line, drawn
  *  under #96's Status lines, "feels like it belongs to the history section"): on a card showing VESTA's message of an
  *  alert (`hasMessage`), every other problem comes first, as one "Also: …" line under the card's name, then the alert
- *  (its icons: cardIcons). The card keeps its height; the row of the list still leads with the alert (lines[0] of
+ *  (its icons: cardFace). The card keeps its height; the row of the list still leads with the alert (lines[0] of
  *  cockpitCard). A card with no alert message, or nothing else, is drawn as it is. Pure. */
 export function othersFirst(card: CardView, hasMessage: (line: CardLine) => boolean): CardView {
   const alerts = card.lines.filter(hasMessage), others = card.lines.filter((l) => !hasMessage(l));
@@ -444,7 +499,7 @@ export function cockpitCard(group: AttentionGroup, cadence: AgentCadence | null,
  *  its fault's title as its line and "Done on 25/10/2026 14:10 (JM)" under it, "Closes 15:06" in its pill — no buttons
  *  (it is cleared). Only the faults whose device `may` be shown: the
  *  profile's own predicate (VillaAttention.shows, hidden devices out), passed by config/cockpitIssues, the one caller;
- *  `confirming` from fm/faultConfirm.confirmingFaults. */
+ *  `confirming`: what fm/faultStanding puts on Watch. */
 export function confirmingCards(confirming: readonly ConfirmingFault[], opts: CardsOpts): CardView[] {
   return oneCardPerDevice(confirming.flatMap((c): CardView[] => {
     const said = confirmParts(c);
@@ -474,7 +529,7 @@ function oneCardPerDevice(cards: readonly CardView[]): CardView[] {
 }
 
 /** Every closed fault as its card, for the Closed section (owner, 2026-11-01): a watched card's, with nothing left to
- *  check, the last closed first (faultConfirm.closedFaults).
+ *  check, the last closed first (faultStanding.closedFaults).
  *  ⚠️ TAKEN BACK WHEN NOTHING CHECKS IT AGAIN (owner, 2026-11-04: "just add this button for the faults that have been
  *  closed with the Not a problem while it lasts status"; architecture review 23: one rule with Tickets › Closed,
  *  faultConfirm.closedTold): such a close had no way back. ⚠️ TOLD AS TICKETS › CLOSED TELLS IT (review 23): its strip
