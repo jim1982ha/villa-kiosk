@@ -17,11 +17,14 @@ A message about no incident is headed the same way, by its title (owner, 2026-10
     To: Owner
 
 "To" names the ROLES a message is for (message_format.audience: "Owner", "Facility Manager", "Owner & Facility
-Manager") — never a person's name (owner, 2026-10-13: "To: Fabien, JM" became "To: Facility Manager"). An incident's
-"To:" FOLLOWS ITS PRIORITY (owner, 2026-10-17): the roles the priority reaches, as the alert desk carried them on the
-incident (store.Notes.TO, `reaches`), widened by every role a step went to (an escalation); a priority that reaches
-nobody says what it does instead, in the desk's words ("To: digest", "To: log") — never the roles of the chat the
-villa's rule posted in (a P3's own message in the owner's group read "To: Owner"). A message about no incident is for
+Manager") — never a person's name (owner, 2026-10-13: "To: Fabien, JM" became "To: Facility Manager"). ⚠️ A CHAT'S
+COPY NAMES WHOM THAT COPY WENT TO (owner, 2026-11-12, #167-P2: the facility manager's still-there read "To: Owner & FM"
+because the owner had been told by the escalation the day before): the roles of the step it was sent for, a role the
+alert's priority does not reach followed by "(escalation)" — "To: FM", and in the owner's group "To: Owner
+(escalation)"; the Status lines keep who got each step. The tablet's one card is everyone's: every role the incident
+went to and its priority reaches, each escalated one said so. A priority that reaches nobody says what it does
+instead, in the desk's words ("To: digest", "To: log") — never the roles of the chat the villa's rule posted in (a
+P3's own message in the owner's group read "To: Owner"). A message about no incident is for
 its role (`to`), else the roles its chat is listed with. The title says "new" for an incident's first notice, "closed"
 for the one that ends it, "existing" otherwise; then one line per earlier notice — what, when, to whom — whatever chat
 it went to (each chat keeps only an incident's latest message: incident_thread.py). A reply to a person in a chat
@@ -34,7 +37,7 @@ named who a message was for. The skill now writes only what happened; this write
 from __future__ import annotations
 
 from vesta_shared.message_format import (ON_TELEGRAM, PRESSED_STAGE, ROLE_WORDS, STEPS, UNTITLED,
-                                         audience, folds)
+                                         audience, audience_why, folds)
 from vesta_shared import status_words
 from vesta_shared.limits import limit
 from vesta_shared.messaging import incident_tag
@@ -340,8 +343,9 @@ class Notices:
             - Alert sent 11/10/2026 09:57 to FM               one line per earlier notice
             - Escalation sent 11/10/2026 10:27 to Owner
 
-        "To:" names every role the incident went to — every earlier notice's, and `also` (roles), this notice's — the
-        same line in every chat (owner, 2026-10-11: one incident, one picture). A message about no incident: its `title`
+        "To:" names whom this chat's copy went to (to_line): `also` (roles), this notice's, when they are the chat's,
+        else the latest earlier step the chat's roles got — a role the priority does not reach said "(escalation)"
+        (owner, 2026-11-12). Chat 0 (the tablet's card) names everyone. A message about no incident: its `title`
         (UNTITLED when it has none), and "To:" the roles of `also`, else the chat's of `to`.
 
         `before`: the heading as it stood before the incident's last `before` steps were recorded — a copy refreshed in
@@ -358,7 +362,8 @@ class Notices:
             # the step this notice is folds into the last one (record): its bottom line says it, never the line above too
             before = 1
         history = _cut(history, before)[0] if before else history
-        who = self.to_line(int(incident), also, history) or audience(self.roles_for(chat, to), short=True) or "this chat"
+        mine = self.roles_for(chat, to) if chat else set()
+        who = self.to_line(int(incident), also, history, mine) or audience(mine, short=True) or "this chat"
         try:
             label = self.name(int(incident))
         except Exception:  # noqa: BLE001 — the heading is written without its priority, never not at all
@@ -391,18 +396,29 @@ class Notices:
         t = _moment(at) if at else None
         return t.astimezone(ZoneInfo(self.tz)).date().isoformat() if t else None
 
-    def to_line(self, incident: int, also=(), history: list[dict] | None = None) -> str | None:
-        """The "To:" of every copy of `incident` — the SAME in every chat: every role the incident went to (its
-        `history`, as recorded; `also`: the roles of the notice being sent) and the roles its priority reaches
-        (`reaches`). ⚠️ "TO:" FOLLOWS THE PRIORITY (owner, 2026-10-17): a priority nobody is sent says what it does
-        instead, in the desk's words ("digest", "log") — never the roles of the chat the villa's rule posted in. None
-        when nothing says (an older desk that did not carry it, and no step yet): the caller's own fallback."""
+    def to_line(self, incident: int, also=(), history: list[dict] | None = None, chat_roles=None) -> str | None:
+        """The "To:" of a copy of `incident`. A chat's (`chat_roles`: the roles it gets): whom THAT copy went to —
+        `also` (the roles of the notice being sent) when it is for the chat, else the latest step of its `history` the
+        chat's roles got (owner, 2026-11-12: "To: FM" on the facility manager's still-there, "To: Owner (escalation)"
+        on the owner's escalation). Everyone's (the tablet's card, or a chat no step went to yet): every role the
+        incident went to and the roles its priority reaches (`reaches`). A role the priority does not reach is followed
+        by "(escalation)" (message_format.audience_why). ⚠️ "TO:" FOLLOWS THE PRIORITY (owner, 2026-10-17): a priority
+        nobody is sent says what it does instead, in the desk's words ("digest", "log") — never the roles of the chat
+        the villa's rule posted in. None when nothing says (an older desk that did not carry it, and no step yet): the
+        caller's own fallback."""
         history = self.state.incident_history(incident) if history is None else history
-        everyone = {r for h in history for r in self._roles(h)} | set(also or ())
         reach = self._reach(incident)
+        wanted = self._wanted(reach) if reach is not None else None
+        mine = set(chat_roles or ())
+        if mine:
+            sent = set(also or ()) & set(ROLE_WORDS)
+            sent = sent if sent & mine else next((r for h in reversed(history) if (r := self._roles(h)) & mine), set())
+            if sent:
+                return audience_why(sent, wanted)
+        everyone = {r for h in history for r in self._roles(h)} | set(also or ())
         if reach is None:
             return audience(everyone, short=True) or None
-        return audience(everyone | self._wanted(reach), short=True) or self._reach_words(reach) or "nobody"
+        return audience_why(everyone | wanted, wanted) or self._reach_words(reach) or "nobody"
 
     def history_lines(self, incident: int, chat: int = 0, latest_excluded: int = 0) -> list[str]:
         """Incident `incident`'s "Status:" lines as chat `chat`'s copy shows them (`kept`, drawn: status_story.texts)."""
@@ -594,7 +610,8 @@ class Notices:
         # until when it is monitored as it stands NOW: moved at each step, gone once it closed
         kept = {k: v for k, v in h.items() if k != "until"}
         return {**kept, "word": self.word(int(incident), None, bool(history)),
-                "to": self.to_line(int(incident), history=history) or h["to"], **({"day": d} if (d := self.day(int(incident))) else {}),
+                "to": self.to_line(int(incident), history=history, chat_roles=self.roles_for(chat) if chat else None)
+                or h["to"], **({"day": d} if (d := self.day(int(incident))) else {}),
                 **({"until": u} if (u := self.until(int(incident))) else {})}
 
     def record(self, incident: int, stage: str | None, sent: list[tuple[int, object]], at: datetime | None = None) -> int:

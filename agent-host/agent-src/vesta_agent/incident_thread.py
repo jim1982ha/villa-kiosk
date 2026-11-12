@@ -144,7 +144,7 @@ class IncidentThread:
         one a later copy does not carry (agent-contract.json vestaMessage.keptOnRewrite)."""
         if self.mirror is None:
             return
-        parts = self._for_everyone(parts)
+        parts = self._for_everyone(parts, iid)
         self.state.set_incident_card(iid, {"parts": parts, "keyboard": keyboard})
         # ⚠️ WHO IT WENT TO IS EVERY CHAT'S, NOT THE LAST DRAWN'S: each chat's copy says its own "To:" (owner and FM, one
         # group each); the tablet's one record names them all, in the words a "To:" line uses (message_format.audience)
@@ -152,17 +152,22 @@ class IncidentThread:
         # reader is precisely the one the tablet stands in for
         heads = [layout.of(copy).get("head") for _c, copy in self.state.incident_chats(iid)] + [parts.get("head")]
         roles = list(dict.fromkeys(r for h in heads for r in kiosk_messages.roles_of((layout.head_of(h) or {}).get("to"))))
+        # everyone's "To:" as the incident stands (notice.to_line for no chat: "Owner (escalation) & FM", owner
+        # 2026-11-12), with any role only a copy names
+        every = (layout.head_of(parts.get("head")) or {}).get("to") or ""
+        extra = [r for r in roles if r not in kiosk_messages.roles_of(every)]
+        to = AND.join([every] + extra) if every else AND.join(roles)
         # ⚠️ THE VILLA'S OWN MESSAGES IT STANDS FOR (tickets 26-27 of "One inbox", owner 2026-10-28: "update the existing
         # card, the same way it is done on Telegram"): every run of the villa's alert this incident took over, so the
         # tablet shows this one card in place of the villa's alert, its repeat and its all-clear
         # ⚠️ A VISIT'S PHOTOS ARE ITS ONE LIST (visit.photos): the siren's snapshots with the villa's, as Telegram's picture
         from .visit import photos
         self.mirror(kiosk_messages.of_parts(kiosk_messages.thread_key(iid), parts, keyboard=keyboard,
-                                            photo=kiosk_messages.photo_b64(photo), to=AND.join(roles) if roles else None,
+                                            photo=kiosk_messages.photo_b64(photo), to=to or None,
                                             takes=self.state.incident_runs(iid),
                                             photos=photos(self.state, iid) if str(iid).isdigit() else None))
 
-    def _for_everyone(self, parts: dict) -> dict:
+    def _for_everyone(self, parts: dict, iid=None) -> dict:
         """A chat's copy as the tablet's card: in English, the languages it was said in carried beside it
         (kiosk_messages.of_parts reads its step's `status_in` and the alert's translation `tr`).
 
@@ -172,7 +177,14 @@ class IncidentThread:
         heading drawn in no chat's language, so its alert words are the ones written."""
         h = layout.head_of(parts.get("head"))
         if h and h.get("lang"):
-            parts = {**parts, "head": {k: v for k, v in h.items() if k != "lang"}}
+            h = {k: v for k, v in h.items() if k != "lang"}
+            parts = {**parts, "head": h}
+        # ⚠️ EVERYONE'S "TO:" (owner, 2026-11-12): a chat's copy names whom it went to; the tablet's card, everyone's,
+        # names every role the incident went to (notice.to_line for no chat)
+        to_line = getattr(self.words, "to_line", None)
+        every = to_line(int(iid)) if h and to_line and str(iid).isdigit() else None
+        if every:
+            parts = {**parts, "head": {**h, "to": every}}
         return self.words.restatus(0, parts)
 
     def tell_open(self, open_incidents) -> int:

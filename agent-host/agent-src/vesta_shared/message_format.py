@@ -64,6 +64,24 @@ def audience(roles, short: bool = False) -> str:
     return AND.join(w for r, w in words.items() if r in wanted)
 
 
+#: After a role a copy went to that its alert's priority does not reach ("To: Owner (escalation)"): why it got it
+#: (owner, 2026-11-12, #167-P2: "To: Owner & FM" in the facility manager's chat, for a P2 the owner was told of only
+#: by its escalation).
+WHY_ESCALATION = " (escalation)"
+
+
+def audience_why(roles, wanted=None) -> str:
+    """An alert copy's "To:": its roles as audience(short) says them, each one its priority does not reach (not in
+    `wanted`, the roles the priority reaches; None or none: not said) followed by WHY_ESCALATION."""
+    have, extra = set(roles or ()), set(roles or ()) - set(wanted or ()) if wanted else set()
+    return AND.join(w + (WHY_ESCALATION if r in extra else "") for r, w in ROLE_SHORT.items() if r in have)
+
+
+def role_words(to: str) -> list[str]:
+    """The roles a "To:" line names ("Owner (escalation) & FM" → ["Owner", "FM"]): each its word alone."""
+    return [r.strip().removesuffix(WHY_ESCALATION.strip()).strip() for r in (to or "").split(AND.strip()) if r.strip()]
+
+
 #: The longest "To:" line any message can carry (every role): the room a skill keeps for it in a caption.
 TO_LONGEST = TO + audience(ROLE_WORDS)
 #: The title of a message about no incident whose sender gave it none (an AI's message sent without one; a heading

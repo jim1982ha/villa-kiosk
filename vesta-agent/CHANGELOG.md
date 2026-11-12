@@ -1,3 +1,12 @@
+## 0.12.505
+
+- **An alert's "To:" now says who that copy was sent to**, in each chat. The facility manager's still-there reads
+  "To: FM"; the owner's escalation copy reads **"To: Owner (escalation)"**, so the owner sees why they got a P2.
+  Before, every copy said everyone the alert had reached so far ("To: Owner & FM" even in the facility manager's chat,
+  after an escalation the day before). The Status lines still say who got each step.
+- The tablet's card, which is everyone's, names everyone the alert went to, with the same note: "To: Owner
+  (escalation) & FM".
+
 ## 0.12.504
 
 - **A "has not run" alert is held while nobody was there to use the device.** Every night VESTA learns, hour by hour,

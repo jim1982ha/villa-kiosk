@@ -70,7 +70,7 @@ def test_the_heading_names_the_incident_first_and_what_was_sent_to_whom(tmp_path
     # it stands (owner, 2026-10-13: in the same block, and "To:" says roles, never names)
     text = v.tg.sent[-1][1]
     title, to, *rest = text.split("\n")
-    assert (title, to) == ("#21 (existing)", "To: Owner & FM")      # every role it went to ("FM": owner, 2026-10-16)
+    assert (title, to) == ("#21 (existing)", "To: Owner")           # whom this copy went to (owner, 2026-11-12)
     # every step, the FM's too (owner, 2026-11-07, live #146-P2: every copy the same lines), then its own step: what,
     # when, to whom (owner, 2026-10-16)
     status_block = text.split("\nStatus:\n")[1]
@@ -223,14 +223,16 @@ def test_one_incident_one_picture_in_every_chat_of_the_same_people(tmp_path):
     shown = {c: r["text"] for c, r in v.thread.shown(5).items()}
     assert set(shown) == {GROUP, FM, JM2} and shown[FM] == shown[JM2], shown     # the two FMs: one picture
     text = shown[FM]
-    # every role it went to, never a name (owner, 2026-10-13)
-    assert text.startswith("#5 (existing)\nTo: Owner & FM\n") and \
+    # whom this copy went to (owner, 2026-11-12: the reminder, to the FM), never a name (owner, 2026-10-13)
+    assert text.startswith("#5 (existing)\nTo: FM\n") and \
         re.search(r"\n⚠️ ⚙️ Reminder sent (?:\d\d/\d\d(?:/\d{4})? )?\d\d:\d\d, No answer after 15min \(to: FM\)$", text), text
     # the group: not sent the reminder, its copy edited to show it, its buttons kept (owner, 2026-11-07, live
     # #146-P2: every copy at every change): "(new)" became "(existing)" with the facility manager's
     first_group = next(t for c, t, _ in v.tg.sent if c == GROUP)
     assert not [c for c, _, _ in v.tg.sent[3:] if c == GROUP] and first_group.startswith("#5 (new)\nTo: Owner & FM\n")
-    assert shown[GROUP] == shown[FM], (shown[GROUP], shown[FM])    # one picture, in every chat
+    # one picture, in every chat — but its "To:", whom each copy went to (owner, 2026-11-12): the alert to both
+    g, f = shown[GROUP].split("\n"), shown[FM].split("\n")
+    assert g[1] == "To: Owner & FM" and g[:1] + g[2:] == f[:1] + f[2:], (shown[GROUP], shown[FM])
     group = v.thread.shown(5)[GROUP]
     assert group["buttons"] and not group["settled"]
 

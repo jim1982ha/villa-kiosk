@@ -213,9 +213,9 @@ def test_every_notice_has_one_heading_with_the_incidents_history(agent):
     run(agent.outcome.carry_out({"send": [R.message("owner", "Still stopped", incident=7, buttons=True,
                                                     stage="escalated")]}, "alert-desk"))
     later = agent.tg.sent[-1][1]
-    # in the owner's chat: "To:" names everyone the alert involves; its "Status:" every step, the FM's alert too
+    # in the owner's chat: "To:" names whom this copy went to (owner, 2026-11-12); its "Status:" every step, the FM's too
     # (owner, 2026-11-07, live #146-P2: every copy the same lines)
-    assert re.fullmatch(r"#7 \(existing\)\nTo: Owner & FM\nStill stopped\nStatus:\n"
+    assert re.fullmatch(r"#7 \(existing\)\nTo: Owner\nStill stopped\nStatus:\n"
                         r"- Alert sent (?:\d\d/\d\d(?:/\d{4})? )?\d\d:\d\d \(to: FM\)\n⚠️ ⚙️ Escalation sent (?:\d\d/\d\d(?:/\d{4})? )?\d\d:\d\d \(to: Owner\)", later), later
     fm_lines = head_text(agent.notices.heading(FM_CHAT, 7)).split("\n")[2:]
     assert [ln.split(" ")[1] for ln in fm_lines] == ["Alert", "Escalation"] and fm_lines[0].endswith("(to: FM)"), fm_lines
@@ -399,12 +399,13 @@ def test_to_follows_the_priority_a_p3_in_the_owners_group_is_never_to_owner(agen
     assert re.search(r"\n- Alert sent .+ \(to: digest\)\n", grp) and status(grp).endswith("(to: digest)"), grp
     # the Kiosk's story of it, the same words (never "Owner")
     assert all("Owner" not in x["note"] for x in agent.tickets.story(1))
-    # a P2 (the FM's) in the same group: "To: FM" — and an escalation to the owner widens it (the owner IS involved)
+    # a P2 (the FM's) in the same group: "To: FM" — escalated, the owner's copy says why (owner, 2026-11-12)
     ha_alert(agent, context="RUN-3", mid=502)
     assert shown(agent, GROUP)[-1].startswith("#2-P2 (new)\nTo: FM\n")
     tick(agent, 20)
     tick(agent, 50)
-    assert all(r["text"].split("\n")[1] == "To: Owner & FM" for r in agent.thread.shown(2).values())
+    assert {c: r["text"].split("\n")[1] for c, r in agent.thread.shown(2).items()} == \
+        {GROUP: "To: Owner (escalation)", OWNER: "To: Owner (escalation)", FM_CHAT: "To: FM"}
 
 
 def test_every_copy_carries_the_incidents_word_and_its_own_status_lines(agent):

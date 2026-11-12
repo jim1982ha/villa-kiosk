@@ -118,7 +118,7 @@ def test_a_copy_recorded_before_is_drawn_again_whole_at_the_next_step(agent):
                                                                   "status": said, "mark": None}})
     tick(agent, 50)                                    # a step to the owner: the facility manager's copy too
     fr = card(agent, FM_FR)
-    assert fr.split("\n")[1] == "To: Owner & FM", fr
+    assert fr.split("\n")[1] == "To: FM", fr                # whom this copy went to (owner, 2026-11-12)
     lines = status(fr, "Statut")
     assert [ln.split(" ")[1] for ln in lines] == ["Alerte", "Rappel", "⚙️"] and "Escalade envoyée" in lines[-1], lines
 

@@ -567,3 +567,11 @@ def test_an_owed_alert_card_survives_a_restart(agent, kiosk):
     rec = kiosk.messages["incident:1"]
     assert "Closed at" in rec["status"][-1] and "buttons" not in rec, rec
     assert again.owed.keys("message") == []
+
+
+def test_the_tablets_card_names_everyone_an_escalated_role_said_so(agent, kiosk):
+    """Owner, 2026-11-12 (#167-P2): each chat's copy names whom it went to; the tablet's one card is everyone's — every
+    role the alert went to, the one its priority does not reach followed by "(escalation)", its roles the words alone."""
+    scenario(agent, alert, lambda v: tick(v, 20), lambda v: tick(v, 50))
+    rec = kiosk.messages["incident:1"]
+    assert rec["to"] == "Owner (escalation) & FM" and set(rec["roles"]) == {"Owner", "FM"}, rec

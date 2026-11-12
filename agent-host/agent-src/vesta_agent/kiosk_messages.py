@@ -31,7 +31,7 @@ import os
 from datetime import datetime, timezone
 
 from vesta_shared import agreement
-from vesta_shared.message_format import AND
+from vesta_shared.message_format import role_words
 
 from . import button_data, layout, ringing
 from .kiosk_owed import MESSAGE, KioskOwed
@@ -90,8 +90,8 @@ def rows_of(buttons) -> list[list[dict]]:
 
 
 def roles_of(to: str) -> list[str]:
-    """The roles a "To:" line names ("Owner & FM")."""
-    return [r.strip() for r in (to or "").split(AND.strip()) if r.strip()]
+    """The roles a "To:" line names ("Owner (escalation) & FM": Owner, FM)."""
+    return role_words(to)
 
 
 def of_parts(key: str, p: dict, *, keyboard: dict | None = None, photo: str | None = None, to: str | None = None,

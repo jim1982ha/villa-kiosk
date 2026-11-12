@@ -70,13 +70,15 @@ def status_lines(text: str) -> list[str]:
 
 def test_to_follows_the_priority_never_the_chat_the_rule_posts_in(agent):
     # owner, 2026-10-17 (told it reverses 2026-10-16's point 4): a P2 reaches the FM — "To: FM" in the group too, where
-    # the owner reads it; once escalated, the owner is named
+    # the owner reads it; once escalated, the owner's copy names the owner, and why (owner, 2026-11-12: "To:" is whom
+    # that copy went to, "(escalation)" for a role the priority does not reach)
     rule(agent, "opened", 1, 500)
     assert card(agent, GROUP).split("\n")[1] == "To: FM"
     assert card(agent, FM_CHAT).split("\n")[1] == "To: FM"
     tick(agent, 20)
     tick(agent, 50)
-    assert card(agent, GROUP).split("\n")[1] == "To: Owner & FM"
+    assert card(agent, GROUP).split("\n")[1] == "To: Owner (escalation)"
+    assert card(agent, FM_CHAT).split("\n")[1] == "To: FM"
 
 
 def test_an_answer_in_the_group_never_widens_to(agent):
@@ -166,10 +168,10 @@ def test_a_run_that_came_back_starts_at_a_back_at_line_and_a_reminder_carries_it
     lines = status_lines(esc)
     assert re.fullmatch(rf"⚠️ ⚙️ Escalation sent {T}, No answer from FM after 45min \(to: Owner\)", lines[-1]), lines
     assert any("(to: FM)" in ln for ln in lines), lines         # every step, the FM's too, "(to: …)" says whom
-    # and the owner's step is shown on the FM's copy too, its "To:" now naming the owner
+    # and the owner's step is shown on the FM's copy too, its "To:" still whom that copy went to (owner, 2026-11-12)
     fm_now = card(agent, FM_CHAT)
     assert status_lines(fm_now) == lines and fm_now != fm_before
-    assert fm_before.split("\n")[1] == "To: FM" and fm_now.split("\n")[1] == "To: Owner & FM", fm_now
+    assert fm_before.split("\n")[1] == "To: FM" and fm_now.split("\n")[1] == "To: FM", fm_now
 
 
 def test_the_back_line_counts_the_runs_and_an_older_record_has_none():
