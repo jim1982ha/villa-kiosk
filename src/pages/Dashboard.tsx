@@ -3,6 +3,7 @@
 
 import { PresenceWindow } from "@/components/hud/PresenceTile";
 import { overlayOpen } from "@/hooks/useBackToClose";
+import { keyIsForCamera } from "@/babylon/overviewKeys";
 import { useInterval } from "@/hooks/useInterval";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import BabylonCanvas from "@/components/canvas/BabylonCanvas";
@@ -711,6 +712,17 @@ export default function Dashboard() {
     if (!manager) return;
     setViewMode(manager.toggleViewMode());
   }, [manager]);
+
+  // ⚠️ ESCAPE LEAVES FPS MODE (owner, 2026-11-12), back to the overview, only when nothing is open: read FIRST (window,
+  // capture) so a window, menu or field the press is for still takes it, and is not counted closed before this looks.
+  useEffect(() => {
+    if (viewMode !== "first-person") return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !e.repeat && !overlayOpen() && keyIsForCamera(e)) toggleViewMode();
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [viewMode, toggleViewMode]);
 
   return (
     <VillaModelProvider value={villa}>
