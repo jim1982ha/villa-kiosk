@@ -228,7 +228,7 @@ const hud = src("components/hud/HUD.tsx");
 // the top bar's round badge (formatCountBadge) and the phone menu's "Cockpit (N)" (withCount, the one writing of a name's count)
 const counted = [...hud.matchAll(/formatCountBadge\(([^)]*)\)/g), ...hud.matchAll(/withCount\("Cockpit", ([^)]*)\)/g)].map((m) => m[1]).filter((a) => a !== "facilityAttention");
 ck("every Cockpit count in the top bar and the phone menu is the number of ROWS",
-   counted.length === 2 && counted.every((a) => a === "attentionGroups.length"), counted);
+   counted.length === 2 && counted.every((a) => a === "openIssues"), counted);
 // 2.496.268: grouped ONCE, per profile — the villa model's role-blind
 // grouping had no reader and ran on every state push anyway.
 ck("the villa model hands attentionOf its device list (the fold and the critical list inside), and leaves the grouping to the profile's view",

@@ -168,7 +168,9 @@ export default function HUD({
   const agentDot = <span className={`status-dot ${robot ? "on" : "warn"}`} aria-hidden="true" />;
   // What this tablet has not seen in Messages (ticket 18 of "One inbox"): a light mark on the robot, the phone's gear
   // and the menu's Cockpit row, apart from the amber count of open issues; the robot then opens on it (MessagesTab).
-  const { unread } = useAnnouncements();
+  // ⚠️ ITS COUNT IS THE OPEN ISSUES HEADING'S (architecture review, 2026-11-12): the villa's own visit cards among
+  // them, so a visit while VESTA is away is counted here too (messagesModel.listedIssues)
+  const { unread, openIssues } = useAnnouncements();
   const unreadSaid = unread > 0 ? `, ${countOf(unread, "unread message")}` : "";
   const unreadMark = unread > 0 && <span className="unread-mark" aria-hidden="true" />;
 
@@ -634,9 +636,9 @@ export default function HUD({
               {robot ? <Bot size={24} /> : <TriangleAlert size={24} />}
               {robot && agentDot}
               {unreadMark}
-              {attentionGroups.length > 0 && (
+              {openIssues > 0 && (
                 <span className="icon-btn-count" aria-hidden="true">
-                  {formatCountBadge(attentionGroups.length)}
+                  {formatCountBadge(openIssues)}
                 </span>
               )}
             </button>
@@ -719,7 +721,7 @@ export default function HUD({
                     {robot && agentDot}
                   </span>
                   <span>
-                    {withCount("Cockpit", attentionGroups.length)}
+                    {withCount("Cockpit", openIssues)}
                     {robot && <span className="sr-only">{`, ${agentTitle}`}</span>}
                     {unreadSaid && <span className="sr-only">{unreadSaid}</span>}
                   </span>

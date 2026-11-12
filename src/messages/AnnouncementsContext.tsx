@@ -12,7 +12,7 @@ import { readJson, writeJson } from "@/utils/storedJson";
 import { fetchAnnouncements, fetchVestaMessages, inLanguage, pressOf, type Announcement, type Pressable } from "./announcements";
 import { useConfig } from "@/config/ConfigContext";
 import { pauseFor, watchFeed, type FeedRead } from "./feed";
-import { afterRead, cardOfMessage, messagePlaces, readAtOpening, shownTogether } from "./messagesModel";
+import { afterRead, cardOfMessage, listedIssues, messagePlaces, readAtOpening, shownTogether } from "./messagesModel";
 import type { CardView } from "@/config/cockpitCard";
 import { pressesOf, type PressState, type Presses } from "./presses";
 import { useCockpitIssues } from "@/components/cockpit/useVillaAttention";
@@ -40,6 +40,9 @@ interface AnnouncementsAndUnread extends Announcements {
   unread: number;
   /** How many of them are VESTA's reports (Messages opens on Reports when they are all the unread). */
   unreadReports: number;
+  /** How many open issues Messages lists, the villa's own alerts among them (messagesModel.listedIssues): the top
+   *  bar's badge and the menu's Cockpit row, the same number as the Open issues heading. */
+  openIssues: number;
   /** The Cockpit opened: everything kept now is read on this tablet (messagesModel.readAtOpening). */
   opened: () => void;
   /** The page's one record of presses (messages/presses). */
@@ -69,7 +72,7 @@ function useFeed(read: (after: number | null, stop: AbortSignal) => Promise<Feed
   return state;
 }
 const NO_PRESSES = pressesOf(async () => "failed");
-const AnnouncementsContext = createContext<AnnouncementsAndUnread>({ ...NONE, unread: 0, unreadReports: 0, opened: () => {}, presses: NO_PRESSES, cardOf: () => null });
+const AnnouncementsContext = createContext<AnnouncementsAndUnread>({ ...NONE, unread: 0, unreadReports: 0, openIssues: 0, opened: () => {}, presses: NO_PRESSES, cardOf: () => null });
 
 export function AnnouncementsProvider({ children }: { children: ReactNode }) {
   // ⚠️ TWO FEEDS, ONE LIST (tickets 26-27 of "One inbox"): the villa's announcements and VESTA's cards are read apart
@@ -109,7 +112,8 @@ export function AnnouncementsProvider({ children }: { children: ReactNode }) {
   const value = useMemo(() => {
     const { unread, unreadReports } = messagePlaces({ ...issues, announcements: kept, read });
     const cardOf = (a: Announcement) => cardOfMessage(a, { ...issues, announcements: kept });
-    return { ...state, unread, unreadReports, opened, presses, cardOf };
+    const openIssues = listedIssues(issues, kept).open.length;
+    return { ...state, unread, unreadReports, openIssues, opened, presses, cardOf };
   }, [state, kept, read, issues, opened, presses]);
   return <AnnouncementsContext.Provider value={value}>{children}</AnnouncementsContext.Provider>;
 }

@@ -5,7 +5,7 @@
 // Messages screen reads; the later tickets add the reports and VESTA's conversation to it. Pure:
 // tests/oracles/messages_model.mjs.
 
-import { cardOfLine, cockpitCard, leadLine, othersFirst, saysWord, toldShown, type CardLine, type CardView } from "@/config/cockpitCard";
+import { CARD_TONE_RANK, cardOfLine, cockpitCard, leadLine, othersFirst, saysWord, toldShown, type CardLine, type CardView } from "@/config/cockpitCard";
 import { groupAttention, type AttentionItem } from "@/config/attention";
 import { alertStage, incidentKey, statusWords, versionOf, VISIT_PRESS, type Announcement, type VillaCardFields } from "./announcements";
 import { WORK_ACTIONS, type WorkAction, type WorkActionKind } from "@/fm/deviceWork";
@@ -37,6 +37,8 @@ export type MessageItem =
 interface MessagesView {
   /** Each filter with its count (Open issues: the open issues; the others none). */
   filters: { id: MessagesFilter; label: string; count: number | null }[];
+  /** How many open issues there are, whatever the filter: the Open issues heading's count (listedIssues). */
+  openCount: number;
   /** The open issues, in their order; then the watched faults and VESTA's cards of alerts that cleared (placeOf
    *  "watch"), folded after them, never counted. */
   issues: MessageItem[];
@@ -90,6 +92,24 @@ export const isFinished = (a: Announcement): boolean => a.asked === true && a.bu
 
 /** One record's identity on the page: two feeds number apart, so VESTA's numbers are marked. */
 export const idOf = (a: Announcement): string => `${a.feed === "vesta" ? "v" : ""}${a.seq}`;
+
+/** The issues as Messages lists them, each as told (issueAsTold): VESTA's open, watched and closed cards and the villa's
+ *  own alerts no fault holds (villaAlertCards), the open ones in their colour's order (CARD_TONE_RANK). The one list the
+ *  Open issues heading, its filter, its empty line and the top bar's badge all count.
+ *  ⚠️ "OPEN ISSUES 0" ABOVE A VISIT (architecture review, 2026-11-12): the villa's own cards were added in three
+ *  places, so with VESTA away the filter said 1, the heading 0 with "Nothing needs attention." over the visit's card,
+ *  and the top bar nothing. Pure. */
+export function listedIssues({ open, watched, closed = [] }: {
+  open: readonly CardView[]; watched: readonly CardView[]; closed?: readonly CardView[];
+}, announcements: readonly Announcement[]): { open: CardView[]; watched: CardView[]; closed: CardView[] } {
+  const villa = villaAlertCards(announcements);
+  const told = (c: CardView) => issueAsTold(c, announcements);
+  return {
+    open: [...open, ...villa.open].map(told).sort((a, b) => CARD_TONE_RANK[a.tone ?? "warn"] - CARD_TONE_RANK[b.tone ?? "warn"]),
+    watched: watched.map(told),
+    closed: [...closed, ...villa.closed].map(told),
+  };
+}
 
 /**
  * ⚠️ THE VILLA'S OWN ALERT IS AN ALERT'S CARD (owner, 2026-11-07: VESTA stopped, a visit showed under Notifications as a
@@ -373,10 +393,11 @@ export function messagePlaces({ open, watched, closed = [], announcements, read 
   // ⚠️ ...AND A CLOSED ALERT ONCE, BY ITS FAULT'S CARD (owner, 2026-11-07: #133-P1 under Closed was VESTA's message drawn
   // as a notification, a bell and "#133-P1 (closed)" with no device, no state, no room): the one card of every case,
   // its message's words, photos and Status inside it as on Open issues and Watch
-  const villa = villaAlertCards(announcements);
-  const withIssue = new Set([...[...open, ...watched, ...closed].flatMap((c) => cardsOfIssue(c, announcements)),
+  const listed = listedIssues({ open, watched, closed }, announcements);
+  const cards = [...listed.open, ...listed.watched, ...listed.closed];
+  const withIssue = new Set([...cards.flatMap((c) => cardsOfIssue(c, announcements)),
     // the villa's own alert by its card's key: the card draws a copy of it (its lines as its Status)
-    ...announcements.filter((a) => a.feed === undefined && [...villa.open, ...villa.closed].some((c) => c.key === `villa:${a.key}`))]);
+    ...announcements.filter((a) => a.feed === undefined && cards.some((c) => c.key === `villa:${a.key}`))]);
   const of = (a: Announcement): MessagePlace => (withIssue.has(a) ? "issue" : placeOf(a));
   const seen = new Set(read);
   // ⚠️ LISTED WITH ITS ISSUE, NO UNREAD (architecture review 2026-10-29 #2): counted, the mark opened Messages on an
@@ -436,15 +457,14 @@ export function messagesView({ open, watched, closed: closedFaults = [], announc
   /** The item asked for (its key); null: none. */
   selected: string | null;
 }): MessagesView {
-  // every issue as told, once: its card reads these lines (issueAsTold)
-  const issueItem = (card: CardView): MessageItem => ({ kind: "issue", key: card.key, card: issueAsTold(card, announcements) });
+  // every issue as told, once (listedIssues)
+  const listedCards = listedIssues({ open, watched, closed: closedFaults }, announcements);
+  const issueItem = (card: CardView): MessageItem => ({ kind: "issue", key: card.key, card });
   const showIssues = filter === "issues";
   const showNotes = filter === "notifications";
   const showReports = filter === "reports";
-  // the villa's own alerts no fault holds yet (VESTA away), drawn as every alert's card (villaAlertCards)
-  const villa = villaAlertCards(announcements);
-  const issues = showIssues ? [...open, ...villa.open].map(issueItem) : [];
-  const watchedItems = showIssues ? watched.map(issueItem) : [];
+  const issues = showIssues ? listedCards.open.map(issueItem) : [];
+  const watchedItems = showIssues ? listedCards.watched.map(issueItem) : [];
   // each record in ONE place, the one the unread mark counts by (messagePlaces): VESTA's card of an alert an open or
   // watched issue holds is listed with that issue, never also as a notification
   const { of } = messagePlaces({ open, watched, closed: closedFaults, announcements });
@@ -458,7 +478,7 @@ export function messagesView({ open, watched, closed: closedFaults = [], announc
   // Closed are shown with the issues, never with the notifications
   // each record in ONE place (placeOf): a report under Reports, an alert that is over in Watch or Closed
   // every closed fault its card, as told (issueAsTold): VESTA's message of its alert inside it, never a card of its own
-  const closedIssues = showIssues ? [...closedFaults, ...villa.closed].map(issueItem) : [];
+  const closedIssues = showIssues ? listedCards.closed.map(issueItem) : [];
   const closedAt = (i: MessageItem) => Date.parse((i.kind === "issue" ? i.card.closedAt : i.announcement.at) ?? "") || 0;
   const closed = [...closedIssues, ...asNotes(showIssues, "closed")].sort((a, b) => closedAt(b) - closedAt(a));
   const watchedCards = asNotes(showIssues, "watch");
@@ -467,7 +487,8 @@ export function messagesView({ open, watched, closed: closedFaults = [], announc
   const watchedAll = [...watchedItems, ...watchedCards];
   const listed = [...issues, ...notifications, ...reports, ...watchedAll, ...closed];
   return {
-    filters: FILTERS.map((f) => ({ ...f, count: f.id === "issues" ? open.length + villa.open.length : null })),
+    filters: FILTERS.map((f) => ({ ...f, count: f.id === "issues" ? listedCards.open.length : null })),
+    openCount: listedCards.open.length,
     issues,
     watched: watchedAll,
     notifications,
