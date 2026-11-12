@@ -1,3 +1,15 @@
+## 2.496.788
+
+- **A screen that cannot start 3D is no longer told it "ran out of memory".** When the browser refused 3D (WebGL
+  blocked or missing), two reloads in a row turned its own message into "The device most likely ran out of memory".
+  Each opening now ends its own attempt, whatever happens to it; only a page killed while loading counts towards that
+  message.
+- **A model with a missing image says which one when it fails to load.** In place of "/textures/364/source: Failed
+  to find index", the error names the material whose image is missing, as the upload already does.
+- **Nothing can stop the page by talking to a 3D model being closed.** The "Cannot read properties of null" error
+  fixed for one case in 2.496.785 can no longer happen from any other: once a model is closed, anything still asking
+  it something is simply ignored.
+
 ## 2.496.787
 
 - **"Open issues" counts the villa's own alerts.** While the VESTA Agent was away, a visit alert showed its card under
