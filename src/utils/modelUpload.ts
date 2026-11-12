@@ -16,7 +16,7 @@
 
 import { EMPTY_ROOM_DATA, readRoomData } from "@/config/roomData";
 import type { ParsedRoomData } from "./sh3dParser";
-import { extractEmbeddedRoomDataJson } from "./glbRoomDataExtractor";
+import { extractEmbeddedRoomDataJson, materialsMissingImages } from "./glbRoomDataExtractor";
 
 export type UploadKind = "glb" | "rooms";
 
@@ -46,6 +46,15 @@ export async function planModelUpload(files: readonly File[]): Promise<UploadPla
   const json = files.find(isJson);
   if (!glb && !json) return { ok: false, message: "Please choose a .glb and/or a .rooms.json file." };
 
+  const glbBytes = glb ? await glb.arrayBuffer() : null;
+  // a model the 3D view would refuse whole is never sent: every tablet would then fail to load the villa
+  const broken = glbBytes ? materialsMissingImages(glbBytes) : [];
+  if (broken.length) {
+    return { ok: false, message: `${glb!.name}: ${broken.length === 1 ? "an image" : `${broken.length} images`} of the model `
+      + `${broken.length === 1 ? "is" : "are"} missing (${broken.slice(0, 3).join(", ")}${broken.length > 3 ? "…" : ""}), so it `
+      + "cannot be shown. Export the model again. Nothing was uploaded." };
+  }
+
   let roomsText: string;
   let origin: UploadStep["origin"];
   if (json) {
@@ -57,7 +66,7 @@ export async function planModelUpload(files: readonly File[]): Promise<UploadPla
     }
     origin = "picked";
   } else {
-    const embedded = extractEmbeddedRoomDataJson(await glb!.arrayBuffer());
+    const embedded = extractEmbeddedRoomDataJson(glbBytes!);
     let usable = false;
     if (embedded) {
       try { readRoomData(embedded); usable = true; } catch { /* treated as none */ }
