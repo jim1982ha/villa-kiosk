@@ -19,7 +19,7 @@ from vesta_shared.problems import Problems
 from vesta_shared.when import Spec
 
 from .kiosk import ASK_HELP, CLOSE, MINE, REOPEN, TAKE, KioskError, closing, confirming, noted, placed, retitled, tagged, \
-    monitoring, todo, unwatched
+    monitoring, holding, todo, unwatched
 from .kiosk import fault_title_chars
 from vesta_shared.messaging import headline, incident_tag
 from vesta_shared.message_format import IN_COCKPIT, ON_TELEGRAM, STEPS
@@ -445,6 +445,9 @@ class Tickets:
                     # an open visit: until when it is monitored, moved later at each step (owner, 2026-11-07)
                     if card.get("monitored_until") != want["monitored_until"]:
                         amends.append(monitoring(want["monitored_until"]))
+                    # a held alert: why it is expected, on the tablet's Watch until it is no longer (owner, 2026-11-12)
+                    if card.get("expected") != want.get("expected"):
+                        amends.append(holding(want.get("expected")))
                     # an open fault is never being confirmed (a field left by a reopening that did not take it away)
                     if card.get("confirms_by"):
                         amends.append(confirming(None))

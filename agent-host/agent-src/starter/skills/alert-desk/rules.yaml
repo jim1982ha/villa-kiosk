@@ -93,6 +93,14 @@ lowered_words:
 # fault's reopening step saying this ("{priority}" filled in).
 raised_words: "Raised to {priority}."
 
+# ⚠️ EXPECTED WHILE NOBODY IS IN (owner, 2026-11-12, #167-P2: "the VESTA Agent shall be clever enough to handle such
+# cases, without human configuration"): an alert of one of these `reasons` (the villa rule's event `reason`) about a
+# device the night check learned runs only when people are in (vesta_shared.demand) is held while people have been in
+# for less than the time it needs since its last run: its number given, nobody asked, its fault on the tablet's Watch
+# saying why (words.yaml `held`). People in long enough and still no run: an alert as any other, the ladder from then.
+held_while_expected:
+  reasons: [overdue_run]
+
 people_roles:
   # role -> which severities reach that chat: every message about an alert, from the first to its close
   owner: [P1]

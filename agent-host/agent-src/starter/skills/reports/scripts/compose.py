@@ -124,7 +124,9 @@ def fm_daily(pack: KnowledgePack, store: Store, as_of: date) -> str:
     new = [p for p in view["new"] if not p["incident"]]
     noted = {p["incident"] for p in view["new"] if p["incident"]
              and (store.incident(p["incident"]) or {}).get("state") == Incident.DIGEST}
-    open_now = [p for p in view["open"] if p not in new and p["incident"] not in noted]
+    # a held alert (owner, 2026-11-12: expected while nobody is in, nobody asked) is noted, never "still open"
+    held = [p for p in view["open"] if p["incident"] and (store.incident(p["incident"]) or {}).get("state") == Incident.HELD]
+    open_now = [p for p in view["open"] if p not in new and p["incident"] not in noted and p not in held]
     # ⚠️ THE ONE SHAPE (owner, 2026-10-11): a title, "To:" (the agent names who), then each section's label and its
     # items, each item its own quote on Telegram — vesta_shared.message_format; never a style written here
     sections = []
@@ -132,8 +134,9 @@ def fm_daily(pack: KnowledgePack, store: Store, as_of: date) -> str:
         sections.append(("New since yesterday", _grouped([{"kind": p["rule_id"], "severity": p["severity"],
                                                            "subject": name_of(p),
                                                            "title": p["title"]} for p in new], group_from, words)))
-    if noted:
-        sections.append(("Also noted (no action needed yet)", [f"- {p['title']}" for p in view["new"] if p["incident"] in noted]))
+    if noted or held:
+        sections.append(("Also noted (no action needed yet)", [f"- {p['title']}" for p in view["new"] if p["incident"] in noted]
+                         + [f"- {alert_line(p)} (held: expected while nobody is in)" for p in held]))
     if open_now:
         # ⚠️ AN ALERT'S NUMBER, TO FIND ITS MESSAGE: it is closed with Done under that message — a typed "#9 done" closes
         # nothing (no reply ever did). It used to print task numbers; a maintenance finding is closed in the VESTA Kiosk. (Owner, 2026-10-11: the

@@ -81,7 +81,7 @@ def test_the_card_says_what_the_task_says():
     assert pb.card(st.task(tid)) == {"open": True, "title": "Door unlocked", "number": iid, "priority": "P2", "origin": "alert",
                                      "check": "minutes", "pattern": None, "since": None, "note": "Closed: the problem is over.", "who": None, "lasting": False,
                                      "reopen_note": None, "todo": "", "closes_at": None,
-                                     "confirms_by": None, "not_watched": False, "monitored_until": None,
+                                     "confirms_by": None, "not_watched": False, "monitored_until": None, "expected": None,
                                      "entity_id": "lock.example_door",
                                      # its first moment its alert's (owner's drill #134-P1): the incident's opening
                                      "began": st.incident(iid)["opened_at"]}

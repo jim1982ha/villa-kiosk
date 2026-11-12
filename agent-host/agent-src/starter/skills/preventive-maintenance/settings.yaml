@@ -43,6 +43,14 @@ behaviour:
   intermittent_min_days: 3              # Equipment that ran on fewer days than this is also treated as running now and then.
   full_day_hours: 20                    # A day needs at least this many hours of data to be judged against its schedule.
   energy_baseline_min_kwh: 0.05         # A normal daily use below this is too small to judge a change against.
+  # (owner, 2026-11-12, #167-P2: "the VESTA Agent shall be clever enough to handle such cases, without human
+  # configuration"): a device that runs only when people are in, learned hour by hour (vesta_shared.demand)
+  people_days: 60                       # How many days of runs, hour by hour with the villa's empty sensor, are read to learn whether a device runs only when people are in.
+  people_min_run_hours: 10              # The fewest hours a device must have run with someone in before it can be said to run only when people are in.
+  people_min_empty_hours: 48            # The fewest hours the villa must have been empty before a device can be said to run only when people are in.
+  people_empty_ratio: 0.25              # A device runs only when people are in if, while the villa is empty, it runs in at most this share of the hours it runs in with someone in.
+  people_sure: 0.95                     # Its "has not run" alert is held until people have been in long enough that it would have run by then with this certainty.
+  people_max_hold_hours: 48             # Never held past this many hours with people in since its last run.
 
 # A fault of the night check's that a person reopened in the Cockpit ("Reopen fault"): who is told and under which
 # title, by recheck.py within 5 minutes. `tell` is a role (fm, owner); the message's body is the one wording of a

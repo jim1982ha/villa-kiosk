@@ -1,3 +1,17 @@
+## 0.12.503
+
+- **A "has not run" alert is held while nobody was there to use the device.** Every night VESTA learns, hour by hour,
+  which devices run only when people are in (a house pump drawing water, a jacuzzi pump), from their own runs and the
+  villa's "Villa empty" sensor. Nothing to set: a device that also runs while the villa is empty (a fridge, a pool pump
+  on its timer, a pump that must turn anyway) is never held.
+- For such a device, its "has not run" alert gets its number as usual, but nobody is asked: its card says why, for
+  example "Expected: Pump runs only when people are in, and nobody has been in since Wed 11/11/2026 20:11. It becomes an
+  alert after 6h with people in and still no run." On the tablet it is on **Watch** (VESTA Kiosk 2.496.782 or later).
+  Once people have been in that long and it still has not run, the facility manager is asked as for any alert
+  ("Still no run once people had been in for 6h"). It closes on its own when the device runs.
+- The night check no longer reports such a device as "ran shorter than expected" or "did not run" on a day the villa
+  was empty, and the daily report lists a held alert under "Also noted (no action needed yet)", not "Still open".
+
 ## 0.12.502
 
 - **Knowledge › Devices replaces the two tabs "Device kinds" and "Device links".** One list, one line per device:

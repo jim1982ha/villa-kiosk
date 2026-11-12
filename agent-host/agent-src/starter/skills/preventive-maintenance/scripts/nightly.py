@@ -50,6 +50,7 @@ from vesta_shared.problems import JUDGED_DAY, Problems, alert_name, problem_name
 from vesta_shared import result  # noqa: E402  (what the engine is asked to do: its shape; R is rules.py)
 from vesta_shared import daily  # noqa: E402  (a device's day: the one running threshold)
 from vesta_shared import run_hours  # noqa: E402  (a device's run-hours check on or off, and why: one verdict)
+from vesta_shared import demand  # noqa: E402  (a device that runs only when people are in: learned)
 from vesta_shared import battery  # noqa: E402  (a battery's ids and its rested level: one owner)
 from vesta_shared.timeutil import schedule_hours_per_day  # noqa: E402
 from vesta_shared.ha_client import HAError  # noqa: E402
@@ -78,6 +79,11 @@ LEVEL_READ_DAYS = limit("night.level_read_days", 2, unit="days", group="read", l
 MIN_RUN_MINUTES = limit("night.min_run_minutes", 30, unit="minutes", group="detect", lo=1, hi=600,
                         says="The shortest pump run the night check judges for losing power during the run.",
                         reached="Shorter runs are never judged for weakening; nobody is told.", told="")
+PEOPLE_READ_DAYS = limit("night.people_read_days", 10, unit="days", group="read", lo=1, hi=30,
+                         says="How many days of the villa's empty sensor the night check reads to count, hour by hour, "
+                              "when each device ran with someone in and while the villa was empty.",
+                         reached="Older days are kept from earlier nights; a day before the villa's own history is "
+                                 "never counted.", told="")
 
 STATE_RULES, EVENT_RULES = R.STATE_RULES, R.EVENT_RULES     # every rule described once: rules.RULES
 
@@ -109,14 +115,20 @@ def run(args) -> dict:
 
     # the villa's state per day, kept night after night (vesta_shared.occupancy): None without its helper
     occupied = occupancy.days(cli, store, os.path.dirname(HERE), win_start.date(), today, Z)
+    # the hours someone was in, and the hours the villa was empty (vesta_shared.demand): None without its sensor
+    people = people_hours(cli, day_end)
     verdicts: dict[str, dict] = {}
+    learned: dict[str, dict] = {}
     for slug, asset in pack.assets.items():
         found, written = asset_findings(cli, store, params, asset, today, day_end, hour_stats, day_stats, now_ref,
-                                        zone, Z, notes, skip_raw=args.skip_raw, occupied=occupied, verdicts=verdicts)
+                                        zone, Z, notes, skip_raw=args.skip_raw, occupied=occupied, verdicts=verdicts,
+                                        people=people, learned=learned)
         findings += found
         features_written += written
     # each device's run-hours check as tonight judged it, for the Device links page (vesta_shared.run_hours)
     run_hours.record(store, now_ref.astimezone(timezone.utc).isoformat(timespec="seconds"), verdicts)
+    # which devices run only when people are in, for the alert desk's "has not run" alerts (vesta_shared.demand)
+    demand.record(store, now_ref.astimezone(timezone.utc).isoformat(timespec="seconds"), learned)
 
     # ---- batteries, availability, silence, levels (current states) -----------
     # a device asleep between its reports reads its last real state (vesta_shared.asleep): its battery is judged too
@@ -210,12 +222,15 @@ def run(args) -> dict:
 def asset_findings(cli, store, params, asset: dict, today: date, day_end: datetime, hour_stats: dict, day_stats: dict,
                    now_ref: datetime, zone: str, Z, notes: list[str], skip_raw: bool = False,
                    write_features: bool = True, occupied: dict | None = None,
-                   verdicts: dict | None = None) -> tuple[list, int]:
+                   verdicts: dict | None = None, people: tuple | None = None,
+                   learned: dict | None = None) -> tuple[list, int]:
     """One asset's day rules (rules.power_rules) over the day `today` ending at `day_end` — the night's reading, and the
     5-minute recheck's of an open finding judged on a finished day (owner, 2026-10-20: one reading of each rule).
     `hour_stats` / `day_stats`: the statistics read for its power / energy entities; `notes` gets what a cut read says.
     `occupied`: the villa's state per day (vesta_shared.occupancy.days; None: not known — compared as before).
     `verdicts`: gets its run-hours verdict (vesta_shared.run_hours.entry) under its slug, when it was judged.
+    `people`: (from when, the villa's hours: people_hours) — its days counted, and `learned` gets under its power reading
+    whether it runs only when people are in (vesta_shared.demand); None: not counted.
     Returns (its findings, the features written — none when `write_features` is off)."""
     findings: list = []
     features_written = 0
@@ -232,6 +247,7 @@ def asset_findings(cli, store, params, asset: dict, today: date, day_end: dateti
         judged(v)
         return findings, 0
     p_series, e_series = {}, {}
+    follows = False                # it runs only when people are in (vesta_shared.demand): its silent empty day is not short
     # a motor whose meter measures another part too (a wall switch's fan and light: vesta_shared.daily.shared_meter):
     # its own on/off decides when it runs, its power is read only while the other part is off
     spans = None
@@ -264,6 +280,8 @@ def asset_findings(cli, store, params, asset: dict, today: date, day_end: dateti
                                  + unread("its power for the day", day_time_label(got.reach(p_eid).astimezone(Z)))
                                  + ", its runs after that are not counted.")
                 p_series.setdefault(today, {}).update({"runs": runs})
+        if people is not None and learned is not None and not spans:
+            follows = people_learned(store, params, asset, p_eid, rows, thr, people, today, Z, learned, write_features)
         if today in p_series:
             f = p_series[today]
             for k in ("run_hours", "full_hours", "running_power", "peak_w", "gap_hours") if write_features else ():
@@ -316,10 +334,56 @@ def asset_findings(cli, store, params, asset: dict, today: date, day_end: dateti
     if p_eid:
         # a shared meter's energy is the other part's too: counted in the energy figures, never judged as the motor's
         findings += R.power_rules(asset, p_eid, p_series, today, params, expected, None if spans else (e_series or None),
-                                  prior, occupied)
+                                  prior, occupied, follows)
     elif e_eid and expected:
         findings += R.power_rules(asset, e_eid, {}, today, params, expected, e_series, prior, occupied)
     return day_seen(findings, day_end), features_written
+
+
+def people_hours(cli, day_end: datetime) -> tuple[datetime, dict] | None:
+    """(from when, each hour's villa state: OCCUPIED / EMPTY) over the last PEOPLE_READ_DAYS before `day_end`, from the
+    villa's empty sensor (the Kiosk's pick, vesta_shared.occupancy.sensor); None without one, or its history unread."""
+    eid = occupancy.sensor()
+    if not eid:
+        return None
+    start = day_end - timedelta(days=PEOPLE_READ_DAYS)
+    try:
+        rows = (cli.history([eid], start, day_end) or {}).get(eid) or []
+    except Exception:  # noqa: BLE001 — unread: nothing counted tonight, the days are counted on a later night
+        return None
+    return (start, demand.hours_held(rows, start, day_end)) if rows else None
+
+
+def people_rules(params) -> demand.Rules:
+    """vesta_shared.demand's rules, from the night check's settings (people_*)."""
+    b = params.behaviour
+    return demand.Rules(b("people_min_run_hours"), b("people_min_empty_hours"), b("people_empty_ratio"),
+                        b("people_sure"), b("people_max_hold_hours"))
+
+
+def people_learned(store, params, asset: dict, p_eid: str, rows: list[dict], thr: float, people: tuple, today: date,
+                   Z, learned: dict, write: bool = True) -> bool:
+    """Its hours counted for each finished day the villa's history covers whole (kept: `write`), and what its last
+    people_days of counts say (vesta_shared.demand.learn), put in `learned` under its power reading with its running
+    power `thr`; whether it runs only when people are in."""
+    start, held = people
+    ran = demand.ran_hours(rows, thr)
+    d = start.astimezone(Z).date()
+    while d <= today:
+        first = datetime.combine(d, time(0, 0), tzinfo=Z)
+        if first >= start and held and write:
+            counts = demand.day_counts(held, ran, first, first + timedelta(days=1))
+            if counts[demand.IN_H] or counts[demand.EMPTY_H]:
+                for name, value in counts.items():
+                    store.put_feature(d.isoformat(), p_eid, demand.FAMILY, name, float(value))
+        d += timedelta(days=1)
+    since = (today - timedelta(days=int(params.behaviour("people_days")) - 1)).isoformat()
+    totals = {name: sum(v or 0 for v in store.features_of(p_eid, demand.FAMILY, name, since).values())
+              for name in demand.NAMES}
+    v = demand.learn(totals, people_rules(params))
+    learned[p_eid] = {**v, "thr": round(thr, 1), "name": asset["name"],
+                      "look_days": int(params.behaviour("baseline_days"))}
+    return bool(v["follows"])
 
 
 def day_seen(findings: list, day_end: datetime) -> list:

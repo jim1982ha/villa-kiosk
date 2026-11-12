@@ -57,6 +57,7 @@ from vesta_shared.asleep import read_states, unheard  # noqa: E402  (unavailable
 from vesta_shared.knowledge_pack import KnowledgePack  # noqa: E402
 from vesta_shared.limits import limit  # noqa: E402  (every limit, set on the Limits tab)
 from vesta_shared import visit_state as VS  # noqa: E402  (where a visit stands: one decision)
+from vesta_shared import demand  # noqa: E402  (a device that runs only when people are in: the night check's verdict)
 
 FATIGUE_WINDOW_DAYS = limit("alerts.fatigue_window_days", 30, unit="days", group="detect", lo=1, hi=365,
                             says="Days over which an automation's alerts are counted to propose retuning it.",
@@ -67,6 +68,8 @@ SKILL = os.path.dirname(HERE)
 # replaces the shipped one for its blueprint (the first that matches wins). It was read as shipped only.
 RULES = skill_settings.load(SKILL, "rules.yaml", first=("routes",))
 DEFAULTS = skill_settings.behaviour(RULES)           # the desk's timings (rules.yaml `behaviour:`)
+#: The reasons of an alert held while it is expected (rules.yaml held_while_expected): a "has not run" alert
+HELD_REASONS = tuple((RULES.get("held_while_expected") or {}).get("reasons") or ())
 
 
 def _params(params: VillaParams | None) -> VillaParams:
@@ -500,8 +503,9 @@ PHASES = ("opened", "resolved", "abandoned", "restated", "step")
 
 
 def intake(store: Store, ev: dict, now: datetime, params: VillaParams | None = None, occupancy_reader=occupancy,
-           zone: str | None = None) -> dict:
-    """An alert from Home Assistant. `zone`: the villa's time zone (vesta_shared.script's one rule)."""
+           zone: str | None = None, client=None) -> dict:
+    """An alert from Home Assistant. `zone`: the villa's time zone (vesta_shared.script's one rule). `client`: the
+    villa's history, read to tell whether a "has not run" alert is expected now (expected); None: never held."""
     ev = normalise(ev)
     if ev["phase"] not in PHASES:
         # ⚠️ A PHASE THIS DESK DOES NOT KNOW IS NOTHING (2026-10-17, 14:41): a newer rule template sent "restated" to a
@@ -539,6 +543,13 @@ def intake(store: Store, ev: dict, now: datetime, params: VillaParams | None = N
         # ⚠️ WHAT IT SAYS NOW (owner, 2026-10-13, the house pump's #5: "last confirmed: 2026-10-01" every morning while
         # Home Assistant's own message said 2026-10-11): a repeat carries the alert's latest words, claim and priority
         cur = _restated(store, cur, ev, sev, now, route, out)
+        # ⚠️ EXPECTED WHILE NOBODY IS IN (owner, 2026-11-12, #167-P2): held, or no longer — before any repeat is told
+        if cur["state"] == Incident.HELD or (cur["state"] in Incident.CHASED and does(sev, route) == "chase"):
+            hold = expected(store, notes_of(cur), now, client)
+            if hold:
+                return held(store, cur, hold, now, out, zone, context=ev.get("_context_id"))
+            if cur["state"] == Incident.HELD:
+                return unheld(store, cur, now, route, out, context=ev.get("_context_id"))
         # the villa's time, written as every message writes one ("Mon 05/10/2026 08:00"): it showed "2026-10-03T00:00", UTC
         # since THIS run began: a reopened alert counts from its return, never from its first run (#125-P1)
         since = since_in(villa_time(cur.get("reopened_at") or cur["opened_at"], zone or "UTC"))
@@ -560,6 +571,7 @@ def intake(store: Store, ev: dict, now: datetime, params: VillaParams | None = N
     back = back_alert(store, ev, now)
     if back:
         return reopen(store, back, ev, now, sev, route, out, zone=zone)
+    hold = expected(store, ev, now, client) if does(sev, route) == "chase" else None
     iid = store.new_incident(key, rule_id, eid, sev, ev, now.isoformat())
     carry_check(store, iid, route, ev)
     carry_to(store, iid, sev, ev)
@@ -567,6 +579,11 @@ def intake(store: Store, ev: dict, now: datetime, params: VillaParams | None = N
     # 2 minutes later, it opened a new number)
     W.carry(store, iid, terms(params))
     out["incident_id"] = iid
+    if hold:
+        # its number, its task and its fault (on the tablet's Watch), nobody asked: expected while nobody is in
+        title = problem_name(ev["message"])["headline"]
+        Problems(store).reopen_task("incident", iid, rule_id, eid, title, route.get("check") or "")
+        return held(store, store.incident(iid), hold, now, out, zone, context=ev.get("_context_id"), new=True)
     out["decision"] = "new"
     # no status: "New" is the heading's (Incident: New #N) — and its "Alert sent" line counts the week when the same
     # alert was seen this week under another number (message_format.STEPS, from problems.incident_runs)
@@ -580,6 +597,85 @@ def intake(store: Store, ev: dict, now: datetime, params: VillaParams | None = N
 #: What a repeat of an open alert brings that the incident keeps: Home Assistant's latest words and what it claims.
 RESTATED = ("message", "summary", "label", "claim", "bad_states", "mode", "state", "entities", "priority", "severity",
             "reason")
+
+
+def expected(store: Store, p: dict, now: datetime, client) -> demand.Hold | None:
+    """Whether an alert (its event, or its incident's notes `p`) is expected now: a reason held while expected
+    (HELD_REASONS) about a device that runs only when people are in, people in for less than it needs since its last run
+    (vesta_shared.demand.hold, read through `client`). None — an alert as any other — otherwise, or when unread."""
+    if client is None or p.get("reason") not in HELD_REASONS:
+        return None
+    ents = p.get("entities")
+    eid = (ents[0] if isinstance(ents, list) and ents else ents if isinstance(ents, str) else p.get("entity_id")) or ""
+    return demand.hold(store, client, occupancy_now.sensor(), str(eid).split(",")[0], now)
+
+
+def held_said(store: Store, inc: dict, hold: demand.Hold, zone: str | None) -> Said:
+    """Why a held alert is expected, in each language (words.yaml held / held_none)."""
+    eid = str(inc.get("entity_id") or "").split(",")[0]
+    device = demand.recorded(store)["devices"].get(eid, {}).get("name") or eid
+    since = since_in(villa_time(hold.since.isoformat(), zone or "UTC"))
+    need = lasting_in(hold.need_h * 3600)
+    if not hold.inside_h:
+        return say("held_none", device=device, since=since, need=need)
+    return say("held", device=device, since=since, need=need, inside=lasting_in(hold.inside_h * 3600))
+
+
+def held(store: Store, inc: dict, hold: demand.Hold, now: datetime, out: dict, zone: str | None,
+         context: str | None = None, new: bool = False) -> dict:
+    """Alert `inc` held (Incident.HELD): nobody chased, its fault on the tablet's Watch saying why (Notes.HELD's
+    `words`), Home Assistant's own message of it taken over with the same words. An alert already chased stops being
+    chased; `new`: its first message. ⚠️ NEVER A MESSAGE OF ITS OWN: the villa sent its own (the rule: never in the
+    critical path) — VESTA rewrites it, and the facility manager is asked only once it is no longer expected."""
+    said = held_said(store, inc, hold, zone)
+    p = notes_of(inc)
+    was = p.get(Notes.HELD) or {}
+    store.note(inc["id"], {Notes.HELD: {"since": hold.since.isoformat(), "ran": hold.ran, "inside_h": hold.inside_h,
+                                        "need_h": hold.need_h, "words": str(said)}})
+    if new:
+        store.update_incident(inc["id"], state=Incident.HELD)
+    elif inc["state"] != Incident.HELD:
+        store.move(inc["id"], Incident.CHASED, Incident.HELD)
+    if was.get("words") != str(said) or inc["state"] != Incident.HELD:
+        out["actions"].append(R.faults_changed())          # its fault's `expected` says the new words (Problems.card)
+    inc = store.incident(inc["id"])
+    # the villa's own message of it (its first, or a repeat: still there) under its number, saying why it is held
+    out["ha_messages"] = [R.ha_message(inc["id"], context=context, stage="new" if new else "still", **about(inc, said))]
+    out["decision"] = "held"
+    return out
+
+
+def unheld(store: Store, inc: dict, now: datetime, route: dict, out: dict, context: str | None = None) -> dict:
+    """Held alert `inc` no longer expected (people in long enough and still no run, or it no longer runs only when
+    people are in): an alert as any other from now — the facility manager asked, the ladder from here."""
+    h = notes_of(inc).get(Notes.HELD) or {}
+    store.note(inc["id"], drop=(Notes.HELD,))
+    store.move(inc["id"], (Incident.HELD,), Incident.ASKED, asked_at=now.isoformat(), assignee=CHASE["asks"])
+    said = say("held_over", need=lasting_in(float(h.get("need_h") or 0) * 3600))
+    inc = store.incident(inc["id"])
+    out["send"] += tell(inc["severity"], "new", incident=inc["id"], ladder=route.get("ladder", True), **about(inc, said))
+    if context:
+        out["ha_messages"] = [R.ha_message(inc["id"], context=context, stage="new", **about(inc, said))]
+    out["actions"].append(R.faults_changed())
+    out["incident_id"] = inc["id"]
+    out["decision"] = "unheld"
+    return out
+
+
+def still_held(store: Store, inc: dict, now: datetime, client, out: dict, zone: str | None) -> None:
+    """At each look, a held alert: still expected — its words kept up to date — or asked now (unheld). Unread: as it is."""
+    if client is None:
+        return
+    hold = expected(store, notes_of(inc), now, client)
+    if hold:
+        sub = {"actions": [], "send": []}
+        held(store, inc, hold, now, sub, zone)
+        out["actions"] += [a for a in sub["actions"] if a not in out["actions"]]
+        return
+    sub = {"actions": [], "send": []}
+    unheld(store, inc, now, route_for(inc["rule_id"], notes_of(inc).get(Notes.BLUEPRINT)), sub)
+    out["send"] += sub["send"]
+    out["actions"] += [a for a in sub["actions"] if a not in out["actions"]]
 
 
 def does(sev: str, route: dict | None = None) -> str:
@@ -1976,6 +2072,9 @@ def tick(store: Store, now: datetime, params: VillaParams | None = None, client=
             said = Said(str(said), getattr(said, "langs", None))
             out["send"] += tell(inc["severity"], "reopened", incident=inc["id"], chased=True, **about(inc, said))
             continue
+        if inc["state"] == Incident.HELD:
+            still_held(store, inc, now, client, out, zone)      # expected while nobody is in: never chased
+            continue
         chase(store, inc, now, out, params, zone)
     # villa silent: the engine's Home Assistant connection has been down too long
     last = store.last_beat(HA_BEAT)
@@ -2040,7 +2139,7 @@ def main(argv=None):
     params = ctx.params
     if a.cmd == "intake":
         ev = json.load(open(a.event)) if a.event else json.load(sys.stdin)
-        res = intake(store, ev, now, params, lambda: occupancy(ctx.client), zone=ctx.zone)
+        res = intake(store, ev, now, params, lambda: occupancy(ctx.client), zone=ctx.zone, client=ctx.live_client)
     elif a.cmd == "tick":
         res = tick(store, now, params, ctx.live_client, zone=ctx.zone)
     elif a.cmd == "reply":

@@ -552,7 +552,7 @@ class Problems:
         # taken on, whatever it was doing: the buttons that no longer apply go (Notes.TAKEN_ON; owner, 2026-11-05)
         self.store.note(sid, {Notes.TAKEN_ON: str(said)})
         # no longer chased, read and written under one lock (store.move): the desk's tick may be moving it too
-        self.store.move(sid, Incident.CHASED, Incident.TAKEN, reply=said)
+        self.store.move(sid, Incident.CHASED + (Incident.HELD,), Incident.TAKEN, reply=said)
         return sid
 
     def unreached(self, iid: int) -> None:
@@ -760,6 +760,10 @@ class Problems:
         return {"open": task.get("status") == "open", "title": title, "closes_at": closes or None,
                 "confirms_by": confirms_by,
                 "monitored_until": monitored_until(self.store.incident(sid)) if kind == "incident" and task.get("status") == "open"
+                else None,
+                # a held alert (owner, 2026-11-12: a pump that runs only when people are in, silent while nobody is):
+                # why it is expected, the tablet listing it on Watch until it is no longer (Notes.HELD)
+                "expected": held_words(self.store.incident(sid)) if kind == "incident" and task.get("status") == "open"
                 else None,
                 # ⚠️ NOTHING WATCHED, SAID OF EVERY CLOSE (owner, 2026-11-07, drill #136-P1: a visit closed in the Cockpit
                 # sat on the tablet's Watch list with no state, as "about to be watched", since only VESTA's own closes
@@ -1005,6 +1009,13 @@ def _moment(iso):
     except ValueError:
         return None
     return t.replace(tzinfo=timezone.utc) if t and t.tzinfo is None else t
+
+
+def held_words(inc: dict | None) -> str | None:
+    """Why open incident `inc` is held (Incident.HELD), in English, its Kiosk fault's `expected`; None when it is not."""
+    if not inc or inc.get("closed_at") or inc.get("state") != Incident.HELD:
+        return None
+    return str((notes_of(inc).get(Notes.HELD) or {}).get("words") or "") or None
 
 
 def monitored_until(inc: dict | None) -> str | None:

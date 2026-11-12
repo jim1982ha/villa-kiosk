@@ -317,7 +317,7 @@ def fault_of(t: dict) -> dict:
             "alert_number": t.get("alertNumber"), "alert_priority": t.get("alertPriority"), "origin": t.get("origin"),
             "check": t.get("check"), "title_pattern": t.get("titlePattern"), "since": t.get("since"),
             "closes_at": t.get("closesAt"), "confirms_by": t.get("confirmsBy"), "not_watched": t.get("notWatched") is True,
-            "monitored_until": t.get("monitoredUntil"),
+            "monitored_until": t.get("monitoredUntil"), "expected": t.get("expected"),
             "note": str(t.get("note") or ""),                     # what to do on site (the agreement's ticket.fields)
             "person_titled": person_titled(t), "cleared": cleared_step(close) if close else None,
             "noted": [(str(u.get("at") or ""), str(u.get("note") or "")) for u in ups if u.get("kind") == NOTED],
@@ -455,6 +455,16 @@ def closing(at: str | None) -> Amend:
         if t.get("status") == "resolved" or t.get("closesAt") == at:
             return None
         return {k: v for k, v in dict(t, closesAt=at).items() if not (k == "closesAt" and v is None)}
+    return amend
+
+
+def holding(words: str | None) -> Amend:
+    """An open alert's fault says why the VESTA Agent holds it (`expected`, owner 2026-11-12: a pump that runs only when
+    people are in, silent while nobody is — on the tablet's Watch with these words), or no longer says it (None)."""
+    def amend(t: dict) -> dict | None:
+        if t.get("status") == "resolved" or t.get("expected") == words:
+            return None
+        return {k: v for k, v in dict(t, expected=words).items() if not (k == "expected" and v is None)}
     return amend
 
 

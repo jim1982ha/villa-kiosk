@@ -769,3 +769,42 @@ visit_siren_no:
   zh: "不拉响警报"
   ja: "サイレンなし"
   ko: "사이렌 없음"
+
+# A "has not run" alert of a device that runs only when people are in (vesta_shared.demand), raised while nobody was
+# there to use it: held — nobody asked, on the tablet's Watch — until people have been in for {need} since {since}
+# (owner, 2026-11-12, #167-P2). {device}: its name; {inside}: the hours people have been in since.
+held:
+  en: "Expected: {device} runs only when people are in, and they have been in for {inside} since {since}. It becomes an alert after {need} with people in and still no run."
+  fr: "Attendu: {device} ne tourne que lorsqu'il y a du monde, et il n'y a eu du monde que {inside} depuis {since}. Cela devient une alerte après {need} de présence sans aucun fonctionnement."
+  id: "Wajar: {device} hanya berjalan saat ada orang, dan baru ada orang selama {inside} sejak {since}. Ini menjadi peringatan setelah {need} ada orang tanpa berjalan sama sekali."
+  de: "Erwartet: {device} läuft nur, wenn jemand da ist, und seit {since} war nur {inside} jemand da. Es wird ein Alarm nach {need} Anwesenheit ohne jeden Lauf."
+  es: "Esperado: {device} solo funciona cuando hay alguien, y desde {since} solo ha habido alguien durante {inside}. Será una alerta tras {need} con gente y sin funcionar."
+  it: "Previsto: {device} funziona solo quando c'è qualcuno, e da {since} c'è stato qualcuno solo per {inside}. Diventa un allarme dopo {need} di presenza senza alcun funzionamento."
+  nl: "Verwacht: {device} draait alleen als er iemand is, en sinds {since} was er maar {inside} iemand. Het wordt een melding na {need} aanwezigheid zonder te draaien."
+  zh: "预期之内：{device} 只在有人时运行，自 {since} 以来仅有人 {inside}。有人 {need} 后仍未运行才会报警。"
+  ja: "想定内：{device} は人がいるときだけ動きます。{since} 以降、人がいたのは {inside} だけです。人がいて {need} 経っても動かなければ警報になります。"
+  ko: "예상됨: {device}은(는) 사람이 있을 때만 작동하며, {since} 이후 사람이 있었던 시간은 {inside}뿐입니다. 사람이 있는 {need} 동안 작동하지 않으면 경보가 됩니다."
+
+held_none:
+  en: "Expected: {device} runs only when people are in, and nobody has been in since {since}. It becomes an alert after {need} with people in and still no run."
+  fr: "Attendu: {device} ne tourne que lorsqu'il y a du monde, et personne n'est venu depuis {since}. Cela devient une alerte après {need} de présence sans aucun fonctionnement."
+  id: "Wajar: {device} hanya berjalan saat ada orang, dan tidak ada orang sejak {since}. Ini menjadi peringatan setelah {need} ada orang tanpa berjalan sama sekali."
+  de: "Erwartet: {device} läuft nur, wenn jemand da ist, und seit {since} war niemand da. Es wird ein Alarm nach {need} Anwesenheit ohne jeden Lauf."
+  es: "Esperado: {device} solo funciona cuando hay alguien, y no ha habido nadie desde {since}. Será una alerta tras {need} con gente y sin funcionar."
+  it: "Previsto: {device} funziona solo quando c'è qualcuno, e non c'è stato nessuno da {since}. Diventa un allarme dopo {need} di presenza senza alcun funzionamento."
+  nl: "Verwacht: {device} draait alleen als er iemand is, en sinds {since} is er niemand geweest. Het wordt een melding na {need} aanwezigheid zonder te draaien."
+  zh: "预期之内：{device} 只在有人时运行，自 {since} 以来无人。有人 {need} 后仍未运行才会报警。"
+  ja: "想定内：{device} は人がいるときだけ動きます。{since} 以降、誰もいません。人がいて {need} 経っても動かなければ警報になります。"
+  ko: "예상됨: {device}은(는) 사람이 있을 때만 작동하며, {since} 이후 아무도 없었습니다. 사람이 있는 {need} 동안 작동하지 않으면 경보가 됩니다."
+
+held_over:
+  en: "Still no run once people had been in for {need}"
+  fr: "Toujours aucun fonctionnement après {need} de présence"
+  id: "Masih belum berjalan setelah ada orang selama {need}"
+  de: "Noch kein Lauf nach {need} Anwesenheit"
+  es: "Sigue sin funcionar tras {need} con gente"
+  it: "Ancora nessun funzionamento dopo {need} di presenza"
+  nl: "Nog steeds niet gedraaid na {need} aanwezigheid"
+  zh: "有人 {need} 后仍未运行"
+  ja: "人がいて {need} 経っても動いていません"
+  ko: "사람이 있은 지 {need}이 지나도 작동하지 않음"

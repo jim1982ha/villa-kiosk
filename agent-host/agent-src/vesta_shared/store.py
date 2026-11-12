@@ -74,6 +74,10 @@ class Incident:
     # someone took its fault on in the VESTA Kiosk ("Open Ticket", owner 2026-10-15): open, no longer chased — it ends
     # as any open incident does (Home Assistant clears it, a person closes its ticket)
     TAKEN = "taken"
+    # a "has not run" alert of a device that runs only when people are in, raised while nobody was there to use it
+    # (the alert desk's held_while_expected; owner, 2026-11-12): open, its fault on the tablet's Watch, nobody chased —
+    # asked when people have been in long enough and it still has not run (asked), or over when it runs
+    HELD = "held"
     CHASED = (ASKED, REASKED, ESCALATED)
     ANSWERED_OR_CLEARED = (DONE, RESOLVED)    # over: its task and ticket close with it (not recovered)
     # an incident muted before 0.12.132 (Mute is gone): over too — its task and Kiosk fault close at the next repair,
@@ -113,6 +117,9 @@ class Notes:
     # the villa's visit as its latest event told it (the alert desk's: its record, steps, photos, cards, and `closes_at`,
     # when it closes if nothing more is seen); read by monitored_until for the Kiosk fault and every copy's last line
     VISIT = "visit"
+    # why a held alert (Incident.HELD) is expected now, and until when it is held — {"since", "ran", "inside_h", "need_h",
+    # "words"}: the desk's, rewritten at its looks; `words` (English) is its Kiosk fault's `expected` (Problems.card)
+    HELD = "held"
     # its Kiosk fault is made even though its task closed before one existed, made closed in one write (Tickets.repair):
     # ⚠️ A VISIT THE VILLA CLOSED WHILE VESTA WAS AWAY (owner's drills, 2026-11-07, #141, #143): its first event made an
     # open fault and a "new" pop-up on the tablet, shown open ~19s until the replayed close; set by the alert desk

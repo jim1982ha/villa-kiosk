@@ -113,10 +113,12 @@ def _profile(series: list[dict], params: VillaParams) -> str:
 # ---------------------------------------------------------------- power family
 def power_rules(asset: dict, entity_id: str, series: dict[date, dict], today: date, params: VillaParams,
                 expected_hours_by_weekday: dict | None, energy_series: dict[date, dict] | None,
-                prior: dict[str, dict] | None = None, occupied: dict[date, str] | None = None) -> list[Finding]:
+                prior: dict[str, dict] | None = None, occupied: dict[date, str] | None = None,
+                follows: bool = False) -> list[Finding]:
     """prior: {rule_id: detail} of findings still open for this asset. While a
     finding is open its baseline is frozen, so the anomaly cannot become the
-    new normal and close itself after a few days."""
+    new normal and close itself after a few days. `follows`: it runs only when people are in (vesta_shared.demand) —
+    a day the villa was empty (`occupied`) it ran shorter, or not at all, because nobody was there to use it: not said."""
     prior = prior or {}
     out: list[Finding] = []
     baseline_days = int(params.behaviour("baseline_days"))
@@ -173,6 +175,8 @@ def power_rules(asset: dict, entity_id: str, series: dict[date, dict], today: da
             f = series[d]
             if exp and exp >= SCHEDULE_MIN_HOURS and f.get("hours_with_data", 0) >= params.behaviour("full_day_hours"):
                 change = pct_change(f["run_hours"], exp)
+                if change is not None and change < 0 and follows and (occupied or {}).get(d) == occupancy.EMPTY:
+                    change = None                  # an empty day: nobody there to use it (owner, 2026-11-12)
                 if change is not None and abs(change) >= dev_pct:
                     what = "ran shorter" if change < 0 else "ran longer"
                     summary = (f"{asset['name']} {what} than expected on {day_label(d, weekday=True)}: "
@@ -241,7 +245,8 @@ def power_rules(asset: dict, entity_id: str, series: dict[date, dict], today: da
     if expected_hours_by_weekday and profile == "intermittent":
         d = days[-1] if days else today
         exp = expected_hours_by_weekday.get(weekday_name(d), 0)
-        if exp and series.get(d, {}).get("run_hours", 0) < EXPECTED_RAN_HOURS:
+        if exp and series.get(d, {}).get("run_hours", 0) < EXPECTED_RAN_HOURS and \
+                not (follows and (occupied or {}).get(d) == occupancy.EMPTY):
             out.append(Finding("PM-EXPECTED-SILENT", entity_id, slug, "power", INFO,
                                f"{asset['name']} was scheduled {lasting(exp * 3600)} on {day_label(d, weekday=True)} and did not run.",
                                {"day": d.isoformat(), "expected_hours": exp}, "Report only: usage driven assets are not chased."))
