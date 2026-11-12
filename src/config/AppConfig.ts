@@ -247,7 +247,7 @@ export interface AppConfig {
    *  VESTA's messages in (messages/recipients CHAT_LANGUAGES); a chat not named reads English. SHARED: set beside the
    *  chat in Settings › Messages › Who gets the messages, and told to the VESTA Agent in its heartbeat answer. */
   chatLanguages: Record<string, string>;
-  /** Standing eye height in metres (default 1.7). Configurable in Settings. */
+  /** Standing eye height in metres (default DEFAULT_EYE_HEIGHT, 1.6). Configurable in Settings. */
   eyeHeight: number;
   /** Walk-speed multiplier (1.0 = default). Configurable in Settings. */
   walkSpeed: number;

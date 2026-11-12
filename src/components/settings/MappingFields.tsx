@@ -153,7 +153,8 @@ export interface ObjectsFieldProps {
  * It replaced Villa's "Bound 3D objects" lists and Devices' "· 3D object: …" with its pencil.
  * ⚠️ SAID FOR WHAT IT IS, ON ITS ONE LINE (owner, 2026-11-12: "camera.storage_room" pointed at another camera read as
  * a second device): each object by its cube (ObjectName, the same in the search's rows), its hover saying it is the
- * model's object and whom it shows; the search says what it moves ("Point camera.storage_room at another entity…").
+ * model's object and whom it shows; the search says what it moves, and when an object was re-mapped to this device
+ * ("Re-mapped to this device · search to point it at another entity…", owner, 2026-11-12: it did not say so).
  * ⚠️ ON THE MAP, ITS SEARCH LISTS THE VILLA'S ENTITIES (owner, 2026-11-11: a device renamed in the villa's system could
  * not be given its new name here, the search listing only the model's objects): a device on the map with 3D objects
  * moves them and its settings to the entity picked (mappingEdits.repointDevice, asked first); the model's objects are
@@ -169,7 +170,7 @@ export function ObjectsField({ entityId, name, objects, links, onAdd, onTakeOff,
       ))}
       <div className="group-members-add">
         {onMoveTo && objects.length > 0 ? (
-          <EntityPicker compact placeholder={movePlaceholder(objects)} exclude={entityId} onChange={(to) => onMoveTo(entityId, to)} />
+          <EntityPicker compact placeholder={movePlaceholder(objects, entityId)} exclude={entityId} onChange={(to) => onMoveTo(entityId, to)} />
         ) : (
         <SearchPicker compact placeholder="Add a 3D object…" onPick={(o) => onAdd(o, entityId)}
           empty={links.shows.size === 0 ? "No 3D model loaded yet." : undefined}
@@ -190,9 +191,13 @@ export function objectTip(object: string, entityId: string, name: string): strin
     : `3D object of the model, named ${object}: it shows ${name} (${entityId}) here.`;
 }
 
-/** The search of a device on the map whose objects show it: what picking an entity does. Pure. */
-export function movePlaceholder(objects: readonly string[]): string {
-  return objects.length === 1 ? `Point ${objects[0]} at another entity…` : "Point these 3D objects at another entity…";
+/** The search of a device on the map whose objects show it: whether an object was re-mapped to this device (its name
+ *  not this device's), and what picking an entity does. Pure. */
+export function movePlaceholder(objects: readonly string[], entityId: string): string {
+  const them = objects.length === 1 ? "it" : "them";
+  return objects.some((o) => o !== entityId)
+    ? `Re-mapped to this device · search to point ${them} at another entity…`
+    : `Search to point ${them} at another entity…`;
 }
 
 /**

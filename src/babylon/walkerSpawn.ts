@@ -21,7 +21,9 @@ import { pointInPolygon, type Pt2 } from "@/utils/geometry";
 import type { TeleportPoint } from "@/types/scene.types";
 
 /** The eye height when the config sets none — the ONE default. */
-export const DEFAULT_EYE_HEIGHT = 1.7;
+// 1.6 m since 2.496.784 (owner, 2026-11-12: "the default viewpoint when switching to FPS mode is a little bit too
+// high"); a tablet whose slider was moved keeps its own (AppConfig.overrides stores only what differs from the default).
+export const DEFAULT_EYE_HEIGHT = 1.6;
 export function eyeHeightOf(configured: number | undefined): number {
   return configured ?? DEFAULT_EYE_HEIGHT;
 }

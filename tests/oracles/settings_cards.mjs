@@ -331,9 +331,11 @@ console.log("\n  a device's \"3D object\" field (owner, 2026-11-06): its objects
      JSON.stringify(pills(lamp)) === JSON.stringify([["Lamp_Kitchen", "Take Lamp_Kitchen off Terrace Lamp"]]), pills(lamp));
   ck("  ...an object linked by its name the same, with the same ✕", JSON.stringify(pills(pump)) === JSON.stringify([["switch.example_pool_pump", "Take switch.example_pool_pump off Pool Pump"]]), pills(pump));
   // owner, 2026-11-11: on the map, the search gives the device another entity (renamed in the villa's system)
-  // owner, 2026-11-12: it says what it moves — its object by name
-  ck("  ...then the compact search, \"Point Lamp_Kitchen at another entity…\", in the same field",
-     /<div class="group-members-add"><div class="picker"><div class="config-search config-search-compact">[\s\S]*?placeholder="Point Lamp_Kitchen at another entity…"/.test(field(lamp)), field(lamp));
+  // owner, 2026-11-12: it says what it moves, and that an object was re-mapped to this device (its name not the device's)
+  const search = (card) => field(card).match(/<div class="group-members-add"><div class="picker"><div class="config-search config-search-compact">[\s\S]*?placeholder="([^"]*)"/)?.[1];
+  ck("  ...then the compact search in the same field, saying an object was re-mapped to the device",
+     search(lamp) === "Re-mapped to this device · search to point it at another entity…", search(lamp));
+  ck("  ...an object named after its device: the search alone", search(pump) === "Search to point it at another entity…", search(pump));
   // each object by its cube, never as an entity: the model's object, whom it shows on hover
   ck("  ...each object pill drawn as a 3D object (its cube) with the hover saying whom it shows",
      /<span class="object-name"><svg[\s\S]*?Lamp_Kitchen/.test(field(lamp))
