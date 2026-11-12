@@ -1,4 +1,4 @@
-## 0.12.503
+## 0.12.504
 
 - **A "has not run" alert is held while nobody was there to use the device.** Every night VESTA learns, hour by hour,
   which devices run only when people are in (a house pump drawing water, a jacuzzi pump), from their own runs and the

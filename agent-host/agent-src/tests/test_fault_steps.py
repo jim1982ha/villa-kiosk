@@ -17,7 +17,7 @@ from datetime import datetime, timedelta, timezone
 from villa_timeline import TimelineVilla
 from helpers import STARTER_SKILLS, make_agent
 from kiosk_fake import FakeKiosk
-from vesta_agent.kiosk import Kiosk, monitoring, retitled
+from vesta_agent.kiosk import Kiosk, holding, monitoring, retitled
 from vesta_shared.problems import Problems
 from vesta_shared.store import Store
 from vesta_agent.roster import Roster
@@ -517,6 +517,10 @@ def test_a_kiosk_that_lists_everything_gets_every_kind_and_field_the_agent_write
     vid = run(k.add_ticket("Door opened while the villa is empty", entity_id="lock.example", number=8))
     run(k.amend(vid, monitoring("2026-11-07T07:02:00+00:00")))
     fields |= _kinds_and_fields(k.ticket(vid))[1]
+    # a held alert's fault says why it is expected (owner, 2026-11-12)
+    hid = run(k.add_ticket("Pump has not run", entity_id="sensor.example_power", number=9))
+    run(k.amend(hid, holding("Expected: Pump runs only when people are in.")))
+    fields |= _kinds_and_fields(k.ticket(hid))[1]
     agreed = json.load(open(CONTRACT))
     # every kind but a person's own (Need help: the Kiosk's card writes it, the agent reads it)
     from vesta_agent.kiosk import PERSON_KINDS
