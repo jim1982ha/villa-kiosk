@@ -1,3 +1,13 @@
+## 2.496.783
+
+- **FPS mode opens looking straight ahead.** Switching to FPS, arriving in a room or starting the walk no longer
+  tilts the view slightly down at the floor; it faces the same way as before, level. Dragging still tilts it as you like.
+- **Advanced Settings › Devices, "3D object": says what it is, on the same line.** Each object of the 3D model now
+  shows a small cube before its name, so `camera.storage_room` no longer reads as a second device: hovering it says
+  "3D object of the model, named camera.storage_room: it shows Tapo Storage Room HD Stream (camera.tapo_…) here."
+  The search next to it says what it moves: "Point camera.storage_room at another entity…". The "Add a 3D object…"
+  search shows the same cube before each object.
+
 ## 2.496.782
 
 What you will see, in the Cockpit's Messages:
