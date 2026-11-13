@@ -1,3 +1,10 @@
+## 2.496.804
+
+- **A chosen device now looks chosen.** In Advanced Settings, Villa presence (and every field linking one device, such
+  as a 3D object's linked device) showed the chosen sensor's name in the same dim grey as the "Search…" hint, so it
+  looked as if nothing was set. It is now written in the normal text colour, behind a link mark; the search icon and
+  the grey come back only while you search for another one.
+
 ## 2.496.803
 
 - **Room chips stay on the map you can see.** Zoomed out, a chip could run off the top of the screen, sit under the
