@@ -21,10 +21,10 @@ def test_a_report_is_written_in_the_owners_shape():
 
 
 def test_its_parts_are_read_back_from_the_text_as_sent():
-    text = F.fill_to(DAILY, "Facility Manager")
+    text = F.fill_to(DAILY, "FM")
     got = [(k, text[a:b]) for k, a, b in F.parts(text)]
     # owner, 2026-10-13: ONE quote block per section — its items together
-    assert got == [("title", "Villa Example, daily report on 11/10/2026."), ("to", "To: Facility Manager"),
+    assert got == [("title", "Villa Example, daily report on 11/10/2026."), ("to", "To: FM"),
                    ("label", "New since yesterday:"), ("item", "- P3 Onsen pump used 0.12 kWh/day (-76%)."),
                    ("label", "Still open:"),
                    ("item", "- Incident #5 · ⚠️ House Pump Power has not run.\n- P2 Motion1 battery at 7%: replace now.")]
@@ -43,7 +43,8 @@ def test_a_report_reaches_telegram_with_its_to_line_filled_and_no_other_heading(
     v = make_agent(tmp_path, {}, roster=Roster.of(owner=[(OWNER, "Jim")], fm=[(FM, "JM")]))
     asyncio.run(v.outcome.carry_out({"send": [{"to": "fm", "text": DAILY}]}, "reports"))
     (chat, text, _), = v.tg.sent
-    assert chat == FM and text == F.fill_to(DAILY, "Facility Manager") and "For:" not in text and "-------" not in text
+    # owner, 2026-11-13: "To: FM", as every alert says it (audience: the short words, one form)
+    assert chat == FM and text == F.fill_to(DAILY, "FM") and "For:" not in text and "-------" not in text
 
 
 # ---------------------------------------------------------------------- review 28
@@ -59,7 +60,7 @@ def test_a_long_report_goes_as_whole_messages_none_lost(tmp_path):
     assert len(texts) >= 2 and all(len(m) <= 4096 for m in texts)
     assert [m.split("\n")[0] for m in texts] == [f"Villa Example, daily report on 11/10/2026 ({i}/{len(texts)})."
                                                   for i in range(1, len(texts) + 1)]
-    assert all(m.split("\n")[1] == "To: Facility Manager" and F.telegram_entities(m) for m in texts)
+    assert all(m.split("\n")[1] == "To: FM" and F.telegram_entities(m) for m in texts)
     assert "Still open:\n- Incident #5" in texts[-1]
     assert "\n\nNew since yesterday:\n" in texts[1]                       # the section goes on: its label again
 

@@ -228,7 +228,7 @@ def who(roles, lang: str = "en") -> str:
     """The roles as a card's Status line names them, in message_format.ROLES order: "Owner & FM", "Propriétaire & FM"."""
     w = _w(lang)
     if not w:
-        return mf.audience(roles, short=True)
+        return mf.audience(roles)
     wanted = set(roles or ())
     return mf.AND.join(w["roles"][r] for r in mf.ROLES if r in wanted)
 

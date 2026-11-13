@@ -18,7 +18,7 @@ def test_the_roles_words_are_the_kiosks_profiles():
         if role in ROLE_WORDS:
             assert ROLE_WORDS[role] == PROFILES[profile]["label"]
             assert ROLE_SHORT[role] == PROFILES[profile]["short"]
-    assert audience(["owner", "fm"]) == f"{PROFILES['owner']['label']} & {PROFILES['ops']['label']}"
+    assert audience(["owner", "fm"]) == f"{PROFILES['owner']['short']} & {PROFILES['ops']['short']}"
 
 
 def test_a_step_is_said_by_its_profile_and_an_older_one_by_its_former_name():

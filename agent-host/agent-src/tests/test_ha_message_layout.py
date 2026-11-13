@@ -80,7 +80,7 @@ def test_to_is_a_role_the_rule_names_else_every_role_as_an_alert_card_says_it():
     src = ("{%- set vm_title, vm_to, vm_text, vm_status = 'T', r, 'x', '' -%}"
            "{% include 'vesta_message.jinja' ignore missing %}")
     t = _env().from_string(src)
-    to = lambda roles: f"\nTo: {html.escape(audience(roles, short=True))}\n"
+    to = lambda roles: f"\nTo: {html.escape(audience(roles))}\n"
     old_helper = lambda e: audience({"fm"}) if e == "input_text.vesta_alert_audience" else "unknown"
     for roles in ({"owner"}, {"fm"}, {"owner", "fm"}):
         for words in (ROLE_WORDS, ROLE_SHORT):
@@ -191,7 +191,7 @@ def test_to_follows_the_priority_by_the_alert_desks_own_table():
     for p in PRIORITIES:
         reached = desk.reaches(p)
         roles = [r for r in reached if r in ("owner", "fm")]
-        said = audience(roles, short=True) if roles else reached[0]
+        said = audience(roles) if roles else reached[0]
         for given in (p, p.lower(), f" {p} "):
             assert t.render(r="", p=given, states=helper).split("\n")[1] == f"To: {html.escape(said)}", (p, given)
     assert [t.render(r="", p=p).split("\n")[1] for p in PRIORITIES] == \

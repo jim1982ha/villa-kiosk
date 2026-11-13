@@ -5,7 +5,7 @@ in the future — without risking to miss any rule").
 Every alert and every report is written as plain text in this shape:
 
     Villa Example, daily report on 11/10/2026.     ← title, in bold             (one line)
-    To: Facility Manager                           ← the roles it is for        ("To: " line, `audience`)
+    To: FM                                         ← the roles it is for        ("To: " line, `audience`)
                                                    ← (an empty line, between sections)
     New since yesterday:                           ← a section's label          (a line ending ":")
     - P3 Onsen pump used 0.12 kWh/day …            ← its items, one per line: ONE quote block per section
@@ -53,15 +53,18 @@ ROLES = tuple(ROLE_WORDS)
 AND = " & "
 
 
-def audience(roles, short: bool = False) -> str:
-    """Who a message is for, as its "To:" line says it: its roles in ROLE_WORDS order ("Owner & Facility Manager"); ""
-    for none. `short`: as an alert card says them (ROLE_SHORT: "Owner & FM").
+def audience(roles) -> str:
+    """Who a message is for, as its "To:" line says it: its roles in ROLE_WORDS order, in their short words (ROLE_SHORT:
+    "Owner & FM"); "" for none.
+
+    ⚠️ ONE WAY TO SAY IT, EVERY MESSAGE (owner, 2026-11-13: the daily report read "To: Facility Manager" above an alert
+    reading "To: FM"): a "To:" line had two forms, the alert card's short one and a long one for reports, notes and
+    approvals. Every "To:" now reads the short words; ROLE_WORDS stays for a role named in a sentence (the People page).
 
     ⚠️ ROLES, NEVER NAMES (owner, 2026-10-13): "To: Fabien, JM" named the people the People list gives each role — a
     message is for a role, whoever holds it. The same words in Home Assistant's own messages (vesta_message.jinja)."""
     wanted = set(roles or ())
-    words = ROLE_SHORT if short else ROLE_WORDS
-    return AND.join(w for r, w in words.items() if r in wanted)
+    return AND.join(w for r, w in ROLE_SHORT.items() if r in wanted)
 
 
 #: After a role a copy went to that its alert's priority does not reach ("To: Owner (escalation)"): why it got it
@@ -71,7 +74,7 @@ WHY_ESCALATION = " (escalation)"
 
 
 def audience_why(roles, wanted=None) -> str:
-    """An alert copy's "To:": its roles as audience(short) says them, each one its priority does not reach (not in
+    """An alert copy's "To:": its roles as audience says them, each one its priority does not reach (not in
     `wanted`, the roles the priority reaches; None or none: not said) followed by WHY_ESCALATION."""
     have, extra = set(roles or ()), set(roles or ()) - set(wanted or ()) if wanted else set()
     return AND.join(w + (WHY_ESCALATION if r in extra else "") for r, w in ROLE_SHORT.items() if r in have)
@@ -83,7 +86,7 @@ def role_words(to: str) -> list[str]:
 
 
 #: The longest "To:" line any message can carry (every role): the room a skill keeps for it in a caption.
-TO_LONGEST = TO + audience(ROLE_WORDS)
+TO_LONGEST = TO + audience(ROLES)
 #: The title of a message about no incident whose sender gave it none (an AI's message sent without one; a heading
 #: "For: …" recorded before 0.12.175). Every message the agent sends on its own has a title: this is the last resort.
 UNTITLED = "Message from VESTA"
@@ -686,7 +689,7 @@ def priority_to(rules: dict) -> dict[str, str]:
     out = {}
     for p in ("P1", "P2", "P3", "P4"):
         reached = [r for r, sevs in roles.items() if r != "digest" and p in (sevs or [])]
-        out[p] = audience(reached, short=True) or does.get(p, "log")
+        out[p] = audience(reached) or does.get(p, "log")
     return out
 
 

@@ -363,7 +363,7 @@ class Notices:
             before = 1
         history = _cut(history, before)[0] if before else history
         mine = self.roles_for(chat, to) if chat else set()
-        who = self.to_line(int(incident), also, history, mine) or audience(mine, short=True) or "this chat"
+        who = self.to_line(int(incident), also, history, mine) or audience(mine) or "this chat"
         try:
             label = self.name(int(incident))
         except Exception:  # noqa: BLE001 — the heading is written without its priority, never not at all
@@ -417,7 +417,7 @@ class Notices:
                 return audience_why(sent, wanted)
         everyone = {r for h in history for r in self._roles(h)} | set(also or ())
         if reach is None:
-            return audience(everyone, short=True) or None
+            return audience(everyone) or None
         return audience_why(everyone | wanted, wanted) or self._reach_words(reach) or "nobody"
 
     def history_lines(self, incident: int, chat: int = 0, latest_excluded: int = 0) -> list[str]:

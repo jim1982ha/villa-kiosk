@@ -40,7 +40,7 @@ def test_a_message_for_a_role_reaches_every_chat_of_it_once_under_its_heading(tm
     # who it is for: its ROLE, never a person's name (owner, 2026-10-13), the same in every chat — under its title
     # (UNTITLED: none was given), as an alert's and a report's (owner, 2026-10-11: one picture; 2026-10-12: one layout)
     heads = {c: t.split("\n")[1] for c, t, _ in v.tg.sent}
-    assert heads == {JM: "To: Facility Manager", FABIEN: "To: Facility Manager", GROUP: "To: Facility Manager"}
+    assert heads == {JM: "To: FM", FABIEN: "To: FM", GROUP: "To: FM"}
     assert all(body(t) == "Pool pump offline." for _, t, _ in v.tg.sent)
     v.tg.sent.clear()
     run(v.outcome.carry_out({"send": [{"to": "owner", "text": "Siren off."}, {"to": "fm", "text": "Siren off."}]}))
