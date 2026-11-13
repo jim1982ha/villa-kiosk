@@ -891,5 +891,7 @@
       {"text": "unknown, notify.", "targets": []},
       {"text": "", "targets": []}
     ]
-  }
+  },
+  "_restartSettle": "After the villa's system restarts, how long BOTH apps let it settle before they believe what it says (owner, 2026-11-13: a restart at 14:43 froze every device on the tablet until the page was reloaded, and the VESTA Agent opened \"missing from the villa's system\" for the LED Strip and the weather station while their integrations were still loading; \"the same 5min parameter shall be used for both, since it's related to the same issue\"). `minutes`: the Kiosk takes a subscribed socket that carried no event for that long for dead and opens it afresh (src/ha/HAWebSocket.ts QUIET_LIMIT_MS), reading every state again; the VESTA Agent says no device is missing while the villa's system is starting, nor for that long after its own \"started\" entry (preventive-maintenance, nightly.missing_findings): a device really removed is said at the next check after it.",
+  "restartSettle": {"minutes": 5}
 }

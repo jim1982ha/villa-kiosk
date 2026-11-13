@@ -137,6 +137,32 @@ def ha_restarts(logbook: list[dict]) -> list:
     return sorted(out)
 
 
+def settling(logbook: list[dict], now, settle_minutes: float) -> bool:
+    """Is the villa's system still starting (its last "stopped" entry after its last "started"), or started less than
+    `settle_minutes` before `now`? Its integrations load in that time, and a device of one not loaded yet is "not
+    found" as a removed one is.
+
+    ⚠️ "MISSING" DURING A RESTART (owner, 2026-11-13: stopped 14:43, started 14:47, the LED Strip's integration loaded
+    at 14:52; the 5-minute check at 14:49 opened "LED Strip is missing from the villa's system", the weather station's
+    too, both back three minutes later)."""
+    from datetime import datetime, timedelta
+    last = {"started": None, "stopped": None}
+    for r in logbook:
+        said = str(r.get("message") or "").strip().lower()
+        if r.get("domain") != "homeassistant" or said not in last:
+            continue
+        try:
+            when = datetime.fromisoformat(str(r["when"]))
+        except (KeyError, ValueError):
+            continue
+        if last[said] is None or when > last[said]:
+            last[said] = when
+    started, stopped = last["started"], last["stopped"]
+    if stopped is not None and (started is None or stopped > started):
+        return True
+    return started is not None and now - started < timedelta(minutes=settle_minutes)
+
+
 def in_restart(when, restarts: list, settle_minutes: float) -> bool:
     """Is `when` within `settle_minutes` of a Home Assistant start (before it: the integrations loading; after it: the
     devices answering again)?

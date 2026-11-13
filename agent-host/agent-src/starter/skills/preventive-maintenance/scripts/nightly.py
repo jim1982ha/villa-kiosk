@@ -40,7 +40,8 @@ from vesta_shared.timeutil import day_label, day_time_label, moment_label, villa
 from vesta_shared.past import unread  # noqa: E402  (the one "could not be read whole: nothing is known after")
 from vesta_shared.message_format import document, split_title, status_line  # noqa: E402  (the one shape of a message)
 from vesta_shared import status_words as SW  # noqa: E402  (each step as the alert card says it, in each chat's language)
-from vesta_shared.device_state import ABSENT, ANSWERS, OFFLINE_NOW, ha_restarts, in_restart  # noqa: E402
+from vesta_shared.device_state import ABSENT, ANSWERS, OFFLINE_NOW, ha_restarts, in_restart, settling  # noqa: E402
+from vesta_shared import agreement  # noqa: E402  (the Kiosk's agreement: restartSettle, one value for both apps)
 from vesta_shared.asleep import last_value, read_states, unheard  # noqa: E402  (a sleeping device reads its last real state)
 from vesta_shared.offline import device_answers, devices_offline, reported_since, watched_kinds  # noqa: E402  (offline now; when it last REALLY reported)
 from vesta_shared.store import alerted_states  # noqa: E402  (which states an alert is about: the desk's reading)
@@ -499,6 +500,21 @@ def forget_dismissed(store, day: str) -> list[int]:
     return done
 
 
+def restart_settling(cli, now: datetime) -> bool:
+    """Whether the villa's system is still starting, or started less than the agreement's restartSettle minutes ago
+    (vesta_shared.device_state.settling, read from its logbook's own "stopped" and "started" entries): no device is
+    missing then. The Kiosk lets the villa's system settle the same time (agent-contract.json restartSettle). An
+    agreement without it, or a logbook that cannot be read: not settling, as before."""
+    minutes = agreement.section("restartSettle").get("minutes")
+    if not isinstance(minutes, (int, float)) or minutes <= 0:
+        return False
+    try:
+        rows = cli.logbook(now - timedelta(minutes=minutes + 60), now)
+    except Exception:  # noqa: BLE001 — the logbook not readable: judged as before
+        return False
+    return settling(rows, now, minutes)
+
+
 def missing_findings(store, pack, cli, now: datetime, zone: str, near=None, named_for_all: bool = True):
     """(PM-MISSING findings, the open PM-MISSING findings whose device answers again). Missing: a device of the
     baseline — every device a pack had (store.pack_seen_rows) and the villa's critical list (pack.critical), never the
@@ -529,6 +545,8 @@ def missing_findings(store, pack, cli, now: datetime, zone: str, near=None, name
     back = [f for f in open_ if any(e in states for e in E.entities_of(f))]
     nostate = sorted(e for e in ids if e not in states and e not in forgotten and e in base)
     gone = cli.not_found(nostate) if nostate else set()
+    if gone and restart_settling(cli, now):
+        gone = set()          # its integration may not be loaded yet: asked again at the next check
     groups: dict[str, list[str]] = {}
     for e in sorted(gone):
         groups.setdefault((seen.get(e) or {}).get("device") or e, []).append(e)

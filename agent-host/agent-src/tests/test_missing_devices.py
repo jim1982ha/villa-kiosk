@@ -43,16 +43,17 @@ def _seen(tmp):
     return st
 
 
-def _fx(tmp, states: dict, not_found=(), rules=None):
+def _fx(tmp, states: dict, not_found=(), rules=None, logbook=()):
     fx = tmp / "fx"
     fx.mkdir(exist_ok=True)
     (fx / "states.json").write_text(json.dumps({"states": states, "not_found": list(not_found)}))
+    (fx / "logbook.json").write_text(json.dumps({"entries": list(logbook)}))
     (fx / "rules.json").write_text(json.dumps(rules if rules is not None else [WATCHDOG]))
     return fx
 
 
-def _recheck(tmp, states, now, not_found=(), critical=(LOCK,), rules=None):
-    fx = _fx(tmp, states, not_found, rules)
+def _recheck(tmp, states, now, not_found=(), critical=(LOCK,), rules=None, logbook=()):
+    fx = _fx(tmp, states, not_found, rules, logbook)
     r = subprocess.run([sys.executable, os.path.join(SKILL, "scripts", "recheck.py"), "--store", str(tmp / "s.sqlite"),
                         "--pack", _pack(tmp, critical), "--fixture-dir", str(fx), "--now", now.isoformat()],
                        capture_output=True, text=True, env={**os.environ, "PYTHONPATH": PYTHONPATH}, timeout=60)
@@ -202,3 +203,24 @@ def test_when_it_left_is_the_agreements_answer_for_each_of_its_cases():
     for c in cases:
         got = nightly.left_at(Cli(c["rows"]), [LOCK], [{"last_seen": c["from"]}], T0)
         assert got == (c["leftAt"], True), c["_"]
+
+
+def _ha(message, at):
+    return {"name": "Home Assistant", "message": message, "domain": "homeassistant", "when": at.isoformat()}
+
+
+def test_no_device_is_missing_while_the_villas_system_restarts_nor_for_the_agreed_minutes_after(tmp_path):
+    # owner, 2026-11-13: stopped 14:43, started 14:47, an integration loaded at 14:52; "missing" opened at 14:49
+    from vesta_shared import agreement
+    settle = agreement.section("restartSettle")["minutes"]
+    _seen(tmp_path)
+    starting = [_ha("stopped", T0 - timedelta(minutes=10))]
+    _recheck(tmp_path, {TH: _st()}, T0, not_found=[LOCK, BATT], logbook=starting)
+    assert _missing(tmp_path) == []                                   # stopped, not started again yet
+    just = starting + [_ha("started", T0 - timedelta(minutes=settle - 1))]
+    _recheck(tmp_path, {TH: _st()}, T0, not_found=[LOCK, BATT], logbook=just)
+    assert _missing(tmp_path) == []                                   # started, still settling
+    later = T0 + timedelta(minutes=2)
+    _recheck(tmp_path, {TH: _st()}, later, not_found=[LOCK, BATT], logbook=just)
+    (f,) = _missing(tmp_path)                                         # settled and still not found: missing
+    assert f["entity_id"] == LOCK
