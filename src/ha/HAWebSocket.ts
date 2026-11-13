@@ -8,6 +8,7 @@ import type {
   HassFloorRegistryEntry, HassServiceTarget, StatisticPeriod,
 } from "@/types/ha.types";
 import { ingressWsUrl } from "./ingress";
+import { RESTART_SETTLE_MS } from "./restartSettle";
 import { captureError } from "@/utils/diagnostics";
 import { report as reportTelemetry } from "@/utils/telemetry";
 import { reportSessionLost } from "@/auth/sessionLost";
@@ -23,6 +24,10 @@ interface PendingSubscription {
   callback: EventCallback;
   id: number;
 }
+
+/** How long a subscribed socket may carry no event before it is taken for dead (sendPing): the agreement's settle
+ *  after a restart of the villa's system, the one the VESTA Agent waits before calling a device missing. */
+export const QUIET_LIMIT_MS = RESTART_SETTLE_MS;
 
 export class HAWebSocket {
   private ws: WebSocket | null = null;
@@ -47,6 +52,11 @@ export class HAWebSocket {
    *  dead, so the disconnect record can tell "the peer hung up" apart from "we
    *  hung up on the peer". Cleared once reported. */
   private pongTimedOut = false;
+  /** Why WE closed a socket that still looked open, besides the pong watchdog: its subscriptions not taken back
+   *  ("unsubscribed") or no event for QUIET_LIMIT_MS ("quiet"). Read by the disconnect record, cleared with it. */
+  private closedBy: "unsubscribed" | "quiet" | null = null;
+  /** When the last event of a subscription arrived (or the socket authenticated): the quiet watchdog's clock. */
+  private lastEventAt = 0;
   /** Guards against reporting the same auth_invalid streak to telemetry on
    *  every ~30s retry forever — see the auth_invalid handler. Reset on the
    *  next successful auth so a LATER, separate occurrence still reports. */
@@ -191,6 +201,7 @@ export class HAWebSocket {
             this.reconnectAttempts = 0;
             this.authInvalidReported = false;
             this.connectedAt = Date.now();
+            this.lastEventAt = this.connectedAt;
             this.resubscribeAll(socket);
             this.startHeartbeat();
             finish(() => resolve());
@@ -235,6 +246,7 @@ export class HAWebSocket {
             this.handleResult(msg);
             break;
           case "event":
+            this.lastEventAt = Date.now();
             (this.subscriptions.get(msg.id)?.callback ?? this.sessions.get(msg.id))?.(msg.event);
             break;
           case "pong":
@@ -274,6 +286,7 @@ export class HAWebSocket {
           wasClean: ev.wasClean,
           upMs: this.connectedAt ? Date.now() - this.connectedAt : 0,
           byPong: this.pongTimedOut,
+          ...(this.closedBy ? { by: this.closedBy } : {}),
           attempts: this.reconnectAttempts,
         });
         // The proxy ends a socket whose session it no longer honours with
@@ -282,6 +295,7 @@ export class HAWebSocket {
         if (ev.code === 4401) reportSessionLost("socket 4401");
         this.connectedAt = 0;
         this.pongTimedOut = false;
+        this.closedBy = null;
         this.stopHeartbeat();
         this.setState("disconnected");
         this.rejectAllPending(new Error("Connection closed"));
@@ -352,6 +366,14 @@ export class HAWebSocket {
 
   private sendPing() {
     if (this.state !== "connected" || !this.ws || this.pongTimer) return;
+    // ⚠️ A SOCKET THAT ANSWERS PINGS BUT CARRIES NO EVENT IS DEAD TOO (owner, 2026-11-13: see resubscribe): a villa's
+    // states change every minute, so a subscribed socket with no event for QUIET_LIMIT_MS is closed; the reconnect
+    // reads every state again (entityStore.hydrate: only what changed is pushed) and subscribes afresh
+    if (this.subscriptions.size > 0 && Date.now() - this.lastEventAt > QUIET_LIMIT_MS) {
+      this.closedBy = "quiet";
+      this.ws.close();
+      return;
+    }
     this.pongTimer = setTimeout(() => {
       this.pongTimer = null;
       this.pongTimedOut = true; // read by onclose's disconnect record
@@ -464,13 +486,28 @@ export class HAWebSocket {
    *  `subscriptions` and is re-issued on the next auth_ok. */
   private resubscribeAll(socket: WebSocket) {
     if (socket.readyState !== WebSocket.OPEN) return;
-    this.subscriptions.forEach((sub) => {
-      try {
-        socket.send(JSON.stringify({
-          id: sub.id, type: "subscribe_events", event_type: sub.eventType,
-        }));
-      } catch { /* next auth_ok re-issues it */ }
-    });
+    this.subscriptions.forEach((sub) => this.resubscribe(socket, sub, 1));
+  }
+
+  /** ⚠️ ITS ANSWER IS READ NOW (owner, 2026-11-13: after the villa's system restarted, a weather station back at
+   *  14:48 still read "Unavailable since 14:47" at 14:53, every device frozen until the page was reloaded). The
+   *  re-subscription after a reconnect was sent and never checked: refused or lost during a long restart, the socket
+   *  looked connected with no change ever reaching it. Refused or unanswered, it is sent again once; then the socket
+   *  is closed, and the reconnect reads every state and subscribes afresh. */
+  private resubscribe(socket: WebSocket, sub: PendingSubscription, triesLeft: number) {
+    const failed = () => {
+      if (socket !== this.ws || socket.readyState !== WebSocket.OPEN) return;
+      if (triesLeft > 0) { this.resubscribe(socket, sub, triesLeft - 1); return; }
+      this.closedBy = "unsubscribed";
+      socket.close();
+    };
+    const timer = setTimeout(() => { if (this.pending.delete(sub.id)) failed(); }, 10000);
+    this.pending.set(sub.id, { resolve: () => {}, reject: failed, timer });
+    try {
+      socket.send(JSON.stringify({
+        id: sub.id, type: "subscribe_events", event_type: sub.eventType,
+      }));
+    } catch { /* next auth_ok re-issues it */ }
   }
 
   async getStates(): Promise<HassEntity[]> {
