@@ -27,4 +27,11 @@ ck("every texture with its image (its own or the WebP one's): the upload goes ah
 const bad = await planModelUpload([glb(model([{ extensions: { EXT_texture_webp: { source: 0 } } }, { extensions: {} }]))]);
 ck("  ...a texture with no image: nothing is uploaded, and the material it is for is named",
    !bad.ok && /cover/.test(bad.message) && /Nothing was uploaded/.test(bad.message) && !/wall/.test(bad.message), bad);
+
+// owner, 2026-11-13: a landed upload came as a green band over the Villa tab; it is said on the button now
+const { uploadProgress } = await import("@/components/settings/useGlbUpload");
+console.log("\n  what the upload button says:");
+ck("in flight its percentage; retried its attempt; landed \"Uploaded, reloading…\"; else its own words",
+   uploadProgress(true, 42, null).words === "Uploading… 42%" && uploadProgress(true, 42, { attempt: 2, of: 5 }).words === "Retrying (2 of 5)…"
+   && uploadProgress(false, null, null, true).words === "Uploaded, reloading…" && uploadProgress(false, null, null).words === null);
 done("A model whose texture has no image is refused at upload, the material named");

@@ -32,6 +32,7 @@ class FakeSocket {
     // A command to the "refused" domain is turned down, as Home Assistant
     // (or the add-on's allow-list) turns down one it will not run.
     else if (m.type === "call_service" && m.domain === "refused") setTimeout(() => this.emit({ id: m.id, type: "result", success: false, error: { code: "unauthorized", message: "refused" } }), 0);
+    else if (m.type === "subscribe_events" && globalThis.refuseSubscribe) setTimeout(() => this.emit({ id: m.id, type: "result", success: false, error: { code: "not_ready", message: "starting" } }), 0);
     else if (m.id !== undefined && m.type !== "pong") setTimeout(() => this.emit({ id: m.id, type: "result", success: true, result: m.type === "get_states" ? [] : null }), 0);
   }
   close(code = 1000) { this.serverClose(code); }
@@ -133,9 +134,29 @@ ck("it reconnects by itself (on its backoff) with a NEW socket", back, { states,
 ck("  ...and re-issues the subscription on the new socket, under the SAME id (events come back on it)",
    sockets[1].sent.some((m) => m.type === "subscribe_events" && m.id === subId && m.event_type === "state_changed"));
 
+// owner, 2026-11-13: after the villa's system restarted, every device stayed as it was until the page was reloaded
+{
+  globalThis.refuseSubscribe = true;
+  const before = sockets.length;
+  sockets.at(-1).serverClose(1006);
+  const tries = () => sockets[before].sent.filter((m) => m.type === "subscribe_events" && m.id === subId).length;
+  const reopened = await until(() => sockets.length > before + 1);       // refused twice: closed, a new one opened
+  globalThis.refuseSubscribe = false;
+  const healed = await until(() => states.at(-1) === "connected" && sockets.at(-1).sent.some((m) => m.type === "subscribe_events" && m.id === subId));
+  ck("a re-subscription the villa's system refuses is sent again once, then the socket is closed and opened afresh",
+     reopened && tries() === 2 && sockets[before].readyState === FakeSocket.CLOSED && healed, { tries: tries(), sockets: sockets.length });
+  const n = sockets.length, realNow = Date.now;
+  Date.now = () => realNow() + 6 * 60_000;           // six minutes with no event
+  ws["sendPing"]();
+  Date.now = realNow;
+  const fresh = await until(() => sockets.length === n + 1 && states.at(-1) === "connected");
+  ck("  ...a subscribed socket that carries no event for five minutes is taken for dead and opened afresh",
+     sockets[n - 1].readyState === FakeSocket.CLOSED && fresh, { sockets: sockets.length });
+}
+
 let lost = null;
 const off = onSessionLost((src) => { lost = src; });
-sockets[1].serverClose(4401);                               // the proxy ends the session
+sockets.at(-1).serverClose(4401);                               // the proxy ends the session
 ck("the proxy's 4401 'session ended' is reported to the profile's owner", lost === "socket 4401", lost);
 off();
 ws.disconnect();
