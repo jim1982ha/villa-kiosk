@@ -1,3 +1,13 @@
+## 2.496.791
+
+- **After the villa's system restarts, devices no longer stay frozen until the page is reloaded.** On 13/11 a restart
+  left every device as it was at 14:47: the weather station, back at 14:48, still read "Unavailable since 14:47" five
+  minutes later. After reconnecting, the Kiosk now checks that the villa's system took back its request for every
+  change (it asks again, then reconnects), and a connection that carries no change at all for 5 minutes is taken for
+  dead and opened afresh, which reads every state again.
+- **One setting for both apps:** that 5 minutes is the time both the Kiosk and the VESTA Agent let the villa's system
+  settle after a restart. The Agent uses it to say nothing is "missing" while the villa's system is still loading.
+
 ## 2.496.790
 
 - **Uploading a model no longer pushes Advanced Settings down with a green band.** "Uploaded 17.9 MB → villa.glb with
