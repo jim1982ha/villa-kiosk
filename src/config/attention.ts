@@ -11,10 +11,11 @@
 // per profile. It is grouped once now, after the profile's filter.
 
 import { deviceLook, storeLookSource } from "@/utils/deviceActivity";
+import { NO_PARTS } from "@/utils/deviceHealth";
 import { alarmText, rowText } from "@/config/reading";
 import { labelOf } from "@/config/EntityMap";
-import { deviceRoom, deviceRoomOrRecord, firstRoom, recordRoomNow, roomLabel } from "@/config/devicePlace";
-import { devicesFor, recordEntity, type VillaDevices } from "@/config/deviceGroups";
+import { deviceRoom, firstRoom, recordRoomNow, roomLabel } from "@/config/devicePlace";
+import { devicesFor, recordCardRoom, recordEntity, type RecordCard, type VillaDevices } from "@/config/deviceGroups";
 import { alertNumberOf, closedAsLasting, DUE_WORDS, faultAlertLabel, faultBegan, faultName, fmAttention, helpIsLatest, stageOf, standingHelp, type FmStage, type HelpAsked } from "@/fm/fmEngine";
 import type { AgentCadence } from "@/agent/agentApi";
 import { faultStanding, watchedRecords, type FaultClosing } from "@/fm/faultStanding";
@@ -129,9 +130,13 @@ function beganAt(id: string, entity: HassEntity | undefined, sinceOf: (id: strin
   return entity?.last_changed ? { openedAt: entity.last_changed } : {};
 }
 
-/** The devices the map paints red (their deviceLook says `alert`): one line each, "alarm". */
+/** The devices the map paints red (their deviceLook says `alert`: their ONE status, a critical door unlocked included):
+ *  one line each, "alarm". An alarm is the device's own status: no fault and no part is asked for it.
+ *  ⚠️ IT ASKED WITHOUT THE CRITICAL LIST'S RULE (architecture review item 5, 2026-11-14): a critical door unlocked, red
+ *  in its window and in 3D, was on no line, and the villa's health stayed amber. */
 function alarmIds(devices: VillaDevices, entities: Record<string, HassEntity>, entityMap: Record<string, EntityMapping>): string[] {
-  const looks = storeLookSource(entities, { entityMap, isCritical: devices.isCritical, isHidden: devices.isHidden });
+  const looks = storeLookSource(entities, { entityMap, isCritical: devices.isCritical, isHidden: devices.isHidden,
+    hasFault: () => false, partsOf: NO_PARTS });
   return devices.ids.filter((id) => entities[id] && deviceLook(id, looks).alert);
 }
 
@@ -144,6 +149,17 @@ export function sinceEntities(opts: { fmData: FmData; devices: VillaDevices; ent
     .map((t) => recordEntity(t.entityId, (x) => x in entities)).filter((id): id is string => !!id);
   return [...new Set([...closing, ...devices.unavailable, ...devices.partlyLost.flatMap((id) => lostPartsOf(devices, id)),
     ...alarmIds(devices, entities, entityMap)])].sort();
+}
+
+/** What a device with dead parts says of them, by their names: "Person detection unavailable" (deviceHealth.lostPartsWords)
+ *  — Open issues' line for the device, and the monthly recap's (fm/readiness availability.partly). "" for a device
+ *  with no lost part. */
+export function lostPartsLine(devices: VillaDevices, id: string, entityMap: Record<string, EntityMapping>,
+  entities: Record<string, HassEntity>): string {
+  const lost = lostPartsOf(devices, id);
+  if (!lost.length) return "";
+  const device = [labelOf(id, entityMap, entities), entities[id]?.attributes?.friendly_name as string | undefined];
+  return lostPartsWords(lost.map((p) => partName(labelOf(p, entityMap, entities), device)));
 }
 
 /** The parts of a device that answers while they do not (VillaDevices.healthOf "partly"); [] for any other health. */
@@ -403,17 +419,16 @@ function mergeFaults(items: AttentionItem[]): AttentionItem[] {
  *  every count uses), its name, and its room (its own, else its entity's, else the record's). */
 export interface CardDevice { key: string; label: string; room?: string }
 
-/** THE way a problem's entity becomes its card's device (architecture review N, card 6): the open issues' cards and
- *  the Watched cards both (config/cockpitCard confirmingCards), which made the same four steps each — a change to how
- *  a card names its device or its room reached one list and not the other. */
-export function cardDevice(entityId: string, recordRoom: string | undefined, ctx: {
-  devices: Pick<VillaDevices, "deviceOf">; entityMap: Parameters<typeof labelOf>[1];
-  entities: Record<string, HassEntity>; resolvedRooms: Record<string, string>;
-}): CardDevice {
-  const key = ctx.devices.deviceOf(entityId);
-  // ⚠️ EMPTY MEANS ABSENT (2026-10-16): this was `rooms[key] ?? rooms[entityId] ?? i.room`, and resolveRooms stores ""
-  // for no room, so `??` stopped there — a device with no room whose sensor had one read "Other".
-  return { key, label: labelOf(key, ctx.entityMap, ctx.entities), room: deviceRoomOrRecord(ctx.resolvedRooms, key, entityId, recordRoom) };
+/** THE way a problem's card becomes its device (architecture review N, card 6): the open issues' cards and the Watched
+ *  and Closed cards (config/cockpitCard clearedCard), which made the same four steps each — a change to how a card
+ *  names its device or its room reached one list and not the other. Which card it is, is the record card's
+ *  (VillaDevices.recordCard): none on no device or on a hidden one. Its room: deviceGroups.recordCardRoom (the device's,
+ *  else its entity's, else the record's; EMPTY MEANS ABSENT, 2026-10-16). */
+export function cardDevice(card: RecordCard, recordRoom: string | undefined, ctx: {
+  entityMap: Parameters<typeof labelOf>[1]; entities: Record<string, HassEntity>; resolvedRooms: Record<string, string>;
+}): CardDevice | undefined {
+  if (card.opens === undefined) return undefined;
+  return { key: card.opens, label: labelOf(card.opens, ctx.entityMap, ctx.entities), room: recordCardRoom(card, recordRoom, ctx.resolvedRooms) };
 }
 
 /** The room a stored record shows now, ONE answer with its Inbox card's (cardDevice): its device's room, the stored one
@@ -431,17 +446,16 @@ export function recordRoom(r: { entityId?: string; room?: string }, ctx: { entit
  *  ⚠️ ONE ANSWER WITH THE INBOX (architecture review round 16, 2026-11-03): the Tickets tab looked the record's raw
  *  entity field up as one id, so a record naming several ("sensor.a,sensor.b", a rule watching three phases) was never
  *  found: its pill showed the stored name or the raw list, and a tap opened nothing. It goes through recordEntity as the
- *  Inbox card does. A device hidden in the villa's system (`devices.isHidden`) is named, opening nothing: it has no
- *  window, as its Inbox card opens nothing (attentionOf). */
-export function recordDevicePill(r: { entityId?: string; room?: string; deviceLabel?: string }, ctx: {
-  devices: Pick<VillaDevices, "deviceOf"> & Partial<Pick<VillaDevices, "isHidden">>; entityMap: Parameters<typeof labelOf>[1];
-  entities: Record<string, HassEntity>; resolvedRooms: Record<string, string>;
+ *  Inbox card does. A device hidden in the villa's system is named, opening nothing: it has no window, as its Inbox
+ *  card opens nothing — the record's card says so (VillaDevices.recordCard), never a hidden test handed in. */
+export function recordDevicePill(r: { id?: string; entityId?: string; deviceLabel?: string }, ctx: {
+  devices: Pick<VillaDevices, "recordCard">; entityMap: Parameters<typeof labelOf>[1]; entities: Record<string, HassEntity>;
 }): { label?: string; opens?: string } {
-  const id = recordEntity(r.entityId, (x) => x in ctx.entities);
-  if (!id) return r.deviceLabel ? { label: r.deviceLabel } : {};
-  const device = cardDevice(id, r.room, ctx);
-  const label = id in ctx.entities ? device.label : r.deviceLabel ?? device.label;
-  return ctx.devices.isHidden?.(id) ? { label } : { opens: device.key, label };
+  const card = ctx.devices.recordCard(r);
+  if (card.entityId === undefined || card.deviceId === undefined) return r.deviceLabel ? { label: r.deviceLabel } : {};
+  const named = labelOf(card.deviceId, ctx.entityMap, ctx.entities);
+  const label = card.entityId in ctx.entities ? named : r.deviceLabel ?? named;
+  return card.opens ? { opens: card.opens, label } : { label };
 }
 
 /** A card's title and room line: the DEVICE, whatever its problems (a problem with no device stands for itself), and
@@ -494,19 +508,20 @@ export function attentionOf(opts: AttentionInputs): Pick<VillaProblems, "attenti
 
   // ⚠️ A DEAD PART OF A LIVE DEVICE (architecture review item 4, 2026-11-13: a camera's person detection unavailable for
   // days, on no card): one line on the device's card, its parts' names in the grey of lost contact, since the first of
-  // them went. Its entity is that part, so a fault about it is this line's (mergeFaults); never critical: the device
-  // answers.
+  // them went. Its entity is that part, so a fault about it is this line's (mergeFaults).
+  // ⚠️ RED FOR A CRITICAL DEVICE (architecture review item 5, 2026-11-14): "never critical" kept this line grey while the
+  // device's window showed the lost part red; a critical device's lost part is the alarm's red here as on its badge.
   for (const id of devices.partlyLost) {
     const lost = lostPartsOf(devices, id);
     if (!lost.length) continue;
-    const device = [labelOf(id, entityMap, entities), entities[id]?.attributes?.friendly_name as string | undefined];
     const began = lost.map((p) => beganAt(p, entities[p], sinceOf))
       .sort((a, b) => (Date.parse(a.openedAt ?? "") || Infinity) - (Date.parse(b.openedAt ?? "") || Infinity))[0];
     items.push({
       id: `parts:${id}`,
       kind: "unavailable",
+      critical: devices.isCritical(id),
       title: labelOf(id, entityMap, entities),
-      detail: lostPartsWords(lost.map((p) => partName(labelOf(p, entityMap, entities), device))),
+      detail: lostPartsLine(devices, id, entityMap, entities),
       source: "live",
       room: deviceRoom(resolvedRooms, id),
       entityId: lost[0],
@@ -598,14 +613,16 @@ export function attentionOf(opts: AttentionInputs): Pick<VillaProblems, "attenti
   // offline device", which exists BECAUSE it is hidden, was silently lost. Its line is kept, filed on its own under
   // "Other" (no device card, no room, opening nothing: `hidden`), counted as any problem; its badge, its window's sign
   // and its live state stay out (the hidden device has no live line: devices.ids leaves it out).
+  // Which card each goes on is the record card's one answer (VillaDevices.recordCard), the Tickets tab's and Closed's too.
   for (const i of items) {
     if (!i.entityId) continue;
-    if (devices.isHidden(i.entityId)) {
+    const device = cardDevice(devices.recordCard({ entityId: i.entityId }), i.room, { entityMap, entities, resolvedRooms });
+    if (!device) {
       i.hidden = true;
       i.room = undefined;
       continue;
     }
-    i.device = cardDevice(i.entityId, i.room, { devices, entityMap, entities, resolvedRooms });
+    i.device = device;
   }
 
   // ⚠️ DONE MOVES THE CARD TO WATCH (owner, 2026-11-02: an offline device's Done closed its fault, and the device's live
@@ -710,7 +727,12 @@ export function attentionFor(att: VillaProblems, may: (entityId: string) => bool
   // findings were dropped. A device list reads `shows`; a problem reads `raises`, the profile's own visibility alone
   // (attentionOf has already filed a hidden device's problems under "Other").
   const shows = (id: string) => !att.devices.isHidden(id) && may(id);
-  const raises = may;
+  // ⚠️ ASKED OF THE DEVICE, NOT OF THE PART (architecture review item 8, 2026-11-14): a dead part's line names the part,
+  // and a profile that may open only what is on the map (listedDevices) was refused it — the map showed the device's
+  // "?" to everyone while that profile's Open issues dropped its card, and a fault on an unplaced part of a device it
+  // may open was dropped the same way. A problem is raised to whoever may open its device.
+  const raises = (id: string) => may(att.devices.deviceOf(id));
+
   const attentionItems = att.attentionItems.filter((i) => !i.entityId || raises(i.entityId));
   const clearing = (att.clearing ?? []).filter((c) => !c.item.entityId || raises(c.item.entityId));
   // Grouped AFTER the profile's filter, never before: a row is built only

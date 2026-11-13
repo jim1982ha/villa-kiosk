@@ -141,6 +141,15 @@ ck("  ...and every window's pill says the state the same way: On active, Off usu
    JSON.stringify(controlPill("light.x", light("on"), "on")) === JSON.stringify({ text: "On", tone: STATUS_PILL_CLASS.active })
    && JSON.stringify(controlPill("fan.x", light("off"), "off")) === JSON.stringify({ text: "Off", tone: STATUS_PILL_CLASS.usual })
    && controlPill("climate.x", { entity_id: "climate.x", state: "cool", attributes: {} }, null).tone === STATUS_PILL_CLASS.active);
+{
+  // ONE rule per device (architecture review item 5, 2026-11-14): the look carries it, every surface applies it
+  const { statusRule } = await import("@/utils/stateColors");
+  const crit = statusRule({ critical: true, hidden: false }), hid = statusRule({ critical: true, hidden: true }),
+    plain = statusRule({ critical: false, hidden: false });
+  ck("a device's rule: critical, its needs-a-look and lost contact the alarm; hidden, never red or amber; plain, every meaning as it is",
+     KEYS.every((k) => crit(k) === criticalStatus(k, true) && plain(k) === k && hid(k) !== "alert" && hid(k) !== "warn")
+     && hid("unavailable") === "unavailable" && hid("active") === "active", KEYS.map((k) => [k, crit(k), hid(k)]));
+}
 ck("a critical device: needs a look and lost contact become the alarm; every other meaning stays",
    criticalStatus("warn", true) === "alert" && criticalStatus("unavailable", true) === "alert"
    && criticalStatus("warn", false) === "warn" && KEYS.filter((k) => k !== "warn" && k !== "unavailable").every((k) => criticalStatus(k, true) === k));
@@ -183,9 +192,10 @@ ck("no .ts/.tsx outside the table names a status or category token as a colour: 
 }
 // an action wears the state it leads to (owner, 2026-11-13: "Unlock door" in the unlocked colour)
 {
-  const { actionColor, STATUS_COLOR: C } = await import("@/utils/stateColors");
+  const { actionColor, statusRule, STATUS_COLOR: C } = await import("@/utils/stateColors");
   ck("a button that moves a device is the colour of where it leads: unlock amber (red for a critical door), lock and close the usual colour, open the active one",
-     actionColor("lock.example_door", "unlocked") === C.warn && actionColor("lock.example_door", "unlocked", true) === C.alert
+     actionColor("lock.example_door", "unlocked") === C.warn
+     && actionColor("lock.example_door", "unlocked", statusRule({ critical: true, hidden: false })) === C.alert
      && actionColor("lock.example_door", "locked") === C.usual && actionColor("cover.example_blind", "open") === C.active
      && actionColor("cover.example_blind", "closed") === C.usual);
 }

@@ -25,7 +25,7 @@ const entityMap = {
   "lock.example_door": { entityId: "lock.example_door", type: "lock", label: "Front door" },
 };
 const folding = new Map([["sensor.example_phase_b", "switch.example_meter"]]);
-const devices = devicesOf({ ids: Object.keys(entities), folding });
+const devices = devicesOf({ ids: Object.keys(entities), folding, entities });
 const resolvedRooms = {};
 const rec = (id, entityId, deviceLabel) => ({ id, title: "Voltage out of range", status: "open", openedAt: "2026-11-02T08:00:00Z",
   entityId, deviceLabel, photoIds: [], updates: [] });
@@ -40,7 +40,7 @@ const inbox = (id) => {
   const g = groups.find((x) => x.items.some((i) => i.ticketId === id));
   return g ? { label: g.title, opens: g.entityId } : null;
 };
-const tickets = (t) => recordDevicePill(t, { devices, entityMap, entities, resolvedRooms });
+const tickets = (t) => recordDevicePill(t, { devices, entityMap, entities });
 
 for (const [t, what, want] of [[records[0], "a record naming several entities", { label: "Pool meter", opens: "switch.example_meter" }],
   [records[1], "a renamed device", { label: "Front door", opens: "lock.example_door" }]]) {
@@ -58,6 +58,30 @@ for (const [t, what, want] of [[records[0], "a record naming several entities", 
      p.label === "Back gate" && p.opens === "lock.example_gone", p);
   const none = tickets(rec("t4", undefined, "Kitchen tap"));
   ck("  ...a record with no device: its stored name, opening nothing", none.label === "Kitchen tap" && none.opens === undefined, none);
+}
+
+// a device hidden in the villa's system: ONE answer for every screen (architecture review item 7, 2026-11-14) — its
+// record is a card of its own under "Other", opening nothing; the Tickets card names the device and opens nothing; the
+// Recap names no device for it (it named the hidden one, and its faults link opened nothing)
+{
+  const { recordCardRoom } = await import("@/config/deviceGroups");
+  const { buildReadiness } = await import("@/fm/readiness");
+  const { attentionFor } = await import("@/config/attention");
+  const shed = { ...ent("lock.example_shed", "Shed lock"), state: "locked" };
+  const all = { ...entities, "lock.example_shed": shed };
+  const hiddenDevices = devicesOf({ ids: Object.keys(entities), folding, entities: all, hidden: new Set(["lock.example_shed"]) });
+  const t = rec("t5", "lock.example_shed", "Shed lock");
+  const fmData = { ...EMPTY_FM_DATA, tickets: [t] };
+  const view = attentionFor({ devices: hiddenDevices, attentionItems: attentionOf({ devices: hiddenDevices, entities: all, entityMap,
+    resolvedRooms: { "lock.example_shed": "Garden" }, fmData }).attentionItems }, () => true);
+  const g = view.attentionGroups.find((x) => x.items.some((i) => i.ticketId === "t5"));
+  const card = hiddenDevices.recordCard(t), pill = recordDevicePill(t, { devices: hiddenDevices, entityMap, entities: all });
+  const recap = buildReadiness(all, fmData, view, entityMap).checks.find((c) => c.id === "tickets");
+  ck("a hidden device's record: its Open issues card under \"Other\", opening nothing; the Tickets card the same card, room and pill",
+     g?.key === card.key && g.entityId === undefined && g.room === "Other" && recordCardRoom(card, "Garden", { "lock.example_shed": "Garden" }) === ""
+       && pill.opens === undefined && pill.label === "Shed lock", { g, card, pill });
+  ck("  ...and the Recap counts it as an open fault naming no device",
+     recap?.label === "1 open fault" && recap.entityIds.length === 0 && recap.goes[0]?.to.ids.length === 0, recap);
 }
 
 // the Tickets tab draws that pill: its DeviceChip takes the name and the device from recordDevicePill, nothing else

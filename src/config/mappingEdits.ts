@@ -11,7 +11,7 @@
 // already be out of date, so a second edit in the same moment erased the
 // first. tests/oracles/mapping_edits.mjs drives every edit by value.
 
-import type { AppConfig } from "./AppConfig";
+import type { AppConfig, DeviceGroup } from "./AppConfig";
 import type { EntityMapping, TeleportPoint } from "@/types/scene.types";
 import { roomKey } from "./roomKey";
 import type { HassEntity } from "@/types/ha.types";
@@ -52,10 +52,17 @@ export function addMapping(entityId: string, entity?: Pick<HassEntity, "attribut
 }
 
 /**
- * "Point it there" (a 3D object whose entity is gone, in Devices): every 3D object that shows `oldId` now shows `newId` — the object named after
+ * "Point it there" (a 3D object whose entity is gone, in Devices): ONE "the device's id changed" edit over EVERY
+ * reference the config holds to it. Every 3D object that shows `oldId` now shows `newId` — the object named after
  * the old id (bound by that name) AND every object bound to it by hand — and the device's settings
  * move with it, leaving no row behind (architecture review 2026-10-12, candidate 1: this was two
- * edits, remapMapping and repointObjects, and the second left `entityMap[oldId]` stranded).
+ * edits, remapMapping and repointObjects, and the second left `entityMap[oldId]` stranded); the owner's groups name the
+ * new id where they named the old one (as the device or a member), every other device linked to it is linked to the new
+ * one, and a device asleep by design stays so.
+ *
+ * ⚠️ THE GROUPS AND THE LINKS STAYED ON THE OLD ID (architecture review item 9, 2026-11-14): a re-pointed group's
+ * device left a "Missing" card in the Cockpit for the old id, its members' readings on neither card, and the pill of a
+ * device linked to it hollow. tests/oracles/mapping_edits.mjs holds every reference.
  *
  * ⚠️ THE NAME MOVES ONLY IF IT IS ONE (owner, 2026-10-12: a light re-pointed after its rename in HA
  * was titled with its OLD id over HA's "Patio2F Center"). The fallback made from the old id no
@@ -84,8 +91,34 @@ export function repointDevice(oldId: string, newId: string, entity?: Pick<HassEn
       else if (id !== newId) entityMap[id] = m;
     }
     if (!(newId in entityMap)) entityMap[newId] = moved;
-    return { meshBindings, entityMap };
+    // every other device linked to it: linked to the new id (a device is never its own link)
+    for (const [id, m] of Object.entries(entityMap)) {
+      if (m.linkedEntityId !== oldId && !(id === newId && m.linkedEntityId === newId)) continue;
+      const { linkedEntityId: _old, ...unlinked } = m;
+      entityMap[id] = id === newId ? unlinked as EntityMapping : { ...m, linkedEntityId: newId };
+    }
+    const deviceGroups = renameInGroups(config.deviceGroups, oldId, newId);
+    const asleep = config.unavailableByDesign.includes(oldId)
+      ? { unavailableByDesign: [...new Set(config.unavailableByDesign.map((id) => (id === oldId ? newId : id)))] } : {};
+    return { meshBindings, entityMap, ...(deviceGroups ? { deviceGroups } : {}), ...asleep };
   };
+}
+
+/** The owner's groups with `oldId` named `newId` (as a group's device or a member), each entity still in one group only
+ *  (deviceGroups.groupEdit's rule): a member whose new id already stands in a group stays where that one stood; a
+ *  group's device whose new id was a member somewhere becomes that group's device only. Null when no group names the
+ *  old id. */
+function renameInGroups(groups: readonly DeviceGroup[], oldId: string, newId: string): DeviceGroup[] | null {
+  if (!groups.some((g) => g.primaryEntityId === oldId || g.memberEntityIds.includes(oldId))) return null;
+  const stood = groups.some((g) => g.primaryEntityId === newId || g.memberEntityIds.includes(newId));
+  const leads = groups.some((g) => g.primaryEntityId === oldId);
+  return groups.map((g) => {
+    const primaryEntityId = g.primaryEntityId === oldId ? newId : g.primaryEntityId;
+    const memberEntityIds = g.memberEntityIds
+      .flatMap((m) => (m === oldId ? (stood ? [] : [newId]) : m === newId && leads ? [] : [m]))
+      .filter((m) => m !== primaryEntityId);
+    return { ...g, primaryEntityId, memberEntityIds };
+  });
 }
 
 /**

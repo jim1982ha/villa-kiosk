@@ -21,16 +21,18 @@ import { cameraMotionId } from "@/config/BinarySensorClasses";
 import { badgeOwnerOf, deviceLook, storeLookSource, type BadgeMark, type LinkPill } from "@/utils/deviceActivity";
 import { iconKeyFor } from "@/babylon/badgeIconKeys";
 import { domainOf } from "@/utils/entityDomain";
+import type { StatusRule } from "@/utils/stateColors";
 
 type LookConfig = Parameters<typeof storeLookSource>[1];
+
 
 interface PanelHeader {
   badge: {
     category: Category; iconKey: string; color?: string; categoryColor: string;
     state: DeviceSurfaceState; mark: BadgeMark | null; linkPill: LinkPill;
-    /** On the villa's critical list (deviceLook.onCriticalList): its pills' "needs a look" and lost contact red
-     *  (reading.statusOf). */
-    onCriticalList: boolean;
+    /** Its device's rule (deviceLook.statusRule): every pill of its window applies it (a critical device's "needs a
+     *  look" and lost contact red). */
+    statusRule: StatusRule;
   };
   /** The linked switch (EntityMapping.linkedEntityId), when it has one, it can be switched and
    *  this profile may control it. */
@@ -107,7 +109,7 @@ export function panelHeader({ panel, entities, config, canControl, linkedSwitch 
       state: look.face,
       mark: look.mark,
       linkPill: look.linkPill,
-      onCriticalList: look.onCriticalList,
+      statusRule: look.statusRule,
     },
     linked: linkedId && !linkedIsSensor && canControl && linkedSwitch
       ? { label: labelOf(linkedId, config.entityMap, entities), ...linkedSwitch }

@@ -24,7 +24,7 @@ import { useModalA11y } from "@/hooks/useModalA11y";
 import { useBackToClose } from "@/hooks/useBackToClose";
 import { tapDebug } from "@/utils/tapDebug";
 import { WHEEL_IDLE_MS, swipeStep, wheelOwner, wheelStep } from "./cameraGestures";
-import { STATUS_COLOR } from "@/utils/stateColors";
+import { PLAIN_STATUS, STATUS_COLOR } from "@/utils/stateColors";
 import { missingFromHa } from "@/utils/deviceHealth";
 import BasePanel from "./BasePanel";
 import { TAP_MOVE_TOL_PX, LONG_PRESS_MS } from "@/utils/tapThresholds";
@@ -35,7 +35,7 @@ import CameraDeviceButtons from "./CameraDeviceButtons";
 import { cameraChoices } from "@/utils/panelRules";
 import { useVillaModel } from "@/config/VillaModel";
 import { useConfig } from "@/config/ConfigContext";
-import { lostColor, readingOf, stateWords } from "@/config/reading";
+import { readingOf, stateWords } from "@/config/reading";
 import { historyStateColor } from "@/utils/stateColors";
 import { useArrowStep } from "@/hooks/useArrowStep";
 import { feedHasSound } from "./feedSound";
@@ -87,7 +87,7 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
   // `motion`: its linked entity when that detects presence (panelHeader, BinarySensorClasses.cameraMotionId).
   // ⚠️ AND THE SAME PIECES AS EVERY DEVICE WINDOW (architecture review P, 2026-10-27): its warning sign, Edit,
   // Open Ticket and "Also on this device" are DeviceWindowPieces', placed in this window's header; a critical camera that
-  // lost contact is red (badge.onCriticalList, reading.lostColor), as the Cockpit and the map paint it.
+  // lost contact is red (its device's rule, badge.statusRule), as the Cockpit and the map paint it.
   const { linked, linkedSensor, motion, back, badge, readings } = usePanelActions();
   const warning = useDeviceWarning();
   const [readingsOpen, setReadingsOpen] = useState(false);
@@ -742,9 +742,9 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
               // ⚠️ MOTION IS ACTIVE, NOT RED (owner, 2026-11-13: one colour code for every status): someone seen is the
               // camera doing its job, green as an occupied room; red is an alarm
               s === "motion" ? STATUS_COLOR.active
-                // the camera unreachable: red for a critical one, as the Cockpit and the map (reading.lostColor)
-                // and its motion part lost: the same rule, a part of a critical device as the device (reading.statusOf)
-                : s === "offline" || s === "motion-unavailable" ? lostColor(badge?.onCriticalList ?? false)
+                // the camera unreachable: red for a critical one, as the Cockpit and the map (its device's rule)
+                // and its motion part lost: the same rule, a part of a critical device as the device
+                : s === "offline" || s === "motion-unavailable" ? STATUS_COLOR[(badge?.statusRule ?? PLAIN_STATUS)("unavailable")]
                   // A camera that is up and recording is alive in its usual
                   // state: purple. It is emphatically not the empty track,
                   // which painted a perfectly healthy camera the same colour

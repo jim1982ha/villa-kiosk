@@ -12,8 +12,8 @@ import { AlertTriangle } from "lucide-react";
 import { useHA } from "@/ha/HAStateStore";
 import { missingAdvice, missingFromHa, NOT_IN_HA } from "@/utils/deviceHealth";
 import { useVillaModel } from "@/config/VillaModel";
-import { lostPillTone } from "@/config/reading";
-import { useOnCriticalList } from "./PanelActionsContext";
+import { STATUS_PILL_CLASS } from "@/utils/stateColors";
+import { useStatusRule } from "./PanelActionsContext";
 import { useLastSeen } from "@/hooks/useLastSeen";
 import { statusMoment } from "@/utils/dateText";
 import StatusPill from "./StatusPill";
@@ -26,8 +26,8 @@ interface Props {
 export default function UnavailableNotice({ entityId }: Props) {
   const { entities } = useHA();
   const { mappedEntityIds } = useVillaModel();
-  // a device on the critical list that lost contact: red, as the Cockpit paints it (reading.statusOf)
-  const tone = lostPillTone(useOnCriticalList());
+  // lost contact, its device's rule applied: red for a device on the critical list, as the Cockpit and its badge paint it
+  const tone = STATUS_PILL_CLASS[useStatusRule()("unavailable")];
   const missing = !!entityId && missingFromHa(entities, entityId);
   // whether the villa's system had it before: read only for a Missing device, one read per window (useLastSeen)
   const seen = useLastSeen(missing ? entityId! : null);

@@ -1,3 +1,37 @@
+## 2.496.800
+
+- **The monthly recap names a device with a dead part.** Its "Device availability" section counted only devices that
+  were offline, so it could say all was well while the weekly Recap said "1 device partly unavailable". It now lists
+  each such device with the parts that stopped answering, in Open issues' words ("Person detection unavailable"). The
+  device still counts as reporting, since it answers.
+
+## 2.496.799
+
+- **A critical door left unlocked is red everywhere.** Its window and its 3D object were red, but its badge on the map
+  showed the plain "in use" dot, its room's number stayed calm, Open issues had no card and the top bar was not red.
+  Now its badge wears the red "!", its room's number turns red, Open issues shows its card ("Unlocked", in red), the
+  top bar turns red and the Recap's "Doors locked" says Fail (as it now does for a jammed lock). An ordinary door left
+  unlocked stays calm, as before.
+- **A critical device with a dead part is red too.** A critical camera whose motion detection stopped answering had a
+  red bar in its window but a grey "?" on its badge and a grey card. Its badge now shows the red "?", and its card and
+  its room's number are red.
+- **A hidden device stays quiet on the 3D map.** A device hidden in the villa's system no longer pulses, glows or turns
+  red or amber on the map; a hidden lock keeps its resting colour.
+- **A dead part counts in the Recap, and for every profile.** "All devices reporting" now says "1 device partly
+  unavailable" when Open issues shows such a card, where it said "Every configured device is reporting". A profile
+  that only sees what is on the map now gets that card too (the map already showed it the "?"), and the faults about
+  a part of a device it can open.
+- **"Also on this device" lists exactly the parts that are checked.** A battery listed there that stops answering now
+  gets its card and the "?" on the badge, like any other part. A device you placed on the map on its own is no longer
+  listed under another device's window: it has its own badge.
+- **A ticket about a hidden device is filed the same way everywhere.** The Recap no longer shows a pill naming a device
+  hidden in the villa's system, nor a "faults" link that opened nothing; Open issues, Watch, Closed and Tickets all
+  give it its own card under "Other".
+- **Pointing a device at another entity takes everything with it.** When a device on the map is moved to another
+  entity in Advanced Settings, its group, the devices linked to it and its place under "Asleep between reports" now
+  follow, so no "Missing" card is left behind, its group's readings stay on its card and a linked badge's pill keeps
+  working.
+
 ## 2.496.798
 
 - **A device on the critical list is red the same way in every window.** A critical lock unlocked or out of contact

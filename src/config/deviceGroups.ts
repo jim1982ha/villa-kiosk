@@ -9,6 +9,8 @@ import type { EntityMapping } from "@/types/scene.types";
 import type { HassEntity } from "@/types/ha.types";
 import { deviceHealth, partsOfFolding, type DeviceHealth, type PartsOf } from "@/utils/deviceHealth";
 import { domainOf } from "@/utils/entityDomain";
+import { recordRoomNow } from "./devicePlace";
+import { deviceWorkKey } from "@/fm/deviceWork";
 
 /** Every entity_id folded into some group as a (non-primary) member — these
  *  never get their own badge; see EntityVisuals.rebuildLabels. */
@@ -332,8 +334,11 @@ interface VillaDeviceInput {
   /** Hidden in the villa's system, by anyone (the store's hiddenInHaEntityIds, registryResolve): never a device. */
   hidden: ReadonlySet<string>;
   /** Filed by the villa's system as configuration or diagnostic, or hidden there (the store's suppressedEntityIds): never
-   *  a part a device's health asks (deviceHealth.partsOfFolding). */
+   *  a part a device's health asks (deviceHealth.partsOfFolding), a battery aside. */
   suppressed: ReadonlySet<string>;
+  /** The entities that are batteries (device_class "battery", VillaModel useBatteryIds): a part of their device even when
+   *  filed as diagnostic (deviceHealth.partsOfFolding). */
+  batteries: ReadonlySet<string>;
   /** Entity ids the 3D model itself carries — a device can be one of these
    *  without Home Assistant knowing it, and vice versa. */
   mappedEntityIds: ReadonlySet<string>;
@@ -374,14 +379,65 @@ export interface LookFacts {
 /** The villa's look facts (criticalDevices, hiddenIn, each device's parts), from its critical list, its hidden and
  *  suppressed entities, the owner's groups and the fold. They change only with the registry, the critical list and the
  *  config, never per state push (the map repaints on them). */
-export function lookFacts(input: Pick<VillaDeviceInput, "critical" | "hidden" | "suppressed" | "entityDeviceIds" | "deviceUnits"
-  | "entityMap" | "deviceGroups">, folding: ReadonlyMap<string, string>): LookFacts {
+export function lookFacts(input: Pick<VillaDeviceInput, "critical" | "hidden" | "suppressed" | "batteries" | "entityDeviceIds"
+  | "deviceUnits" | "entityMap" | "deviceGroups">, folding: ReadonlyMap<string, string>): LookFacts {
   return {
     critical: criticalDevices(input.critical, folding, input.entityDeviceIds, input.deviceUnits),
     isHidden: hiddenIn(input.hidden, folding),
-    partsOf: partsOfFolding(folding, { suppressed: input.suppressed, hidden: input.hidden,
-      chosen: new Set(input.deviceGroups.flatMap((g) => g.memberEntityIds)), disabled: (id) => !!input.entityMap[id]?.disabled }),
+    partsOf: devicePartsOf(input, folding),
   };
+}
+
+/** Each device's parts (deviceHealth.partsOfFolding) from the villa's inputs: the ONE answer its health, its badge's "?"
+ *  and its window's "Also on this device" (deviceReadings) read. Config and registry only, never a state push. */
+export function devicePartsOf(input: Pick<VillaDeviceInput, "hidden" | "suppressed" | "batteries" | "entityDeviceIds"
+  | "entityMap" | "deviceGroups">, folding: ReadonlyMap<string, string>): PartsOf {
+  return partsOfFolding(folding, { suppressed: input.suppressed, hidden: input.hidden, batteries: input.batteries,
+    chosen: new Set(input.deviceGroups.flatMap((g) => g.memberEntityIds)), disabled: (id) => !!input.entityMap[id]?.disabled,
+    entityDeviceIds: input.entityDeviceIds, placed: (id) => id in input.entityMap });
+}
+
+/** A record the villa files on a card: a fault or a ticket (its `id`), the entity field it names (one id, or several:
+ *  recordEntity). */
+export interface RecordRef { id?: string; entityId?: string }
+
+/** THE card a record (a fault, a ticket, a line of Open issues) is filed under. */
+export interface RecordCard {
+  /** One card per device (fm/deviceWork.deviceWorkKey): `device:<opens>`, else the record alone (`item:fault:<id>`). */
+  key: string;
+  /** The entity it names (recordEntity: the first of a list the villa's system has); undefined: it names none. */
+  entityId?: string;
+  /** That entity's device (the fold), hidden or not: what its device pill names. */
+  deviceId?: string;
+  /** The device whose card it is on, and what a tap on it opens; undefined on no device, or on one hidden in the
+   *  villa's system (it has no window: the record is a card of its own under "Other"). */
+  opens?: string;
+}
+
+/**
+ * ⚠️ FIVE PLACES DECIDED IT (architecture review item 7, 2026-11-14): VillaDevices.cardOfRecord, the open issues
+ * (attention.attentionOf), the Closed and Watch cards (cockpitCard.clearedCard), the Tickets tab's device pill
+ * (attention.recordDevicePill, which was handed the hidden test as an option) and its room line each asked "which
+ * device, and is it hidden" themselves, and the Recap asked the plain fold (deviceOfRecord): a hidden device's ticket
+ * had its own card in Tickets and a pill naming that device, opening nothing, on the Recap. One answer now.
+ */
+export function recordCardOf(ctx: { deviceOf: (id: string) => string; isHidden: (id: string) => boolean;
+  has: (id: string) => boolean }): (r: RecordRef) => RecordCard {
+  return (r) => {
+    const entityId = recordEntity(r.entityId, ctx.has);
+    const deviceId = entityId === undefined ? undefined : ctx.deviceOf(entityId);
+    const opens = entityId === undefined || ctx.isHidden(entityId) ? undefined : deviceId;
+    return { key: deviceWorkKey(opens, `fault:${r.id ?? ""}`), entityId, deviceId, opens };
+  };
+}
+
+/** The room line of a record's card (RecordCard): its device's room now (devicePlace.recordRoomNow: the device, else
+ *  its entity, else the room stored with the record), the stored room when it names no device, none ("Other") on a
+ *  hidden device's card, as its Open issues card has it. "" for none. */
+export function recordCardRoom(card: RecordCard, stored: string | undefined, rooms: Readonly<Record<string, string | undefined>>): string {
+  if (card.entityId !== undefined && card.opens === undefined) return "";
+  return recordRoomNow(rooms, card.entityId !== undefined && card.deviceId !== undefined
+    ? { key: card.deviceId, entityId: card.entityId } : null, stored);
 }
 
 export interface VillaDevices {
@@ -400,13 +456,12 @@ export interface VillaDevices {
   has(entityId: string): boolean;
   /** The device `entityId` belongs to (the fold, deviceOf below): what every count "per device" counts by. */
   deviceOf(entityId: string): string;
-  /** The device a fault's or ticket's entity field names — a list of several included (recordDeviceOf). */
-  deviceOfRecord(field: string): string;
-  /** The device a fault's or ticket's CARD is filed under (fm/deviceWork.recordWorkKey): its device, or undefined for
-   *  one hidden in the villa's system, whose record is a card of its own under "Other", opening nothing — the rule the
-   *  Open issues follow (attention.attentionOf asks isHidden of the same entity). ⚠️ THE TICKETS TAB FILED IT UNDER THE
-   *  HIDDEN DEVICE (architecture review item 8, 2026-11-13): one card per hidden device there, one per record in Open
-   *  issues. */
+  /** THE card a record is filed under (recordCardOf): its device, or a card of its own under "Other" for one on no
+   *  device or on a device hidden in the villa's system. Open issues, Watch, Closed, the Tickets tab, the counts and the
+   *  Recap all ask this. */
+  recordCard(r: RecordRef): RecordCard;
+  /** The device a record's entity field files it under (recordCard's `opens`): what the counts per card take
+   *  (fm/deviceWork). ⚠️ THE TICKETS TAB FILED IT UNDER THE HIDDEN DEVICE (architecture review item 8, 2026-11-13). */
   cardOfRecord(field: string): string | undefined;
   /** Is this device critical — it, or an entity folded onto it, is on the villa's critical list (criticalDevices). */
   isCritical(entityId: string): boolean;
@@ -426,6 +481,7 @@ export function villaDevices(input: VillaDeviceInput): VillaDevices {
   const set = new Set(ids);
   const health = new Map(ids.map((id) => [id, deviceHealth(id, input.entities, facts.partsOf)]));
   const healthOf = (id: string) => health.get(id) ?? deviceHealth(id, input.entities, facts.partsOf);
+  const recordCard = recordCardOf({ deviceOf: (id) => deviceOf(folding, id), isHidden: facts.isHidden, has: (x) => x in input.entities });
   return {
     ids,
     // "Which real devices are currently offline" — the reality filter
@@ -441,11 +497,8 @@ export function villaDevices(input: VillaDeviceInput): VillaDevices {
     healthOf,
     has: (id) => set.has(id),
     deviceOf: (id) => deviceOf(folding, id),
-    deviceOfRecord: recordDeviceOf(folding, (id) => id in input.entities),
-    cardOfRecord: (field) => {
-      const id = recordEntity(field, (x) => x in input.entities) ?? field;
-      return facts.isHidden(id) ? undefined : deviceOf(folding, id);
-    },
+    recordCard,
+    cardOfRecord: (field) => recordCard({ entityId: field }).opens,
     isCritical: (id) => facts.critical.has(id),
     isHidden: facts.isHidden,
     facts,
@@ -524,7 +577,8 @@ const FIRST_CLASSES = ["power", "energy", "temperature"];
 
 /**
  * What else is on the device of the entity whose panel is OPEN — "Also on this
- * device" (2.496.260; the same for every panel since 2.496.271).
+ * device" (2.496.260; the same for every panel since 2.496.271): its device's parts (`partsOf`, the very ones its
+ * health asks: deviceHealth.partsOfFolding) that are readings and the villa's system has, never the open one.
  *
  * ⚠️ IT ONLY EVER SHOWED ON SOME DEVICES (owner, 2026-10-04: "only applied to
  * some specific devices"). Only the device's MAIN entity listed anything, so a
@@ -550,29 +604,11 @@ const FIRST_CLASSES = ["power", "energy", "temperature"];
 export function deviceReadings(
   id: string,
   folding: ReadonlyMap<string, string>,
+  partsOf: PartsOf,
   entities: Record<string, HassEntity>,
-  suppressed: ReadonlySet<string>,
-  deviceGroups: readonly DeviceGroup[],
-  entityDeviceIds: Readonly<Record<string, string>> = {},
-  /** Hidden by a PERSON in Home Assistant (registry hidden_by) — kept hidden,
-   *  battery or not; the battery exception is for HA's own "diagnostic". */
-  userHidden: ReadonlySet<string> = new Set(),
 ): string[] {
-  const rep = deviceOf(folding, id);
-  const chosen = new Set(deviceGroups.find((g) => g.primaryEntityId === rep)?.memberEntityIds ?? []);
-  const members = new Set<string>();
-  for (const [m, to] of folding) if (to === rep) members.add(m);
-  const dev = entityDeviceIds[rep] ?? entityDeviceIds[id];
-  if (dev) for (const [m, d] of Object.entries(entityDeviceIds)) if (d === dev) members.add(m);
-  const readings: string[] = [];
-  for (const m of members) {
-    if (m === id || m === rep || !entities[m]) continue;
-    if ((folding.get(m) ?? m) !== rep && folding.has(m)) continue;   // grouped under another device: listed there
-    if (!READING_DOMAINS.has(domainOf(m))) continue;
-    const battery = entities[m].attributes?.device_class === "battery";
-    if (suppressed.has(m) && !chosen.has(m) && (!battery || userHidden.has(m))) continue;
-    readings.push(m);
-  }
+  const readings = partsOf(deviceOf(folding, id)).filter((m) => m !== id && !!entities[m] && READING_DOMAINS.has(domainOf(m)));
+
   const rank = (m: string) => {
     const k = FIRST_CLASSES.indexOf(String(entities[m]?.attributes?.device_class ?? ""));
     return k < 0 ? FIRST_CLASSES.length : k;

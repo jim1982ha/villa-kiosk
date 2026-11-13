@@ -17,7 +17,8 @@ import { Wrench } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
 import { recordDevicePill } from "@/config/attention";
 import { ticketFace } from "@/config/cockpitCard";
-import { useCardRoom, useDeviceIdentity, useVillaModel } from "@/config/VillaModel";
+import { useVillaModel } from "@/config/VillaModel";
+import { recordCardRoom } from "@/config/deviceGroups";
 import { roomLabel } from "@/config/devicePlace";
 import { useFmData } from "@/fm/FmDataContext";
 import { useHA } from "@/ha/HAStateStore";
@@ -50,15 +51,14 @@ export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, on
   onRaiseOpened?: () => void;
 }) {
   const { data, removeTicket } = useFmData();
-  const cardRoom = useCardRoom();
   const terms = useFmTerms();
-  const { deviceOf } = useDeviceIdentity();
   // ⚠️ A HIDDEN DEVICE'S TICKET IS A CARD OF ITS OWN, AS IN OPEN ISSUES (architecture review item 8, 2026-11-13): under
-  // "Other", opening nothing — the hidden device has no window (VillaDevices.cardOfRecord, attention.attentionOf)
-  const { cardOfRecord, isHidden } = useVillaModel().devices;
-  /** A ticket's room line: its device's, "Other" for a hidden device's (cardOfRecord), as its Open issues card. */
-  const roomOf = (t: FmTicket) => (t.entityId && cardOfRecord(t.entityId) === undefined ? roomLabel(undefined) : cardRoom(t));
+  // "Other", opening nothing — the hidden device has no window. Which card, its room and its pill are the record card's
+  // one answer (VillaDevices.recordCard), the Open issues' too (architecture review item 7, 2026-11-14)
+  const { cardOfRecord, recordCard } = useVillaModel().devices;
   const { config, resolvedRooms } = useConfig();
+  /** A ticket's room line: its card's (deviceGroups.recordCardRoom), "Other" for a hidden device's, as its Open issues card. */
+  const roomOf = (t: FmTicket) => roomLabel(recordCardRoom(recordCard(t), t.room, resolvedRooms));
   const { entities } = useHA();
   /** Every card's buttons carried out: Done's form, Need help, Close's question, Reopen's form (WorkButtons). */
   const work = useCardWork();
@@ -104,7 +104,7 @@ export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, on
   const card = (t: FmTicket, actions?: ReactNode, framed = true, stated = true) => {
     const work = data.completions.find((c) => c.ticketId === t.id && c.costId);
     const cost = work ? data.costs.find((c) => c.id === work.costId) : undefined;
-    const pill = recordDevicePill(t, { devices: { deviceOf, isHidden }, entityMap: config.entityMap, entities, resolvedRooms });
+    const pill = recordDevicePill(t, { devices: { recordCard }, entityMap: config.entityMap, entities });
     // ⚠️ ITS HEAD AS ITS INBOX CARD'S (cockpitCard.ticketFace; owner, 2026-11-05, the "Status on top" card): its stage in
     // its strip, who moved it under its words, never the stage or the time twice; its alert's name the strip's chip
     const face = ticketFace(t, stated);
@@ -122,7 +122,7 @@ export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, on
         amount={cost ? formatMoney(cost.amountIdr, terms.currency) : undefined}
         erase={{ title: "Erase this ticket", detail: t.title, run: (token) => removeTicket(t.id, token) }}
         onOpen={() => editor.edit(t.id)}
-        // its device's room now, the stored one only with no device (owner, 2026-10-30: devicePlace.recordRoomNow)
+        // its device's room now, the stored one only with no device (owner, 2026-10-30: deviceGroups.recordCardRoom)
         room={roomOf(t)}
         // its device's name and what a tap opens as its Inbox card has them (attention.recordDevicePill), first on its line
         device={<DeviceChip entityId={pill.opens} onOpenEntity={onOpenEntity} label={pill.label} />}

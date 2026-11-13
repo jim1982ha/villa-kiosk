@@ -15,7 +15,7 @@ export default function ReadingPill({ r, icon, inline }: {
   /** One of a line of readings (a group's members): the pill alone, its line is the group's. */
   inline?: boolean;
 }) {
-  // only painted: its meaning, a critical device's red included, is the reading's (config/reading.statusOf)
+  // only painted: its meaning, a critical device's red included, is the reading's (config/reading.readingOf, its device's rule applied)
   return (
     <StatusPill tone={r.pill ?? ""} icon={r.alarm ? AlertTriangle : icon} inline={inline}>
       {r.value}

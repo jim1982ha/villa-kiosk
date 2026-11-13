@@ -71,10 +71,27 @@ export const NOT_KEPT_COLOR = STATUS_COLOR.noValue;
 
 /** A critical device's reading (on the villa's critical list): its "needs a look" and its lost contact are an alarm
  *  (owner, 2026-11-13: "a critical door unlocked, a critical device offline" are red). Every other meaning stays. The
- *  one escalation, applied to the meaning before anything paints it: every pill and the camera's bar of a window
- *  (config/reading.statusOf), the 3D object (deviceActivity.meshLookFor) and an action button (actionColor). */
+ *  one escalation, applied to the meaning before anything paints it, through the device's rule (statusRule). */
 export function criticalStatus(key: StatusKey, critical: boolean): StatusKey {
   return critical && (key === "warn" || key === "unavailable") ? "alert" : key;
+}
+
+/** ONE DEVICE'S RULE for every status it shows: a state's meaning, once it is known whether its device is on the
+ *  villa's critical list (criticalStatus: "needs a look" and lost contact are the alarm's red) or hidden in the villa's
+ *  system (never red or amber anywhere: its alarm and its "needs a look" read as its usual state). The device's look
+ *  carries it (deviceActivity.DeviceLook.statusRule); its badge, its 3D object, its room's number, the Cockpit's alarms
+ *  and every pill of its window project what it says. */
+export type StatusRule = (key: StatusKey) => StatusKey;
+
+/** The rule of a device neither critical nor hidden (or before the villa is read): every meaning as it is. */
+export const PLAIN_STATUS: StatusRule = (key) => key;
+
+const HIDDEN_STATUS: StatusRule = (key) => (key === "alert" || key === "warn" ? "usual" : key);
+const CRITICAL_STATUS: StatusRule = (key) => criticalStatus(key, true);
+
+/** The rule of a device with these facts (hidden wins: it is no device anywhere). */
+export function statusRule(facts: { critical: boolean; hidden: boolean }): StatusRule {
+  return facts.hidden ? HIDDEN_STATUS : facts.critical ? CRITICAL_STATUS : PLAIN_STATUS;
 }
 
 /** The colour of a button that MOVES a device to `target` (its state as the villa's system names it: "unlocked",
@@ -83,8 +100,8 @@ export function criticalStatus(key: StatusKey, critical: boolean): StatusKey {
  *  takes the state it says (PowerToggle). ⚠️ AN ACTION WEARS WHERE IT LEADS (owner, 2026-11-13: "Shall the `Unlock
  *  door` button colour be contextual to the `unlocked` colour state?"): it wore the app's green accent, a colour that
  *  says "on" on every other screen; a blind's buttons wore the device's category colour, an identity, never a state. */
-export function actionColor(entityId: string, target: string, critical = false): string {
-  return STATUS_COLOR[criticalStatus(statusKeyFor(target, entityId), critical)];
+export function actionColor(entityId: string, target: string, rule: StatusRule = PLAIN_STATUS): string {
+  return STATUS_COLOR[rule(statusKeyFor(target, entityId))];
 }
 
 // ── The state → meaning map ───────────────────────────────────────────────

@@ -30,7 +30,7 @@ import type { FmData, FmTicket } from "@/fm/fmTypes";
 import type { HassEntity } from "@/types/ha.types";
 import { alertStage, statusWords, type Announcement } from "@/messages/announcements";
 import { labelOf } from "./EntityMap";
-import { recordEntity, type VillaDevices } from "./deviceGroups";
+import type { VillaDevices } from "./deviceGroups";
 import { attentionSeverity, cardDevice, cardHead, type AttentionGroup, type AttentionItem, type AttentionSeverity } from "./attention";
 
 /** The records of one line — its fault, or the fault folded onto its live state, with their copies. A copy shares its
@@ -541,7 +541,7 @@ export function closedCards(fmData: FmData, cadence: AgentCadence | null, now: D
 }
 
 interface CardsOpts {
-  devices: Pick<VillaDevices, "deviceOf" | "isHidden">;
+  devices: Pick<VillaDevices, "recordCard">;
   entities: Record<string, HassEntity>;
   entityMap: Parameters<typeof labelOf>[1];
   resolvedRooms: Record<string, string>;
@@ -554,11 +554,11 @@ interface CardsOpts {
  *  villa's system (as attention.attentionOf files the open one). */
 function clearedCard(t: FmTicket, did: string, opts: CardsOpts, own: Pick<CardView, "key" | "look" | "nextCheck" | "watched" | "closedAt" | "erases">): CardView[] {
   const { devices, entities, entityMap, resolvedRooms, may } = opts;
-  const entityId = recordEntity(t.entityId, (x) => x in entities);
-  if (entityId && !may(entityId)) return [];
-  // its device, title and room as an open issue's card has them (attention cardDevice / cardHead)
-  const hidden = !!entityId && devices.isHidden(entityId);
-  const device = entityId && !hidden ? cardDevice(entityId, t.room, { devices, entityMap, entities, resolvedRooms }) : undefined;
+  // its card as an open issue's (VillaDevices.recordCard: its device, or its own card under "Other" for a hidden one)
+  const card = devices.recordCard(t);
+  if (card.entityId !== undefined && !may(card.entityId)) return [];
+  const hidden = card.entityId !== undefined && card.opens === undefined;
+  const device = cardDevice(card, t.room, { entityMap, entities, resolvedRooms });
   const title = faultName(t);
   return [{
     ...own,

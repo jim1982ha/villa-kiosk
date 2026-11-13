@@ -96,7 +96,7 @@ const map = Object.fromEntries([DOOR, LIGHT].map((id) => [id, { entityId: id, ty
 const devices = (entities) => {
   const st = store.getState();
   return villaDevices({ entityMap: map, deviceGroups: [], dismissed: new Set(), hidden: st.hiddenInHaEntityIds,
-    suppressed: st.suppressedEntityIds, mappedEntityIds: new Set(), entities, entityDeviceIds: st.entityDeviceIds,
+    suppressed: st.suppressedEntityIds, batteries: new Set(), mappedEntityIds: new Set(), entities, entityDeviceIds: st.entityDeviceIds,
     deviceUnits: st.deviceUnits });
 };
 ck("so no screen calls it offline: not in the villa's unavailable devices, contact not lost",
