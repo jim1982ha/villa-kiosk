@@ -6,8 +6,7 @@
 
 import type { LucideIcon } from "lucide-react";
 import { AlertTriangle } from "lucide-react";
-import { lostPillTone, type Reading } from "@/config/reading";
-import { usePanelActions } from "./PanelActionsContext";
+import type { Reading } from "@/config/reading";
 import StatusPill from "./StatusPill";
 
 export default function ReadingPill({ r, icon, inline }: {
@@ -16,10 +15,9 @@ export default function ReadingPill({ r, icon, inline }: {
   /** One of a line of readings (a group's members): the pill alone, its line is the group's. */
   inline?: boolean;
 }) {
-  // a critical device that lost contact: the red of the Cockpit, not the amber (the open window's header decides)
-  const critical = usePanelActions().badge?.critical ?? false;
+  // only painted: its meaning, a critical device's red included, is the reading's (config/reading.statusOf)
   return (
-    <StatusPill tone={lostPillTone(r.pill ?? "", critical)} icon={r.alarm ? AlertTriangle : icon} inline={inline}>
+    <StatusPill tone={r.pill ?? ""} icon={r.alarm ? AlertTriangle : icon} inline={inline}>
       {r.value}
     </StatusPill>
   );

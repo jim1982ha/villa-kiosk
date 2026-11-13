@@ -32,7 +32,7 @@ const alert = parseVestaMessage({ seq: 1, key: "incident:7", title: "#7-P1 (new)
 
 function cockpit(entities, tickets = []) {
   const devices = villaDevices({ entityMap: {}, deviceGroups: [], dismissed: new Set(), hidden: new Set(), suppressed: new Set(),
-    mappedEntityIds: mapped, entities, entityDeviceIds: {} });
+    mappedEntityIds: mapped, entities, entityDeviceIds: {}, deviceUnits: {} });
   const problems = { devices, attentionItems: attentionOf({ devices, entities, entityMap: {}, resolvedRooms: {},
     fmData: { ...EMPTY_FM_DATA, tickets } }).attentionItems };
   const view = attentionFor(problems, () => true);

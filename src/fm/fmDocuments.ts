@@ -33,9 +33,9 @@ interface RecapInput {
   fm: FmData;
   month: string;
   villaName: string;
-  /** The villa's one answer to "which device does this record's entity field name" (VillaModel.useDeviceIdentity
-   *  deviceOfRecord) — the open faults and tickets are counted per DEVICE card, as the Overview and Tickets count. */
-  deviceOfRecord: (field: string) => string;
+  /** The villa's one answer to "which device's card is this record on" (VillaDevices.cardOfRecord: none for a hidden
+   *  device) — the open faults and tickets are counted per card, as the Overview and Tickets count. */
+  cardOfRecord: (field: string) => string | undefined;
   /** Optional live readiness snapshot, included as the closing section — and the device availability section's
    *  figures (its `availability`: the devices its "All devices reporting" check covers). ⚠️ THE COUNTS CAME TWICE
    *  (architecture review, 2026-10-19): offlineDeviceCount and totalDeviceCount were passed beside the readiness that
@@ -225,7 +225,7 @@ export function buildMonthlyRecap(input: RecapInput): string {
   // open work counted per DEVICE card, as the Tickets tab and §5 count it (deviceWork.openCounts); the figures that
   // are per record — resolved, the mean — are ticketStats'. ⚠️ This line counted records (architecture review,
   // 2026-10-19): a pump with two faults read "Open: 2" here and "1 detected fault" in §5 of the same recap.
-  const open = openCounts(fm.tickets, input.deviceOfRecord);
+  const open = openCounts(fm.tickets, input.cardOfRecord);
   L.push(`## 3. Faults and response`);
   // ⚠️ FAULTS AND TICKETS, EACH NAMED (owner, 2026-11-01: "never a ticket unless the user has explicitly clicked on open
   // a ticket"): "Resolved this month" and its mean counted every closed fault, beside "Tickets in progress", and read

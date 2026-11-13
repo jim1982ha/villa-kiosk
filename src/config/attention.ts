@@ -431,15 +431,17 @@ export function recordRoom(r: { entityId?: string; room?: string }, ctx: { entit
  *  ⚠️ ONE ANSWER WITH THE INBOX (architecture review round 16, 2026-11-03): the Tickets tab looked the record's raw
  *  entity field up as one id, so a record naming several ("sensor.a,sensor.b", a rule watching three phases) was never
  *  found: its pill showed the stored name or the raw list, and a tap opened nothing. It goes through recordEntity as the
- *  Inbox card does. */
+ *  Inbox card does. A device hidden in the villa's system (`devices.isHidden`) is named, opening nothing: it has no
+ *  window, as its Inbox card opens nothing (attentionOf). */
 export function recordDevicePill(r: { entityId?: string; room?: string; deviceLabel?: string }, ctx: {
-  devices: Pick<VillaDevices, "deviceOf">; entityMap: Parameters<typeof labelOf>[1];
+  devices: Pick<VillaDevices, "deviceOf"> & Partial<Pick<VillaDevices, "isHidden">>; entityMap: Parameters<typeof labelOf>[1];
   entities: Record<string, HassEntity>; resolvedRooms: Record<string, string>;
 }): { label?: string; opens?: string } {
   const id = recordEntity(r.entityId, (x) => x in ctx.entities);
   if (!id) return r.deviceLabel ? { label: r.deviceLabel } : {};
   const device = cardDevice(id, r.room, ctx);
-  return { opens: device.key, label: id in ctx.entities ? device.label : r.deviceLabel ?? device.label };
+  const label = id in ctx.entities ? device.label : r.deviceLabel ?? device.label;
+  return ctx.devices.isHidden?.(id) ? { label } : { opens: device.key, label };
 }
 
 /** A card's title and room line: the DEVICE, whatever its problems (a problem with no device stands for itself), and

@@ -71,8 +71,8 @@ export const NOT_KEPT_COLOR = STATUS_COLOR.noValue;
 
 /** A critical device's reading (on the villa's critical list): its "needs a look" and its lost contact are an alarm
  *  (owner, 2026-11-13: "a critical door unlocked, a critical device offline" are red). Every other meaning stays. The
- *  one escalation every surface that knows a device is critical applies (config/reading.criticalPillTone,
- *  deviceActivity.meshLookFor, reading.lostColor). */
+ *  one escalation, applied to the meaning before anything paints it: every pill and the camera's bar of a window
+ *  (config/reading.statusOf), the 3D object (deviceActivity.meshLookFor) and an action button (actionColor). */
 export function criticalStatus(key: StatusKey, critical: boolean): StatusKey {
   return critical && (key === "warn" || key === "unavailable") ? "alert" : key;
 }

@@ -7,6 +7,7 @@ import { HAServices } from "@/ha/HAServiceCalls";
 import { coverPill } from "@/config/reading";
 import { useLiveDraft } from "@/hooks/useLiveDraft";
 import ControlFrame from "./ControlFrame";
+import { useOnCriticalList } from "./PanelActionsContext";
 import CommandButton from "./CommandButton";
 import { actionColor } from "@/utils/stateColors";
 
@@ -18,7 +19,7 @@ export default function CoverPanel({ entity, mapping, onClose }: PanelProps) {
   // would otherwise snap it back and the release would send a stale number.
   const position = useLiveDraft<number>(hasPosition ? pos as number : undefined, 0,
     (v) => HAServices.setCoverPosition(ws, mapping.entityId, v));
-  const pill = coverPill(mapping.entityId, entity?.state, hasPosition ? position.value : undefined);
+  const pill = coverPill(mapping.entityId, entity?.state, hasPosition ? position.value : undefined, useOnCriticalList());
   // what a command moves: the blind's state ("opening") or, on one that reports only it, its position
   const moves = `${entity?.state} ${pos}`;
 

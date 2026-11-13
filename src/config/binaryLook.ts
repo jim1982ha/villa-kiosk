@@ -13,7 +13,7 @@
 // ⚠️ IN USE IS ACTIVE HERE TOO (owner, 2026-11-13: one colour code for every
 // status): a detection, an open door, a lock sensor unlocked were red here and
 // in its history bar from 2026-10-26 ("keep red there") while in use on the map;
-// they are the purple of "on" now, and only a problem (a leak, smoke) is red.
+// they are the green of "on" now, and only a problem (a leak, smoke) is red.
 // The two are projections of one condition, side by side in
 // config/deviceCondition (conditionOf for the map, windowProblemState here).
 

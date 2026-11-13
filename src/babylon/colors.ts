@@ -23,7 +23,8 @@ export const ALERT_RED_HEX = "#B24232";
 // ⚠️ GREY, NO LONGER AMBER (owner, 2026-10-22: badge proposal 2): amber is a fault — check soon — and grey "no
 // contact", on every surface. Matches --status-lost (light theme) across the 2D panels for the same signal.
 // ⚠️ LIGHTER (owner, 2026-11-13: lost contact is a plain light grey, far from the dark empty track of "nothing to show").
-export const LOST_GREY = Color3.FromHexString("#9A9F98");
+const LOST_GREY_HEX = "#9A9F98";
+export const LOST_GREY = Color3.FromHexString(LOST_GREY_HEX);
 
 // Same green as --status-on across the 2D panels ("this is reporting fine" /
 // "available") — for the one place on the Babylon GUI side that needs it
@@ -34,10 +35,26 @@ export const AVAILABLE_GREEN_HEX = "#34845A";
 // --status-usual (light theme): alive in its usual state (owner, 2026-11-13) — a room whose devices all report that is
 // "all right" in this colour (healthPill "ok"), as their windows say it.
 export const USUAL_HEX = "#6E57B8";
-// --status-warning (light theme): a FAULT, check soon — as a hex for the pill below.
+// --status-warning (light theme): a FAULT, check soon.
 const FAULT_AMBER_HEX = "#B8801F";
-// --status-lost (light theme): no contact — the same grey as LOST_GREY, as a hex for the pill below.
-const LOST_GREY_HEX = "#9A9F98";
+
+/** The status vocabulary's colours (utils/stateColors.STATUS_COLOR) as light-theme hexes, one per meaning: what a baked
+ *  picture (the room chip's pill) and a 3D object (STATUS_COLOR3) are painted from. */
+const STATUS_HEX: Record<StatusKey, string> = {
+  usual: USUAL_HEX,                 // --status-usual
+  active: AVAILABLE_GREEN_HEX,      // --status-active
+  transitional: "#1F7F8C",          // --status-pending
+  warn: FAULT_AMBER_HEX,            // --status-warning
+  alert: ALERT_RED_HEX,             // --status-danger
+  unavailable: LOST_GREY_HEX,       // --status-lost
+  // nothing to show: a mesh has no empty track, so the quiet --status-off a resting object takes
+  noValue: "#D8D3C7",
+};
+
+/** A room's health as the status table's meaning (summaryLook.roomHealth): a fault is "needs a look", all right the usual. */
+const HEALTH_STATUS = { alert: "alert", fault: "warn", unavailable: "unavailable", ok: "usual" } as const satisfies Record<string, StatusKey>;
+/** The ink on each pill: white on the dark fills, dark on the light ones. */
+const DARK_INK = "#17191A";
 
 /** A room's count pill, by the room's HEALTH (summaryLook.roomHealth): red —
  *  something needs attention; amber — a device has an open fault; grey —
@@ -52,12 +69,12 @@ const LOST_GREY_HEX = "#9A9F98";
  *
  *  Static light-theme values, like every colour in this file: the map chip's
  *  pill is a baked picture. Dark ink on the amber: white on it is 3.4:1, too
- *  faint for a digit this small; dark is 5.2:1. Dark on the light grey too (white on it is 2.6:1). */
+ *  faint for a digit this small; dark is 5.2:1. Dark on the light grey too (white on it is 2.6:1).
+ *
+ *  ⚠️ THE TABLE'S COLOURS (architecture review item 6, 2026-11-13): it typed its own four hexes beside STATUS_HEX. */
 export function healthPill(health: "alert" | "fault" | "unavailable" | "ok"): { fill: string; ink: string } {
-  return health === "alert" ? { fill: ALERT_RED_HEX, ink: "#ffffff" }
-    : health === "fault" ? { fill: FAULT_AMBER_HEX, ink: "#17191A" }
-    : health === "unavailable" ? { fill: LOST_GREY_HEX, ink: "#17191A" }
-    : { fill: USUAL_HEX, ink: "#ffffff" };
+  const key = HEALTH_STATUS[health];
+  return { fill: STATUS_HEX[key], ink: key === "warn" || key === "unavailable" ? DARK_INK : "#ffffff" };
 }
 
 /** The status vocabulary's colours (utils/stateColors.STATUS_COLOR) for a 3D object, light-theme values like every
@@ -65,12 +82,8 @@ export function healthPill(health: "alert" | "fault" | "unavailable" | "ok"): { 
  *  consistent with the device status"). It had its own: a locked lock a brighter green than its pill, an unlocked one
  *  a teal glow beside a red "Unlocked". The same keys as STATUS_COLOR, one value each (tests/oracles/colour_rules.mjs). */
 export const STATUS_COLOR3: Record<StatusKey, Color3> = {
-  usual: Color3.FromHexString(USUAL_HEX),          // --status-usual
-  active: Color3.FromHexString(AVAILABLE_GREEN_HEX), // --status-active
-  transitional: Color3.FromHexString("#1F7F8C"),   // --status-pending
-  warn: Color3.FromHexString(FAULT_AMBER_HEX),     // --status-warning
-  alert: ALERT_RED,                                // --status-danger
-  unavailable: LOST_GREY,                          // --status-lost
-  // nothing to show: a mesh has no empty track, so the quiet --status-off a resting object takes
-  noValue: Color3.FromHexString("#D8D3C7"),
+  ...(Object.fromEntries(Object.entries(STATUS_HEX).map(([k, hex]) => [k, Color3.FromHexString(hex)])) as Record<StatusKey, Color3>),
+  // the alarm's red as every 3D red already is (ALERT_RED, a hair from its hex)
+  alert: ALERT_RED,
+  unavailable: LOST_GREY,
 };

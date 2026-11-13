@@ -24,11 +24,15 @@ export function deviceWorkKey(device: string | undefined, ownId: string): string
 }
 
 /** A record's card: its entity's device, else the record alone — the same key its Overview line gets (its line's id
- *  is `fault:<record id>`, config/attention.attentionOf). `deviceOfRecord`: the villa's one answer to "which
- *  device does this record's entity field name" (deviceGroups.recordDeviceOf — a list of several included). */
-export function recordWorkKey(t: Pick<FmTicket, "id" | "entityId">, deviceOfRecord: (field: string) => string): string {
-  return deviceWorkKey(t.entityId ? deviceOfRecord(t.entityId) : undefined, `fault:${t.id}`);
+ *  is `fault:<record id>`, config/attention.attentionOf). `cardOf`: the villa's one answer to "which device's card
+ *  does this record's entity field name" (VillaDevices.cardOfRecord — a list of several included; undefined for a
+ *  device hidden in the villa's system: the record alone, as the Open issues file it). */
+export function recordWorkKey(t: Pick<FmTicket, "id" | "entityId">, cardOf: CardOf): string {
+  return deviceWorkKey(t.entityId ? cardOf(t.entityId) : undefined, `fault:${t.id}`);
 }
+
+/** The device a record's card is filed under, undefined for none (VillaDevices.cardOfRecord). */
+type CardOf = (field: string) => string | undefined;
 
 /** `things` grouped by `keyOf`, in the order each key first appears; every thing comes back exactly once. */
 export function groupByDevice<T>(things: readonly T[], keyOf: (t: T) => string): { key: string; items: T[] }[] {
@@ -49,14 +53,14 @@ export interface DeviceWork {
 }
 
 /** `records` grouped by device, in the order each device first appears. */
-function workByDevice(records: readonly FmTicket[], deviceOfRecord: (field: string) => string): DeviceWork[] {
-  return groupByDevice(records, (t) => recordWorkKey(t, deviceOfRecord)).map(({ key, items }) => ({ key, records: items }));
+function workByDevice(records: readonly FmTicket[], cardOf: CardOf): DeviceWork[] {
+  return groupByDevice(records, (t) => recordWorkKey(t, cardOf)).map(({ key, items }) => ({ key, records: items }));
 }
 
 /** The Tickets tab's cards: the tickets in progress, one per device, the device whose latest was opened last first. */
-export function ticketCards(records: readonly FmTicket[], deviceOfRecord: (field: string) => string): DeviceWork[] {
+export function ticketCards(records: readonly FmTicket[], cardOf: CardOf): DeviceWork[] {
   return workByDevice(records.filter((t) => stageOf(t) === "ticket")
-    .sort((a, b) => Date.parse(b.openedAt) - Date.parse(a.openedAt)), deviceOfRecord);
+    .sort((a, b) => Date.parse(b.openedAt) - Date.parse(a.openedAt)), cardOf);
 }
 
 // ── What a card's buttons do ─────────────────────────────────────────────────
@@ -234,11 +238,11 @@ export const workRecord = (t: Pick<FmTicket, "id" | "status" | "updates">): Work
  *  figures that must stay per record (a repair's mean time, in the monthly recap) are ticketStats'. */
 interface OpenCounts { faults: number; tickets: number; total: number }
 
-export function openCounts(records: readonly FmTicket[], deviceOfRecord: (field: string) => string): OpenCounts {
-  const cards = workByDevice(records.filter(isTicketOpen), deviceOfRecord).map((d) => d.records.map(workRecord));
+export function openCounts(records: readonly FmTicket[], cardOf: CardOf): OpenCounts {
+  const cards = workByDevice(records.filter(isTicketOpen), cardOf).map((d) => d.records.map(workRecord));
   return {
     faults: cards.filter((rs) => rs.some((r) => r.stage === "fault")).length,
-    tickets: ticketCards(records, deviceOfRecord).length,
+    tickets: ticketCards(records, cardOf).length,
     total: cards.filter((rs) => overviewActions(rs).length > 0).length,
   };
 }

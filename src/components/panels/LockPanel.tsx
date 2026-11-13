@@ -5,9 +5,9 @@ import type { PanelProps } from "@/types/panel.types";
 import { useHA } from "@/ha/HAStateStore";
 import { HAServices } from "@/ha/HAServiceCalls";
 import { usePendingAck } from "@/hooks/usePendingAck";
-import { criticalPillTone, lockBolt, lockButtons, lockPill } from "@/config/reading";
+import { lockBolt, lockButtons, lockPill } from "@/config/reading";
 import { actionColor } from "@/utils/stateColors";
-import { usePanelActions } from "./PanelActionsContext";
+import { useOnCriticalList } from "./PanelActionsContext";
 import { tapFeedback, successFeedback } from "@/utils/haptics";
 import ControlFrame from "./ControlFrame";
 import InlineConfirm from "@/components/common/InlineConfirm";
@@ -26,10 +26,9 @@ export default function LockPanel({ entity, mapping, onClose }: PanelProps) {
   // motor reports for a second or two, and "jammed" — was announced as a red
   // "UNLOCKED": an alarming claim about a door that was in fact busy securing
   // itself. Reporting the state HA actually sent is both truer and shorter.
-  const own = lockPill(mapping.entityId, entity?.state);
-  // a critical lock unlocked or lost: red, as the Cockpit and its 3D object paint it (reading.criticalPillTone)
-  const onCriticalList = usePanelActions().badge?.onCriticalList ?? false;
-  const pill = { ...own, tone: criticalPillTone(own.tone, onCriticalList) };
+  // a critical lock unlocked or lost: red, as the Cockpit and its 3D object paint it (reading.statusOf)
+  const onCriticalList = useOnCriticalList();
+  const pill = lockPill(mapping.entityId, entity?.state, onCriticalList);
   // A deadbolt is the SLOWEST device class in the villa — a Z-Wave/Zigbee
   // lock routinely takes seconds to report back, and unlike a light there is
   // usually no way to see the result from where you're standing. This panel

@@ -21,7 +21,7 @@ import "./babylonSideEffects";
 import { CAMERA_BEAM_ALPHA_INDEX } from "./seeThroughOrder";
 import { STATUS_COLOR3 } from "./colors";
 
-// ⚠️ MOTION SEEN IS ACTIVE, NOT RED (owner, 2026-11-13: one colour code for every status): the status table's purple,
+// ⚠️ MOTION SEEN IS ACTIVE, NOT RED (owner, 2026-11-13: one colour code for every status): the status table's green,
 // as the camera window's motion marks; it was its own red
 const BEAM_COLOR = STATUS_COLOR3.active;
 // A wide "spotlight" cone at ROOM scale. Two rounds of feedback shaped this:

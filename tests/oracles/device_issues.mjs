@@ -9,10 +9,11 @@ import { register } from "node:module";
 register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 const { deviceLook, storeLookSource } = await import("@/utils/deviceActivity");
-const { attentionOf, attentionFor, deviceIssues, issueSeverity, faultsFor } = await import("@/config/attention");
+const { attentionOf, attentionFor, deviceIssues, issueSeverity, faultsFor, recordDevicePill } = await import("@/config/attention");
 const { cockpitCard } = await import("@/config/cockpitCard");
 const { EMPTY_FM_DATA } = await import("@/fm/fmTypes");
 const { devicesOf } = await import("../consistency/devices.mjs");
+const { ticketCards, openCounts, recordWorkKey } = await import("@/fm/deviceWork");
 
 const ent = (id, state) => ({ entity_id: id, state, attributes: {}, last_changed: "2026-10-25T08:00:00Z", last_updated: "" });
 const old = new Date(Date.now() - 400 * 864e5).toISOString();
@@ -85,6 +86,16 @@ ck("  ...nothing wrong: no mark, no sign, no card", E.mark === null && E.sign ==
      !att.shows(id) && att.raises(id) && !att.devices.ids.includes(id));
   ck("  ...a profile that may not open it is told nothing of it",
      attentionFor(problems, (x) => x !== id).attentionGroups.length === 0);
+  // architecture review item 8 (2026-11-13): the Tickets tab filed a hidden device's tickets under the device, one
+  // card for all of them, while Open issues gave each its own card under "Other"
+  const taken = [{ ...ticket("t7", id, "Old lock rattles"), status: "in_progress" }, { ...ticket("t8", id, "Old lock sticks"), status: "in_progress" }];
+  const tabCards = ticketCards(taken, devices.cardOfRecord);
+  ck("  ...its tickets in progress: each a card of its own on the Tickets tab, as in Open issues, and counted so",
+     tabCards.length === 2 && openCounts(taken, devices.cardOfRecord).tickets === 2
+       && recordWorkKey(fmData.tickets[0], devices.cardOfRecord) === att.attentionGroups.find((g) => g.title === "Old lock battery low")?.key,
+     { tab: tabCards.map((c) => c.key), open: att.attentionGroups.map((g) => g.key) });
+  const pill = recordDevicePill(taken[0], { devices, entityMap, entities, resolvedRooms: { [id]: "Cellar" } });
+  ck("  ...its device named on each, opening nothing, as its Open issues card", pill.label !== undefined && pill.opens === undefined, pill);
 }
 
 console.log("\n  every window as its profile sees the villa (architecture review N, card 5)");

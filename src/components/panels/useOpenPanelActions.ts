@@ -63,9 +63,6 @@ export function useOpenPanelActions({ screen, open: activePanel, go, panelFor, r
     (entityId: string) => go({ type: "openReading", panel: panelFor(entityId) }), [panelFor, go]);
   const goBack = useCallback(() => go({ type: "back" }), [go]);
   const backText = backLabel(screen, (id) => labelOf(id, config.entityMap, entities), (c) => CATEGORY_LABELS[c]);
-  const readings: ReadingRow[] = activePanel
-    ? readingRows(readingsOf(activePanel.entityId), entities, config.entityMap)
-    : [];
 
   // The open panel's LINKED entity (EntityMapping.linkedEntityId). Its switch
   // is optimistic: the switch otherwise can't move until the device itself
@@ -97,6 +94,9 @@ export function useOpenPanelActions({ screen, open: activePanel, go, panelFor, r
     linkedSwitch: linkedPower && linkedEntityId
       ? { isOn: linkedToggle.isOn, known: linkedPower.position !== "unknown", contact: contactOf(entities[linkedEntityId]?.state) }
       : null });
+  // "Also on this device": its parts read with the window's critical-list fact, as its own pills (reading.statusOf)
+  const readings: ReadingRow[] = readingRows(readingsOf(activePanel.entityId), entities, config.entityMap,
+    header.badge.onCriticalList);
   return {
     linkedAsk,
     actions: {

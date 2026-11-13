@@ -30,7 +30,7 @@ const folding = deviceFolding(entityMap, [], registry);
 function villa(states, fmData = EMPTY_FM_DATA) {
   const entities = Object.fromEntries(states.map((e) => [e.entity_id, e]));
   const input = { entityMap, deviceGroups: [], dismissed: new Set(), hidden, suppressed, mappedEntityIds: new Set([CAM]),
-    entities, entityDeviceIds: registry, folding };
+    entities, entityDeviceIds: registry, deviceUnits: {}, folding };
   const facts = lookFacts(input, folding);
   const devices = villaDevices({ ...input, facts });
   const view = attentionFor({ devices, attentionItems: attentionOf({ devices, entities, entityMap,

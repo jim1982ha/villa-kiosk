@@ -8,6 +8,7 @@ export function devicesOf({ ids = [], unavailable = [], folding = new Map(), cri
   const set = new Set(ids);
   const of = (id) => folding.get(id) ?? id;
   const crit = new Set([...critical].flatMap((e) => [e, of(e)]));
+  const isHidden = (id) => hidden.has(id) || hidden.has(of(id));
   return {
     ids, unavailable,
     partlyLost: Object.keys(partlyLost),
@@ -15,7 +16,9 @@ export function devicesOf({ ids = [], unavailable = [], folding = new Map(), cri
     has: (id) => set.has(id),
     deviceOf: of,
     deviceOfRecord: (field) => of(String(field ?? "").split(",")[0].trim()),
+    // a hidden device's record is a card of its own (VillaDevices.cardOfRecord)
+    cardOfRecord: (field) => { const id = String(field ?? "").split(",")[0].trim(); return isHidden(id) ? undefined : of(id); },
     isCritical: (id) => crit.has(id),
-    isHidden: (id) => hidden.has(id) || hidden.has(of(id)),
+    isHidden,
   };
 }

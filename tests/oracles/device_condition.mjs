@@ -14,7 +14,7 @@ import { register } from "node:module";
 register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 const { conditionOf, glowsRoom } = await import("@/config/deviceCondition");
-const { deviceLook, storeLookSource, readingOf, meshLookFor, groupLook } = await import("@/utils/deviceActivity");
+const { deviceLook, storeLookSource, meshLookFor, groupLook } = await import("@/utils/deviceActivity");
 const { roomHealth } = await import("@/babylon/summaryLook");
 const { binaryLook } = await import("@/config/binaryLook");
 const { statusKeyFor } = await import("@/utils/stateColors");
@@ -78,7 +78,7 @@ const seen = TABLE.map(([type, id, dc, state, want, windowWant]) => {
   const entityMap = { [id]: { entityId: id, type }, [host]: { entityId: host, type: "switch", linkedEntityId: id } };
   const src = storeLookSource(entities, { entityMap, isHidden: () => false });
   const look = deviceLook(id, src);
-  const mesh = meshLookFor(readingOf(id, src));
+  const mesh = meshLookFor(id, src);
   const items = attentionOf({ devices: devicesOf({ ids: [id] }), entities, entityMap, resolvedRooms: {},
     fmData: EMPTY_FM_DATA }).attentionItems;
   // the window's status as its pill and history bar read it: binaryLook for a binary sensor, the table otherwise —

@@ -35,7 +35,7 @@ interface MotionRoutingInput {
 
 export interface MotionRouting {
   beams: { cameraId: string; on: boolean }[];
-  /** `alarm`: the glow is an alarm's (red), else a room in use (purple). */
+  /** `alarm`: the glow is an alarm's (red), else a room in use (green). */
   rooms: { room: string; on: boolean; alarm?: boolean }[];
 }
 
@@ -64,7 +64,7 @@ export function motionRouting(i: MotionRoutingInput): MotionRouting {
 export interface MotionLit {
   beams: ReadonlySet<string>;
   rooms: ReadonlyMap<string, string>;
-  /** The lit rooms (their keys) one of whose sensors is an alarm: glowing red, not purple. */
+  /** The lit rooms (their keys) one of whose sensors is an alarm: glowing red, not green. */
   alarms?: ReadonlySet<string>;
 }
 

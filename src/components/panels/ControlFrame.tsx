@@ -14,12 +14,12 @@ import type { ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
 import { PowerSection } from "./PowerToggle";
 import StatusPill from "./StatusPill";
-import { usePanelActions } from "./PanelActionsContext";
+import { useOnCriticalList } from "./PanelActionsContext";
 import { useHA } from "@/ha/HAStateStore";
 import { HAServices } from "@/ha/HAServiceCalls";
 import { actionColor } from "@/utils/stateColors";
 import { isOffline } from "@/utils/deviceHealth";
-import { controlPill, criticalPillTone } from "@/config/reading";
+import { controlPill } from "@/config/reading";
 import { deviceSwitch } from "@/utils/devicePower";
 import type { HassEntity } from "@/types/ha.types";
 import type { EntityMapping } from "@/types/scene.types";
@@ -41,18 +41,19 @@ interface Props {
 
 export default function ControlFrame({ entity, mapping, power, beside, pill, children }: Props) {
   const { ws } = useHA();
-  const onCriticalList = usePanelActions().badge?.onCriticalList ?? false;
+  const onCriticalList = useOnCriticalList();
   // ⚠️ LOST CONTACT, NOT "UNKNOWN" (owner, 2026-10-18; architecture review 2026-10-19): a device whose state is
   // "unknown" is answering — it can be commanded (a toggle needs no value), so its controls stay, without the notice;
   // its power button then sits "off" until the device says (devicePower: no position). Only "unavailable" or a
   // missing entity is lost (deviceHealth.isOffline): no controls, and the window's frame says so (BasePanel's notice).
   if (isOffline(entity)) return null;
   const sw = power ? deviceSwitch(entity, mapping.entityId, mapping) : null;
-  const shown = pill ?? controlPill(mapping.entityId, entity, sw ? sw.position : null);
+  // a panel's own pill is read with the same critical-list fact (reading.statusOf): only painted here
+  const shown = pill ?? controlPill(mapping.entityId, entity, sw ? sw.position : null, onCriticalList);
   return (
     <>
       {/* the state, said once and the same way in every window; a critical device's "needs a look" in red */}
-      <StatusPill tone={criticalPillTone(shown.tone, onCriticalList)} icon={pill?.icon}>{shown.text}</StatusPill>
+      <StatusPill tone={shown.tone} icon={pill?.icon}>{shown.text}</StatusPill>
       {sw && (() => {
         return (
           <PowerSection
