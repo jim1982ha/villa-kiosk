@@ -1,3 +1,11 @@
+## 0.12.506
+
+- **No more "missing from the villa's system" while the villa's system restarts.** On 13/11 a restart (stopped 14:43,
+  started 14:47) opened that fault for the LED Strip and the weather station while their integrations were still
+  loading; both were back three minutes later. VESTA now says nothing is missing while the villa's system is starting,
+  nor for 5 minutes after it started: a device really removed is reported at the next check after that. The 5 minutes
+  are the same setting the VESTA Kiosk uses after a restart (one value for both apps).
+
 ## 0.12.505
 
 - **An alert's "To:" now says who that copy was sent to**, in each chat. The facility manager's still-there reads
