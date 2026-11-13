@@ -291,7 +291,9 @@ export function classifyDeviceActivity({ type, entity: s, condition }: DeviceRea
  *
  *   * `tint` — a lock's whole-mesh colour: its window's status colour (green locked, amber unlocked, red jammed or a
  *     critical one unlocked, teal on its way, grey out of contact);
- *   * `pulse` — a sensor's red pulse, while its window says red (a leak, smoke);
+ *   * `pulse` — a sensor's pulse, in its window's colour, while it is on (a detection, a door open: active; a leak,
+ *     smoke: the alarm's red). ⚠️ IT PULSED ONLY RED (owner, 2026-11-13: "I used to see it blinking"): a detection was
+ *     red in its window until the colour code made it "on, nothing wrong", and its object went still;
  *   * `glow` — an active switch/player's soft glow, in its window's status colour;
  *
  * ⚠️ THE WINDOW'S STATUS, NEVER A CALMER ONE (owner, 2026-11-04: "remove all notion of stays calm and always align it
@@ -305,7 +307,7 @@ type MeshLook =
   | { kind: "none" }
   | { kind: "dark"; outline?: StatusKey }
   | { kind: "glow"; on: boolean; tone: StatusKey }
-  | { kind: "pulse"; on: boolean; unavailable: boolean }
+  | { kind: "pulse"; on: boolean; unavailable: boolean; tone?: StatusKey }
   | { kind: "tint"; tone: StatusKey };
 
 export function meshLookFor(r: DeviceReading): MeshLook {
@@ -319,7 +321,8 @@ export function meshLookFor(r: DeviceReading): MeshLook {
     case "lock":
       return { kind: "tint", tone: criticalStatus(kind === "unavailable" ? "unavailable" : status, r.critical && !r.hidden) };
     case "binary_sensor":
-      return { kind: "pulse", on: kind !== "unavailable" && status === "alert", unavailable: kind === "unavailable" };
+      return { kind: "pulse", on: kind !== "unavailable" && (status === "alert" || status === "active"),
+        unavailable: kind === "unavailable", tone: status };
     case "switch":
     case "media_player":
       return { kind: "glow", on: kind === "on", tone: status };

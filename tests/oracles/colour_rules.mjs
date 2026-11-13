@@ -109,7 +109,7 @@ for (const [name, b] of Object.entries(THEMES)) {
   const own = (t) => val(b, t) ?? val(BASE, t);
   const vals = tokens.map((t) => own(t.slice(6, -1)));
   const cats = [...BASE.matchAll(/--(cat-[\w-]+):/g)].map((m) => own(m[1]));
-  if (vals.some((v) => !v) || new Set(vals).size !== 7 || cats.includes(own("status-active"))) themeBad.push({ name, vals, cats });
+  if (vals.some((v) => !v) || new Set(vals).size !== 7 || cats.includes(own("status-usual"))) themeBad.push({ name, vals, cats });
 }
 ck("every theme gives the seven meanings seven colours, its purple none of its category colours", themeBad.length === 0, themeBad);
 
