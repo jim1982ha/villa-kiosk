@@ -64,6 +64,7 @@ export const STATUS_COLOR3: Record<StatusKey, Color3> = {
   active: Color3.FromHexString("#34845A"),        // --status-on
   idle: Color3.FromHexString("#D8D3C7"),          // --status-off
   transitional: Color3.FromHexString("#1F7F8C"),  // --status-pending
+  shut: Color3.FromHexString("#6B5AA6"),          // --cat-access-control
   unavailable: LOST_GREY,                         // --status-lost
   alert: ALERT_RED,                               // --status-danger
 };

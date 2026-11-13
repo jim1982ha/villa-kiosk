@@ -1,3 +1,9 @@
+## 2.496.792
+
+- **Curtains and fans use the lock's colours.** A curtain opening or closing, and a fan turning, are the teal a lock
+  has while it locks. A closed curtain and a fan that is off are now purple (the locks' own colour, shut as a locked
+  door is), no longer the dark grey that sat too close to the grey of "Unavailable" in their history.
+
 ## 2.496.791
 
 - **After the villa's system restarts, devices no longer stay frozen until the page is reloaded.** On 13/11 a restart
