@@ -1,4 +1,4 @@
-## 0.12.510
+## 0.12.511
 
 - **The night check also rests while the villa's system restarts.** Like the 5-minute check since 0.12.509, it now
   opens and closes no fault while the villa's system is starting and for 5 minutes after; that night's new faults
