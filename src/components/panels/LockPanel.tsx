@@ -6,6 +6,7 @@ import { useHA } from "@/ha/HAStateStore";
 import { HAServices } from "@/ha/HAServiceCalls";
 import { usePendingAck } from "@/hooks/usePendingAck";
 import { criticalPillTone, lockBolt, lockButtons, lockPill } from "@/config/reading";
+import { actionColor } from "@/utils/stateColors";
 import { usePanelActions } from "./PanelActionsContext";
 import { tapFeedback, successFeedback } from "@/utils/haptics";
 import ControlFrame from "./ControlFrame";
@@ -28,7 +29,8 @@ export default function LockPanel({ entity, mapping, onClose }: PanelProps) {
   // itself. Reporting the state HA actually sent is both truer and shorter.
   const own = lockPill(mapping.entityId, entity?.state);
   // a critical lock unlocked or lost: red, as the Cockpit and its 3D object paint it (reading.criticalPillTone)
-  const pill = { ...own, tone: criticalPillTone(own.tone, usePanelActions().badge?.onCriticalList ?? false) };
+  const onCriticalList = usePanelActions().badge?.onCriticalList ?? false;
+  const pill = { ...own, tone: criticalPillTone(own.tone, onCriticalList) };
   // A deadbolt is the SLOWEST device class in the villa — a Z-Wave/Zigbee
   // lock routinely takes seconds to report back, and unlike a light there is
   // usually no way to see the result from where you're standing. This panel
@@ -78,10 +80,11 @@ export default function LockPanel({ entity, mapping, onClose }: PanelProps) {
             confirmLabel={ask.asking.confirmLabel} onConfirm={ask.confirm} onCancel={ask.cancel} /></div>;
         }
         const Icon = b === "lock" ? Lock : Unlock;
+        // the colour of where it leads: "Unlock door…" the unlocked amber (red for a critical door), "Lock door" locked's
+        const leads = { ["--state" as string]: actionColor(mapping.entityId, b === "lock" ? "locked" : "unlocked", onCriticalList) };
         return n === 0 ? (
           <button key={b}
-            // `cta`, not `on`: emphasis for the action to take, never a report of the device's state
-            className="big-toggle cta"
+            className="big-toggle action" style={leads}
             onClick={ask.request}
             aria-busy={pending || undefined}
           >
@@ -89,7 +92,7 @@ export default function LockPanel({ entity, mapping, onClose }: PanelProps) {
           </button>
         ) : (
           <div key={b} className="mt">
-            <button className="btn" style={{ width: "100%" }} onClick={ask.request}>
+            <button className="btn action" style={{ width: "100%", ...leads }} onClick={ask.request}>
               <Icon size={18} /> {b === "lock" ? "Lock door" : "Unlock door…"}
             </button>
           </div>

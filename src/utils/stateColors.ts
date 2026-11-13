@@ -180,6 +180,16 @@ export function criticalStatus(key: StatusKey, critical: boolean): StatusKey {
   return critical && (key === "warn" || key === "unavailable") ? "alert" : key;
 }
 
+/** The colour of a button that MOVES a device to `target` (its state as the villa's system names it: "unlocked",
+ *  "open"): the colour of the state it leads to, from this table — "Unlock door…" amber (red for a critical door),
+ *  "Lock door" and "Close" in the usual colour, "Open" in the active one. A button that SAYS a state (the power button)
+ *  takes the state it says (PowerToggle). ⚠️ AN ACTION WEARS WHERE IT LEADS (owner, 2026-11-13: "Shall the `Unlock
+ *  door` button colour be contextual to the `unlocked` colour state?"): it wore the app's green accent, a colour that
+ *  says "on" on every other screen; a blind's buttons wore the device's category colour, an identity, never a state. */
+export function actionColor(entityId: string, target: string, critical = false): string {
+  return STATUS_COLOR[criticalStatus(statusKeyFor(target, entityId), critical)];
+}
+
 // ── The state → meaning map ───────────────────────────────────────────────
 // The villa's system's own history colours states from a per-domain table, and its vocabulary is wider than the
 // meanings this kiosk shows. Rather than import its palette (a second, unrelated set of hues in a deliberately
