@@ -39,7 +39,9 @@ import {
   type PlacementItem, type DeferralBucket, type PlacementScratch, type PlacementStats,
 } from "./badgePlacement";
 import { channelEnabled } from "@/utils/tapDebug";
-import { bucketRoomChips, combineChips, type ChipMember, type RoomChip } from "./roomChips";
+import { bucketRoomChips, chipBox, combineChips, type ChipMember, type RoomChip } from "./roomChips";
+import { chipGrid, mapArea, placeChip, type PlaceBox, type ScreenRect } from "./chipPlace";
+import { drawnThisPass } from "./badgeFrame";
 import { RoomFocus } from "./roomFocus";
 import { arrange, cardLift, gridCells, MAX_TOTAL_CHIPS, type CardArrangement } from "./badgeCard";
 import { badgeRank } from "./badgePriority";
@@ -478,6 +480,9 @@ export interface ChipFrame {
   text: ChipTextMetrics;
   /** How wide a chip may be drawn, in chipWidthPx's units. */
   budget: number;
+  /** What the HUD lays over the map (its bars and rail), render px on the
+   *  canvas: a chip is drawn clear of them (chipPlace.mapArea). Absent: none. */
+  cover?: readonly ScreenRect[];
 }
 
 /** EVERYTHING one pass reads about its frame — values, never a way back into
@@ -1667,7 +1672,7 @@ export class PlacementPass {
     // is actually rendered.
     let chips = this.deriveChips(false);
     if (!CHIP_COLLISION || !clearance || clearance.pxPerWorld <= 0) {
-      return this.deriveChips();
+      return this.deriveChips(true, this.chipObstacles(shown, boxes, pending));
     }
     const scale = this.f.scale;
     const gapPx = this.f.metrics.minGapPx * scale;
@@ -1725,7 +1730,7 @@ export class PlacementPass {
     // Only now, and only for the render: the escalation above is settled, so
     // merging can no longer change which badges are drawn — which is the
     // property its own docstring has always claimed.
-    const rendered = this.deriveChips();
+    const rendered = this.deriveChips(true, this.chipObstacles(shown, boxes, pending));
     if (focus.size === 0) return rendered;
 
     // ── A FOCUSED ROOM'S DEVICES OUTRANK ANOTHER ROOM'S LABEL (2.431.0) ─────
@@ -1783,8 +1788,9 @@ export class PlacementPass {
     if (focusBoxes.length === 0) return rendered;
     return rendered.filter((c) => {
       const q = planeOf(clearance, c.centre.x, c.centre.y, c.centre.z, this.glass);
-      // The chip's OWN height: a merged chip is one line per room tall.
-      const cx = q.sx, cy = q.sy - c.halfH, hw = c.halfW + gapPx, hh = c.halfH + gapPx;
+      // The chip's OWN height (a merged chip is one line per room tall), where
+      // its placement moved it (chipPlace.placeChip).
+      const cx = q.sx + c.dx, cy = q.sy - c.halfH + c.dy, hw = c.halfW + gapPx, hh = c.halfH + gapPx;
       for (const b of focusBoxes) {
         if (groundOf(cx - b.cx, q.sz - b.cz) < hw + b.hw && Math.abs(cy - b.cy) < hh + b.hh) return false;
       }
@@ -1810,10 +1816,15 @@ export class PlacementPass {
    * "overlap" a real chip — "Swimming Pool +7" drawn ahead with the pool
    * behind. A chip behind the camera is not drawn, so it never joins one.
    */
-  deriveChips(merge = true): RoomChip[] {
+  deriveChips(merge = true, obstacles: readonly PlaceBox[] = []): RoomChip[] {
     const f = this.f, c = f.chips;
     const chips = bucketRoomChips(c.members, (k) => !!this.roomClustered.get(k), (k) => this.roomDisplay.get(k) ?? k);
     const scale = f.scale;
+    const gap = f.metrics.minGapPx * scale;
+    // The map a person can see: the viewport minus the HUD's bars, its rail a
+    // block to keep off (chipPlace.mapArea). Render set only — see `place`.
+    const area = c.view ? mapArea(c.view.vp, c.cover ?? [], gap) : null;
+    const unit = f.summary.size * scale;
     const behind = new Set<RoomChip>();
     const measure = (ch: RoomChip) => {
       // Each line truncated on its own: one room's long name never shortens another's.
@@ -1827,45 +1838,128 @@ export class PlacementPass {
       // LABEL alone: the count is a corner overlay inside padding chipWidthPx
       // already reserves (charging it again merged pills that were clear).
       // The WIDEST line: every line of a merged chip shares its width, names
-      // on the left and the pills in one right-hand column.
+      // on the left and the pills in one right-hand column — per column.
       let widest = 0;
       for (const l of ch.lines) widest = Math.max(widest, chipWidthPx(l.label, c.text));
-      ch.halfW = (widest / 2) * scale;
-      // One badge unit per line, as renderChips draws it.
-      ch.halfH = ((ch.lines.length * f.summary.size) / 2) * scale;
+      // ── NEVER TALLER THAN THE MAP (2.496.803) ────────────────────────────
+      // One badge unit per line, as renderChips draws it — in as many columns
+      // as the visible map's height needs (owner's screenshot: an eleven-line
+      // chip ran off the top, under the top bar). Each column fills top-down.
+      const grid = chipGrid(ch.lines.length, unit, area ? area.bottom - area.top : 0);
+      ch.cols = grid.cols; ch.rows = grid.rows;
+      ch.halfW = ((grid.cols * widest) / 2) * scale;
+      ch.halfH = ((grid.rows * f.summary.size) / 2) * scale;
+      ch.dx = 0; ch.dy = 0;
+    };
+    // ── KEPT ON THE VISIBLE MAP, OFF EVERY BADGE AND CARD (2.496.803) ─────
+    // Owner's screenshots: chips cut off by the top bar, the left rail and the
+    // screen's edge, and a merged chip over the corner of a group card. The
+    // drawn box moves only as far as that needs (chipPlace.placeChip).
+    //
+    // ⚠️ RENDER SET ONLY, LIKE THE MERGE. Escalation (settleChips's loop) runs
+    // on the unmerged, unplaced chips in the view plane — CHIP_COLLISION says
+    // why a camera-dependent obstacle set there made rooms flicker — so where a
+    // chip is drawn can never change which badges are drawn. The badges and
+    // cards it keeps off are that settled answer, fixed for this call.
+    const place = (ch: RoomChip) => {
+      if (!area || !c.view) return;
+      const at = { cx: ch.x, cy: ch.y - ch.halfH, hw: ch.halfW, hh: ch.halfH };
+      // A chip wholly off the screen (its room is outside the view) stays
+      // there, unseen: pulling it in would line every room beside the camera
+      // up along the edges. Partly on it, or under the HUD: brought in.
+      const v = c.view.vp;
+      if (at.cx + at.hw <= v.x || at.cx - at.hw >= v.x + v.width
+          || at.cy + at.hh <= v.y || at.cy - at.hh >= v.y + v.height) return;
+      const to = placeChip(at, area, obstacles, gap);
+      ch.dx = to.cx - at.cx; ch.dy = to.cy - at.cy;
     };
     for (const ch of chips) measure(ch);
     const front = chips.filter((ch) => !behind.has(ch));
-    if (merge && c.view && front.length > 1) {
-      const gap = f.metrics.minGapPx * scale;
+    if (merge && c.view) {
+      for (const ch of front) place(ch);
       // ── MERGED ON THE DRAWN BOX (2.496.801) ──────────────────────────────
       // A chip sits ENTIRELY ABOVE its anchor (renderChips lifts it by half
       // its own height), and a merged chip is one line per room tall — so two
       // chips of different heights are not centred on the same row as their
       // anchors, and testing anchor ± halfH would merge a short chip into the
       // air below a tall one and miss it in the tall one's real top half.
-      // placementCheck's chip-vs-chip counter reads this same drawn box.
+      // Since 2.496.803 the drawn box is also where its placement put it.
+      // placementCheck's chip-vs-chip counter reads this same box (chipBox).
       //
       // ⚠️ IT STILL CONVERGES, AND CANNOT OSCILLATE. A merge makes the
       // survivor taller and maybe wider, which can make it overlap a third
-      // chip — that only adds merges. Every merge removes one box and nothing
-      // ever splits inside the loop, so it stops after at most n-1 merges
-      // however much the chips grow. And it starts from the UNMERGED chips on
-      // every pass, so the result is a function of the camera alone: no merge
-      // carries over from the last frame to be undone in this one.
-      const boxOf = (ch: RoomChip) => ({ ch, x: ch.x, y: ch.y - ch.halfH, halfW: ch.halfW, halfH: ch.halfH });
-      const merged = mergeOverlapping(
+      // chip — that only adds merges. Placement is a function of the one box
+      // (with the area and the obstacles fixed for this call), applied before
+      // the box is tested, so it is just part of measuring; it never splits a
+      // chip. Every merge removes one box and nothing ever splits inside the
+      // loop, so it stops after at most n-1 merges however much the chips grow
+      // or move. And it starts from the UNMERGED chips on every pass, so the
+      // result is a function of the camera alone: no merge carries over from
+      // the last frame to be undone in this one.
+      //
+      // A merge is still as greedy as touching (rules/RULES.md: badges group
+      // only when they touch, nothing overlaps): a cap on lines would leave two
+      // chips overlapping, and a chip may not be pushed away from its room to
+      // make space. What bounds a long chain is the columns above — a chip past
+      // the map's height grows sideways, inside the map.
+      const boxOf = (ch: RoomChip) => {
+        const b = chipBox(ch);
+        return { ch, x: b.cx, y: b.cy, halfW: b.hw, halfH: b.hh };
+      };
+      const merged = front.length > 1 ? mergeOverlapping(
         front.map(boxOf),
         gap,
         (b) => b.ch.ids.length,
         (keep, drop) => {
           combineChips(keep.ch, drop.ch);
           measure(keep.ch);
+          place(keep.ch);
           Object.assign(keep, boxOf(keep.ch));
         },
-      );
-      return [...merged.map((b) => b.ch), ...chips.filter((ch) => behind.has(ch))];
+      ).map((b) => b.ch) : front;
+      return [...merged, ...chips.filter((ch) => behind.has(ch))];
     }
     return chips;
   }
+
+  /**
+   * What a drawn chip keeps off (chipPlace.placeChip): every badge drawn this
+   * pass and every card that survived it, each where it is PAINTED — true
+   * perspective, the boxes placementReport hands placementCheck. A card is
+   * entirely above its anchor, as a badge is by its own `cy`.
+   */
+  private chipObstacles(
+    shown: readonly ShownLabel[], boxes: readonly { halfW: number; halfH: number; cy: number }[],
+    pending: readonly PendingEntityGroup[],
+  ): PlaceBox[] {
+    const view = this.f.chips.view;
+    if (!view) return [];
+    const out: PlaceBox[] = [];
+    for (let i = 0; i < shown.length; i++) {
+      const s2 = shown[i];
+      if (!drawnThisPass(s2, this)) continue;
+      out.push({ cx: s2.x, cy: s2.y + boxes[i].cy, hw: boxes[i].halfW, hh: boxes[i].halfH });
+    }
+    const p = new Vector3();
+    for (const g of pending) {
+      const box = drawnCardBox(this.f, g, view.tm, view.vp, p);
+      if (box) out.push(box);
+    }
+    return out;
+  }
+}
+
+/** A card's box where it is PAINTED, true perspective — entirely above its
+ *  anchor (updateEntityGroups lifts it by cardLift) — or null behind the
+ *  camera. The one box the chips keep off and placementReport checks. */
+export function drawnCardBox(
+  f: PlacementFrame, g: PendingEntityGroup, tm: Matrix, vp: Viewport, p = new Vector3(),
+): { cx: number; cy: number; hw: number; hh: number } | null {
+  const lay = layoutOf(f, g, g.members.length);
+  p.set(g.wx, g.wy, g.wz);
+  Vector3.ProjectToRef(p, Matrix.IdentityReadOnly, tm, vp, p);
+  if (!(p.z >= 0 && p.z <= 1)) return null;
+  const hw = (lay.width / 2) * f.scale;
+  const hh = cardLift(lay, f.scale);
+  return { cx: p.x, cy: p.y - hh, hw, hh };
 }

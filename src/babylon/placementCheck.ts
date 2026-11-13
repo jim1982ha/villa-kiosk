@@ -16,7 +16,7 @@
 // it layouts that break each rule and requires it to say so.
 
 import { solvePlacement, createPlacementScratch, type PlacementItem, type PlacementScratch } from "./badgePlacement";
-import type { RoomChip } from "./roomChips";
+import { chipBox, type RoomChip } from "./roomChips";
 
 /** A drawn thing's box on the glass, render px: centre and half extents. */
 export interface ScreenBox { cx: number; cy: number; hw: number; hh: number }
@@ -252,7 +252,6 @@ export class PlacementCheck {
     // to see. Its own bucket, a failure like the rest: settleChips drops any chip
     // a focused badge or card collides with (2.431.0), so a count here is the
     // plane-vs-perspective residual of (b) or a gap in that drop.
-    const chipBox = (c: RoomChip): ScreenBox => ({ cx: c.x, cy: c.y - c.halfH, hw: c.halfW, hh: c.halfH });
     for (const c of s.chips) {
       const box = chipBox(c);
       if (!onScreen(box)) continue;

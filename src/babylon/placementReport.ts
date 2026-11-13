@@ -14,11 +14,10 @@
 import { Matrix, Vector3 } from "@babylonjs/core/Maths/math.vector";
 import { Viewport } from "@babylonjs/core/Maths/math.viewport";
 import { roomKey } from "@/config/roomKey";
-import { cardLift } from "./badgeCard";
 import { drawnThisPass } from "./badgeFrame";
 import { PlacementCheck, type PassSnapshot, type PlacementCounts, type PlacementFindings, type ScreenBox } from "./placementCheck";
 import {
-  PlacementPass, glassScratch, layoutOf, placementItems, roomOfEntity,
+  PlacementPass, drawnCardBox, glassScratch, placementItems, roomOfEntity,
   type PassClearance, type PendingEntityGroup, type PlacementFrame, type PassResult, type ShownLabel,
 } from "./placementPass";
 import type { RoomChip } from "./roomChips";
@@ -73,16 +72,11 @@ export function passSnapshot(i: SnapshotInput): PassSnapshot {
   const cards: { box: ScreenBox; ink: ScreenBox; focused: boolean; key: string }[] = [];
   const p = new Vector3();
   for (const g of i.groups) {
-    const lay = layoutOf(frame, g, g.members.length);
-    p.set(g.wx, g.wy, g.wz);
-    Vector3.ProjectToRef(p, Matrix.IdentityReadOnly, tm, vp, p);
-    if (!(p.z >= 0 && p.z <= 1)) continue;
-    const hw = (lay.width / 2) * frame.scale;
-    const hh = cardLift(lay, frame.scale);
+    const box = drawnCardBox(frame, g, tm, vp, p);
+    if (!box) continue;
     // The square INSCRIBED in the card: a badge under it is BURIED, one under the
     // rest of the box only under the card's END (the self-check's two counters).
-    const inner = Math.min(hw, hh);
-    const box = { cx: p.x, cy: p.y - hh, hw, hh };
+    const inner = Math.min(box.hw, box.hh);
     cards.push({ box, ink: { cx: box.cx, cy: box.cy, hw: inner, hh: inner }, focused: g.focused, key: g.key });
   }
   return {
@@ -111,7 +105,7 @@ export interface PlacementReport {
   frame: Omit<PlacementFrame, "focus" | "exempt" | "chips"> & {
     focus: string[]; exempt: string[];
     chips: { members: { id: string; room: string; pos: { x: number; y: number; z: number } }[];
-             text: PlacementFrame["chips"]["text"]; budget: number };
+             text: PlacementFrame["chips"]["text"]; budget: number; cover?: PlacementFrame["chips"]["cover"] };
   };
   shown: ReportBadge[];
   boxes: Box[];
@@ -161,6 +155,7 @@ export function placementReport(a: {
       chips: {
         members: f.chips.members.map((m) => ({ id: m.id, room: m.room, pos: { x: r(m.pos.x), y: r(m.pos.y), z: r(m.pos.z) } })),
         text: f.chips.text, budget: f.chips.budget,
+        ...(f.chips.cover?.length ? { cover: f.chips.cover.map((c) => ({ left: r(c.left), top: r(c.top), right: r(c.right), bottom: r(c.bottom) })) } : {}),
       },
     },
     shown: a.shown.map((b) => ({

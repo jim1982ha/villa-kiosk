@@ -16,6 +16,7 @@ const { roomLook } = await import("@/babylon/summaryLook");
 const { EMPTY_FM_DATA } = await import("@/fm/fmTypes");
 const { buildMonthlyRecap } = await import("@/fm/fmDocuments");
 const { UnavailableByDesign } = await import("@/ha/unavailableByDesign");
+const { lostPartsWords } = await import("@/utils/deviceHealth");
 
 const SINCE = "2026-11-10T10:02:00.000Z";
 const ent = (id, state, name, at = "2026-11-13T08:00:00.000Z") =>
@@ -65,10 +66,10 @@ ck("its health is partly lost, the person detection only: never a diagnostic, co
 ck("  ...the device itself still reads alive: not on the offline list, its badge's face not faded",
    !dead.devices.unavailable.includes(CAM) && dead.devices.partlyLost.join() === CAM
      && !dead.look.unavailable && dead.look.face !== "unavailable", { look: dead.look.face, unavailable: dead.devices.unavailable });
-ck("  ...ONE Cockpit card, the camera's, in its room, saying \"Person detection unavailable\" in the grey of lost contact, since 10/11 10:02",
+ck("  ...ONE Cockpit card, the camera's, in its room, saying \"Person detection not answering, the device itself works\" in the grey of lost contact, since 10/11 10:02",
    dead.view.attentionGroups.length === 1 && dead.view.attentionGroups[0].title === "Shed camera"
      && dead.view.attentionGroups[0].room === "Shed" && dead.view.attentionGroups[0].entityId === CAM
-     && dead.card.status.map((s) => `${s.text}|${s.tone}`).join() === "Person detection unavailable|tone-quiet"
+     && dead.card.status.map((s) => `${s.text}|${s.tone}`).join() === "Person detection not answering, the device itself works|tone-quiet"
      && dead.view.attentionGroups[0].items[0].openedAt === SINCE,
    { groups: dead.view.attentionGroups.map((g) => [g.title, g.room, g.entityId]), card: dead.card });
 ck("  ...its window's warning sign grey, its badge's corner the grey \"?\", its room's number grey",
@@ -86,7 +87,7 @@ ck("  ...the Recap's \"All devices reporting\" says so, a warning naming the cam
 ck("  ...the monthly recap's \"Device availability\" names it too, its parts in the card's words, still counted as reporting",
    dead.monthly.join("\n") === ["- **1 of 1** devices reporting (100.0%)",
      "- 1 device partly unavailable, listed under \"Open issues\" in the Cockpit's Inbox:",
-     "  - Shed camera: Person detection unavailable"].join("\n"), dead.monthly);
+     "  - Shed camera: Person detection not answering, the device itself works"].join("\n"), dead.monthly);
 const notShown = villa([ent(CAM, "idle", "Shed camera"), ent(PERSON, "unavailable", "Shed camera Person detection", SINCE)],
   EMPTY_FM_DATA, () => false);
 ck("  ...a profile that may not open the camera: nothing partly unavailable in its monthly recap",
@@ -104,7 +105,7 @@ const flat = villa([ent(CAM, "idle", "Shed camera"), ent(PERSON, "off", "Shed ca
   ent(BATTERY, "unavailable", "Shed camera Battery", SINCE)]);
 ck("its dead battery is listed under \"Also on this device\" AND is the card, the \"?\" and the room's number",
    flat.also.includes(BATTERY) && JSON.stringify(flat.devices.healthOf(CAM)) === JSON.stringify({ kind: "partly", lost: [BATTERY] })
-     && flat.card?.status.map((x) => x.text).join() === "Battery unavailable" && flat.look.mark === "lost",
+     && flat.card?.status.map((x) => x.text).join() === "Battery not answering, the device itself works" && flat.look.mark === "lost",
    { also: flat.also, health: flat.devices.healthOf(CAM), card: flat.card, mark: flat.look.mark });
 ck("  ...and the parts it never asks are never listed: no signal strength, no restart button, no hidden switch",
    [SIGNAL, RESTART, PRIVACY].every((id) => !flat.also.includes(id)), flat.also);
@@ -142,5 +143,10 @@ ck("a control never used counts as a dead part until it is put on \"Unavailable 
 ck("  ...on the list: the camera alive, no card, no partly-unavailable line in the Recap",
    onList.devices.healthOf(CAM).kind === "alive" && onList.card === null && onList.devices.partlyLost.length === 0
      && onList.recap.state !== "warn", { health: onList.devices.healthOf(CAM), recap: onList.recap });
+
+// four dead parts are four names, never "4 parts unavailable" (owner, 2026-11-14: "it should be more explicit")
+ck("four dead parts: each named, and the device said to work",
+   lostPartsWords(["Person detection", "Cell motion detection", "Motion alarm", "Move to preset"])
+     === "Person detection, Cell motion detection, Motion alarm and Move to preset not answering, the device itself works");
 
 done("✅ one health per device: a dead part of a live device is its card, its grey sign and its grey \"?\"");

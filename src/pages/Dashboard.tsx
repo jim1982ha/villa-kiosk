@@ -11,6 +11,7 @@ import SummaryGroupPanel from "@/components/panels/SummaryGroupPanel";
 import { Layers } from "lucide-react";
 import HUD from "@/components/hud/HUD";
 import RoomLabel from "@/components/hud/RoomLabel";
+import { useMapCover, type CoverRect } from "@/components/hud/mapCover";
 import ConnectionBanner from "@/components/hud/ConnectionBanner";
 import UpdateBanner from "@/components/hud/UpdateBanner";
 import AnnouncementNotice from "@/components/hud/AnnouncementNotice";
@@ -421,6 +422,10 @@ export default function Dashboard() {
   const marks = villa.marks;
   const isHidden = marks.isHidden;
   useEffect(() => { manager?.setDeviceMarks(marks); }, [manager, marks]);
+  // What the HUD covers of the map (its bars, rail and tiles, measured off the page): room chips are drawn clear of it.
+  const [mapCover, setMapCover] = useState<CoverRect[]>([]);
+  useMapCover(setMapCover);
+  useEffect(() => { manager?.setMapCover(mapCover); }, [manager, mapCover]);
   // ...and every window (the open one's header, the room chooser) as THIS profile sees the villa: its badge's amber
   // "!" is a card its own Cockpit lists, as the window's warning sign reads (VillaModel marksFor). The map is the same
   // for everyone.
