@@ -151,6 +151,10 @@ export const STATUS_COLOR = {
    *  two it spent motoring — the one reading that palette exists to keep
    *  separate. See TRANSITIONAL_STATES. */
   transitional: "var(--status-pending)",
+  /** At rest and shut: a curtain closed, a fan off. ⚠️ NOT THE IDLE TRACK (owner, 2026-11-13: a curtain's "Closed"
+   *  was the dark idle grey, too close to the grey of "Unavailable" beside it): the purple of the locks' own category,
+   *  closed as a locked door is, while moving stays the teal a lock has locking (`transitional`). */
+  shut: "var(--cat-access-control)",
   /** Home Assistant has lost contact ("unavailable") — never "unknown", which
    *  is a device answering with no value (contactOf "no-value": idle).
    *  ⚠️ GREY, NO LONGER AMBER (owner, 2026-10-22: badge proposal 2): amber is a
@@ -256,7 +260,9 @@ const DOMAIN_STATES: Record<string, Record<string, StatusKey>> = {
   // cover's "open" — the one state whose meaning genuinely inverts between
   // two domains, and the reason this table has to be domain-aware at all.
   lock: { locked: "active", unlocked: "alert", open: "alert" },
-  cover: { open: "active", closed: "idle" },
+  cover: { open: "active", closed: "shut" },
+  // ⚠️ A FAN AS A CURTAIN (owner, 2026-11-13): turning is moving, the lock's teal; off is shut
+  fan: { on: "transitional", off: "shut" },
   valve: { open: "active", closed: "idle" },
   alarm_control_panel: {
     disarmed: "idle",
@@ -346,6 +352,7 @@ export const STATUS_PILL_CLASS: Record<StatusKey, string> = {
   active: "on",
   idle: "off",
   transitional: "transitional",
+  shut: "shut",
   unavailable: "unavailable",
   alert: "danger",
 };

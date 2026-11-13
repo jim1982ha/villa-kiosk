@@ -129,4 +129,12 @@ ck("  ...so the one difference with the map: in use, red in the window and calm 
    ["binary_sensor/door door on", "binary_sensor/motion hall on", "lock front unlocked"]
      .every((r) => { const s = seen.find((x) => x.row === r); return s && s.window && s.mark === "active" && s.health === "ok" && !s.cockpit; }));
 
+// owner, 2026-11-13: a curtain's "Closed" was the idle grey beside "Unavailable"; a fan is read as a curtain
+console.log("\n  a curtain and a fan, as a lock: moving teal, shut its own colour, never the grey of lost contact:");
+ck("curtain: open active, opening/closing moving, closed shut; fan: on moving, off shut; unavailable lost for both",
+   statusKeyFor("open", "cover") === "active" && statusKeyFor("opening", "cover") === "transitional"
+   && statusKeyFor("closing", "cover") === "transitional" && statusKeyFor("closed", "cover") === "shut"
+   && statusKeyFor("on", "fan") === "transitional" && statusKeyFor("off", "fan") === "shut"
+   && statusKeyFor("unavailable", "cover") === "unavailable" && statusKeyFor("unavailable", "fan") === "unavailable"
+   && statusKeyFor("locking", "lock") === "transitional");
 done("✅ one condition per device, projected by every surface");

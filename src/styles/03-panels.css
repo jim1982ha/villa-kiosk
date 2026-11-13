@@ -197,6 +197,7 @@ button[aria-busy="true"] { animation: command-waiting 0.9s ease-in-out infinite;
    else entirely — a tap acknowledged but not yet confirmed by HA. This one is
    a state HA has positively reported. */
 .status-pill.transitional { background: color-mix(in srgb, var(--status-pending) 20%, transparent); color: var(--status-pending); }
+.status-pill.shut { background: color-mix(in srgb, var(--cat-access-control) 20%, transparent); color: var(--cat-access-control); }
 /* Entity is unavailable/unknown to HA — a DISTINCT tone from both on/off and
    danger. Danger ("UNLOCKED"/"OPEN") asserts a known, confirmed state; showing
    that same tone when HA has actually LOST CONTACT with the device is a real
