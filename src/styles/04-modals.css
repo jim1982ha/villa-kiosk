@@ -500,6 +500,10 @@
 .config-search { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; padding-block: 0; }
 .config-search svg { flex: 0 0 auto; color: var(--text-dim); }
 .config-search input { flex: 1 1 auto; min-width: 0; align-self: stretch; }
+/* A chosen value shown in the closed box (SearchPicker `chosen`): the text's own colour, its link mark too, never the
+   hint's dim grey (owner, 2026-11-14: a chosen sensor looked unset). */
+.config-search-chosen svg { color: var(--text-primary); }
+.config-search-chosen input::placeholder { color: var(--text-primary); opacity: 1; }
 /* Compact variant — sized to sit inline at pill height (GroupedDevices'
    "add another member" row, alongside its 4px/8px-padded member pills)
    instead of the full standalone-field size above. */
