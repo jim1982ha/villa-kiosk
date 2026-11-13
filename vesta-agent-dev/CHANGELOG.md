@@ -1,3 +1,9 @@
+## 0.12.508
+
+- **Every message's "To:" says "FM", never "Facility Manager".** The daily report read "To: Facility Manager" just
+  above an alert reading "To: FM". Reports, notes and approvals now say "To:" the way alerts do, from the one set of
+  short words (the VESTA UI's own profile words); "Facility Manager" stays where a role is named in a sentence.
+
 ## 0.12.507
 
 - **A villa message that is over says "(closed)" in its title, as VESTA's closed alerts do.** A doorbell opened or not
