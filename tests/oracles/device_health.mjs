@@ -14,6 +14,7 @@ const { cockpitCard, cardTop } = await import("@/config/cockpitCard");
 const { deviceLook, storeLookSource, lookMarks, marksOf } = await import("@/utils/deviceActivity");
 const { roomLook } = await import("@/babylon/summaryLook");
 const { EMPTY_FM_DATA } = await import("@/fm/fmTypes");
+const { buildMonthlyRecap } = await import("@/fm/fmDocuments");
 
 const SINCE = "2026-11-10T10:02:00.000Z";
 const ent = (id, state, name, at = "2026-11-13T08:00:00.000Z") =>
@@ -42,8 +43,17 @@ function villa(states, fmData = EMPTY_FM_DATA, may = () => true) {
   return { devices, view, look, card, sign: issueSeverity(view.attentionGroups, [CAM], devices.deviceOf),
     // what its window lists under "Also on this device", and the Recap's "All devices reporting"
     also: deviceReadings(CAM, folding, facts.partsOf, entities),
-    recap: buildReadiness(entities, fmData, view, entityMap).checks.find((c) => c.id === "devices-online") };
+    recap: buildReadiness(entities, fmData, view, entityMap).checks.find((c) => c.id === "devices-online"),
+    // the monthly recap's "Device availability" section, made from the same readiness
+    monthly: monthlySection(buildMonthlyRecap({ fm: fmData, month: "2026-11", villaName: "V", now: Date.parse("2026-11-14T10:00:00Z"),
+      readiness: buildReadiness(entities, fmData, view, entityMap), cardOfRecord: () => undefined })) };
 }
+const monthlySection = (doc) => {
+  const lines = doc.split("\n"), at = lines.findIndex((l) => l.startsWith("## 4. Device availability"));
+  if (at < 0) return [];
+  const end = lines.findIndex((l, i) => i > at && l.trim() === "");
+  return lines.slice(at + 1, end < 0 ? undefined : end);
+};
 
 const dead = villa([ent(CAM, "idle", "Shed camera"), ent(PERSON, "unavailable", "Shed camera Person detection", SINCE),
   ent(SIGNAL, "unavailable", "Shed camera Signal"), ent(PRIVACY, "unavailable", "Shed camera Privacy"),
@@ -70,6 +80,16 @@ ck("  ...counted as a thing that needs attention, never the villa's danger: the 
 ck("  ...the Recap's \"All devices reporting\" says so, a warning naming the camera: \"1 device partly unavailable.\"",
    dead.recap.state === "warn" && dead.recap.detail === "1 device partly unavailable." && dead.recap.entityIds.join() === CAM
      && dead.recap.goes[0]?.word === "device", dead.recap);
+// ⚠️ THE MONTHLY RECAP STILL COUNTED ONLY OFFLINE DEVICES (2.496.800): its "Device availability" said all was well
+// while the weekly check above named the camera
+ck("  ...the monthly recap's \"Device availability\" names it too, its parts in the card's words, still counted as reporting",
+   dead.monthly.join("\n") === ["- **1 of 1** devices reporting (100.0%)",
+     "- 1 device partly unavailable, listed under \"Open issues\" in the Cockpit's Inbox:",
+     "  - Shed camera: Person detection unavailable"].join("\n"), dead.monthly);
+const notShown = villa([ent(CAM, "idle", "Shed camera"), ent(PERSON, "unavailable", "Shed camera Person detection", SINCE)],
+  EMPTY_FM_DATA, () => false);
+ck("  ...a profile that may not open the camera: nothing partly unavailable in its monthly recap",
+   !notShown.monthly.some((l) => /partly|Shed camera/.test(l)), notShown.monthly);
 // a profile that may open only what is on the map (listedDevices without listUnmappedDevices): the dead part is not on
 // the map, its device is, and the map shows everyone the device's "?"
 const placedOnly = villa([ent(CAM, "idle", "Shed camera"), ent(PERSON, "unavailable", "Shed camera Person detection", SINCE)],

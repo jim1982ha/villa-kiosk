@@ -151,6 +151,17 @@ export function sinceEntities(opts: { fmData: FmData; devices: VillaDevices; ent
     ...alarmIds(devices, entities, entityMap)])].sort();
 }
 
+/** What a device with dead parts says of them, by their names: "Person detection unavailable" (deviceHealth.lostPartsWords)
+ *  — Open issues' line for the device, and the monthly recap's (fm/readiness availability.partly). "" for a device
+ *  with no lost part. */
+export function lostPartsLine(devices: VillaDevices, id: string, entityMap: Record<string, EntityMapping>,
+  entities: Record<string, HassEntity>): string {
+  const lost = lostPartsOf(devices, id);
+  if (!lost.length) return "";
+  const device = [labelOf(id, entityMap, entities), entities[id]?.attributes?.friendly_name as string | undefined];
+  return lostPartsWords(lost.map((p) => partName(labelOf(p, entityMap, entities), device)));
+}
+
 /** The parts of a device that answers while they do not (VillaDevices.healthOf "partly"); [] for any other health. */
 function lostPartsOf(devices: VillaDevices, id: string): readonly string[] {
   const h = devices.healthOf(id);
@@ -503,7 +514,6 @@ export function attentionOf(opts: AttentionInputs): Pick<VillaProblems, "attenti
   for (const id of devices.partlyLost) {
     const lost = lostPartsOf(devices, id);
     if (!lost.length) continue;
-    const device = [labelOf(id, entityMap, entities), entities[id]?.attributes?.friendly_name as string | undefined];
     const began = lost.map((p) => beganAt(p, entities[p], sinceOf))
       .sort((a, b) => (Date.parse(a.openedAt ?? "") || Infinity) - (Date.parse(b.openedAt ?? "") || Infinity))[0];
     items.push({
@@ -511,7 +521,7 @@ export function attentionOf(opts: AttentionInputs): Pick<VillaProblems, "attenti
       kind: "unavailable",
       critical: devices.isCritical(id),
       title: labelOf(id, entityMap, entities),
-      detail: lostPartsWords(lost.map((p) => partName(labelOf(p, entityMap, entities), device))),
+      detail: lostPartsLine(devices, id, entityMap, entities),
       source: "live",
       room: deviceRoom(resolvedRooms, id),
       entityId: lost[0],

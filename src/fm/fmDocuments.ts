@@ -273,6 +273,14 @@ export function buildMonthlyRecap(input: RecapInput): string {
     // not a fault record; it is a row of Messages' Open issues, and the readiness check names it below.
     if (off > 0) L.push(`- ${countOf(off, "device")} currently offline, listed under "Open issues" in the Cockpit's Inbox, `
       + `and under "${AVAILABILITY_CHECK_LABEL}" below.`);
+    // ⚠️ A DEVICE WITH A DEAD PART WAS LEFT OUT (2.496.800): the weekly check counted it ("1 device partly
+    // unavailable") while this section said every device was fine. It still reports, so it is not offline: named here
+    // with its parts, in Open issues' words.
+    const partly = avail.partly;
+    if (partly.length) {
+      L.push(`- ${countOf(partly.length, "device")} partly unavailable, listed under "Open issues" in the Cockpit's Inbox:`);
+      for (const p of partly) L.push(`  - ${p.name}: ${p.parts}`);
+    }
     L.push("");
   }
 

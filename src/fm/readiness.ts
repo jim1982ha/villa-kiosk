@@ -20,7 +20,8 @@ import { locksGroup, lightsGroup, type SummaryGroup } from "@/config/summaryGrou
 import type { EntityMapping } from "@/types/scene.types";
 import { AirVent, Cctv, WifiOff } from "lucide-react";
 import type { FmData } from "./fmTypes";
-import type { VillaAttention } from "@/config/attention";
+import { lostPartsLine, type VillaAttention } from "@/config/attention";
+import { labelOf } from "@/config/EntityMap";
 import type { Tone } from "./tone";
 import { countOf } from "@/utils/countOf";
 import { isDomain } from "@/utils/entityDomain";
@@ -98,7 +99,13 @@ export interface ReadinessResult {
   passed: number;
   total: number;
   /** The devices the "All devices reporting" check covers, and those of them not reporting — the recap's §4. */
-  availability: { total: number; offline: readonly string[] };
+  availability: {
+    total: number;
+    offline: readonly string[];
+    /** Those answering while some of their parts do not (VillaDevices.partlyLost): reporting, never offline — each
+     *  named, with its parts as Open issues says them ("Person detection unavailable"). */
+    partly: readonly { id: string; name: string; parts: string }[];
+  };
   /** Worst state across all checks — what the headline shows. */
   overall: CheckState;
 }
@@ -342,7 +349,8 @@ export function buildReadiness(
   const passed = checks.filter((c) => c.state === "pass").length;
   const overall: CheckState = checks.some((c) => c.state === "fail")
     ? "fail" : checks.some((c) => c.state === "warn") ? "warn" : "pass";
-  return { checks, passed, total: checks.length, overall, availability: { total: devices.ids.length, offline } };
+  return { checks, passed, total: checks.length, overall, availability: { total: devices.ids.length, offline,
+    partly: partly.map((id) => ({ id, name: labelOf(id, entityMap, entities), parts: lostPartsLine(devices, id, entityMap, entities) })) } };
 }
 
 /** A device the villa's system does not have, as a state: lost contact (contactOf), no reading. */
