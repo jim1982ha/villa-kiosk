@@ -153,7 +153,11 @@ def test_a_message_that_is_over_has_its_text_struck_as_a_closed_alerts():
            "{% include 'vesta_message.jinja' ignore missing %}")
     title, to, text, status = "🔔 Visitor at Parking Doorbell", "Owner & FM", "Someone is at the door.", "✅ Opened"
     got = _env().from_string(src).render(t=title, r=to, x=text, s=status, k=True)
-    assert got == _expected(title, to, text, status).replace(_styled(text, "item"), _styled(text, "struck")), got
+    # …and its title says "(closed)" as a closed alert's (owner, 2026-11-13), in the one word (OVER_WORD)
+    from vesta_shared.message_format import OVER_WORD, title_with
+    want = _expected(title, to, text, status).replace(_styled(text, "item"), _styled(text, "struck"))
+    assert got == want.replace(_styled(title, "title"), _styled(title_with(title, OVER_WORD), "title"), 1), got
+    assert title_with(title, OVER_WORD).endswith(" (closed)")
     assert _env().from_string(src).render(t=title, r=to, x=text, s=status, k=False) == _expected(title, to, text, status)
 
 

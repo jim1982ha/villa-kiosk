@@ -38,7 +38,7 @@ import logging
 import re
 
 from vesta_shared import status_words
-from vesta_shared.message_format import TO, document, status_head
+from vesta_shared.message_format import OVER_WORD, TO, document, status_head, title_with
 
 log = logging.getLogger("vesta.villa_messages")
 
@@ -126,6 +126,10 @@ class VillaMessages:
             title, to, body, status = shape(data.get("message"))
             if not title:
                 return 0
+            # "(closed)" is VESTA's word, never translated: the title is translated without it, then said again
+            done = title_with("", OVER_WORD)
+            ended = over(data.get("message")) and title.endswith(done)
+            title = title[:-len(done)] if ended else title
             lines = [title] + body + status
             shown, want = self.translations.lines(lang, lines, self.names())
             if want:
@@ -134,7 +138,8 @@ class VillaMessages:
             if shown == lines:
                 return 0                      # nothing in this language yet: the villa's English stays
             mid_lines, said = shown[1:1 + len(body)], shown[1 + len(body):]
-            page = document(shown[0], to, [(None, ["\n".join(mid_lines)]), (status_words.label(lang), said)])
+            page = document(title_with(shown[0], OVER_WORD) if ended else shown[0], to,
+                            [(None, ["\n".join(mid_lines)]), (status_words.label(lang), said)])
             try:
                 ok = await self.edit(chat, mid, page, keyboard(data.get("buttons")), struck=over(data.get("message")))
             except Exception:  # noqa: BLE001 — the villa's English stays

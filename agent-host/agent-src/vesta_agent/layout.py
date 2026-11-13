@@ -24,7 +24,7 @@ from __future__ import annotations
 from datetime import date, datetime
 
 from vesta_shared.message_format import (CLOSED_STAGES, INCIDENT_TITLE, MARK_ICONS, STAGE_ICONS, TO, UNTITLED, document,
-                                         parts as shape_parts, status_head, STATUS_BREAK)
+                                         parts as shape_parts, status_head, STATUS_BREAK, title_with)
 from vesta_shared import status_words
 from vesta_shared.limits import limit
 from vesta_shared.messaging import split_message, telegram_message_chars, tg_len
@@ -98,7 +98,7 @@ def head_of(h) -> dict | None:
 
 def title_line(h: dict) -> str:
     """A heading's first line: "#9-P2 (existing)", "Approval request"."""
-    return f"{h['title']} ({h['word']})" if h.get("word") else h["title"]
+    return title_with(h["title"], h.get("word"))
 
 
 def head_text(h) -> str:

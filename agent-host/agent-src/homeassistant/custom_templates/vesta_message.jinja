@@ -37,7 +37,8 @@
     chases; the task rule that drew one sent nothing since 2026-08-25).
 
     A message that is over sets vm_struck true (owner, 2026-11-09: a doorbell opened or not answered): its text is
-    struck, as a closed alert's (message_format.TELEGRAM "struck"); the VESTA Agent's redraw keeps it struck.
+    struck, as a closed alert's (message_format.TELEGRAM "struck"), and its title ends "(closed)" as a closed alert's
+    does (vm_over_title: message_format.OVER_WORD, the one word; owner, 2026-11-13); the VESTA Agent's redraw keeps both.
 
     The tags are the agent's style table (message_format.TELEGRAM: title bold, item blockquote, note blockquote +
     italic); its test (tests/test_ha_message_layout.py) fails when this file and the agent's layout or words differ.
@@ -52,6 +53,7 @@
 {%- set vm_words = {"new": "New alert", "existing": "Still open", "watch": "Cleared on {time}.", "closed": "Cleared on {time}."} -%}
 {%- set vm_time_format = "%d/%m/%Y %H:%M" -%}
 {%- set vm_status_break = "\n" -%}
+{%- set vm_over_title = " (closed)" -%}
 {#- END WORDS -#}
 {%- set vm_by = vm_priority_to.get(vm_priority | default('', true) | string | trim | upper) -%}
 {%- set vm_r = vm_to | default('', true) | string | trim -%}
@@ -73,7 +75,7 @@
 {%- set vm_w = vm_w | replace('{time}', vm_at) if vm_at else vm_w | replace(' on {time}', '') -%}
 {%- set vm_s = vm_icons[vm_g] ~ ' ' ~ (vm_s or vm_w) -%}
 {%- endif -%}
-<b>{{ vm_escape(vm_title) }}</b>
+<b>{{ vm_escape(vm_title) }}{% if vm_struck | default(false) %}{{ vm_over_title }}{% endif %}</b>
 To: {{ vm_escape(vm_r) }}
 {%- if vm_t %}
 <blockquote>{% if vm_struck | default(false) %}<s>{{ vm_escape(vm_t) }}</s>{% else %}{{ vm_escape(vm_t) }}{% endif %}</blockquote>

@@ -261,6 +261,19 @@ STEPS: dict[str, Step] = {
     "reopened": Step("Reopen request sent", "existing", timed=True),
     "closed": Step("Closing note sent", "closed", timed=False),
 }
+
+
+def title_with(title: str, word: str | None) -> str:
+    """A title with where its message stands, the ONE way a title says it: "#9-P2 (existing)", "#92-P2 (closed)", and
+    the villa's own message that is over, "🔔 Visitor at Parking Doorbell (closed)" (OVER_WORD)."""
+    return f"{title} ({word})" if word else title
+
+
+#: The word a title ends with once its message is over: the closing step's (STEPS["closed"]) — an alert's "(closed)",
+#: and the villa's own message the villa struck (vesta_message.jinja vm_over_title; owner, 2026-11-13: "the same
+#: `(closed)` text in the telegram notification title … changing the `Closed` word at 1 source would change it
+#: consistently everywhere").
+OVER_WORD = STEPS["closed"].title
 #: How often a step repeated in a row, after its moment: "Still-there alert sent 06/11/2026 18:35, 3 times (to: Owner &
 #: FM)" (status_words writes each other language's, in the desk's own "Still there: 6 times since …" words).
 #: ⚠️ ONE LINE PER PROBLEM (owner, 2026-11-06, #125-P1): four cameras saw one person within a minute, the villa's rule
@@ -706,6 +719,7 @@ def jinja_words() -> str:
         f"{{%- set vm_words = {lit(STAGE_WORDS)} -%}}",
         f"{{%- set vm_time_format = {lit(MOMENT_FORMAT)} -%}}",
         f"{{%- set vm_status_break = {lit(STATUS_BREAK)} -%}}",
+        f"{{%- set vm_over_title = {lit(title_with('', OVER_WORD))} -%}}",
         JINJA_END,
     ])
 
