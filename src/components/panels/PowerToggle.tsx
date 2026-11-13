@@ -1,7 +1,11 @@
 // src/components/panels/PowerToggle.tsx
-// The big on/off button shared by the light, fan, switch and media panels.
-// One component so the markup, the "on" styling and the Power icon live in a
-// single place instead of being copy-pasted into every panel.
+// The big Turn on / Turn off button shared by the light, fan, switch, A/C and media panels.
+// One component so the markup, the styling and the Power icon live in a single place.
+//
+// ⚠️ AN ACTION, AS THE LOCK'S (owner, 2026-11-13: "there is no pill showing the current state for the Fan as it
+// appear for other device"): it said the state ("On") in the state's colour while a lock and a blind said theirs in a
+// pill and named their action on the button. The window's pill says the state now (ControlFrame, every window), and
+// this button says what a tap does, in the colour of where it leads (stateColors.actionColor), as "Unlock door…".
 
 import type { ReactNode } from "react";
 import { Power } from "lucide-react";
@@ -10,12 +14,12 @@ import { useAskFirst } from "@/hooks/useAskFirst";
 import type { SwitchAsk } from "@/utils/devicePower";
 import { tapFeedback } from "@/utils/haptics";
 import InlineConfirm from "@/components/common/InlineConfirm";
-import { STATUS_COLOR, type StatusKey } from "@/utils/stateColors";
+
 
 interface Props {
   on: boolean;
-  /** Its state's meaning (stateColors.powerStatus): the button's colour, purple on, green off. */
-  status: StatusKey;
+  /** The colour of where a tap leads (stateColors.actionColor: off when on, on when off). */
+  leads: string;
   onClick: () => unknown;
   /** devicePower.deviceSwitch's `ask` — the device's own answer to "ask
    *  before throwing it": always for an unlock, and whenever the owner set
@@ -44,7 +48,7 @@ export function PowerSection({ beside, ...props }: Omit<Props, "compact"> & { be
   );
 }
 
-export default function PowerToggle({ on, status, onClick, ask = null, compact = false }: Props) {
+export default function PowerToggle({ on, leads, onClick, ask = null, compact = false }: Props) {
   // `on` is derived purely from HA's live entity state, so the button gave no
   // feedback at all for the round-trip between a tap and the real
   // state_changed event landing — on a slow link that read as "did that even
@@ -57,11 +61,7 @@ export default function PowerToggle({ on, status, onClick, ask = null, compact =
   // usePendingAck now, shared with the lock panel.
   const { pending, markPending } = usePendingAck(on);
 
-  // ⚠️ THE STATE'S COLOUR (owner, 2026-11-13: "the big On button follows the state"): the table's (stateColors
-  // STATUS_COLOR), purple on, green off, as its history bar. It was the device's category colour (--device-*), a
-  // category colour being a device's identity, never a state. See .big-toggle.power in 03-panels.css.
-
-  const { asking, request, confirm, cancel } = useAskFirst(ask, () => {
+    const { asking, request, confirm, cancel } = useAskFirst(ask, () => {
     tapFeedback();
     markPending(onClick());
   });
@@ -72,12 +72,12 @@ export default function PowerToggle({ on, status, onClick, ask = null, compact =
 
   return (
     <button
-      className={`big-toggle power${compact ? " compact" : ""}${on ? " on" : ""}`}
-      style={{ ["--state" as string]: STATUS_COLOR[status] }}
+      className={`big-toggle action${compact ? " compact" : ""}`}
+      style={{ ["--state" as string]: leads }}
       onClick={request}
       aria-busy={pending || undefined}
     >
-      <Power size={compact ? 20 : 24} /> {on ? "On" : "Off"}
+      <Power size={compact ? 20 : 24} /> {on ? "Turn off" : "Turn on"}
     </button>
   );
 }

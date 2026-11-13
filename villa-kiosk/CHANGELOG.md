@@ -1,3 +1,13 @@
+## 2.496.796
+
+- **Every device window shows its state the same way.** A light, a fan, a switch, a TV and an A/C now show a state pill
+  at the top ("On", "Off", "Cool"), as a lock and a blind already did, drawn once for every window by the same piece.
+  Their big button now says what a tap does ("Turn off", "Turn on"), in the colour of where it leads, as "Unlock
+  door…" does.
+- **One pill style everywhere.** Every pill has the same size (a sensor's was larger), and only an alarm or lost
+  contact is in capitals ("LEAK DETECTED", "UNAVAILABLE"); every other state is written as it is said ("Locked",
+  "Open", "On"). The lock's pill said "LOCKED" beside a blind's "Open".
+
 ## 2.496.795
 
 - **A button that moves a device wears the colour of where it leads.** "Unlock door…" is now the amber of "unlocked"

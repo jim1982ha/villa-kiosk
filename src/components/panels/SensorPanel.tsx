@@ -37,7 +37,7 @@ export default function SensorPanel({ entity, mapping, onClose }: PanelProps) {
     <BasePanel title={mapping.label} entityId={mapping.entityId} icon={icon} onClose={onClose}
       history={<ReadingHistory entityId={mapping.entityId} mappingType={mapping.type} />}>
       {/* its reading, unless contact is lost: then the frame's notice (BasePanel), as in every device window */}
-      {r.contact !== "lost" && (r.pill ? <ReadingPill r={r} icon={BinaryIcon} large /> : (
+      {r.contact !== "lost" && (r.pill ? <ReadingPill r={r} icon={BinaryIcon} /> : (
       <div className="reading-large">
         {/* ⚠️ THE SAME RULE THE BADGE USES (utils/entityValue, inside
             config/reading): a 6570.989 W sensor reads "6.6 kW" here as on

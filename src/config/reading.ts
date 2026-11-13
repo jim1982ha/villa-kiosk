@@ -29,7 +29,7 @@ import { binaryLook } from "./binaryLook";
 import { stateLabelFor } from "./BinarySensorClasses";
 import { deviceRowText, formatSensorParts } from "@/utils/entityValue";
 import { domainOf } from "@/utils/entityDomain";
-import { contactOf, criticalStatus, isNoHistory, isUnavailable, NO_RECORD, NO_RECORD_WORDS, NOT_KEPT, NOT_KEPT_COLOR, NOT_KEPT_WORDS, NOT_IN_HA, paintState, statusKeyFor, STATUS_COLOR, STATUS_PILL_CLASS, type StatusKey } from "@/utils/stateColors";
+import { contactOf, criticalStatus, isNoHistory, isUnavailable, NO_RECORD, NO_RECORD_WORDS, NOT_KEPT, NOT_KEPT_COLOR, NOT_KEPT_WORDS, NOT_IN_HA, paintState, powerStatus, statusKeyFor, STATUS_COLOR, STATUS_PILL_CLASS, type StatusKey } from "@/utils/stateColors";
 
 /** The stretch older than the villa's system keeps, as a history bar reads it (historySource.keptFrom). */
 export { NOT_KEPT, NOT_KEPT_WORDS, NO_RECORD, NO_RECORD_WORDS };
@@ -91,7 +91,7 @@ export function readingOf(
   const lost = contact === "lost";
   // ⚠️ MISSING IS NOT "UNAVAILABLE" (architecture review 2026-10-31 round 12 #1): an entity the villa's system does not
   // have at all is lost contact too (no controls, no claim), but said in the word every surface uses for it
-  const lostWord = entity === undefined ? NOT_IN_HA.toUpperCase() : "UNAVAILABLE";
+  const lostWord = entity === undefined ? NOT_IN_HA : "Unavailable";
   const noValue = contact === "no-value";
   const deviceClass = entity?.attributes.device_class as string | undefined;
   if (kind === "binary") {
@@ -102,7 +102,9 @@ export function readingOf(
     const words = look.word(state);
     return {
       kind, unavailable, contact, level,
-      value: lost ? lostWord : noValue ? "UNKNOWN" : alarm ? words.toUpperCase() : words,
+      // ⚠️ SAID ONCE, SHOUTED BY ITS PILL (owner, 2026-11-13: one style in every window): an alarm's and a lost
+      // device's pill is in capitals by its tone (03-panels .status-pill.danger/.unavailable), never by its words
+      value: lost ? lostWord : noValue ? "Unknown" : words,
       unit: "",
       // no value is the empty track's tone (stateColors STATUS_PILL_CLASS.noValue): nothing to say, nothing wrong
       pill: lost ? STATUS_PILL_CLASS.unavailable : noValue ? STATUS_PILL_CLASS.noValue : alarm ? STATUS_PILL_CLASS.alert : look.tone(state),
@@ -116,7 +118,7 @@ export function readingOf(
   const parts = entity ? formatSensorParts(entity) : { value: "", unit: "" };
   return {
     kind, unavailable, contact, level,
-    value: lost ? lostWord : noValue ? "UNKNOWN" : parts.value || (entity?.state ?? "—"),
+    value: lost ? lostWord : noValue ? "Unknown" : parts.value || (entity?.state ?? "—"),
     unit: unavailable ? "" : parts.unit,
     pill: lost ? STATUS_PILL_CLASS.unavailable : noValue ? STATUS_PILL_CLASS.noValue : null,
     alarm: lost || level === "danger",
@@ -221,12 +223,24 @@ export function lostColor(critical: boolean): string {
   return STATUS_COLOR[criticalStatus("unavailable", critical)];
 }
 
-/** The lock window's pill: the state the lock actually reported, shouted
- *  ("UNLOCKING", "JAMMED"), "UNKNOWN" when there is no lock entity at all.
- *  A lock reporting "unknown" (no value, its device answering) takes the empty
- *  track's tone, never the grey of a lost lock (statusKeyFor). */
+/** The lock window's pill: the state the lock actually reported ("Unlocking", "Jammed"), "Unknown" when there is no
+ *  lock entity at all. A lock reporting "unknown" (no value, its device answering) takes the empty track's tone, never
+ *  the grey of a lost lock (statusKeyFor). ⚠️ NOT SHOUTED BY ITS WORDS (owner, 2026-11-13: "LOCKED" beside a blind's
+ *  "Open"): an alarm's pill is in capitals by its tone, every window alike (03-panels .status-pill). */
 export function lockPill(id: string, state: string | undefined): StatePill {
-  return { text: (state ?? "unknown").replace(/_/g, " ").toUpperCase(), tone: pillTone(id, state) };
+  const words = (state ?? "unknown").replace(/_/g, " ");
+  return { text: words.charAt(0).toUpperCase() + words.slice(1), tone: pillTone(id, state) };
+}
+
+/** A device window's state pill when its panel gives none of its own (ControlFrame): a device with a switch says On
+ *  or Off (its power, as its history bar colours it: stateColors.powerStatus), any other its state in its words
+ *  ("Cool", "Playing"). ⚠️ EVERY WINDOW SAYS ITS STATE THE SAME WAY (owner, 2026-11-13: "there is no pill showing the
+ *  current state for the Fan as it appear for other device"): a light, a fan, a switch, a player and an A/C said it
+ *  only on their power button, a lock and a blind in a pill above their buttons. */
+export function controlPill(id: string, entity: HassEntity | undefined, power: "on" | "off" | "unknown" | null): StatePill {
+  if (power && power !== "unknown") return { text: power === "on" ? "On" : "Off", tone: STATUS_PILL_CLASS[powerStatus(power, entity?.state, id)] };
+  const dc = entity?.attributes.device_class as string | undefined;
+  return { text: entity ? stateWords(id, dc)(entity.state) : NOT_IN_HA, tone: pillTone(id, entity?.state) };
 }
 
 /** The cover window's pill: "Open", "Partially open (40%)", "Closed" —
