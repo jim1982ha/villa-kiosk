@@ -534,14 +534,15 @@ def test_around_says_a_restart_once_and_keeps_a_device_that_did_not_come_back():
     assert "03:59:41  Thermometer (sensor.example_thermometer)  — with the restart, not back since" in text, text
     assert "06:01:25  Next Relay" in text and "Next Relay (switch.next_relay)  —" not in text   # its own drop: plain
     # ⚠️ THE NIGHTLY CHECK READS THE SAME ROWS THE SAME WAY (architecture review, 2026-10-15: one answer,
-    # vesta_shared.device_state.RestartDrops): neither restart drop is a reconnect of the device's own, Next Relay's is
+    # vesta_shared.restart.RestartDrops): neither restart drop is a reconnect of the device's own, Next Relay's is
     import importlib.util
     spec = importlib.util.spec_from_file_location(
         "pm_features", os.path.join(STARTER_SKILLS, "preventive-maintenance", "scripts", "features.py"))
     features = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(features)
     rows = Restarted().logbook(T(9, 2), T(9, 15))
-    flips = features.flips_per_day(rows, "UTC", investigate.th("restart_settle_minutes"))
+    from vesta_shared import restart
+    flips = features.flips_per_day(rows, "UTC", restart.minutes())
     assert "switch.spa" not in flips and "sensor.example_thermometer" not in flips and "switch.next_relay" in flips, flips
 
 

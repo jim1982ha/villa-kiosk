@@ -123,91 +123,25 @@ def out_since(client, entity_ids, states: dict, bad, now, minutes: float, unknow
 from .battery import charge as battery_charge  # noqa: E402,F401
 
 
+# Whether the villa's system is restarting, or was, belongs to vesta_shared.restart (its one owner, 2026-11-13). The
+# names stay here for a starter skill a villa edited (kept by updates) that still imports them.
 def ha_restarts(logbook: list[dict]) -> list:
-    """When Home Assistant said it had started, from logbook rows: its own entry ({"domain": "homeassistant",
-    "message": "started"}), the same on every install."""
-    from datetime import datetime
-    out = []
-    for r in logbook:
-        if r.get("domain") == "homeassistant" and str(r.get("message") or "").strip().lower() == "started":
-            try:
-                out.append(datetime.fromisoformat(str(r["when"])))
-            except (KeyError, ValueError):
-                continue
-    return sorted(out)
+    from .restart import Restarts
+    return Restarts(logbook, 0).starts
 
 
 def settling(logbook: list[dict], now, settle_minutes: float) -> bool:
-    """Is the villa's system still starting (its last "stopped" entry after its last "started"), or started less than
-    `settle_minutes` before `now`? Its integrations load in that time, and a device of one not loaded yet is "not
-    found" as a removed one is.
-
-    ⚠️ "MISSING" DURING A RESTART (owner, 2026-11-13: stopped 14:43, started 14:47, the LED Strip's integration loaded
-    at 14:52; the 5-minute check at 14:49 opened "LED Strip is missing from the villa's system", the weather station's
-    too, both back three minutes later)."""
-    from datetime import datetime, timedelta
-    last = {"started": None, "stopped": None}
-    for r in logbook:
-        said = str(r.get("message") or "").strip().lower()
-        if r.get("domain") != "homeassistant" or said not in last:
-            continue
-        try:
-            when = datetime.fromisoformat(str(r["when"]))
-        except (KeyError, ValueError):
-            continue
-        if last[said] is None or when > last[said]:
-            last[said] = when
-    started, stopped = last["started"], last["stopped"]
-    if stopped is not None and (started is None or stopped > started):
-        return True
-    return started is not None and now - started < timedelta(minutes=settle_minutes)
+    from .restart import Restarts
+    return Restarts(logbook, settle_minutes).settling(now)
 
 
 def in_restart(when, restarts: list, settle_minutes: float) -> bool:
-    """Is `when` within `settle_minutes` of a Home Assistant start (before it: the integrations loading; after it: the
-    devices answering again)?
-
-    ⚠️ HOME ASSISTANT SAYS WHEN IT RESTARTED (2026-10-13): a minute with 20 entities dropping together was taken for a
-    restart — but one Wi-Fi relay is nine entities, so three relays losing the same access point were "a restart" and
-    their drops never counted, while a small villa's real restart might stay under 20. Its own "started" entry decides."""
     from datetime import timedelta
     return any(abs(when - r) <= timedelta(minutes=settle_minutes) for r in restarts)
 
 
-class RestartDrops:
-    """The drops of a stretch of logbook rows, each judged against the villa system's restarts — ONE answer to "was
-    this drop the restart's?" for the nightly check and the investigation.
-
-    ⚠️ ONE ANSWER, TWO SKILLS (architecture review, 2026-10-15): the same rule was written into each on 2026-10-13,
-    differently — the night check left out every drop near a restart, the investigation only those that answered again.
-    Each now asks this, and keeps its own setting (restart_settle_minutes) and its own words:
-    - `at_restart`: the drop came with a restart (within the settle window) — never a device's own reconnect;
-    - `theirs`: …and the device answered again with it — the restart's alone, nothing to list;
-    - `kept_down`: …and it did not answer again — the restart took it down, said as such."""
-
-    def __init__(self, rows: list[dict], settle_minutes: float):
-        from datetime import datetime
-        self.restarts = ha_restarts(rows)
-        self.settle = settle_minutes
-        self._back: set[str] = set()
-        went = {r.get("entity_id") for r in rows if is_offline(r.get("state"))}
-        for r in rows:
-            eid = r.get("entity_id")
-            if eid in went and not is_offline(r.get("state")):
-                try:
-                    if self._near(datetime.fromisoformat(str(r["when"]))):
-                        self._back.add(eid)
-                except (KeyError, ValueError):
-                    continue
-
-    def _near(self, when) -> bool:
-        return bool(self.settle) and in_restart(when, self.restarts, self.settle)
-
-    def at_restart(self, entity_id: str, when) -> bool:
-        return self._near(when)
-
-    def theirs(self, entity_id: str, when) -> bool:
-        return self._near(when) and entity_id in self._back
-
-    def kept_down(self, entity_id: str, when) -> bool:
-        return self._near(when) and entity_id not in self._back
+def __getattr__(name: str):
+    if name == "RestartDrops":            # read when asked: vesta_shared.restart reads this module's is_offline
+        from .restart import RestartDrops
+        return RestartDrops
+    raise AttributeError(name)

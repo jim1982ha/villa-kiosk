@@ -37,7 +37,6 @@ behaviour:
   noise_per_hour: 30          # A device changing more often than this is background noise, not an event.
   state_lane_max: 8           # A device with more different states than this reports a value (a time, a text), not a state.
   coincide_s: 600             # How close in time an event must be to an unusual moment for the investigation page to show them side by side.
-  restart_settle_minutes: 10  # A device answering again within this long of a restart of the villa's system came back because of the restart, not on its own.
 
 # What the investigation says when the villa's system re-ran every rule itself — a reload of the rules, a start: ONE
 # line for all of them (the moments and how many rule runs follow it), never "Automation “X” ran … check whether it

@@ -40,8 +40,8 @@ from vesta_shared.timeutil import day_label, day_time_label, moment_label, villa
 from vesta_shared.past import unread  # noqa: E402  (the one "could not be read whole: nothing is known after")
 from vesta_shared.message_format import document, split_title, status_line  # noqa: E402  (the one shape of a message)
 from vesta_shared import status_words as SW  # noqa: E402  (each step as the alert card says it, in each chat's language)
-from vesta_shared.device_state import ABSENT, ANSWERS, OFFLINE_NOW, ha_restarts, in_restart, settling  # noqa: E402
-from vesta_shared import agreement  # noqa: E402  (the Kiosk's agreement: restartSettle, one value for both apps)
+from vesta_shared.device_state import ABSENT, ANSWERS  # noqa: E402
+from vesta_shared import restart  # noqa: E402  (is the villa's system restarting, was a drop the restart's: one answer)
 from vesta_shared.asleep import last_value, read_states, unheard  # noqa: E402  (a sleeping device reads its last real state)
 from vesta_shared.offline import device_answers, devices_offline, reported_since, watched_kinds  # noqa: E402  (offline now; when it last REALLY reported)
 from vesta_shared.store import alerted_states  # noqa: E402  (which states an alert is about: the desk's reading)
@@ -49,6 +49,7 @@ from vesta_shared import automation_words as AW  # noqa: E402  (an automation in
 from vesta_shared.limits import limit  # noqa: E402  (every limit, set on the Limits tab)
 from vesta_shared.problems import JUDGED_DAY, Problems, alert_name, problem_name  # noqa: E402  (a problem's lifecycle: one owner)
 from vesta_shared import result  # noqa: E402  (what the engine is asked to do: its shape; R is rules.py)
+from vesta_shared.result import FAULT_LOG, NIGHT_CHECK, fault_log, fault_log_skipped  # noqa: E402  (run's `result` is its dict)
 from vesta_shared import daily  # noqa: E402  (a device's day: the one running threshold)
 from vesta_shared import run_hours  # noqa: E402  (a device's run-hours check on or off, and why: one verdict)
 from vesta_shared import demand  # noqa: E402  (a device that runs only when people are in: learned)
@@ -152,7 +153,7 @@ def run(args) -> dict:
         book = cli.logbook_read(day_end - timedelta(days=int(params.behaviour("reconnect_days"))), day_end, now=now_ref)
     except Exception:  # noqa: BLE001 — logbook is optional: every stamp is then read past
         book = None
-    findings += silent_findings(cli, pack, states, now_ref, params, Z, suspect=restart_stamps(book, params))
+    findings += silent_findings(cli, pack, states, now_ref, params, Z, suspect=restart_stamps(book))
 
     level_rows = [r for r in pack.entities("level")
                   if params.has(f"{r['asset']}_max_c") or params.has(f"{r['asset']}_max_humidity_pct")]
@@ -166,15 +167,54 @@ def run(args) -> dict:
     notes += said
 
     # ---- the villa's rules still watching a hidden device ----------------------
-    found, said = hidden_in_rule_findings(cli, pack, states, store)
+    found, said = hidden_in_rule_findings(cli, pack, states, store, at=now_ref)
     findings += found
     notes += said
 
     # ---- the devices gone from the villa's system ------------------------------
     # a person's Done on one first: it was removed on purpose, never found again (forget_dismissed)
     forget_dismissed(store, today.isoformat())
-    found, said, back = missing_night(store, pack, cli, now_ref, zone)
-    findings += found
+    # ⚠️ NOTHING OPENED OR CLOSED WHILE THE VILLA'S SYSTEM RESTARTS (owner, 2026-11-13; the 5-minute recheck rests the
+    # same way, vesta_shared.restart): read then, a device still loading reads offline or missing, and one that
+    # answered before reads back. Tonight's findings wait for the next night; the recheck reads every open fault again
+    # once the villa's system has settled
+    settling = restart.settling(cli, now_ref)
+    if settling:
+        night = {"new": [], "still_open": [], "closed": [], "task_ids": [], "again": [], "resolved": [],
+                 "handed_over": [], "notes": {}}
+    else:
+        night = persist_night(ctx, findings, today, now_ref, alerts, notes)
+    new, still_open, closed, tasks = night["new"], night["still_open"], night["closed"], night["task_ids"]
+    again = night["again"]
+    resolved = night["resolved"]
+    store.beat("maintenance_nightly", day_end.astimezone(timezone.utc).isoformat())
+    store.audit("preventive-maintenance", "nightly", {"as_of": today.isoformat(), "new": len(new), "closed": len(closed)})
+
+    result = {"as_of": today.isoformat(), "villa": pack.villa, "features_written": features_written,
+              "new_findings": new, "still_open": still_open, "closed": closed, "handed_over": night["handed_over"], "again": again,
+              "tasks_to_create": tasks, "tasks_resolved": resolved, "notes": notes,
+              # every fault tonight opened or closed, for the Agent's log; resting, one line that it rested
+              FAULT_LOG: fault_log(Problems(store).written(), NIGHT_CHECK)
+              + (fault_log_skipped(NIGHT_CHECK) if settling else [])}
+    # the P2s told at once, kept to be rewritten; the earlier ones whose watch ends tonight, closed (or back) on their own
+    # message; the ones that cleared tonight, watched there; the ones an alert took over, said so
+    result["send"] = told_now(result, store=store, at=now_ref)
+    result["edits"] = one_edit_per_message(
+        told_watch_over(store, now_ref, zone, ctx.settings)
+        + told_cleared(store, [o["id"] for o in closed], now_ref, zone, ctx.settings,
+                       handed={o["id"]: night["notes"][int(o["id"])] for o in night["handed_over"]}))
+    if args.out:
+        with open(args.out, "w", encoding="utf-8") as fh:
+            json.dump(result, fh, indent=1, default=str)
+    return result
+
+
+def persist_night(ctx, findings: list, today: date, now_ref: datetime, alerts: dict, notes: list[str]) -> dict:
+    """The night's findings written (Problems.record_night), the missing devices read first: Problems.record_night's
+    answer. `alerts`: the offline faults an alert took over (handed_to_alerts); `notes` gets what a failed read says."""
+    cli, store, pack, params = ctx.client, ctx.store, ctx.pack, ctx.params
+    found, said, back = missing_night(store, pack, cli, now_ref, ctx.zone)
+    findings = findings + found
     notes += said
     for f in back:
         Problems(store).close_finding(f, today.isoformat(), BACK_NOTE)
@@ -189,7 +229,7 @@ def run(args) -> dict:
     # ⚠️ HOW A FAULT ENDED, ONE ANSWER (architecture review round 13, card 2): a fault the night no longer finds asks the
     # table the 5-minute recheck asks (endings.py) — its devices read now; "the nightly check no longer sees it" is left
     # for what no ending explains
-    night = Problems(store).record_night(
+    return Problems(store).record_night(
         findings, today.isoformat(), state_rules=STATE_RULES,
         event_rules=EVENT_RULES, worsened_step=params.behaviour("worsened_step_pct"),
         resolved_note=cleared_note(),
@@ -198,26 +238,6 @@ def run(args) -> dict:
                                                   missing=missing, alerts=alerts, battery=moved,
                                                   offline=E.offline_hands(store.findings(status="open")))),
         settle_minutes=still_there_minutes(ctx.settings))
-    new, still_open, closed, tasks = night["new"], night["still_open"], night["closed"], night["task_ids"]
-    again = night["again"]
-    resolved = night["resolved"]
-    store.beat("maintenance_nightly", day_end.astimezone(timezone.utc).isoformat())
-    store.audit("preventive-maintenance", "nightly", {"as_of": today.isoformat(), "new": len(new), "closed": len(closed)})
-
-    result = {"as_of": today.isoformat(), "villa": pack.villa, "features_written": features_written,
-              "new_findings": new, "still_open": still_open, "closed": closed, "handed_over": night["handed_over"], "again": again,
-              "tasks_to_create": tasks, "tasks_resolved": resolved, "notes": notes}
-    # the P2s told at once, kept to be rewritten; the earlier ones whose watch ends tonight, closed (or back) on their own
-    # message; the ones that cleared tonight, watched there; the ones an alert took over, said so
-    result["send"] = told_now(result, store=store, at=now_ref)
-    result["edits"] = one_edit_per_message(
-        told_watch_over(store, now_ref, zone, ctx.settings)
-        + told_cleared(store, [o["id"] for o in closed], now_ref, zone, ctx.settings,
-                       handed={o["id"]: night["notes"][int(o["id"])] for o in night["handed_over"]}))
-    if args.out:
-        with open(args.out, "w", encoding="utf-8") as fh:
-            json.dump(result, fh, indent=1, default=str)
-    return result
 
 
 def asset_findings(cli, store, params, asset: dict, today: date, day_end: datetime, hour_stats: dict, day_stats: dict,
@@ -443,9 +463,10 @@ def level_findings(pack, params, rows: list[dict], lvl_stats: dict, today: date,
     return day_seen(out, datetime.combine(today + timedelta(days=1), time(0, 0), tzinfo=ZoneInfo(zone)))
 
 
-def hidden_in_rule_findings(cli, pack, states: dict, store) -> tuple[list, list[str]]:
-    """PM-HIDDEN-IN-RULE (rules.hidden_in_rule_rules) over the villa's rules naming a hidden entity (pack.hidden). A
-    reading that fails keeps the open ones as they are — the night saw nothing, it must not say they are cleared."""
+def hidden_in_rule_findings(cli, pack, states: dict, store, at: datetime | None = None) -> tuple[list, list[str]]:
+    """PM-HIDDEN-IN-RULE (rules.hidden_in_rule_rules) over the villa's rules naming a hidden entity (pack.hidden) that
+    does not answer at `at` (now when not said; endings.answers: the test its close asks too). A reading that fails
+    keeps the open ones as they are — the night saw nothing, it must not say they are cleared."""
     hidden = list(getattr(pack, "hidden", None) or [])
     if not hidden:
         return [], []
@@ -459,7 +480,8 @@ def hidden_in_rule_findings(cli, pack, states: dict, store) -> tuple[list, list[
         # watching a device replaced by its copy: that one is offline or gone.
         now = cli.states(hidden)
         standing = {e: pack.standing(e, (now.get(e) or {}).get("state")) for e in hidden}
-        hidden = [e for e in hidden if standing[e] in (ABSENT, OFFLINE_NOW)]
+        when = at or datetime.now(timezone.utc)
+        hidden = [e for e in hidden if not E.answers(pack, e, now.get(e), when)]
         if not hidden:
             return [], []
         rules = cli.rules_mentioning(hidden)
@@ -500,19 +522,9 @@ def forget_dismissed(store, day: str) -> list[int]:
     return done
 
 
-def restart_settling(cli, now: datetime) -> bool:
-    """Whether the villa's system is still starting, or started less than the agreement's restartSettle minutes ago
-    (vesta_shared.device_state.settling, read from its logbook's own "stopped" and "started" entries): no device is
-    missing then. The Kiosk lets the villa's system settle the same time (agent-contract.json restartSettle). An
-    agreement without it, or a logbook that cannot be read: not settling, as before."""
-    minutes = agreement.section("restartSettle").get("minutes")
-    if not isinstance(minutes, (int, float)) or minutes <= 0:
-        return False
-    try:
-        rows = cli.logbook(now - timedelta(minutes=minutes + 60), now)
-    except Exception:  # noqa: BLE001 — the logbook not readable: judged as before
-        return False
-    return settling(rows, now, minutes)
+#: Whether the villa's system is restarting or settling: vesta_shared.restart's one answer (the name kept for a skill
+#: edited before 0.12.510)
+restart_settling = restart.settling
 
 
 def missing_findings(store, pack, cli, now: datetime, zone: str, near=None, named_for_all: bool = True):
@@ -544,9 +556,8 @@ def missing_findings(store, pack, cli, now: datetime, zone: str, near=None, name
         store.cache_put(FORGOTTEN, forgotten)
     back = [f for f in open_ if any(e in states for e in E.entities_of(f))]
     nostate = sorted(e for e in ids if e not in states and e not in forgotten and e in base)
+    # (never read while the villa's system settles: both checks rest then, vesta_shared.restart)
     gone = cli.not_found(nostate) if nostate else set()
-    if gone and restart_settling(cli, now):
-        gone = set()          # its integration may not be loaded yet: asked again at the next check
     groups: dict[str, list[str]] = {}
     for e in sorted(gone):
         groups.setdefault((seen.get(e) or {}).get("device") or e, []).append(e)
@@ -696,10 +707,10 @@ def reconnect_findings(cli, pack, states: dict, end: datetime, params, zone: str
     if book is not None and not book.whole:
         # a count from a read cut short is a floor, said where the night's notes are read
         notes.append(unread("The logbook", day_time_label(book.reach.astimezone(Z))) + ", reconnect counts may be low.")
-    flips = F.flips_per_day(lb, zone, params.behaviour("restart_settle_minutes"),
+    flips = F.flips_per_day(lb, zone, restart.minutes(),
                             params.behaviour("reconnect_min_drop_seconds"), end=end)
     # when each dropped last: a loop is seen at its latest drop (Finding.seen_at), never at the read
-    last_drop = {eid: max(ts) for eid, ts in F.drop_times(lb, params.behaviour("restart_settle_minutes"),
+    last_drop = {eid: max(ts) for eid, ts in F.drop_times(lb, restart.minutes(),
                                                           params.behaviour("reconnect_min_drop_seconds"), end=end).items() if ts}
     # ONE finding per DEVICE, named as a person reads it (villa, 2026-10-04: a relay, its firmware
     # entity and its uptime sensor were three lines, two of them raw entity ids)
@@ -805,13 +816,14 @@ def battery_findings(pack, states: dict, params, today: date, stats: dict | None
     return out
 
 
-def restart_stamps(book, params):
-    """Whether a stamp may be a restart's: within restart_settle_minutes of one of the villa's own "started" entries in
-    `book` (a logbook read), or outside what it read; None without a book (every stamp may be)."""
+def restart_stamps(book, params=None):
+    """Whether a stamp may be a restart's: within one of the villa system's restarts in `book` (a logbook read:
+    vesta_shared.restart.Restarts.near, the one settle time), or outside what it read; None without a book (every stamp
+    may be). `params`: what a caller edited before 0.12.510 still passes."""
     if book is None:
         return None
-    starts, settle = ha_restarts(book.rows), params.behaviour("restart_settle_minutes")
-    return lambda t: in_restart(t, starts, settle) or t < book.start or t > book.reach
+    restarts = restart.Restarts(book.rows)
+    return lambda t: restarts.near(t) or t < book.start or t > book.reach
 
 
 def silent_findings(cli, pack, states: dict, now_ref: datetime, params, Z, rows: list[dict] | None = None,
@@ -1335,6 +1347,7 @@ def main(argv=None):
     out["actions"] = []
     out["send"] = res["send"] if "send" in res else told_now(res)
     out["edits"] = res.get("edits") or []
+    out[FAULT_LOG] = res.get(FAULT_LOG) or []
     print(json.dumps(out, indent=1, default=str))
     return 0
 

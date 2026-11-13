@@ -274,7 +274,30 @@ class Problems:
         """The night check no longer sees a finding: it closes, its task is cleared (its Kiosk fault follows: the
         repair). Returns a script's `actions` for it (result.moved)."""
         self.store.close_finding(finding["rule_id"], finding["entity_id"], day)
+        self._wrote(result.CLOSED, finding["rule_id"], finding["entity_id"], dict(finding).get("summary"), note)
         return result.moved(self.settle(f"finding:{int(finding['id'])}", note=note))
+
+    def reword(self, row: dict, finding) -> None:
+        """Open finding `row` said again with `finding`'s words and detail, in place (its day kept): neither opened nor
+        closed. The one writer of a fault's new words outside record (recheck.gone_missing: a missing device's words
+        once its history said when it left)."""
+        self.store.raise_finding(finding.rule_id, finding.entity_id, finding.family, row["opened_day"], finding.severity,
+                                 finding.summary, {**json.loads(row["detail"] or "{}"), **finding.detail,
+                                                   "check": finding.check})
+
+    # ⚠️ EVERY OPEN AND CLOSE SAID (owner, 2026-11-13: two faults "Cleared" during a restart, nothing in the Agent's log):
+    # each write of a finding's state is one row of the run (store.fault_writes), which the script hands the engine in
+    # its result (result.fault_log) and the engine copies to its log
+    def _wrote(self, what: str, rule_id: str, entity_id: str, words, note: str = "") -> None:
+        rows = getattr(self.store, "fault_writes", None)
+        if rows is not None:
+            rows.append({"what": what, "rule": rule_id, "device": entity_id, "words": str(words or ""),
+                         "note": str(note or "")})
+
+    def written(self) -> list[dict]:
+        """The faults this run opened, opened again or closed, in order: {what (result.OPENED, OPENED_AGAIN, CLOSED),
+        rule, device, words, note (a close's)}."""
+        return list(getattr(self.store, "fault_writes", None) or [])
 
     def seen(self, finding_id: int, at: str, settle_minutes: float | None) -> list[int]:
         """Open finding `finding_id` read still bad at `at` (a reading of its source: the recheck's, every few minutes,
@@ -323,6 +346,7 @@ class Problems:
             # ⚠️ ITS TASK AND ITS KIOSK TICKET CLOSE WITH IT (villa, 2026-10-01): the finding closed, the ticket
             # stayed "Open fault" for ever, and the Kiosk's Cockpit filled with faults long gone
             self.store.close_finding(o["rule_id"], o["entity_id"], day)
+            self._wrote(result.CLOSED, o["rule_id"], o["entity_id"], dict(o).get("summary"), note or resolved_note)
             resolve += self.settle(f"finding:{int(o['id'])}", note=note or resolved_note)
         # `resolve_actions`: kept for a skill edited before 0.12.267 (its nightly.py reads each one's task_id)
         return {**out, "closed": closed, "handed_over": handed, "resolved": resolve, "notes": notes,
@@ -367,6 +391,7 @@ class Problems:
                 # closed with that note, never counted cleared
                 self.store.close_finding(row["rule_id"], row["entity_id"], day)
                 notes[fid] = handed.get(fid) or said.get(fid) or note
+                self._wrote(result.CLOSED, row["rule_id"], row["entity_id"], row.get("summary"), notes[fid])
                 moved += self.settle(f"finding:{fid}", note=notes[fid])
                 (gone if fid in handed else closed).append(fid)
         return {"seen": out_seen, "closed": closed, "handed": gone, "notes": notes, "task_ids": moved}
@@ -399,6 +424,8 @@ class Problems:
                 fid, is_new = back, False
             else:
                 fid, is_new = self.store.raise_finding(f.rule_id, f.entity_id, f.family, day, f.severity, f.summary, f.detail)
+                if is_new or prev_row is None:        # new, or that day's closed row opened again (a rerun)
+                    self._wrote(result.OPENED if is_new else result.OPENED_AGAIN, f.rule_id, f.entity_id, f.summary)
             # seen when the reading shows it (a loop's latest drop, a day's start), else now: a close is answered only by
             # what came after it (rules.Finding.seen_at; architecture review 25)
             self.store.finding_seen(fid, getattr(f, "seen_at", "") or at or self.store.now(), settle_minutes)
@@ -413,6 +440,7 @@ class Problems:
                 # "nothing new", the monthly page "Fixed". It closes when a night passes without it, or a person does.
                 if f.severity not in TASK_SEVERITIES:
                     self.store.close_finding(f.rule_id, f.entity_id, day)    # no fault: closes the same night, as ever
+                    self._wrote(result.CLOSED, f.rule_id, f.entity_id, f.summary)
                 if is_new:                                                    # a rerun of the same night: told already
                     new.append(d)
                 elif f.severity in TASK_SEVERITIES and prev_row and prev_row["opened_day"] != day:
@@ -479,6 +507,7 @@ class Problems:
         # yesterday, back today — "(again: …)" was not said at all, the message read as a new problem
         seen = ([x for x in runs if x >= since] or [since]) + [day]
         self.store.reopen_finding(last["id"], f.severity, f.summary, f.detail, day, seen)
+        self._wrote(result.OPENED_AGAIN, f.rule_id, f.entity_id, f.summary)
         return last["id"]
 
     def closed_in_kiosk(self, task_id: int, said=None, at: str | None = None, who: str | None = None,

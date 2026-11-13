@@ -12,7 +12,8 @@ from collections import defaultdict
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from vesta_shared.device_state import RestartDrops, is_offline  # the one "does this device answer"
+from vesta_shared.device_state import is_offline  # the one "does this device answer"
+from vesta_shared.restart import RestartDrops  # the one "was it the restart's"
 from vesta_shared.stats import med, slope_per_hour
 from vesta_shared.timeutil import local_day
 # a day of a power or energy meter: shared with roi-energy, so they live in vesta_shared (roi-energy imported this
@@ -110,8 +111,9 @@ def flips_per_day(logbook: list[dict], zone: str, settle_minutes: float = 0,
 
 def drop_times(logbook: list[dict], settle_minutes: float = 0, min_drop_seconds: float = 0,
                end: datetime | None = None) -> dict[str, list[datetime]]:
-    """When each entity dropped to "unavailable", from logbook rows, in order, leaving out those within `settle_minutes` of
-    a Home Assistant restart (device_state.in_restart: its own "started" entry) — every restart takes every entity
+    """When each entity dropped to "unavailable", from logbook rows, in order, leaving out those of a restart of the villa's
+    system (vesta_shared.restart: its own "stopped" and "started" entries, `settle_minutes` around them; the night check
+    passes restart.minutes(), the one settle time) — every restart takes every entity
     through "unavailable", and three restarts in three days read as "dropped and reconnected 10 times" for a relay that
     never moved (villa, 2026-10-04).
 
@@ -127,7 +129,7 @@ def drop_times(logbook: list[dict], settle_minutes: float = 0, min_drop_seconds:
     night's setting reconnect_min_drop_seconds) is not counted; one still offline at the end of the read is.
 
     `end`: the period read ends there; a drop at or after it is not counted (None: none is left out)."""
-    drops = RestartDrops(logbook, settle_minutes)        # the one answer (vesta_shared.device_state)
+    drops = RestartDrops(logbook, settle_minutes)        # the one answer (vesta_shared.restart)
     out: dict[str, list[datetime]] = defaultdict(list)
     timeline: dict[str, list[tuple[datetime, bool]]] = defaultdict(list)
     for r in logbook:

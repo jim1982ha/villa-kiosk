@@ -59,7 +59,7 @@ from zoneinfo import ZoneInfo
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
-from vesta_shared import kiosk_words, result, script  # noqa: E402
+from vesta_shared import kiosk_words, restart, result, script  # noqa: E402
 from vesta_shared.problems import Problems  # noqa: E402
 from vesta_shared.timeutil import moment_label  # noqa: E402  (a moment as every notice and the agreement write it)
 import nightly as N  # noqa: E402  (what is offline: the night's one reading of it)
@@ -180,8 +180,7 @@ def gone_missing(store, pack, client, now: datetime, params, zone: str, settle_m
             # its words corrected in place once its history said when it left (nightly.left_at: a fault of 0.12.420
             # said the moment the check first looked)
             if row["summary"] != f.summary or json.loads(row["detail"] or "{}").get("since") != f.detail.get("since"):
-                store.raise_finding(f.rule_id, f.entity_id, f.family, row["opened_day"], f.severity, f.summary,
-                                    {**json.loads(row["detail"] or "{}"), **f.detail, "check": f.check})
+                Problems(store).reword(row, f)
                 # its open task named moved, so the Kiosk's fault is retitled now (tickets.repair), as _restate's
                 moved += _open_task(store, row["id"])
             moved += Problems(store).seen(row["id"], now.isoformat(), settle_minutes)
@@ -289,7 +288,7 @@ class Tick:
 
     def hidden(self) -> list:
         if self._hidden is None:
-            self._hidden = N.hidden_in_rule_findings(self.client(), self.pack, self.states, self.store)[0]
+            self._hidden = N.hidden_in_rule_findings(self.client(), self.pack, self.states, self.store, at=self.now)[0]
         return self._hidden
 
     def battery(self, rows) -> list:
@@ -552,10 +551,11 @@ def main(argv=None):
     # ⚠️ NOTHING OPENED OR CLOSED WHILE THE VILLA'S SYSTEM RESTARTS (owner, 2026-11-13: stopped 14:43, started 14:47;
     # at 14:49 this check cleared "The automation 'Server room person' watches 1 device that no longer answers" and its
     # twin, read while the villa's devices were still loading, and opened "LED Strip is missing"): the whole tick rests
-    # while it is starting and for the agreement's restartSettle minutes after (nightly.restart_settling); the next
-    # tick reads everything as it is
-    if N.restart_settling(ctx.live_client, now):
-        print(json.dumps({"actions": [], "send": [], "edits": [], result.FAULTS_CHANGED: False}))
+    # while it is starting and for the agreement's restartSettle minutes after (vesta_shared.restart, the night check's
+    # rest too); the next tick reads everything as it is. Said once in the Agent's log (result.fault_log_skipped)
+    if restart.settling(ctx.live_client, now):
+        print(json.dumps({"actions": [], "send": [], "edits": [], result.FAULTS_CHANGED: False,
+                          result.FAULT_LOG: result.fault_log_skipped(result.FREQUENT_CHECK)}))
         return 0
     settle = N.still_there_minutes(ctx.settings)
     # what is missing first: a fault whose device is gone then follows its missing fault (back_online)
@@ -585,7 +585,9 @@ def main(argv=None):
     print(json.dumps({"actions": result.moved(res["actions"] + again["actions"] + found["actions"] + miss["actions"]),
                       "send": miss["send"] + found["send"] + told, "edits": N.one_edit_per_message(edits),
                       result.FAULTS_CHANGED: bool(closed or handed or again["actions"] or found["actions"]
-                                                  or miss["actions"])},
+                                                  or miss["actions"]),
+                      # every fault this tick opened or closed, for the Agent's log
+                      result.FAULT_LOG: result.fault_log(Problems(ctx.store).written(), result.FREQUENT_CHECK)},
                      default=str))
     return 0
 

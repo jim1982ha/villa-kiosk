@@ -27,7 +27,6 @@ behaviour:
   silence_min_history_hours: 48         # A sensor with less history than this is too new to be called silent.
   integration_down_devices: 3           # How many devices of one integration (the link to one brand or system of devices) must go offline together for that integration to be reported as down.
   integration_down_window_minutes: 30   # How close together those devices must go offline to count as one integration down (three unrelated drops days apart are three devices).
-  restart_settle_minutes: 10            # Devices dropping this close to a restart of the villa's system dropped because of the restart, and are not reported.
   battery_trend_days: 14                # How many days of a battery's levels are read to see whether it is falling steadily.
   battery_trend_min_points: 7           # The fewest daily readings a battery needs in those days before its trend is judged.
   battery_trend_drop_per_day: 0.5       # A battery falling faster than this each day is falling steadily.

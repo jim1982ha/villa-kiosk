@@ -196,6 +196,27 @@ def moved(task_ids) -> list[dict]:
     return [faults_changed()] if list(task_ids) else []
 
 
+#: A script result's list of the faults it opened, opened again or closed, each a row (fault_log), copied to the Agent's
+#: log (vesta_agent/outcome.py). ⚠️ EVERY WRITE SAID (owner, 2026-11-13: two faults "Cleared" at 14:49, during a
+#: restart, and the Agent's log said nothing of either; only the store knew).
+FAULT_LOG = "fault_log"
+#: What a fault-log row says happened; SKIPPED: the check opened and closed nothing, the villa's system restarting.
+OPENED, OPENED_AGAIN, CLOSED, SKIPPED = "opened", "opened again", "closed", "skipped"
+#: Which check wrote it: the engine names each in its own words (the frequent one by its cadence, a setting).
+NIGHT_CHECK, FREQUENT_CHECK = "night", "frequent"
+
+
+def fault_log(rows, check: str, settling: bool = False) -> list[dict]:
+    """The rows of what a check wrote (Problems.written: what, rule, device, words, note), each marked with its
+    `check` (NIGHT_CHECK, FREQUENT_CHECK) and whether the villa's system was settling after a restart."""
+    return [{**r, "check": check, "settling": bool(settling)} for r in rows]
+
+
+def fault_log_skipped(check: str) -> list[dict]:
+    """The one row of a check that rested while the villa's system restarts (vesta_shared.restart.settling)."""
+    return [{"what": SKIPPED, "rule": "", "device": "", "words": "", "note": "", "check": check, "settling": True}]
+
+
 #: The action of a take-on (take_on), as the engine reads it.
 TAKE_ON = "ticket.take"
 

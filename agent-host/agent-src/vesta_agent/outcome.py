@@ -44,6 +44,7 @@ from datetime import datetime, timezone
 from typing import Awaitable, Callable
 
 from vesta_shared.message_format import KIOSK_UNREACHED
+from vesta_shared import result as R
 from vesta_shared.result import FAULTS_CHANGED, REDRAW, SHEET, TAKE_ON, TELL_VILLA
 from vesta_shared.ha_client import error_short_chars
 
@@ -66,12 +67,40 @@ log = logging.getLogger("vesta.outcome")
 #: What a script result can ask the engine to carry out — the keys carry_out reads. ⚠️ ONE LIST
 #: (architecture review, 0.12.38): the model's run_skill_script tool kept its own copy, so a key added here
 #: would be carried out on schedule and silently skipped when the model ran the same script.
-CARRIED_KEYS = ("send", "actions", "siren_gate", "settle", "ha_messages", "edits", "seen")
+CARRIED_KEYS = ("send", "actions", "siren_gate", "settle", "ha_messages", "edits", "seen", R.FAULT_LOG)
 
 
 def has_work(res) -> bool:
     """Whether a script's result asks for anything carry_out does."""
     return isinstance(res, dict) and any(res.get(k) for k in CARRIED_KEYS)
+
+
+def check_words(check: str, skill_name: str | None = None) -> str:
+    """Which check wrote a fault-log row, in words: the night check, or the frequent one by its cadence (a setting)."""
+    if check == R.NIGHT_CHECK:
+        return "the night check"
+    if check == R.FREQUENT_CHECK:
+        from .scheduler import every
+        from vesta_shared.status_words import duration
+        return f"the check every {duration(every().total_seconds())}"
+    return f"skill {skill_name or '?'}"
+
+
+def fault_lines(rows, skill_name: str | None = None) -> list[str]:
+    """A script's fault-log rows (result.fault_log, each a dict) as the Agent's log says them, one plain line each —
+    'Fault closed: "<words>" (the night check: Cleared: back online.)' — and a check that rested, one line."""
+    out = []
+    for r in rows:
+        by = check_words(str(r.get("check") or ""), skill_name)
+        if r.get("what") == R.SKIPPED:
+            out.append(f"{by[0].upper()}{by[1:]} opened and closed no fault: the villa's system is restarting.")
+            continue
+        words = str(r.get("words") or r.get("device") or r.get("rule") or "").strip()
+        why = f"{by}: {str(r['note']).strip()}" if r.get("note") else by
+        if r.get("settling"):
+            why += ", while the villa's system was restarting"
+        out.append(f'Fault {r.get("what") or "changed"}: "{words}" ({why})')
+    return out
 
 
 async def camera_photo(reader, entity_id) -> tuple[str, str] | None:
@@ -166,6 +195,12 @@ class Outcome:
         done = {"sent": 0, "not_sent": 0, "tickets": 0, "resolved": 0, "unrouted": 0, "edited": 0}
         if not isinstance(res, dict) or not res:
             return done
+        # ⚠️ EVERY FAULT OPENED OR CLOSED, IN THE AGENT'S LOG (owner, 2026-11-13: two faults "Cleared" during a restart
+        # and the log said nothing): the script's own rows (result.fault_log), one plain line each
+        written = [r for r in res.get(R.FAULT_LOG) or [] if isinstance(r, dict)]
+        for row, line in zip(written, fault_lines(written, skill_name)):
+            log.info("%s", line)
+            self.state.log("fault_written", {**row, "skill": skill_name})
         # its visits begun FIRST (visit.Run: the villa told each step, its photos kept, its sheet made), before any copy
         visits = await self.visits.begin(res, lambda iid: self.incidents.name(iid) if self.incidents else "") \
             if self.visits is not None else Run()

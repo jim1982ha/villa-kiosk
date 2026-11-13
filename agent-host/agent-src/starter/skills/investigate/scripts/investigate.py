@@ -47,7 +47,8 @@ from vesta_shared.messaging import incident_tag  # noqa: E402  (an alert's one n
 from vesta_shared.problems import priority_of  # noqa: E402  (its priority: one reading)
 
 from vesta_shared import asleep  # noqa: E402  (unavailable by design: its last report holds, now and over a window)
-from vesta_shared.device_state import ASLEEP_NOW, NO_VALUE, OFFLINE, RestartDrops  # noqa: E402  (the one "does this device answer")
+from vesta_shared.device_state import ASLEEP_NOW, NO_VALUE, OFFLINE  # noqa: E402  (the one "does this device answer")
+from vesta_shared.restart import RestartDrops  # noqa: E402  (the one "was it the restart's")
 from vesta_shared.limits import limit  # noqa: E402  (every limit, set on the VESTA Agent page's Limits tab)
 # ⚠️ WHAT A CONTROL CAN PROVE (architecture review 32 follow-up, 2026-10-11): an on/off control that stayed OFF the whole
 # period — and the days before — while another device ran is not what turned that device on. An account blamed a
@@ -1039,9 +1040,10 @@ def around(client, store, start: datetime, end: datetime, focus: list[str], zone
                 pass
     # ⚠️ A RESTART IS SAID ONCE, NOT AS EVERY DEVICE (2026-10-13): a period holding a Home Assistant restart listed
     # nearly every device as "stopped answering" and never said Home Assistant had restarted. A device that went and
-    # answered again within `restart_settle_minutes` of it was the restart's; one that did not come back stays listed.
-    # the one answer to "was it the restart's" (vesta_shared.device_state.RestartDrops, the nightly check's too)
-    drops = RestartDrops(rows, th("restart_settle_minutes"))
+    # answered again within the restart (from its stop to the settle time after its start) was the restart's; one that
+    # did not come back stays listed. The one answer to "was it the restart's", with the one settle time
+    # (vesta_shared.restart.RestartDrops, the nightly check's too)
+    drops = RestartDrops(rows)
     restart_only = {e for t, _, e in offline if drops.theirs(e, t)}
     offline = [o for o in offline if not drops.theirs(o[2], o[0])]
     back = [b for b in back if not drops.theirs(b[2], b[0])]

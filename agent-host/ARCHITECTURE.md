@@ -319,8 +319,8 @@ Decisions of 2026-09-30 (owner):
   OPEN, told owner: name-word heuristics (knowledge_pack *_WORDS, energy_period "main"/"phase"/"returned",
   filtration_optimiser "_pump") — owner 2026-10-13: generic words, not villa data; low priority (main meter could
   come from HA's Energy settings one day).
-  0.12.188: a drop is a restart's only near Home Assistant's own "started" entry (`device_state.ha_restarts` /
-  `in_restart`, `restart_settle_minutes`); the 20-entities crowd filter is gone — never reintroduce a crowd count.
+  0.12.188: a drop is a restart's only near Home Assistant's own "started" entry; the 20-entities crowd filter is
+  gone — never reintroduce a crowd count. 0.12.510: see `vesta_shared/restart.py` below.
 - No PDF (owner, 2026-09-30): the reports are self-contained HTML pages sent
   as attachments. Chromium was ~480 MB of a 1.1 GB image for this alone.
 - ⚠️ The Dockerfile's layer order is what an update costs the Yellow: agent
@@ -650,6 +650,16 @@ then fixed with the probe's scenarios as the tests. Decided:
   level is `facts.night_battery_says`: "replace" from an open PM-BATTERY-CRIT / LOW problem (open_problems, so a fault a
   person closed is not shown), "watch" from an open PM-BATTERY-TREND finding read from the store (INFO: never a task,
   never on the list). The page's own thresholds and the power_step / battery_trend clues are gone.
+- **`vesta_shared/restart.py`** owns "is the villa's system restarting, was this the restart's" (review, 2026-11-13,
+  0.12.510): `minutes()` (the agreement's restartSettle, DEFAULT_MINUTES 5 when it has none — never "off"),
+  `settling(client, now)` (its logbook read there; unreadable: not settling, said on stderr), `Restarts` (each restart
+  from its "stopped" to settle after its "started") and `RestartDrops`. recheck.main and the night check's writes
+  (nightly.persist_night) rest while settling and say so once (result.fault_log_skipped); the night's drops, stamps and
+  the investigation use the same minutes (the skills' restart_settle_minutes is gone). device_state keeps the old names
+  for a villa-edited skill. The alert desk's rule_gone is left alone: it asks "gone for clear_minutes", already held.
+- **Every fault write is a log row** (0.12.510): Problems records each finding opened, opened again or closed in
+  `store.fault_writes` (`Problems.written`); recheck and nightly put them in their result (`result.FAULT_LOG`), and
+  outcome.carry_out copies each to the Agent's log (`fault_lines`) and the calls table (`fault_written`).
 - **`vesta_shared/battery.py`** owns a battery's charge (`charge`; device_state.battery_charge is a re-export for a
   villa-edited skill), its projection (`projection(points, floor_pct, level)`, the floor the caller's setting) and the
   rule ids the reports read (CRIT, LOW, TREND, REPLACE) — kept out of result.py on purpose (one owner per subject).

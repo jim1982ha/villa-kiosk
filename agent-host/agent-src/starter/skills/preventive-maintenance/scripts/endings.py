@@ -24,7 +24,8 @@ from datetime import datetime
 from typing import Callable, NamedTuple
 
 from vesta_shared import automation_words as AW  # an automation named by its own name
-from vesta_shared.device_state import OFFLINE, is_offline, out_for  # "is it back": one answer
+from vesta_shared.device_state import ANSWERS, ASLEEP_NOW, NO_VALUE_NOW, OFFLINE, out_of, out_for, reading  # "is it back"
+from vesta_shared import restart  # the settle time: a value-less state younger than it is still loading
 from vesta_shared.offline import device_answers  # a device that answers is not offline
 from vesta_shared.timeutil import clock
 import rules as R  # every rule described once (rules.RULES)
@@ -180,10 +181,29 @@ def _rule_gone(f: dict) -> str:
     return f"Closed: the {AW.words(d.get('name'), f['entity_id'], d.get('kind'))} no longer exists in the villa's system."
 
 
+def answers(pack, entity_id: str, row: dict | None, now: datetime | None) -> bool:
+    """Does `entity_id` answer now (`row`: its state row read now, None when the villa's system has none), by the
+    knowledge pack's test (KnowledgePack.standing)? A value, or asleep between its reports by design: yes. No value
+    ("unknown"): only once that has held the settle time after a restart (vesta_shared.restart.minutes) — a device still
+    loading answers with no value first. Offline, or no state: no. The ONE test the night check opens a hidden-device
+    fault by (nightly.hidden_in_rule_findings: a device that does not answer) and this table closes it by.
+
+    ⚠️ OPENED BY ONE TEST, CLOSED BY ANOTHER (architecture review, 2026-11-13): the hidden-device fault opened on
+    pack.standing and closed on "read and not offline", so a device answering "unknown" while its integration loaded
+    was "back online"."""
+    if not row:
+        return False
+    st = row.get("state")
+    standing = pack.standing(entity_id, st) if pack is not None else reading(st)
+    if standing in (ANSWERS, ASLEEP_NOW):
+        return True
+    return standing == NO_VALUE_NOW and now is not None and out_of(row, OFFLINE, now, restart.minutes(),
+                                                                    unknown_tells=True)
+
+
 def _all_answer(es, r) -> bool:
-    """Every one of `es` read now, and none offline: a hidden device that answers is no fault (rules.hidden_in_rule_rules)."""
-    return r.client is not None and bool(es) and all(e in r.states and not is_offline((r.states[e] or {}).get("state"))
-                                                     for e in es)
+    """Every one of `es` answers now (answers): a hidden device that answers is no fault (rules.hidden_in_rule_rules)."""
+    return r.client is not None and bool(es) and all(answers(r.pack, e, r.states.get(e), r.now) for e in es)
 
 
 def _any(rule: str) -> bool:
