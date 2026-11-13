@@ -201,8 +201,11 @@ export function partName(part: string, device: readonly (string | undefined)[]):
   return rest.charAt(0).toUpperCase() + rest.slice(1);
 }
 
-/** What a device's card says of its lost parts, by their names (partName): "Person detection unavailable", "Motion,
- *  Person detection unavailable", "4 parts unavailable" past three — one line per device, its grey state pill. */
+/** What a device's card says of its lost parts, every one by its name (partName), and that the device itself still
+ *  works: "Person detection not answering, the device itself works" — one line per device, its grey state pill.
+ *  ⚠️ EVERY PART NAMED (owner, 2026-11-14, of "4 parts unavailable" on a camera: "I don't understand what this fault is
+ *  about … it should be more explicit"): past three it said only a count, and never that the device still worked. */
 export function lostPartsWords(names: readonly string[]): string {
-  return `${names.length > 3 ? `${names.length} parts` : names.join(", ")} unavailable`;
+  const list = names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}` : names.join("");
+  return `${list} not answering, the device itself works`;
 }

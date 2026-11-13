@@ -121,7 +121,7 @@ import { OcclusionSweep, owesLayout } from "./occlusionSweep";
 import { BadgeFrame, drawnThisPass } from "./badgeFrame";
 import { LayoutGate } from "./layoutGate";
 import { WalkerView, walkExemptRooms } from "./walkerView";
-import type { RoomChip } from "./roomChips";
+import { chipLineCell, type RoomChip } from "./roomChips";
 import { groupCardModel, roomChipModel, type SummaryFrame } from "./summaryLook";
 import { rungAt, referenceDepthAt, iconZoomAt, cssExtent } from "./badgeScale";
 import { solveRoomZoom } from "./roomZoomSolver";
@@ -157,6 +157,7 @@ import {
 } from "./meshVariants";
 // Pure label/chip overlap geometry — see labelLayout.ts.
 import { type ChipTextMetrics } from "./labelLayout";
+import type { ScreenRect } from "./chipPlace";
 // Babylon prototype patches this module depends on — see babylonSideEffects.
 import { BulbSet, WARM_GLOW, STRIP_MIN_LENGTH, type BulbReading } from "./bulbSet";
 import { lightingModeFor, type LightingMode } from "./lightingMode";
@@ -1098,6 +1099,19 @@ export class EntityVisuals {
   /** The villa model's marks (critical, hidden, an amber issue) — every badge, card and room chip repaints when one
    *  really changed (sameMarks). A hidden device's badge leaves the map and its room chips (deviceActivity.drawsBadge),
    *  its mesh repaints quiet — never red, never lost (badgeKindFor). */
+  /** What the HUD lays over the map — its bars and its rail — CSS px from the
+   *  canvas's top-left. Room chips are kept clear of it (chipPlace.mapArea). */
+  private mapCover: readonly ScreenRect[] = [];
+  setMapCover(cover: readonly ScreenRect[]): void {
+    const same = cover.length === this.mapCover.length && cover.every((r, i) => {
+      const o = this.mapCover[i];
+      return r.left === o.left && r.top === o.top && r.right === o.right && r.bottom === o.bottom;
+    });
+    if (same) return;
+    this.mapCover = cover;
+    this.markLayoutDirty();
+  }
+
   setDeviceMarks(marks: DeviceMarks): void {
     if (sameMarks(marks, this.marks)) return;
     this.marks = marks;
@@ -4179,6 +4193,12 @@ export class EntityVisuals {
         // share divided back through the scale the renderer multiplies by —
         // the device-pixel ratio cancels (see CHIP_MAX_VIEWPORT_FRACTION).
         budget: viewportBudget(eng.getRenderWidth(), scale, CHIP_MAX_VIEWPORT_FRACTION),
+        // The HUD over the map, CSS px → render px (the conversion every badge
+        // dimension passes through): a chip is drawn clear of it.
+        cover: this.mapCover.map((r) => {
+          const k = this.cssToGui();
+          return { left: r.left * k, top: r.top * k, right: r.right * k, bottom: r.bottom * k };
+        }),
       },
     };
   }
@@ -5196,18 +5216,40 @@ export class EntityVisuals {
       // container re-scale and nothing else — glyphBakePx's rule.
       const csm = this.summaryMetrics();
       const n = model.lines.length;
-      c.container.height = `${n * csm.size}px`;
+      // ── IN COLUMNS WHEN TALLER THAN THE MAP (2.496.803) ─────────────────
+      // placementPass lays the lines out `cols` × `rows` (chipPlace.chipGrid),
+      // each column filling top-down. One column adapts its width to the
+      // widest line, as it always has; several are each the width placement
+      // measured a line with (halfW is cols of them), set outright because
+      // adaptWidthToChildren reads a child's width, never its offset.
+      const { cols, rows } = chip;
+      const colPx = (chip.halfW * 2) / (cols * scale);
+      c.container.height = `${rows * csm.size}px`;
+      if (cols > 1) {
+        c.container.adaptWidthToChildren = false;
+        c.container.width = `${cols * colPx}px`;
+      } else {
+        c.container.adaptWidthToChildren = true;
+      }
       for (let i = 0; i < n; i++) {
         const line = model.lines[i];
         const row = this.ensureChipLine(c, i);
+        const { col, row: r } = chipLineCell(i, rows);
         row.text.text = line.label;
         row.text.color = chipRest.ink;
-        // Centred on its own line: (i - (n-1)/2) units from the chip's centre,
-        // plus the optical nudge badgeText gives every string.
-        row.text.top = `${(i - (n - 1) / 2) * csm.size + csm.font * this.metrics.textOpticalTopEm}px`;
-        row.count.top = `${CHIP_COUNT_INSET_PX + i * csm.size}px`;
-        row.zone.top = `${i * csm.size}px`;
+        // Centred on its own line: (r - (rows-1)/2) units from the chip's
+        // centre, plus the optical nudge badgeText gives every string.
+        row.text.top = `${(r - (rows - 1) / 2) * csm.size + csm.font * this.metrics.textOpticalTopEm}px`;
+        row.count.top = `${CHIP_COUNT_INSET_PX + r * csm.size}px`;
+        row.zone.top = `${r * csm.size}px`;
         row.zone.height = `${csm.size}px`;
+        // Its column: the name from that column's left edge, the pill at its
+        // right edge, the tap zone that column's width (the zones still tile
+        // the chip, so every point on it names exactly one room).
+        row.text.left = `${col * colPx}px`;
+        row.count.left = `${-CHIP_COUNT_INSET_PX - (cols - 1 - col) * colPx}px`;
+        row.zone.width = cols > 1 ? `${colPx}px` : "100%";
+        row.zone.left = `${col * colPx}px`;
         row.count.source = countBadgeImage({
           text: line.count,
           ...healthPill(line.health),
@@ -5228,12 +5270,14 @@ export class EntityVisuals {
       c.container.background = chipRest.fill;
       c.container.scaleX = scale;
       c.container.scaleY = scale;
-      // ZERO horizontal offset, always: the chip sits exactly on its anchor.
-      // The only Y offset is half the chip's own height, which puts the chip
-      // entirely above that anchor (see ensureCluster) — not a nudge. A merged
-      // chip grows UPWARD, line by line, as placementPass measures it.
-      c.container.linkOffsetXInPixels = 0;
-      c.container.linkOffsetYInPixels = -((n * csm.size) / 2) * scale;
+      // On its anchor, lifted by half its own height so it sits entirely above
+      // it (see ensureCluster); a merged chip grows UPWARD, line by line, as
+      // placementPass measures it. Then moved by its placement (dx, dy), only
+      // as far as keeps it on the visible map and off every badge and card
+      // (chipPlace.placeChip, 2.496.803): 0, 0 for a chip that fits where it
+      // stands.
+      c.container.linkOffsetXInPixels = chip.dx;
+      c.container.linkOffsetYInPixels = -((rows * csm.size) / 2) * scale + chip.dy;
       c.container.isVisible = true;
     }
     // Chips with no visible member (floor switch, category filter) — and rooms
@@ -5357,6 +5401,7 @@ export class EntityVisuals {
     // resolve through pickClusterAt.
     const zone = new Rectangle(`clusterZone_${name}`);
     zone.width = "100%";
+    zone.horizontalAlignment = Control.HORIZONTAL_ALIGNMENT_LEFT;
     zone.verticalAlignment = Control.VERTICAL_ALIGNMENT_TOP;
     zone.thickness = 0;
     zone.background = "";

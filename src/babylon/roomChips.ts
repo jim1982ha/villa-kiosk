@@ -57,6 +57,46 @@ export interface RoomChip {
    *  The collision test re-projects `centre` onto the view plane instead; see
    *  CHIP_COLLISION for why the two spaces are not the same one. */
   x: number; y: number; halfW: number; halfH: number;
+  /**
+   * How far the DRAWN box is moved from where its anchor puts it (true
+   * perspective, render px): only so far as keeps the chip inside the map's
+   * visible area and off every drawn badge and card (chipPlace.placeChip).
+   * 0, 0 for a chip that fits where it stands. Render set only.
+   */
+  dx: number; dy: number;
+  /**
+   * How the lines are laid out: `cols` columns of up to `rows` lines, each
+   * column filling top-down (chipPlace.chipGrid). 1 × n until a chip is taller
+   * than the visible map.
+   */
+  cols: number; rows: number;
+}
+
+/** A chip's DRAWN box, true perspective: entirely above its anchor (renderChips
+ *  lifts it by half its own height), moved by its placement. The ONE box the
+ *  merge, the placement and placementCheck's counters read. */
+export function chipBox(c: RoomChip): { cx: number; cy: number; hw: number; hh: number } {
+  return { cx: c.x + c.dx, cy: c.y - c.halfH + c.dy, hw: c.halfW, hh: c.halfH };
+}
+
+/** Where line `i` of a chip laid out `rows` lines per column sits: columns
+ *  fill top-down, left to right (chipPlace.chipGrid). renderChips places each
+ *  line's name, pill and tap zone in this cell. */
+export function chipLineCell(i: number, rows: number): { col: number; row: number } {
+  return { col: Math.floor(i / rows), row: i % rows };
+}
+
+/** The line of a drawn chip under a screen point (true perspective), or -1 off
+ *  the chip or on the empty end of its last column — the room a tap there
+ *  names, as the tap zones renderChips lays out in the same cells answer it. */
+export function chipLineAt(c: RoomChip, x: number, y: number): number {
+  const b = chipBox(c);
+  const left = b.cx - b.hw, top = b.cy - b.hh;
+  if (!(x >= left && x < left + 2 * b.hw && y >= top && y < top + 2 * b.hh)) return -1;
+  const col = Math.floor((x - left) / ((2 * b.hw) / c.cols));
+  const row = Math.floor((y - top) / ((2 * b.hh) / c.rows));
+  const i = col * c.rows + row;
+  return i < c.lines.length ? i : -1;
 }
 
 /**
@@ -139,7 +179,7 @@ export function bucketRoomChips(
       lines: [{ key, room, label: room, ids: g.ids.slice(), ringRed: look.ringRed, fault: look.fault, unavailable: look.unavailable }],
       centre: g.sum.scale(1 / g.ids.length), rooms: 1, roomNames: [room],
       ringRed: look.ringRed, ringOn: look.ringOn, unavailable: look.unavailable, fault: look.fault, anyOn: look.anyOn,
-      x: 0, y: 0, halfW: 0, halfH: 0,
+      x: 0, y: 0, halfW: 0, halfH: 0, dx: 0, dy: 0, cols: 1, rows: 1,
     });
   }
   return chips;

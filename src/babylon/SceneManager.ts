@@ -2631,6 +2631,14 @@ export class SceneManager {
     this.visuals.setDeviceMarks(marks);
   }
 
+  /** What the HUD lays over the map (its bars and rail), as the page measured them (client CSS px): room chips are
+   *  drawn clear of it. Taken relative to the canvas here, the one place that knows where the canvas is. */
+  setMapCover(rects: readonly { left: number; top: number; right: number; bottom: number }[]): void {
+    const at = this.scene.getEngine().getRenderingCanvas()?.getBoundingClientRect();
+    const x = at?.left ?? 0, y = at?.top ?? 0;
+    this.visuals.setMapCover(rects.map((r) => ({ left: r.left - x, top: r.top - y, right: r.right - x, bottom: r.bottom - y })));
+  }
+
   private disposed = false;
   /** One-shot guard so handlePageShow's reload can never loop. */
   private reloadedAfterDispose = false;

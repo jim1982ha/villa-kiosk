@@ -128,17 +128,18 @@ console.log("\n  a merged chip is one line per room TALL, and the merge still se
   const sy = (y) => Vector3.Project(new Vector3(0, y, 6), Matrix.IdentityReadOnly, scene.getTransformMatrix(), vp).y;
   const pxPerM = (sy(1.2) - sy(1.3)) * 10;          // screen y grows downward
   const UNIT = 40;                                  // summary.size: one line
-  const derive = (members) => {
+  const begin = (members, cover) => {
     const pass = new PlacementPass();
     pass.begin({
       metrics: { minGapPx: 2, cardIconFraction: 0.8, countPillFraction: 0.4, countFontFraction: 0.6 },
       summary: { size: UNIT, font: 16, countSize: 16, countFont: 10 }, perCardCap: MAX_GRID_CHIPS,
       rooms: {}, focus: new RoomFocus(), exempt: new Set(), scale: 1, cardBudget: 10_000, cellCap: 6,
-      chips: { members, view: { tm: scene.getTransformMatrix(), vp }, text: { charPx: 7, padPx: 20 }, budget: 400 },
+      chips: { members, view: { tm: scene.getTransformMatrix(), vp }, text: { charPx: 7, padPx: 20 }, budget: 400, cover },
     });
     for (const m of members) { pass.roomDisplay.set(m.room, m.room); pass.chipRoom(m.room, "solver"); }
-    return pass.deriveChips();
+    return pass;
   };
+  const derive = (members, cover) => begin(members, cover).deriveChips();
   const at = (id, room, up) => ({ id, room, pos: { x: 0, y: 1.2 + up / pxPerM, z: 6 } });
   // A chip is drawn ENTIRELY ABOVE its anchor. "attic" stands 1.75 lines above
   // "kitchen": clear of a one-line kitchen chip, but inside the top line of a
@@ -158,6 +159,69 @@ console.log("\n  a merged chip is one line per room TALL, and the merge still se
   const again = derive(Array.from({ length: 8 }, (_, i) => at(`r${i}`, `room${i}`, i * 0.9 * UNIT)).reverse());
   ck("  ...and the same rooms in another order give the same chips",
      JSON.stringify(again.map((c) => c.lines.map((l) => l.room))) === JSON.stringify(pile.map((c) => c.lines.map((l) => l.room))));
+  console.log("\n  every room chip is drawn on the visible map, clear of the HUD and of every card (owner, 2026-11-14):");
+  {
+    const { chipBox, chipLineAt } = await import("@/babylon/roomChips");
+    const { drawnCardBox } = await import("@/babylon/placementPass");
+    // A room anchored at a screen point: the camera looks down +z from (0, 1.6, 0).
+    const cx0 = vp.width / 2, cy0 = vp.height / 2;
+    const atPx = (id, room, sx, sy) => ({ id, room, pos: { x: (sx - cx0) / pxPerM, y: 1.6 - (sy - cy0) / pxPerM, z: 6 } });
+    const probe = Vector3.Project(new Vector3(100 / pxPerM, 1.6 - 50 / pxPerM, 6), Matrix.IdentityReadOnly, scene.getTransformMatrix(), vp);
+    ck("the premise: a room placed at a screen point projects there", Math.abs(probe.x - (cx0 + 100)) < 0.5 && Math.abs(probe.y - (cy0 + 50)) < 0.5, [probe.x, probe.y]);
+    // The HUD over the map: a top bar, a bottom bar, and a rail down the left.
+    const TOP = 60, BOTTOM = vp.height - 60;
+    const rail = { left: 10, top: TOP + 8, right: 70, bottom: 500 };
+    const cover = [{ left: 0, top: 0, right: vp.width, bottom: TOP }, { left: 0, top: BOTTOM, right: vp.width, bottom: vp.height }, rail];
+    const edges = (b) => ({ l: b.cx - b.hw, r: b.cx + b.hw, t: b.cy - b.hh, b: b.cy + b.hh });
+    const onMap = (c) => { const e = edges(chipBox(c)); return e.t >= TOP && e.b <= BOTTOM && e.l >= 0 && e.r <= vp.width; };
+    const apart = (a, b, gap = 2) => Math.abs(a.cx - b.cx) >= a.hw + b.hw + gap || Math.abs(a.cy - b.cy) >= a.hh + b.hh + gap;
+    const railBox = { cx: (rail.left + rail.right) / 2, cy: (rail.top + rail.bottom) / 2, hw: (rail.right - rail.left) / 2, hh: (rail.bottom - rail.top) / 2 };
+
+    const [under] = derive([atPx("p", "pool", cx0, 30)]);
+    ck("the premise: a room just below the top edge draws its chip under the top bar", edges(chipBox(under)).t < TOP, edges(chipBox(under)));
+    const [shifted] = derive([atPx("p", "pool", cx0, 30)], cover);
+    ck("a chip under the top bar is moved down, fully inside the visible map", onMap(shifted), edges(chipBox(shifted)));
+    ck("  ...only as far as that: its top edge one gap below the bar, its x unchanged",
+       Math.abs(edges(chipBox(shifted)).t - (TOP + 2)) < 1e-6 && shifted.dx === 0, [edges(chipBox(shifted)), shifted.dx]);
+    const [corner] = derive([atPx("s", "corner room", 20, 80)], cover);
+    ck("a chip in the top-left corner, under the rail, is moved clear of the rail and inside the map",
+       onMap(corner) && apart(chipBox(corner), railBox), edges(chipBox(corner)));
+    const [side] = derive([atPx("k", "edge room", vp.width - 5, cy0)], cover);
+    ck("a chip half off the right edge is moved fully inside it", onMap(side), edges(chipBox(side)));
+
+    const [away] = derive([atPx("g", "garage", -400, cy0)], cover);
+    ck("a room wholly off the screen keeps its chip there, unseen, not lined up along the edge", away.dx === 0 && away.dy === 0 && edges(chipBox(away)).r < 0);
+    const many = Array.from({ length: 30 }, (_, i) => atPx(`d${i}`, `room ${String(i).padStart(2, "0")}`, cx0, 700));
+    const [tall] = derive(many, cover);
+    ck("thirty rooms on one spot: one chip, taller than the map, laid out in columns",
+       tall.lines.length === 30 && tall.cols >= 2 && tall.rows * tall.cols >= 30, [tall.cols, tall.rows]);
+    ck("  ...that fits the visible map, top bar to bottom bar", onMap(tall) && 2 * tall.halfH <= BOTTOM - TOP, edges(chipBox(tall)));
+    const b = chipBox(tall), colW = (2 * b.hw) / tall.cols, rowH = (2 * b.hh) / tall.rows;
+    const tapped = tall.lines.map((_, i) => chipLineAt(tall,
+      b.cx - b.hw + (Math.floor(i / tall.rows) + 0.5) * colW, b.cy - b.hh + ((i % tall.rows) + 0.5) * rowH));
+    ck("  ...each column fills top-down, and a tap on any line, in any column, names that line's room",
+       tapped.every((t, i) => t === i) && chipLineAt(tall, b.cx + b.hw - colW / 2, b.cy - b.hh + rowH / 2) === tall.rows * (tall.cols - 1),
+       tapped);
+    const back = derive([...many].reverse(), cover)[0];
+    ck("  ...and it settles the same whatever order the rooms come in",
+       JSON.stringify(back.lines.map((l) => l.room)) === JSON.stringify(tall.lines.map((l) => l.room)) && back.cols === tall.cols && back.dy === tall.dy);
+    const pile = derive(Array.from({ length: 12 }, (_, i) => atPx(`q${i}`, `room${i}`, cx0 + (i % 3) * 30, 250 - i * 20)), cover);
+    ck("a chain of rooms reaching above the top bar settles on the map with no two chips overlapping",
+       pile.every(onMap) && pile.every((c, i) => pile.every((o, j) => j <= i || apart(chipBox(c), chipBox(o)))), pile.map((c) => [c.lines.length, edges(chipBox(c))]));
+
+    // A card of another room's devices stands where a room chip would be drawn.
+    const study = atPx("s1", "study", cx0, 400);
+    const card = { key: "hall:fan.a", room: "Hall", roomKeys: ["hall"], members: [0, 1, 2, 3], grid: 4, focused: false,
+                   wx: study.pos.x + 10 / pxPerM, wy: study.pos.y - 15 / pxPerM, wz: 6, sx: 0, sy: 0, sz: 0 };
+    const pass = begin([study], cover);
+    const cardBox = drawnCardBox(pass.f, card, scene.getTransformMatrix(), vp);
+    const [bare] = pass.deriveChips();
+    ck("the premise: the study's chip, where it stands, covers the hall's group card", !apart(chipBox(bare), cardBox), [chipBox(bare), cardBox]);
+    const [kept] = pass.settleChips([], [], [card], null);
+    ck("the settled chip is moved off the card, still on the map, near its room",
+       apart(chipBox(kept), cardBox) && onMap(kept) && Math.hypot(kept.dx, kept.dy) < 4 * (kept.halfW + kept.halfH),
+       [chipBox(kept), cardBox]);
+  }
 }
 
 done("✅ a room chip says who is in it, merged or not");

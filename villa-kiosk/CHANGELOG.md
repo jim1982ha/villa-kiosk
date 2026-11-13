@@ -1,3 +1,17 @@
+## 2.496.803
+
+- **Room chips stay on the map you can see.** Zoomed out, a chip could run off the top of the screen, sit under the
+  top bar, the bottom bar or the floor buttons on the left, or hang off a side of the screen. Every room chip is now
+  kept fully inside the visible map, moved only as far as it needs to be.
+- **A long shared chip uses columns.** When many rooms share one chip and their lines would be taller than the map, the
+  lines are laid out in two or more columns, each read top to bottom. Tapping a line in any column still goes to that
+  room.
+- **Room chips no longer cover device badges.** A chip drawn over the corner of a group of device badges is now moved
+  just clear of it, so every badge and group stays visible and tappable.
+- **A device with dead parts names every one of them, and says the device still works.** A camera card read "4 parts
+  unavailable" and nothing more; it now reads, for example, "Person detection, Cell motion detection, Motion alarm and
+  Move to preset not answering, the device itself works", in the Cockpit and in the monthly recap.
+
 ## 2.496.802
 
 - **"Asleep between reports" is now "Unavailable by design", for parts too.** A camera's control it never uses, such as
