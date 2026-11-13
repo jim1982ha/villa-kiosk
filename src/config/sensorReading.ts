@@ -11,7 +11,7 @@
 // and swapped its chart for the text timeline.
 
 import type { HassEntity } from "@/types/ha.types";
-import { isUnavailable } from "@/utils/stateColors";
+import { isUnavailable } from "@/utils/deviceHealth";
 
 export type ReadingKind = "binary" | "measurement" | "text";
 

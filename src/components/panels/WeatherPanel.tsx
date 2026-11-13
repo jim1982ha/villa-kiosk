@@ -30,7 +30,7 @@ import { useHistorySource } from "@/hooks/useHistorySource";
 import { ChartStep, useHistoryRange, useKeptFrom, type HistoryRange } from "./historyRange";
 import { ExpandableChart } from "./ChartWindow";
 import { PERIOD_MS, peakOf, seriesExtent, seriesTotal, type HistoryStatus } from "@/utils/statisticsSeries";
-import { isUnavailable } from "@/utils/stateColors";
+import { isUnavailable } from "@/utils/deviceHealth";
 import type { HassEntity, HistorySeries } from "@/types/ha.types";
 import {
   beaufort, compass, pressureTendency, uvBand, stationReadings, barometerAngle, thermometerFraction, rainTubeTop,

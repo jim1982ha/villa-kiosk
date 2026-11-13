@@ -65,16 +65,26 @@ const E = seen("light.ok", { state: "on" });
 ck("  ...nothing wrong: no mark, no sign, no card", E.mark === null && E.sign === null && E.cardTone === null, E);
 
 {
-  // owner, 2026-10-25: "“hidden” should mean hidden everywhere" — a hidden lock with an open fault and a late
-  // task: no card, no count, no sign (the map already drew no badge)
+  // architecture review item 5 (2026-11-13): a hidden device takes no card, badge or sign with it, and its findings
+  // stay. Until then "hidden means hidden everywhere" (owner, 2026-10-25) dropped its fault and its late task too, so
+  // a VESTA finding about a hidden, offline device, which exists BECAUSE it is hidden, was never seen.
   const id = "lock.old", entities = { [id]: ent(id, "locked") }, entityMap = { [id]: { entityId: id, type: "lock" } };
   const devices = devicesOf({ ids: [], hidden: new Set([id]) });
   const fmData = { ...EMPTY_FM_DATA, tickets: [ticket("t9", id, "Old lock battery low")],
-    schedules: [{ id: "s1", title: "Service the old lock", entityId: id, everyDays: 30, lastDoneAt: old }] };
-  const att = attentionFor({ devices, attentionItems: attentionOf({ devices, entities, entityMap, resolvedRooms: {}, fmData }).attentionItems }, () => true);
-  ck("a hidden device: no Cockpit card, no count, no sign — hidden everywhere",
-     att.attentionGroups.length === 0 && att.health.level === "ok" && issueSeverity(att.attentionGroups, [id], (x) => x) === null,
-     att.attentionGroups.map((g) => g.title));
+    schedules: [{ id: "s1", title: "Service the old lock", entityId: id, everyDays: 30, enabled: true, createdAt: old }] };
+  const problems = { devices, attentionItems: attentionOf({ devices, entities, entityMap, resolvedRooms: { [id]: "Cellar" }, fmData }).attentionItems };
+  const att = attentionFor(problems, () => true);
+  const cards = att.attentionGroups.map((g) => ({ title: g.title, room: g.room, opens: g.entityId ?? null }));
+  ck("a hidden device: its fault and its late task are still Cockpit cards, each on its own, under \"Other\", opening nothing",
+     JSON.stringify(cards.map((c) => c.title).sort()) === JSON.stringify(["Old lock battery low", "Service the old lock"])
+       && cards.every((c) => c.room === "Other" && c.opens === null), cards);
+  ck("  ...counted as any problem, and still no badge mark and no window sign: the hidden device itself has none",
+     att.health.level === "warn" && !deviceIssues(att.attentionGroups).amber.has(id)
+       && issueSeverity(att.attentionGroups, [id], (x) => x) === null, { health: att.health, amber: [...deviceIssues(att.attentionGroups).amber] });
+  ck("  ...and never listed: the profile's device list and its pickers leave it out (shows), its problems do not (raises)",
+     !att.shows(id) && att.raises(id) && !att.devices.ids.includes(id));
+  ck("  ...a profile that may not open it is told nothing of it",
+     attentionFor(problems, (x) => x !== id).attentionGroups.length === 0);
 }
 
 console.log("\n  every window as its profile sees the villa (architecture review N, card 5)");

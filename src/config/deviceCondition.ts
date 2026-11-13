@@ -13,7 +13,8 @@
 
 import type { EntityType } from "@/types/scene.types";
 import type { HassEntity } from "@/types/ha.types";
-import { binaryStatus, contactOf, lockBolt, statusKeyFor, type StatusKey } from "@/utils/stateColors";
+import { binaryStatus, lockBolt, statusKeyFor, type StatusKey } from "@/utils/stateColors";
+import { contactOf } from "@/utils/deviceHealth";
 import { alertStateFor, binarySensorClassInfo, isMotionSensor } from "./BinarySensorClasses";
 
 /**

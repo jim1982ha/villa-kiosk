@@ -44,7 +44,7 @@ import InlineConfirm from "@/components/common/InlineConfirm";
 import { NOT_SENT, allSent } from "@/ha/serviceOutcome";
 import { usePendingAck } from "@/hooks/usePendingAck";
 import { domainOf } from "@/utils/entityDomain";
-import { NOT_IN_HA } from "@/utils/stateColors";
+import { NOT_IN_HA } from "@/utils/deviceHealth";
 import EmptyLine from "@/components/common/EmptyLine";
 
 interface Props {

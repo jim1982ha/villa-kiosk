@@ -300,7 +300,7 @@ console.log("\n  one way a problem's entity becomes its card's device, for the o
        && cardHead(undefined, "Pump weak", undefined).room === "Other", cardHead(undefined, "Pump weak", undefined));
   const cc = readFileSync(new URL("../../src/config/cockpitCard.ts", import.meta.url), "utf8");
   ck("  ...and the Watched cards name and place their device only through it",
-     /cardDevice\(entityId, t\.room, \{ devices, entityMap, entities, resolvedRooms \}\)/.test(cc) && /\.\.\.cardHead\(device, title, t\.room\)/.test(cc)
+     /cardDevice\(entityId, t\.room, \{ devices, entityMap, entities, resolvedRooms \}\)/.test(cc) && /\.\.\.cardHead\(device, title, hidden \? undefined : t\.room\)/.test(cc)
        && !/\blabelOf\(|deviceRoomOrRecord\(|roomLabel\(/.test(cc.slice(cc.indexOf("export function confirmingCards"))));
 }
 

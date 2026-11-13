@@ -102,7 +102,7 @@ ck("the light's sliders and the cover's follow the device (useLiveDraft, one set
 // blamed on the 3D model: the window says since when it is missing and to check it there. Driven from the history rows
 // the villa's system keeps, through the history source, to the words.
 {
-  const { missingAdvice } = await import("@/utils/stateColors");
+  const { missingAdvice } = await import("@/utils/deviceHealth");
   const { loadOne } = await import("@/ha/historySource");
   const { momentText } = await import("@/utils/dateText");
   const t0 = 1_700_000_000_000, M = 60_000, iso = (t) => new Date(t).toISOString();

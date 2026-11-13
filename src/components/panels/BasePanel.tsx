@@ -28,7 +28,7 @@ import { HistoryRangeShare } from "./historyRange";
 import ModalFooter from "@/components/common/ModalFooter";
 import BackButton from "@/components/common/BackButton";
 import { useHA } from "@/ha/HAStateStore";
-import { isOffline, missingFromHa } from "@/utils/stateColors";
+import { isOffline, missingFromHa } from "@/utils/deviceHealth";
 import UnavailableNotice from "./UnavailableNotice";
 import { deviceRoom } from "@/config/devicePlace";
 
@@ -66,7 +66,7 @@ interface Props {
    *  panel that already shows every reading of the device (DeviceGroupPanel). */
   deviceReadings?: false;
   /** The device has lost contact: the notice, above the window's own content. Default: its entity's own
-   *  (stateColors.isOffline); a window of several readings says so only when every one is lost (DeviceGroupPanel). */
+   *  (deviceHealth.isOffline); a window of several readings says so only when every one is lost (DeviceGroupPanel). */
   lost?: boolean;
   onClose: () => void;
   children: ReactNode;

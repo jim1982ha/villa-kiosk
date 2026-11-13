@@ -26,6 +26,7 @@ import type { SwitchPosition } from "@/utils/entityState";
 import { phantomEntity } from "@/utils/phantomEntity";
 import { domainOf } from "./entityDomain";
 import { shownAsleep } from "@/ha/unavailableByDesign";
+import { lostParts, NO_PARTS, type PartsOf } from "./deviceHealth";
 
 type DeviceActivity = "on" | "off" | "alert" | "info";
 
@@ -77,6 +78,9 @@ export interface DeviceReading {
   fault: boolean;
   /** Asleep by design and shown with its last report (ha/unavailableByDesign.shownAsleep): the grey "z". */
   asleep: boolean;
+  /** It answers while a part of it does not (deviceHealth.lostParts, its linked entity aside: that is its own corner):
+   *  the grey "?" on a face that still says what it does. */
+  partLost: boolean;
 }
 
 /** The five-way live-state reading a badge is painted from: this module's own
@@ -91,7 +95,7 @@ export type BadgeKind = DeviceActivity | "unavailable";
  *   critical  a critical device has lost contact   red "?"
  *   alarm     an alarm, the condition "wrong" (a leak, a low battery, a jammed lock)   red "!"
  *   fault     an open Cockpit fault                 amber "!"
- *   lost      contact lost                          grey "?"
+ *   lost      contact lost, with it or with a part of it (DeviceReading.partLost)   grey "?"
  *   asleep    asleep by design, its last report shown   grey "z"
  *   moving    on its way between two rest states (TRANSITIONAL_STATES)   teal "…"
  *   active    in use, the condition "inUse": a detection, a door or window open, a lock unlocked   a plain dot in
@@ -183,7 +187,9 @@ export function badgeMarkOf(r: DeviceReading): BadgeMark | null {
     critical: lost && r.critical,
     alarm: kind === "alert",
     fault: r.fault,
-    lost,
+    // ⚠️ A DEAD PART IS SAID TOO (architecture review item 4, 2026-11-13): a camera streaming with its person detection
+    // unavailable for days wore no mark; its face still says what it does, its corner the grey "?"
+    lost: lost || r.partLost,
     asleep: r.asleep,
     moving: TRANSITIONAL_STATES.has(r.entity.state),
     // in use, as the condition says it (a third reading of a lock lived here, inUseNow, to 2.496.542)
@@ -414,6 +420,9 @@ export interface LookSource {
      *  its amber "!" (owner, 2026-10-22: badge proposal 2). Absent: no fault is drawn (the Cockpit's own counts, which
      *  list the faults themselves). */
     hasFault?: (entityId: string) => boolean;
+    /** Each device's parts its health asks (deviceGroups.LookFacts.partsOf): a dead one is its grey "?". Absent: a device
+     *  is its own entity (the Cockpit's own tiles). */
+    partsOf?: PartsOf;
   };
   /** A linked switch the person has just thrown and Home Assistant has not yet
    *  confirmed: true/false while it is pending, undefined otherwise. Only the
@@ -434,28 +443,30 @@ export interface DeviceMarks {
   critical: ReadonlySet<string>;
   isHidden: (entityId: string) => boolean;
   faults: ReadonlySet<string>;
+  /** Each device's parts (deviceGroups.LookFacts.partsOf): config only, so a drawing repaints a dead part with its state. */
+  partsOf: PartsOf;
 }
 
 /** The marks of the villa's look facts (deviceGroups.lookFacts, the ones its devices answer from) and the devices with an
  *  amber issue: the facts themselves, never rebuilt, so the map and the lists read the same answer. Pure. */
-export function marksOf(facts: Pick<DeviceMarks, "critical" | "isHidden">, faults: ReadonlySet<string>): DeviceMarks {
-  return { critical: facts.critical, isHidden: facts.isHidden, faults };
+export function marksOf(facts: Pick<DeviceMarks, "critical" | "isHidden" | "partsOf">, faults: ReadonlySet<string>): DeviceMarks {
+  return { critical: facts.critical, isHidden: facts.isHidden, faults, partsOf: facts.partsOf };
 }
 
 /** The marks as a LookSource reads them (`config` with its entity map: `{ entityMap, ...lookMarks(marks) }`). */
-export function lookMarks(m: DeviceMarks): Pick<LookSource["config"], "isCritical" | "isHidden" | "hasFault"> {
-  return { isCritical: (id) => m.critical.has(id), isHidden: m.isHidden, hasFault: (id) => m.faults.has(id) };
+export function lookMarks(m: DeviceMarks): Pick<LookSource["config"], "isCritical" | "isHidden" | "hasFault" | "partsOf"> {
+  return { isCritical: (id) => m.critical.has(id), isHidden: m.isHidden, hasFault: (id) => m.faults.has(id), partsOf: m.partsOf };
 }
 
 const sameSet = (a: ReadonlySet<string>, b: ReadonlySet<string>) => a === b || (a.size === b.size && [...a].every((id) => b.has(id)));
 
-/** Two marks that draw the same: the same lists, the same hidden test. */
+/** Two marks that draw the same: the same lists, the same hidden test, the same parts. */
 export function sameMarks(a: DeviceMarks, b: DeviceMarks): boolean {
-  return a.isHidden === b.isHidden && sameSet(a.critical, b.critical) && sameSet(a.faults, b.faults);
+  return a.isHidden === b.isHidden && a.partsOf === b.partsOf && sameSet(a.critical, b.critical) && sameSet(a.faults, b.faults);
 }
 
-/** Before the villa is read: nothing critical, hidden or at fault. */
-export const NO_MARKS: DeviceMarks = { critical: new Set(), isHidden: () => false, faults: new Set() };
+/** Before the villa is read: nothing critical, hidden or at fault, every device its own entity. */
+export const NO_MARKS: DeviceMarks = { critical: new Set(), isHidden: () => false, faults: new Set(), partsOf: NO_PARTS };
 
 /** Everything a device looks like, from one place. */
 export interface DeviceLook {
@@ -486,6 +497,8 @@ export interface DeviceLook {
   onCriticalList: boolean;
   /** It has an open Cockpit fault (LookSource.config.hasFault) — its room chip's number is amber for it. */
   fault: boolean;
+  /** It answers, and a part of it does not (DeviceReading.partLost): its grey "?", its room's grey number. */
+  partLost: boolean;
   /** Hidden in the villa's system: the map draws no badge for it (drawsBadge). */
   hidden: boolean;
   /** POWER: its switch's position, "none" when it has no switch. */
@@ -514,24 +527,29 @@ export function readingOf(entityId: string, source: LookSource): DeviceReading {
       link = ownReadingOf(linkedId, source);
     }
   }
-  return { ...ownReadingOf(entityId, source), linked: !!linkedId, linkedOn, link };
+  return { ...ownReadingOf(entityId, source, linkedId), linked: !!linkedId, linkedOn, link };
 }
 
-/** One entity's reading on its own facts, its link not followed. */
-function ownReadingOf(entityId: string, source: LookSource): DeviceReading {
+/** One entity's reading on its own facts, its link not followed (`linkedId`: its linked entity, never one of its lost
+ *  parts here: its own corner says it). */
+function ownReadingOf(entityId: string, source: LookSource, linkedId?: string): DeviceReading {
   const own = source.state(entityId);
   const entity = own ?? phantomEntity(entityId);
+  const condition = conditionOf(source.typeOf(entityId), entity);
+  const parts = source.config.partsOf;
   return {
     type: source.typeOf(entityId),
     entity,
     linked: false,
     linkedOn: false,
     link: null,
-    condition: conditionOf(source.typeOf(entityId), entity),
+    condition,
     critical: source.config.isCritical?.(entityId) ?? false,
     hidden: source.config.isHidden(entityId),
     fault: source.config.hasFault?.(entityId) ?? false,
     asleep: shownAsleep(own),
+    partLost: condition !== "lost" && !!parts
+      && lostParts(entityId, parts, (id) => source.state(id)).some((p) => p !== linkedId),
   };
 }
 
@@ -549,6 +567,7 @@ export function deviceLook(entityId: string, source: LookSource): DeviceLook {
     critical: r.critical && own === "unavailable",
     onCriticalList: r.critical && !r.hidden,
     fault: r.fault && !r.hidden,
+    partLost: r.partLost && !r.hidden,
     hidden: r.hidden,
     power: switchable ? devicePower(source.state(entityId), entityId).position : "none",
     linkedOn: r.linkedOn,
@@ -627,7 +646,7 @@ interface GroupLook {
    *  longer carries "needs attention" (that moved to its count, see
    *  summaryLook.roomHealth), so it must not lose "on" to a red it never draws. */
   anyOn: boolean;
-  /** A member is unavailable — dimming is its own signal, never a ring. */
+  /** A member is unavailable, or a part of one (DeviceLook.partLost) — dimming is its own signal, never a ring. */
   unavailable: boolean;
   /** A member has an open Cockpit fault (DeviceLook.fault): a room's number is amber for it (summaryLook.roomHealth). */
   fault: boolean;
@@ -674,7 +693,7 @@ export function groupLook(
     if (red) anyAlert = true;
     else everyRingAlert = false;
     if (m.kind === "on") anyActive = true;
-    if (m.kind === "unavailable" || link === "lost") unavailable = true;
+    if (m.kind === "unavailable" || m.partLost || link === "lost") unavailable = true;
     if (m.fault || link === "fault") fault = true;
     if (m.power === "on") onCount++;
     if (m.active) activeCount++;

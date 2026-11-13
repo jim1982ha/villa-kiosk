@@ -7,7 +7,7 @@
 import type { AppConfig, DeviceGroup } from "./AppConfig";
 import type { EntityMapping } from "@/types/scene.types";
 import type { HassEntity } from "@/types/ha.types";
-import { lostContact } from "@/utils/stateColors";
+import { deviceHealth, partsOfFolding, type DeviceHealth, type PartsOf } from "@/utils/deviceHealth";
 import { domainOf } from "@/utils/entityDomain";
 
 /** Every entity_id folded into some group as a (non-primary) member — these
@@ -305,6 +305,9 @@ interface VillaDeviceInput {
   dismissed: ReadonlySet<string>;
   /** Hidden in the villa's system, by anyone (the store's hiddenInHaEntityIds, registryResolve): never a device. */
   hidden: ReadonlySet<string>;
+  /** Filed by the villa's system as configuration or diagnostic, or hidden there (the store's suppressedEntityIds): never
+   *  a part a device's health asks (deviceHealth.partsOfFolding). */
+  suppressed: ReadonlySet<string>;
   /** Entity ids the 3D model itself carries — a device can be one of these
    *  without Home Assistant knowing it, and vice versa. */
   mappedEntityIds: ReadonlySet<string>;
@@ -336,15 +339,21 @@ interface VillaDeviceInput {
 export interface LookFacts {
   critical: ReadonlySet<string>;
   isHidden: (entityId: string) => boolean;
+  /** The parts of each device its health asks (deviceHealth.partsOfFolding): the badge's grey "?" for a dead part and
+   *  the offline lists read the same ones. */
+  partsOf: PartsOf;
 }
 
-/** The villa's look facts (criticalDevices, hiddenIn), from its critical list, its hidden entities and the fold. They
- *  change only with the registry, the critical list and the config, never per state push (the map repaints on them). */
-export function lookFacts(input: Pick<VillaDeviceInput, "critical" | "hidden" | "entityDeviceIds" | "deviceUnits">,
-  folding: ReadonlyMap<string, string>): LookFacts {
+/** The villa's look facts (criticalDevices, hiddenIn, each device's parts), from its critical list, its hidden and
+ *  suppressed entities, the owner's groups and the fold. They change only with the registry, the critical list and the
+ *  config, never per state push (the map repaints on them). */
+export function lookFacts(input: Pick<VillaDeviceInput, "critical" | "hidden" | "suppressed" | "entityDeviceIds" | "deviceUnits"
+  | "entityMap" | "deviceGroups">, folding: ReadonlyMap<string, string>): LookFacts {
   return {
     critical: criticalDevices(input.critical, folding, input.entityDeviceIds, input.deviceUnits),
     isHidden: hiddenIn(input.hidden, folding),
+    partsOf: partsOfFolding(folding, { suppressed: input.suppressed, hidden: input.hidden,
+      chosen: new Set(input.deviceGroups.flatMap((g) => g.memberEntityIds)), disabled: (id) => !!input.entityMap[id]?.disabled }),
   };
 }
 
@@ -352,9 +361,13 @@ export interface VillaDevices {
   /** Every device the villa actually has — real, not hidden, not dismissed,
    *  folded so a multi-entity device appears once. */
   readonly ids: readonly string[];
-  /** The subset that has lost contact (lostContact: "unavailable", or an entity the villa's system does not have —
-   *  "Missing"); never "unknown" (2026-10-18). */
+  /** The subset that has lost contact (its health "lost": "unavailable", or an entity the villa's system does not
+   *  have, "Missing"); never "unknown" (2026-10-18). */
   readonly unavailable: readonly string[];
+  /** The subset that answers while some of its parts do not (its health "partly"): alive, never in `unavailable`. */
+  readonly partlyLost: readonly string[];
+  /** The health of one of `ids` (deviceHealth): alive, partly lost (which parts) or lost. */
+  healthOf(entityId: string): DeviceHealth;
   /** Is this entity one of the villa's devices? Provided so callers stop
    *  building their own `Set` from `ids` — five of them did. */
   has(entityId: string): boolean;
@@ -376,6 +389,8 @@ export function villaDevices(input: VillaDeviceInput): VillaDevices {
   const ids = selectableDeviceIds(input.entityMap, input.mappedEntityIds, input.entities, input.dismissed, folding,
     facts.isHidden);
   const set = new Set(ids);
+  const health = new Map(ids.map((id) => [id, deviceHealth(id, input.entities, facts.partsOf)]));
+  const healthOf = (id: string) => health.get(id) ?? deviceHealth(id, input.entities, facts.partsOf);
   return {
     ids,
     // "Which real devices are currently offline" — the reality filter
@@ -383,8 +398,12 @@ export function villaDevices(input: VillaDeviceInput): VillaDevices {
     // job, so the two cannot drift apart. They did once: the fault picker had
     // its own, laxer idea of what counted as a device.
     // lost contact, never "unknown": a sensor with no value to give is not offline (2026-10-18); a device the villa's
-    // system no longer has is, but never before its states have come (lostContact)
-    unavailable: ids.filter((id) => lostContact(input.entities, id)),
+    // system no longer has is, but never before its states have come (deviceHealth.lostContact)
+    unavailable: ids.filter((id) => healthOf(id).kind === "lost"),
+    // ⚠️ A DEAD PART OF A LIVE DEVICE (architecture review item 4, 2026-11-13): only the entity standing for each device
+    // was asked, so a camera whose person detection had been unavailable for days was on no list
+    partlyLost: ids.filter((id) => healthOf(id).kind === "partly"),
+    healthOf,
     has: (id) => set.has(id),
     deviceOf: (id) => deviceOf(folding, id),
     deviceOfRecord: recordDeviceOf(folding, (id) => id in input.entities),
@@ -399,7 +418,8 @@ export function villaDevices(input: VillaDeviceInput): VillaDevices {
 export function devicesFor(devices: VillaDevices, may: (entityId: string) => boolean): VillaDevices {
   const ids = devices.ids.filter(may);
   const set = new Set(ids);
-  return { ...devices, ids, unavailable: devices.unavailable.filter(may), has: (id) => set.has(id) };
+  return { ...devices, ids, unavailable: devices.unavailable.filter(may), partlyLost: devices.partlyLost.filter(may),
+    has: (id) => set.has(id) };
 }
 
 // ── One identity for every opener (2.496.260) ──────────────────────────────

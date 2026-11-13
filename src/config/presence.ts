@@ -9,7 +9,8 @@
 import type { HassEntity } from "@/types/ha.types";
 import { labelOf } from "./EntityMap";
 import type { StateSince } from "@/ha/historySource";
-import { STATUS_COLOR, statusKeyFor, UNKNOWN_STATES, type StatusKey } from "@/utils/stateColors";
+import { STATUS_COLOR, statusKeyFor, type StatusKey } from "@/utils/stateColors";
+import { UNKNOWN_STATES } from "@/utils/deviceHealth";
 import { fmtDuration } from "@/components/panels/chartUtils";
 
 export type PresenceState = "occupied" | "empty" | "unknown";

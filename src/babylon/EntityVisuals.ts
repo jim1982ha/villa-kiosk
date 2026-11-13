@@ -164,6 +164,7 @@ import "./babylonSideEffects";
 import { onActiveFloor, stampedFloor } from "./floorOf";
 import { deviceRoom } from "@/config/devicePlace";
 import { isDomain } from "@/utils/entityDomain";
+import { isOffline } from "@/utils/deviceHealth";
 
 // Baseline emissive for an UNWIRED light marker (no HA state yet). SweetHome
 // ceiling spots / LED strips export as small placeholder spheres; at the old
@@ -2311,7 +2312,10 @@ export class EntityVisuals {
     // badge when only the member changed. FIRST, before the linked routing
     // below: the badges it repaints read their linked entity from this cache
     // (deviceLook), so caching after would paint them from the old state.
+    // a part that changed contact (or came in lost: its device may have been painted before it) repaints its device
+    const prev = this.lastState.get(entity.entity_id);
     this.lastState.set(entity.entity_id, entity);
+    if (prev ? isOffline(prev) !== isOffline(entity) : isOffline(entity)) this.applyPartRouting(entity.entity_id);
 
     // Motion/presence routing (camera beam or room glow) runs regardless of
     // whether THIS entity has a mesh of its own — a plain HA binary_sensor
@@ -2526,6 +2530,22 @@ export class EntityVisuals {
       const map = this.mapping.get(id);
       if (st && map) this.updateLabel(id, map.type, st);
     }
+  }
+
+  /** A PART of a device (deviceHealth.partsOfFolding) lost or regained contact: repaint the device's badge, whose
+   *  grey "?" says a dead part (deviceActivity.badgeMarkOf). Only on that change, which is rare: every badge is asked. */
+  private applyPartRouting(partId: string): void {
+    let hit = false;
+    for (const id of this.labels.keys()) {
+      if (!this.marks.partsOf(id).includes(partId)) continue;
+      const st = this.lastState.get(id);
+      const map = this.mapping.get(id);
+      if (st && map) { this.updateLabel(id, map.type, st); hit = true; }
+    }
+    if (!hit) return;
+    // a room chip's number takes its colour in the layout pass (summaryLook.roomHealth)
+    this.markLayoutDirty();
+    this.requestRender();
   }
 
   /** A device whose LINKED entity has a badge of its own: that badge wears this device's pictogram (badgeSubject), and

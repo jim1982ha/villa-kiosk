@@ -60,7 +60,7 @@ interface HeaderInput {
 }
 
 /** A linked entity's switch: its position (`isOn`, as just pressed), whether its position is known at all (`known`:
- *  not for a lock in motion, devicePower), and its contact (stateColors.contactOf). */
+ *  not for a lock in motion, devicePower), and its contact (deviceHealth.contactOf). */
 interface LinkedState { isOn: boolean; known: boolean; contact: "lost" | "no-value" | "ok" }
 
 /** The word under a linked entity's name: "Unavailable" only when contact is LOST, "Unknown" when the device answers

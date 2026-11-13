@@ -4,10 +4,10 @@
 // again, fm/faultConfirm), from ONE profile's view of the villa (attention.attentionFor). Pure; Messages only
 // draws what this returns, a check reads it by value.
 //
-// ⚠️ A HIDDEN DEVICE'S CLOSED FAULT STILL SHOWED (owner, 2026-10-25: "hidden means hidden everywhere"): the open issues
-// left a hidden device out, and the Watched list was built beside them, in the page, through the profile's visibility
-// alone, which never asks whether a device is hidden. Both lists now pass the one predicate the profile's view owns
-// (VillaAttention.shows: not hidden, and the profile may open it).
+// ⚠️ ONE PREDICATE FOR EVERY SECTION (owner, 2026-10-25): the Watched list was built beside the open issues, in the page,
+// through a visibility of its own. Every section passes the one the profile's view owns for problems
+// (VillaAttention.raises: the profile may open it), and files a hidden device's fault as the open issues do: under
+// "Other", on no device card (architecture review item 5, 2026-11-13: hidden is no longer dropped).
 
 import type { AgentCadence } from "@/agent/agentApi";
 import type { ConfirmingFault } from "@/fm/faultConfirm";
@@ -39,7 +39,7 @@ function watchList(clearing: readonly OnWatch[], fmData: FmData, cadence: AgentC
 
 /** Every card Open issues draws for the profile whose view is `view` (useVillaAttention). `fmData`: the fault
  *  records; `cadence`: the VESTA Agent's own timing (null: it did not say); `now`: the moment the cards are read at. */
-export function cockpitIssues(view: Pick<VillaAttention, "attentionGroups" | "devices" | "shows" | "clearing">, opts: {
+export function cockpitIssues(view: Pick<VillaAttention, "attentionGroups" | "devices" | "raises" | "clearing">, opts: {
   fmData: FmData;
   cadence: AgentCadence | null;
   now: Date;
@@ -48,7 +48,7 @@ export function cockpitIssues(view: Pick<VillaAttention, "attentionGroups" | "de
   resolvedRooms: Record<string, string>;
 }): CockpitIssues {
   const { fmData, cadence, now, entities, entityMap, resolvedRooms } = opts;
-  const cards = { devices: view.devices, entities, entityMap, resolvedRooms, may: view.shows };
+  const cards = { devices: view.devices, entities, entityMap, resolvedRooms, may: view.raises };
   return {
     // ⚠️ IN THEIR COLOUR'S ORDER (owner, 2026-11-05): red, amber, grey, then what is being handled; within a colour the
     // grouping's own order (attention.groupAttention), a stable sort

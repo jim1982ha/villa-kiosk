@@ -4,13 +4,14 @@
 // security stakes). Replaces the panel's normal toggle/controls entirely: a
 // device HA has no contact with can't be reliably commanded, and showing the
 // toggle as a definite (usually "Off") state misrepresents what's actually
-// known — see utils/stateColors.isUnavailable's docstring for the LockPanel
+// known — see utils/deviceHealth.isUnavailable's docstring for the LockPanel
 // case ("UNLOCKED" shown for a lock HA had actually lost contact with) that
 // prompted this pattern.
 
 import { AlertTriangle } from "lucide-react";
 import { useHA } from "@/ha/HAStateStore";
-import { missingAdvice, missingFromHa, NOT_IN_HA, STATUS_PILL_CLASS } from "@/utils/stateColors";
+import { STATUS_PILL_CLASS } from "@/utils/stateColors";
+import { missingAdvice, missingFromHa, NOT_IN_HA } from "@/utils/deviceHealth";
 import { useVillaModel } from "@/config/VillaModel";
 import { lostPillTone } from "@/config/reading";
 import { usePanelActions } from "./PanelActionsContext";

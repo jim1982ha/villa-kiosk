@@ -9,7 +9,7 @@
 import { register } from "node:module";
 register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
-const { isOffline, isUnavailable } = await import("@/utils/stateColors");
+const { isOffline, isUnavailable } = await import("@/utils/deviceHealth");
 const { villaDevices, deviceFolding } = await import("@/config/deviceGroups");
 const { attentionOf, groupAttention, villaHealthFrom, attentionTone } = await import("@/config/attention");
 const { cockpitCard } = await import("@/config/cockpitCard");
@@ -36,7 +36,7 @@ const entities = {
 const ids = Object.keys(entities);
 const entityMap = Object.fromEntries(ids.map((id) => [id, { entityId: id, type: id.split(".")[0], label: id }]));
 const folding = deviceFolding(entityMap, [], { "lock.door": "dev-door", "sensor.door_battery": "dev-door" });
-const d = villaDevices({ entityMap, deviceGroups: [], hidden: new Set(), dismissed: new Set(), mappedEntityIds: new Set(ids),
+const d = villaDevices({ entityMap, deviceGroups: [], hidden: new Set(), suppressed: new Set(), dismissed: new Set(), mappedEntityIds: new Set(ids),
   entities, entityDeviceIds: { "lock.door": "dev-door", "sensor.door_battery": "dev-door" }, folding });
 ck("the Cockpit's offline list leaves out the unknown sensor and keeps the lost ones",
    !d.unavailable.includes("sensor.windchill") && d.unavailable.includes("sensor.th_humidity") && d.unavailable.includes("lock.door"),
@@ -44,7 +44,7 @@ ck("the Cockpit's offline list leaves out the unknown sensor and keeps the lost 
 
 console.log("  one list of critical devices:");
 // the villa's devices with the rule's critical list — the device list answers which are critical (villaDevices.isCritical)
-const build = (critical) => attentionOf({ devices: villaDevices({ entityMap, deviceGroups: [], hidden: new Set(), dismissed: new Set(),
+const build = (critical) => attentionOf({ devices: villaDevices({ entityMap, deviceGroups: [], hidden: new Set(), suppressed: new Set(), dismissed: new Set(),
   mappedEntityIds: new Set(ids), entities, entityDeviceIds: { "lock.door": "dev-door", "sensor.door_battery": "dev-door" }, folding, critical }),
   entities, entityMap, resolvedRooms: {}, fmData: EMPTY_FM_DATA }).attentionItems;
 // the rule names the lock's BATTERY sensor; the model shows the lock: the device is critical
@@ -85,7 +85,7 @@ console.log("  a critical device that lost contact is red everywhere, not only o
   const { panelHeader } = await import("@/components/panels/panelHeader");
   const { lostPillTone, criticalPillTone, lockPill } = await import("@/config/reading");
   const { markSurface, categorySurface } = await import("@/config/EntityCategories");
-  const crit = villaDevices({ entityMap, deviceGroups: [], hidden: new Set(), dismissed: new Set(), mappedEntityIds: new Set(ids),
+  const crit = villaDevices({ entityMap, deviceGroups: [], hidden: new Set(), suppressed: new Set(), dismissed: new Set(), mappedEntityIds: new Set(ids),
     entities, entityDeviceIds: { "lock.door": "dev-door", "sensor.door_battery": "dev-door" }, folding,
     critical: new Set(["sensor.door_battery"]) });
   const config = { entityMap, isCritical: crit.isCritical, isHidden: () => false };

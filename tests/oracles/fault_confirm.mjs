@@ -201,11 +201,12 @@ ck("  ...and a fault only a person closes has no next check: nothing checks it",
      counted.map((e) => propText(e, "unit")));
 }
 
-console.log("\n  a hidden device: no card in any section (config/cockpitIssues, the cards Open issues draws):");
+console.log("\n  a hidden device: no device card in any section, its faults filed under \"Other\" (config/cockpitIssues):");
 {
-  // ⚠️ OWNER, 2026-10-25: "hidden means hidden everywhere". The open issues left a hidden device out; its CLOSED fault
-  // was still a Watched card, built beside them through the profile's visibility alone. Driven through the villa's
-  // items → the profile's view → cockpitIssues, the very path Messages takes (useCockpitIssues).
+  // ⚠️ OWNER, 2026-10-25: one predicate for every section (the Watched list was built beside the open issues through a
+  // visibility of its own). ⚠️ ARCHITECTURE REVIEW ITEM 5 (2026-11-13): a hidden device's faults are no longer dropped
+  // with it, open or watched: each is its own card under "Other", opening nothing. Driven through the villa's items →
+  // the profile's view → cockpitIssues, the very path Messages takes (useCockpitIssues).
   const { cockpitIssues } = await import("@/config/cockpitIssues");
   const jammed = { id: "h1", title: "Door jammed", status: "open", openedAt: at(-20), entityId: "lock.door", photoIds: [],
     updates: [opened] };
@@ -230,9 +231,13 @@ console.log("\n  a hidden device: no card in any section (config/cockpitIssues, 
   })();
   ck("a watched card carries its alert's number, so VESTA's card of it is found there (and leaves Notifications)",
      numbered.watched.find((c) => c.key === "watched:device:lock.door")?.lines[0].alertNumber === 90, numbered.watched.map((c) => c.lines));
-  ck("  ...hidden in the villa's system: no card about it, open or watched; every other card kept",
+  const filed = (cards, key) => cards.filter((c) => c.key === key).map((c) => ({ room: c.room, opens: c.entityId ?? null }));
+  ck("  ...hidden in the villa's system: no card about the device, open or watched; its faults each their own card under \"Other\", opening nothing",
      about(quiet.open).length === 0 && about(quiet.watched).length === 0
-     && quiet.watched.map((c) => c.key).join() === "watched:device:lock.back,watched:device:switch.pump,watched:device:lock.side" && quiet.open.length === seen.open.length - 1,
+     && JSON.stringify(filed(quiet.open, "item:fault:h1")) === JSON.stringify([{ room: "Other", opens: null }])
+     && JSON.stringify(filed(quiet.watched, "watched:w1")) === JSON.stringify([{ room: "Other", opens: null }])
+     && quiet.watched.map((c) => c.key).join() === "watched:device:lock.back,watched:w1,watched:device:switch.pump,watched:device:lock.side"
+     && quiet.open.length === seen.open.length,
      { open: quiet.open.map((c) => c.key), watched: quiet.watched.map((c) => c.key) });
   ck("  ...and Messages draws exactly these, its open issues and its Watched rows from useCockpitIssues (the profile's view)",
      /const \{ open, watched, closed \} = useCockpitIssues\(\);/.test(readFileSync(new URL("../../src/components/cockpit/MessagesTab.tsx", import.meta.url), "utf8"))

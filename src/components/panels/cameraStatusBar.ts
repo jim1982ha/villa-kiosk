@@ -13,7 +13,7 @@
 // Pure: tests/oracles/camera_status_bar.mjs. It was an inline closure in
 // CameraPanel.tsx, where 2.496.179 painted a lost motion sensor green.
 
-import { contactOf } from "@/utils/stateColors";
+import { contactOf } from "@/utils/deviceHealth";
 import type { StateHistoryPoint } from "@/types/ha.types";
 import { mergeStateHistories } from "./chartUtils";
 

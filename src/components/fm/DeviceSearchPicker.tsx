@@ -31,7 +31,7 @@ import { useMemo, useState } from "react";
 import type { EntityMapping } from "@/types/scene.types";
 import { labelOf } from "@/config/EntityMap";
 import type { VillaDevices } from "@/config/deviceGroups";
-import { lostContact } from "@/utils/stateColors";
+import { lostContact } from "@/utils/deviceHealth";
 import { deviceRoom } from "@/config/devicePlace";
 import type { HassEntity } from "@/types/ha.types";
 import { deviceSearchTexts, matchesQuery, type SearchSource } from "@/config/deviceRecord";

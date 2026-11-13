@@ -1,3 +1,15 @@
+## 2.496.797
+
+- **A device that works but has a dead part now says so.** A camera that streams while its person detection has been
+  unavailable for days showed nothing anywhere. Its card in Open issues now reads "Person detection unavailable" in
+  the grey of lost contact, with the time it went; its window shows the grey warning sign, its badge on the map the
+  grey "?" and its room's number turns grey, while the camera itself still reads as working. Parts the villa's system
+  files as settings or diagnostics, parts someone hid and parts switched off make no noise.
+- **A hidden device no longer hides VESTA's findings about it.** A device hidden in the villa's system still has no
+  card, badge or window sign, but a fault or a late task about it is no longer dropped: it is its own card in Open
+  issues, Watch and Closed, under "Other". A finding that exists because the device is hidden (an automation still
+  watching a hidden, offline device) is now seen.
+
 ## 2.496.796
 
 - **Every device window shows its state the same way.** A light, a fan, a switch, a TV and an A/C now show a state pill

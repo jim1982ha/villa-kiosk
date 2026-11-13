@@ -4,7 +4,7 @@
 // Asked only while such a window is open, so it adds one read per window, never one per device.
 
 import { useMemo } from "react";
-import type { MissingSeen } from "@/utils/stateColors";
+import type { MissingSeen } from "@/utils/deviceHealth";
 import { useHistorySource } from "./useHistorySource";
 
 /** `entityId` null: nothing to ask. "loading" until the history answers; "unknown" when it could not be read. */

@@ -20,7 +20,7 @@
 // Pure: tests/oracles/device_power.mjs.
 
 import type { HassEntity } from "@/types/ha.types";
-import { isUnavailable } from "@/utils/stateColors";
+import { isUnavailable } from "@/utils/deviceHealth";
 import { switchPosition, type SwitchPosition } from "@/utils/entityState";
 import { domainOf } from "./entityDomain";
 
