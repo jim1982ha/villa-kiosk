@@ -1,3 +1,9 @@
+## 0.12.513
+
+- **A night check that waited out a restart runs again even when the VESTA Agent itself restarted in between**, as
+  after a full reboot of the villa's box. It still runs only once, and not at all once the next night's check has
+  come.
+
 ## 0.12.512
 
 - **A night check that rests during a restart now runs again once the villa's system has settled**, instead of
