@@ -1,3 +1,10 @@
+## 0.12.507
+
+- **A villa message that is over says "(closed)" in its title, as VESTA's closed alerts do.** A doorbell opened or not
+  answered had its text struck but kept its plain title; it now reads "🔔 Visitor at Parking Doorbell (closed)". The
+  word is the one VESTA's alerts use ("#92-P2 (closed)"), written in one place for both, and it stays as it is when
+  VESTA draws the message in another language. Copy the new vesta_message.jinja into the villa's custom templates.
+
 ## 0.12.506
 
 - **No more "missing from the villa's system" while the villa's system restarts.** On 13/11 a restart (stopped 14:43,
