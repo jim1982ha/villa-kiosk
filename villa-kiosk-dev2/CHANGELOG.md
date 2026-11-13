@@ -1,3 +1,10 @@
+## 2.496.800
+
+- **The monthly recap names a device with a dead part.** Its "Device availability" section counted only devices that
+  were offline, so it could say all was well while the weekly Recap said "1 device partly unavailable". It now lists
+  each such device with the parts that stopped answering, in Open issues' words ("Person detection unavailable"). The
+  device still counts as reporting, since it answers.
+
 ## 2.496.799
 
 - **A critical door left unlocked is red everywhere.** Its window and its 3D object were red, but its badge on the map
