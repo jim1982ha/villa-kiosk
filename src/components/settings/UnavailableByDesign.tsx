@@ -1,5 +1,5 @@
 // src/components/settings/UnavailableByDesign.tsx
-// Advanced Settings › Devices › "Asleep between reports": the villa's devices whose "unavailable" is their design
+// Advanced Settings › Devices › "Unavailable by design": the villa's devices whose "unavailable" is their design
 // (AppConfig.unavailableByDesign, shared). Picked, never typed: the list's one field (SearchOrAdd, as Grouped devices')
 // narrows the cards and offers the devices, "On the list" (shown) or "Add to the list".
 // What picking one does is the entity store's (ha/unavailableByDesign); this only edits the list.
@@ -48,7 +48,7 @@ export default function UnavailableByDesign({ title, tip }: { title: string; tip
           {shown.map((id) => (
             <EntityCard key={id} entityId={id} lead={<Moon size={16} aria-hidden />}
               tone={marked(id)}
-              remove={{ label: `Take ${name(id)} off Asleep between reports`, run: () => set(id, false) }} />
+              remove={{ label: `Take ${name(id)} off Unavailable by design`, run: () => set(id, false) }} />
           ))}
         </div>
       )}

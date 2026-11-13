@@ -4,7 +4,7 @@
 // picking it does ("Create a group", "Add to the list"). Pure: a check drives it.
 //
 // ⚠️ ONE FIELD PER LIST (owner, 2026-11-06): Grouped devices had two, "New group: Search or type entity_id… [+ Create]"
-// and "Filter by entity ID or label…"; Asleep between reports a picker and no filter; Bound 3D objects a picker and an
+// and "Filter by entity ID or label…"; Unavailable by design a picker and no filter; Bound 3D objects a picker and an
 // Add button. Each list now has one field that narrows it and offers its devices.
 
 import { entitySearch, type SearchSource } from "./deviceRecord";

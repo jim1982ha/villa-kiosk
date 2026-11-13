@@ -361,9 +361,10 @@ export default function ConfigEditorModal({ onBack, withinSettings, focusEntityI
               the map. The first device keeps the badge; the others show in its window.
             </>} />
 
-            <UnavailableByDesign title="Asleep between reports" tip={<>
-              Devices that sleep between reports, such as a battery door sensor. VESTA shows what each one last
-              reported and raises no fault while it sleeps.
+            <UnavailableByDesign title="Unavailable by design" tip={<>
+              Devices, or parts of one, whose "unavailable" is normal: a battery door sensor that sleeps between
+              reports, or a camera's control it never uses, such as Move to Preset with no preset saved. VESTA shows
+              what each one last reported, or nothing, and never counts it as lost.
             </>} />
           </>
         )}

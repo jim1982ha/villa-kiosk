@@ -7,7 +7,7 @@
 // what is offered is config/searchOrAdd's, by value.
 //
 // ⚠️ IT REPLACED TWO FIELDS PER LIST: Grouped devices' "New group" picker with its Create button above a "Filter by
-// entity ID or label…" box, Asleep between reports' "Add a device…", Bound 3D objects' picker with its Add button.
+// entity ID or label…" box, Unavailable by design' "Add a device…", Bound 3D objects' picker with its Add button.
 
 import { useEffect, useRef, useState, type RefObject } from "react";
 import SearchPicker, { type SearchRow } from "./SearchPicker";
