@@ -85,22 +85,35 @@ export function groupCardModel(members: readonly CardMember[], drawn: number, wa
   };
 }
 
+/** One printed line of a room chip: one room. */
+interface RoomChipLine {
+  /** roomKey() of the room — what a tap on this line names. */
+  key: string;
+  /** The room as spelt. */
+  room: string;
+  /** What is printed: the room's name, truncated on its own. */
+  label: string;
+  /** This room's devices. */
+  entityIds: string[];
+  /** The line's pill number, capped ("99+"): this room's devices only. */
+  count: string;
+  /** The line's pill colour: this room's HEALTH (roomHealth), as its own chip would show. */
+  health: RoomHealth;
+}
+
 export interface RoomChipModel {
   /** Every device it stands for is behind a wall while walking. */
   hidden: boolean;
-  /** What is printed (the room, truncated, + any "+N"). */
-  label: string;
   entityIds: string[];
   /** The room a tap names, and every room a merged chip swallowed. */
   displayName: string;
   roomNames: string[];
-  /** The border: "active" when something in the room is on, else "rest" —
-   *  NEVER "alert" (see roomHealth). */
+  /** The border: "active" when something in any of its rooms is on, else
+   *  "rest" — NEVER "alert" (see roomHealth). A merged chip has ONE border. */
   frame: SummaryFrame;
-  /** The corner pill's number, capped ("99+"). */
-  count: string;
-  /** The corner pill's colour — the room's HEALTH (roomHealth). */
-  health: RoomHealth;
+  /** One line per room, top to bottom (roomChips.orderLines), each with its
+   *  own name, count and health. One line for an unmerged chip. */
+  lines: RoomChipLine[];
 }
 
 /** A room's health, worst first: "alert" — something needs attention (a
@@ -131,13 +144,14 @@ function roomFrame(ring: { anyOn: boolean }): SummaryFrame {
 export function roomChipModel(chip: RoomChip, walking: boolean, occluded: (id: string) => boolean): RoomChipModel {
   return {
     hidden: walking && chip.ids.length > 0 && chip.ids.every(occluded),
-    label: chip.label,
     entityIds: chip.ids,
     displayName: chip.room,
     roomNames: chip.roomNames,
     frame: roomFrame(chip),
-    count: formatCountBadge(chip.ids.length),
-    health: roomHealth(chip),
+    lines: chip.lines.map((l) => ({
+      key: l.key, room: l.room, label: l.label, entityIds: l.ids,
+      count: formatCountBadge(l.ids.length), health: roomHealth(l),
+    })),
   };
 }
 
@@ -146,7 +160,7 @@ export function roomChipModel(chip: RoomChip, walking: boolean, occluded: (id: s
  *  The same groupLook count rule bucketRoomChips applies, so a row in the
  *  merged chip's "Which room?" list carries exactly the border and pill the
  *  room's own chip shows on the map when it stands alone. */
-export function roomLook(looks: readonly (DeviceLook | undefined)[]): Pick<RoomChipModel, "frame" | "health"> {
+export function roomLook(looks: readonly (DeviceLook | undefined)[]): { frame: SummaryFrame; health: RoomHealth } {
   const ring = groupLook(looks, { showingDevices: false });
   return { frame: roomFrame(ring), health: roomHealth(ring) };
 }

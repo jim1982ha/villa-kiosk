@@ -436,9 +436,12 @@ export class SceneManager {
         opts.onClusterPicked(hit.room, hit.entityIds, []);
         return;
       }
-      // A room chip's TAP navigates to the room.
+      // A room chip's TAP navigates to the room — on a merged chip, to the
+      // room of the line tapped: each line is that room's own chip, its own
+      // name and count (2.496.801). Press-and-hold still asks about them all.
       if (hit.kind === "room" && opts.onClusterTapped) {
-        opts.onClusterTapped(hit.room, hit.entityIds, hit.roomNames);
+        if (hit.line) opts.onClusterTapped(hit.line.room, hit.line.entityIds, [hit.line.room]);
+        else opts.onClusterTapped(hit.room, hit.entityIds, hit.roomNames);
         return;
       }
       this.pick.pickAtScreen(x, y);

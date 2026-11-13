@@ -316,7 +316,7 @@ export class PlacementCheck {
       // that indicts the thing it is auditing is worse than no instrument, and
       // this one nearly bought a rewrite of chipWidthPx that was not needed.
       const err = Math.abs((c.halfW * 2) / s.chipScale - drawn);
-      if (err > f.chipWidthErr) { f.chipWidthErr = err; worst = c.label; }
+      if (err > f.chipWidthErr) { f.chipWidthErr = err; worst = c.lines.map((l) => l.label).join(" / "); }
     }
     if (f.chipWidthErr > s.minGapPx) {
       lines.push(`PLACEMENT: chipWidthPx is off by ${f.chipWidthErr.toFixed(1)} CSS px`

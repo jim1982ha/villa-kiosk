@@ -1,3 +1,14 @@
+## 2.496.801
+
+- **A shared room chip lists every room.** Zoomed out, rooms too close together share one chip, which read "Living
+  Room +1" with one number for all. It now shows one line per room, each with that room's own name and its own
+  number, coloured for that room (purple all right, grey no contact, amber a fault, red act now), busiest room first.
+  The chip's border still says whether something in any of them is on. Tap a line to go to that room; press and hold
+  the chip to choose among them, as before. The map legend says so.
+- **Access control devices are now raspberry pink.** Their purple was almost the purple of a room or device that is all
+  right, so a lit camera or lock looked like a status. The family now has its own pink on its badges, its top-bar icon
+  and the legend; every status colour stays as it was.
+
 ## 2.496.800
 
 - **The monthly recap names a device with a dead part.** Its "Device availability" section counted only devices that

@@ -27,17 +27,20 @@ export interface HitPickers {
   entityGroupAt(x: number, y: number): { room: string; entityIds: string[]; entityId: string | null } | null;
   /** The badge drawn under the point. */
   badgeAt(x: number, y: number): string | null;
-  /** The room chip under the point. */
-  clusterAt(x: number, y: number): { room: string; entityIds: string[]; roomNames: string[] } | null;
+  /** The room chip under the point, and the line of it (one room) the point is on. */
+  clusterAt(x: number, y: number): { room: string; entityIds: string[]; roomNames: string[]; line: ChipLineHit | null } | null;
 }
+
+/** One line of a room chip: the one room it names, and that room's devices. */
+type ChipLineHit = { room: string; entityIds: string[] };
 
 type Hit =
   /** One device: a card's cell, or a badge. */
   | { kind: "device"; entityId: string }
   /** A group card, at a point that names no device of its own. */
   | { kind: "group"; room: string; entityIds: string[] }
-  /** A room chip. */
-  | { kind: "room"; room: string; entityIds: string[]; roomNames: string[] }
+  /** A room chip; `line` is the room of a merged chip the point is on. */
+  | { kind: "room"; room: string; entityIds: string[]; roomNames: string[]; line: ChipLineHit | null }
   /** No GUI tier answered — the 3D scene under the point is the caller's. */
   | { kind: "none" };
 
@@ -48,6 +51,6 @@ export function resolveHit(p: HitPickers, x: number, y: number): Hit {
   if (badge) return { kind: "device", entityId: badge };
   if (group) return { kind: "group", room: group.room, entityIds: group.entityIds };
   const chip = p.clusterAt(x, y);
-  if (chip) return { kind: "room", room: chip.room, entityIds: chip.entityIds, roomNames: chip.roomNames };
+  if (chip) return { kind: "room", room: chip.room, entityIds: chip.entityIds, roomNames: chip.roomNames, line: chip.line };
   return { kind: "none" };
 }
