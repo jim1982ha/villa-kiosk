@@ -429,33 +429,40 @@ def test_the_tablets_card_is_in_english_whichever_chats_copy_was_drawn_last(tmp_
     assert rec["languages"]["fr"]["status"][0].startswith("Terminé à "), rec        # the French, beside it
 
 
-def test_an_open_alert_with_no_step_since_the_tablet_kept_cards_gets_its_card_at_start(agent, kiosk):
-    """Alert #83 (owner, 2026-10-29): no step since before the tablet kept alert cards, so the tablet showed the short
-    list while Telegram showed the card. At start, every open alert's card is kept as its newest copy stands, its
-    Status told for everyone; its "To:" names everyone it went to."""
+def test_a_step_telegram_refused_stays_in_the_tablets_card_and_the_faults_story(tmp_path, kiosk):
+    """Architecture review 2026-11-14 b, card 1: the owner's escalation, refused by Telegram (a chat that never pressed
+    Start), reached the tablet, then vanished from its Status at the next step, its "To:" never named the owner and
+    the Kiosk fault's story never told it. A step is the alert's wherever it was told."""
+    roster = Roster.of(owner=[(OWNER, "Owner")], fm=[(FM_CHAT, "Wayan"), (GROUP, "Staff group")])
+    agent = make_agent(tmp_path, policy(), roster=roster, skills=["alert-desk"],
+                       reader=FakeHA(tools=[tool("ha_get_state")]), kiosk=kiosk)
+    agent.bot_username = BOT["username"]
+    agent.tg.refuse.add(f"blocked {OWNER}")                     # the owner's only chat: never pressed Start
     scenario(agent, alert, lambda v: tick(v, 20), lambda v: tick(v, 50))
-    kiosk.messages.clear()
-    agent.state.drop("inccard:1")       # an alert told before its card was kept (engine 0.6.419 and earlier)
-    for chat, rec in agent.state.incident_chats(1):       # copies drawn before their heading held every step
-        head = dict(rec["parts"]["head"])
-        head.pop("story", None)
-        if chat == FM_CHAT:
-            # ...one of them in an older wording no count draws again: it must never be the one told (round 2)
-            head["history"] = ["- Alert sent long ago, in an older wording (to: FM)"]
-        agent.state.set_incident_message(1, chat, {**rec, "parts": {**rec["parts"], "head": head}})
-    agent.state.db.close()
-    again = Vesta(agent.s, telegram=agent.tg, reader=agent.reader, kiosk=agent.kiosk)
-
-    async def start(v):
-        await v.start()
-        await v.messages.settle()
-    asyncio.run(start(again))
     rec = kiosk.messages["incident:1"]
-    assert set(rec["roles"]) == {"FM", "Owner"}, rec
-    assert any("Escalation sent" in line for line in rec["status"]), rec["status"]
-    assert any("Alert sent" in line for line in rec["status"]) and any("Reminder sent" in line for line in rec["status"])
-    assert sum("Escalation sent" in line for line in rec["status"]) == 1, rec["status"]
-    assert [b["label"] for b in rec.get("buttons", [])] == ["Done", "Not a problem", "Open Ticket", "Need help"], rec
+    assert rec["status"][-1].startswith("🆘") or "Escalation sent" in rec["status"][-1], rec["status"]
+    assert "Owner" in rec["roles"], rec
+    scenario(agent, lambda v: v.thread.restate(1, "Taken on in the Cockpit by Wayan."))     # the next step
+    rec = kiosk.messages["incident:1"]
+    assert any(line.startswith("- ") and "Escalation sent" in line for line in rec["status"]), rec["status"]
+    assert "Owner" in rec["roles"], rec
+    assert any("Escalation sent" in x["note"] for x in agent.notices.story(1)), agent.notices.story(1)
+
+
+def test_the_tablets_card_keeps_the_buttons_a_chat_still_shows_whichever_chat_was_drawn_last(agent, kiosk):
+    """Architecture review 2026-11-14 b, card 2: the tablet's card took the buttons of the chat drawn last — one copy
+    redrawn without them took Done and Need help off the tablet while another chat still asked."""
+    scenario(agent, alert, lambda v: tick(v, 20))
+    chats = [c for c, _ in agent.state.incident_chats(1)]
+    assert len(chats) > 1, chats
+    for last in chats:                     # whichever copy is drawn last, one keeps its buttons
+        keeps = next(c for c in chats if c != last)
+
+        async def taken(v, keeps=keeps):
+            await v.thread.restate(1, "Taken on in the Cockpit by Wayan.",
+                                   keyboard=lambda c: v.buttons.still(1, c) if c == keeps else None)
+        scenario(agent, taken)
+        assert [b["label"] for b in kiosk.messages["incident:1"].get("buttons", [])], kiosk.messages["incident:1"]
 
 
 def test_at_start_an_open_alerts_card_is_told_again_as_it_was_kept_never_guessed_from_the_chats(agent, kiosk):

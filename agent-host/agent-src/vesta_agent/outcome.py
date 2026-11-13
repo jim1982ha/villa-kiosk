@@ -318,11 +318,16 @@ class Outcome:
             # the people the skill asked to answer (result.message first_in_line) — the skill's, never a role named here
             if iid and kb and item.get("first_in_line"):
                 asked.setdefault(int(iid), []).append((chat, bool(mid)))
+            if iid:
+                # ⚠️ A STEP IS THE ALERT'S WHEREVER IT WAS TOLD (architecture review 2026-11-14 b, card 1): one Telegram
+                # refused (a chat that never pressed Start) or Telegram off still reached the tablet (Poster.post), and
+                # left out of the history it vanished from the tablet's Status at the next step, from its "To:" and
+                # from the Kiosk fault's story
+                notice(iid, item.get("stage"), chat, roles or (self.notices.roles_of(int(iid)) if self.notices else ()))
             if not mid:
                 done["not_sent"] += 1                         # delivery.py: refused, or Telegram off
                 continue
             if iid:
-                notice(iid, item.get("stage"), chat, roles or (self.notices.roles_of(int(iid)) if self.notices else ()))
                 posted.setdefault(int(iid), []).append((chat, item.get("stage"), going.get(int(iid))))
             done["sent"] += 1
             done.setdefault("messages", {})[chat] = mid          # each chat's message: a page's buttons go under it
@@ -370,6 +375,11 @@ class Outcome:
                 await self.thread.sync(iid, layout.of(latest), skip=set() if listed else {c for c, _s, _a in shown_in},
                                        head_for=head_for, keyboard=(
                     lambda c, i=iid: self.buttons.keyboard(i, c, skill_name)) if skill_name and self.buttons.open(iid) else None)
+        # the tablet's card told again once this result's steps are recorded: its "To:" names whom they went to, even
+        # when no other chat's copy was redrawn (the one chat it went to refused it: its card was told before the record)
+        if self.thread is not None:
+            for iid in recorded:
+                self.thread.retell(iid)
         # ⚠️ THE TABLET'S FAULT AS SOON AS TELEGRAM'S COPIES ARE (owner's screenshots, 2026-11-07, #142): the step's lines
         # ("alert sent again (to: …)") reached the tablet's card 10s to 12s after Telegram, the repair waiting on the
         # siren's request, the sheet's pictures and the villa told; brought up to date now, beside them

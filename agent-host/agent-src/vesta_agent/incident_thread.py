@@ -27,7 +27,6 @@ import asyncio
 import logging
 
 from vesta_shared.limits import limit
-from vesta_shared.message_format import AND
 from vesta_shared.messaging import incident_tag
 from vesta_shared.status_words import pick
 
@@ -57,7 +56,7 @@ def owed_for() -> timedelta:
 
 class PlainWords:
     """A thread's words as given: its copies' headings, Status and language with no notices to draw them (a test, or a
-    thread built before them). notice.Notices is the one the engine uses: the same seven methods."""
+    thread built before them). notice.Notices is the one the engine uses: the same eight methods."""
 
     def retitle(self, iid, head: str, chat: int = 0) -> str:
         return head
@@ -65,7 +64,10 @@ class PlainWords:
     def heading(self, chat: int, incident: int | None = None) -> str | None:
         return None
 
-    def story_of(self, incident: int, chat: int, shown) -> None:
+    def to_line(self, incident: int) -> None:
+        return None
+
+    def split(self, said: dict) -> None:
         return None
 
     def lang(self, chat: int) -> str:
@@ -91,8 +93,8 @@ class IncidentThread:
         `words`: notice.Notices (or PlainWords): `retitle` (a copy's heading as its incident stands now); `heading` (chat,
         incident): the whole heading again, title, "To:" and EVERY earlier step, used when a copy's status is REPLACED
         (owner, 2026-10-15: "Escalation sent … to Owner" vanished when "Ticket opened…" replaced it); `lang` (chat) and
-        `restatus` (chat, parts): each chat's Status in its own language (owner, 2026-10-23); `story_of` (incident,
-        chat, its lines): a copy drawn before its heading held every step, told for everyone (tell_open); `refold`
+        `restatus` (chat, parts): each chat's Status in its own language (owner, 2026-10-23); `to_line` (incident) and
+        `split` (a step's `said`): the tablet's card's "To:" and its state line, everyone's (`tell`); `refold`
         (incident): a history recorded a line per repeat, folded, and each copy's heading then.
         `name`: incidents.Incidents.name, how the incident is named ("#9-P2") in a pointer to its newer message.
         `translations` () → translation.Translations (or None): the alert's own words in each chat's language, when known,
@@ -131,7 +133,13 @@ class IncidentThread:
     def taken(self, iid: int | str, run: str) -> None:
         """The villa's automation run `run` (its context id) is incident `iid`'s: its announcement on the tablet gives way
         to the incident's card. Told again at once when the card was already told without it."""
-        if run and self.state.add_incident_run(iid, run) and (card := self.state.incident_card(iid)):
+        if run and self.state.add_incident_run(iid, run):
+            self.retell(iid)
+
+    def retell(self, iid: int | str) -> None:
+        """Incident `iid`'s card told to the tablet again as it was kept, drawn as the incident stands now (its "To:":
+        steps recorded since, a run taken over since)."""
+        if card := self.state.incident_card(iid):
             self.tell(iid, card["parts"], card.get("keyboard"))
 
     def tell(self, iid: int | str, parts: dict, keyboard: dict | None = None, photo=None) -> None:
@@ -145,25 +153,17 @@ class IncidentThread:
         if self.mirror is None:
             return
         parts = self._for_everyone(parts, iid)
+        keyboard = self._card_keyboard(iid, keyboard)
         self.state.set_incident_card(iid, {"parts": parts, "keyboard": keyboard})
-        # ⚠️ WHO IT WENT TO IS EVERY CHAT'S, NOT THE LAST DRAWN'S: each chat's copy says its own "To:" (owner and FM, one
-        # group each); the tablet's one record names them all, in the words a "To:" line uses (message_format.audience)
-        # ⚠️ AND THIS COPY'S OWN (architecture review 2026-10-29, round 2): a copy Telegram refused is in no chat, and its
-        # reader is precisely the one the tablet stands in for
-        heads = [layout.of(copy).get("head") for _c, copy in self.state.incident_chats(iid)] + [parts.get("head")]
-        roles = list(dict.fromkeys(r for h in heads for r in kiosk_messages.roles_of((layout.head_of(h) or {}).get("to"))))
-        # everyone's "To:" as the incident stands (notice.to_line for no chat: "Owner (escalation) & FM", owner
-        # 2026-11-12), with any role only a copy names
-        every = (layout.head_of(parts.get("head")) or {}).get("to") or ""
-        extra = [r for r in roles if r not in kiosk_messages.roles_of(every)]
-        to = AND.join([every] + extra) if every else AND.join(roles)
         # ⚠️ THE VILLA'S OWN MESSAGES IT STANDS FOR (tickets 26-27 of "One inbox", owner 2026-10-28: "update the existing
         # card, the same way it is done on Telegram"): every run of the villa's alert this incident took over, so the
         # tablet shows this one card in place of the villa's alert, its repeat and its all-clear
         # ⚠️ A VISIT'S PHOTOS ARE ITS ONE LIST (visit.photos): the siren's snapshots with the villa's, as Telegram's picture
         from .visit import photos
+        said = parts.get("said")
         self.mirror(kiosk_messages.of_parts(kiosk_messages.thread_key(iid), parts, keyboard=keyboard,
-                                            photo=kiosk_messages.photo_b64(photo), to=to or None,
+                                            photo=kiosk_messages.photo_b64(photo),
+                                            step=self.words.split(said) if isinstance(said, dict) else None,
                                             takes=self.state.incident_runs(iid),
                                             photos=photos(self.state, iid) if str(iid).isdigit() else None))
 
@@ -181,45 +181,39 @@ class IncidentThread:
             parts = {**parts, "head": h}
         # ⚠️ EVERYONE'S "TO:" (owner, 2026-11-12): a chat's copy names whom it went to; the tablet's card, everyone's,
         # names every role the incident went to (notice.to_line for no chat)
-        to_line = getattr(self.words, "to_line", None)
-        every = to_line(int(iid)) if h and to_line and str(iid).isdigit() else None
+        every = self.words.to_line(int(iid)) if h and str(iid).isdigit() else None
         if every:
             parts = {**parts, "head": {**h, "to": every}}
         return self.words.restatus(0, parts)
+
+    def _card_keyboard(self, iid: int | str, keyboard: dict | None) -> dict | None:
+        """The buttons of incident `iid`'s card on the tablet: every button a copy still answering shows (each once),
+        with `keyboard`, the copy being told's (one Telegram did not take is in no chat).
+
+        ⚠️ EVERYONE'S, NOT THE LAST CHAT DRAWN'S (architecture review 2026-11-14 b, card 2): every copy is told here in
+        turn, and the card kept the buttons of whichever was drawn last — a copy settled in one chat, or redrawn there
+        without them, took Done and Need help off the tablet while another chat still asked."""
+        rows = [*((keyboard or {}).get("inline_keyboard") or ())]
+        for _chat, rec in self.state.incident_chats(iid):
+            if rec.get("buttons") and not rec.get("settled") and rec.get("kb"):
+                rows += rec["kb"].get("inline_keyboard") or ()
+        seen, out = set(), []
+        for b in (b for row in rows for b in row):
+            if b.get("callback_data") not in seen:
+                seen.add(b.get("callback_data"))
+                out.append(b)
+        return {"inline_keyboard": [out]} if out else None
 
     def tell_open(self, open_incidents) -> int:
         """At start: each open incident's card told to the tablet again, as it was kept (`tell`) — a copy the Kiosk had not
         kept when the Agent stopped is owed no longer (kiosk_messages.py keeps what is owed in memory) — how many.
         ⚠️ ALERT #83 (owner, 2026-10-29): an incident with no card kept had none on the tablet, which showed its short list
-        while Telegram showed the card. One told before its card was kept (engine 0.6.419 and earlier) gets it from its
-        newest copy: the one whose Status, told for everyone, holds the most steps before its bottom line, told for
-        everyone (the tablet is everyone's) — read once, kept from then on."""
+        while Telegram showed the card. Every step since engine 0.6.420 keeps its card; an open alert with none (older
+        still) is told at its next step."""
         told = 0
         for iid in open_incidents:
-            if self.mirror is None:
-                continue
-            if card := self.state.incident_card(iid):
-                self.tell(iid, card["parts"], card.get("keyboard"))
-                told += 1
-                continue
-            best = None
-            for chat, rec in self.state.incident_chats(iid):
-                h = layout.head_of((rec.get("parts") or {}).get("head"))
-                if h is None:
-                    continue
-                if "story" in h:
-                    told_steps, parts = h["story"], rec["parts"]
-                else:
-                    story = self.words.story_of(int(iid), chat, h["history"])
-                    # ⚠️ ONE WHOSE LINES NO COUNT DRAWS AGAIN COMES LAST (round 2): it tells its own chat's steps only
-                    told_steps, parts = (story[1], {**rec["parts"], "head": {**h, "story": story[1]}}) if story \
-                        else (None, rec["parts"])
-                # the newest copy tells the most steps before its bottom line
-                score = -1 if told_steps is None else len(told_steps)
-                if best is None or score > best[0]:
-                    best = (score, parts, rec.get("kb") if rec.get("buttons") else None)
-            if best is not None:
-                self.tell(iid, best[1], best[2])
+            if self.mirror is not None and self.state.incident_card(iid):
+                self.retell(iid)
                 told += 1
         return told
 

@@ -95,18 +95,20 @@ def roles_of(to: str) -> list[str]:
 
 
 def of_parts(key: str, p: dict, *, keyboard: dict | None = None, photo: str | None = None, to: str | None = None,
-             takes: list[str] | None = None, photos: list[dict] | None = None) -> dict:
+             takes: list[str] | None = None, photos: list[dict] | None = None,
+             step: tuple[str, str] | None = None) -> dict:
     """The record of a message drawn as `layout` parts `p`: its title and "To:", the Status lines (the history, then where it
     stands), its stage, the words it was drawn in besides English when the agent holds them, its buttons. `to`: the "To:"
     of every chat's copy together (IncidentThread.tell), else this copy's; `takes`: the villa's runs it stands for;
-    `photos`: a visit's one list of photos (visit.photos), each a file of the villa's media folder."""
+    `photos`: a visit's one list of photos (visit.photos), each a file of the villa's media folder; `step`: its bottom
+    line as the step alone and the words said with it (notice.Notices.split), None: the line whole."""
     h = layout.head_of(p.get("head"))
     said = p.get("said") if isinstance(p.get("said"), dict) else {}
     # ⚠️ THE STATE IS THE STAGE ALONE (owner, 2026-11-07): a reminder's state line was its whole bottom line, "Reminder
     # sent 11:43, No answer after 15min. Seen at … Was this visit expected? (to: Owner & FM)"; the step's own words
     # ("Reminder sent 11:43") are the state, what the desk said with it a Status line above, as Telegram's bottom line
     # says it (Telegram keeps it whole)
-    bottom, said_with = _step_and_words((p.get("status") or "").strip(), said) if h else ((p.get("status") or "").strip(), "")
+    bottom, said_with = step if h and step else ((p.get("status") or "").strip(), "")
     # ⚠️ "MONITORING UNTIL" ONCE (owner, 2026-11-07, drill #139): the tablet's card said it in its state AND its pill;
     # the pill (the fault's monitoredUntil) says it there, so the tablet's state is the stage's words alone
     status = layout.stage_line({**h, "until": None}, bottom, p.get("mark")) if h else bottom
@@ -175,21 +177,6 @@ def _tablet_lines(lines) -> list:
     ⚠️ "+3 MORE PHOTOS ON THE TABLET" ON THE TABLET (owner's screenshot, 2026-11-08, #154): meaningless there, the
     tablet's card shows every photo."""
     return [x for x in lines or () if not (isinstance(x, dict) and x.get("id") in TELEGRAM_ONLY_LINES)]
-
-
-def _step_and_words(status: str, said: dict) -> tuple[str, str]:
-    """A step's bottom line ("Reminder sent 11:43, No answer after 15min. … (to: Owner & FM)", notice.Notices.bottom)
-    as its step alone and the words said with it, whom included ("No answer after 15min. … (to: Owner & FM)"); the line
-    whole and no words when it is no step said with words (`said`: what it was drawn from, layout.step_said)."""
-    if not (said.get("stage") and said.get("at")):
-        return status, ""
-    for words in [said.get("status"), *(said.get("status_in") or {}).values()]:
-        words = str(words or "").strip()
-        i = status.rfind(words) if words else -1
-        step = status[:i].rstrip(" ,;:，、") if i > 0 else ""
-        if step:
-            return step, status[i:]
-    return status, ""
 
 
 def of_note(key: str, title: str, to: str, text: str, *, status: str = "", lead: str = "", keyboard: dict | None = None,

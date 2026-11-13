@@ -1,3 +1,14 @@
+## 0.12.514
+
+- **A step Telegram did not deliver stays in the alert's story.** When Telegram refuses a chat (someone who never
+  pressed Start) or "Agent replies on Telegram" is off, the reminder or escalation still reaches the VESTA UI, and it
+  now stays listed in the alert's Status at the next step, in its "To:" line and in the fault's story in the Cockpit.
+- **The alert card in the VESTA UI keeps Done and Need help while any chat still shows them.** It used to take the
+  buttons of whichever chat's message was updated last, so one chat's settled message could take them off the
+  VESTA UI.
+- An alert still open from before the VESTA UI kept alert cards (October) gets its card at its next step, no longer at
+  start.
+
 ## 0.12.513
 
 - **A night check that waited out a restart runs again even when the VESTA Agent itself restarted in between**, as

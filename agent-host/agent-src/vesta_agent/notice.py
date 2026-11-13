@@ -539,13 +539,35 @@ class Notices:
         whose — a step to no role says what its priority does instead ("(to: digest)")."""
         if stage not in STEPS or not STEPS[stage].timed:
             return status
+        step, words = self._halves(stage, roles, status, at or datetime.now(timezone.utc), incident, lang)
+        return f"{step}{STEP_SEP if lang == 'en' else status_words.sep(lang)}{words}" if words else step
+
+    def _halves(self, stage: str, roles, status: str, at: datetime, incident: int | None, lang: str) -> tuple[str, str]:
+        """A timed step's bottom line in two: the step alone ("Reminder sent 11:43") and the skill's words with whom
+        ("No answer after 15min. (to: Owner & FM)"); the whole step and no words when the skill said none. The skill's
+        words go BEFORE whom, so the line ends "(to: …)" like every other (owner, 2026-10-18, #41)."""
         who = self._who(roles, incident=incident, lang=lang)
-        line = self.step(stage, roles, at or datetime.now(timezone.utc), reach=[who], lang=lang)
+        line = self.step(stage, roles, at, reach=[who], lang=lang)
+        to = status_words.to_tail(who, lang)
         if not status:
-            return line
-        # the skill's words go BEFORE whom, so this line ends "(to: …)" like every other (owner, 2026-10-18, #41)
-        to, sep = status_words.to_tail(who, lang), (STEP_SEP if lang == "en" else status_words.sep(lang))
-        return f"{line.removesuffix(to)}{sep}{status}{to}" if line.endswith(to) else f"{line}{sep}{status}"
+            return line, ""
+        return (line.removesuffix(to), f"{status}{to}") if line.endswith(to) else (line, status)
+
+    def split(self, said: dict) -> tuple[str, str] | None:
+        """The tablet's card's bottom line, in English, from the step it was drawn from (`said`: layout.step_said) — its
+        state (the step alone) and the words said with it, whom included (`_halves`); None when it is no timed step (a
+        note, a close: its words are the line). ⚠️ DRAWN FROM THE STEP, NEVER READ BACK OUT OF THE LINE (architecture
+        review 2026-11-14 b, card 2): the words were found in the drawn line by searching for them, so any wording that
+        moved them left the whole line as the card's state."""
+        stage = said.get("stage")
+        if stage not in STEPS or not STEPS[stage].timed or not said.get("at"):
+            return None
+        try:
+            at = datetime.fromisoformat(said["at"])
+        except (TypeError, ValueError):
+            return None
+        return self._halves(stage, said.get("roles") or (), str(said.get("status") or "").strip(), at,
+                            said.get("incident"), "en")
 
     def restatus(self, chat: int, p: dict) -> dict:
         """A copy's parts with its bottom line drawn again for chat `chat`, in the chat's language, from the step it
