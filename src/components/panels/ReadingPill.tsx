@@ -10,18 +10,16 @@ import { lostPillTone, type Reading } from "@/config/reading";
 import { usePanelActions } from "./PanelActionsContext";
 import StatusPill from "./StatusPill";
 
-export default function ReadingPill({ r, icon, large, inline }: {
+export default function ReadingPill({ r, icon, inline }: {
   r: Reading;
   icon: LucideIcon;
-  /** The reading is all the window says (a sensor's): the large pill. */
-  large?: boolean;
   /** One of a line of readings (a group's members): the pill alone, its line is the group's. */
   inline?: boolean;
 }) {
   // a critical device that lost contact: the red of the Cockpit, not the amber (the open window's header decides)
   const critical = usePanelActions().badge?.critical ?? false;
   return (
-    <StatusPill tone={lostPillTone(r.pill ?? "", critical)} icon={r.alarm ? AlertTriangle : icon} large={large} inline={inline}>
+    <StatusPill tone={lostPillTone(r.pill ?? "", critical)} icon={r.alarm ? AlertTriangle : icon} inline={inline}>
       {r.value}
     </StatusPill>
   );

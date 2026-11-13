@@ -8,7 +8,6 @@ import { coverPill } from "@/config/reading";
 import { useLiveDraft } from "@/hooks/useLiveDraft";
 import ControlFrame from "./ControlFrame";
 import CommandButton from "./CommandButton";
-import StatusPill from "./StatusPill";
 import { actionColor } from "@/utils/stateColors";
 
 export default function CoverPanel({ entity, mapping, onClose }: PanelProps) {
@@ -27,8 +26,7 @@ export default function CoverPanel({ entity, mapping, onClose }: PanelProps) {
     <BasePanel title={mapping.label} entityId={mapping.entityId} icon={<Blinds size={22} />} onClose={onClose}>
       {/* ab0ffb46 routed Cover through the shared notice in a comment only —
           the bespoke pill carried no detail. The notice, as every panel. */}
-      <ControlFrame entity={entity} mapping={mapping}>
-        <StatusPill tone={pill.tone}>{pill.text}</StatusPill>
+      <ControlFrame entity={entity} mapping={mapping} pill={pill}>
 
       <div className="row-buttons">
         {/* each in the colour of where it leads (stateColors.actionColor); Stop leads nowhere: plain */}

@@ -41,7 +41,7 @@ export default function UnavailableNotice({ entityId }: Props) {
       // each a line of the window's body, no box round them: the first and the last line of a window keep the
       // window's own distance to its header and footer (04-modals.css .modal-body)
       <>
-        <StatusPill tone={STATUS_PILL_CLASS.unavailable} icon={AlertTriangle}>{NOT_IN_HA.toUpperCase()}</StatusPill>
+        <StatusPill tone={STATUS_PILL_CLASS.unavailable} icon={AlertTriangle}>{NOT_IN_HA}</StatusPill>
         {seen !== "loading" && (
           <p className="muted body-text center">
             {missingAdvice(mappedEntityIds.has(entityId!), seen)}

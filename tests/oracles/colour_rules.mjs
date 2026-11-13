@@ -129,10 +129,18 @@ ck("the On button's meaning comes from the table: on active, off usual, no value
    powerStatus("on", "on", "light.x") === "active" && powerStatus("off", "off", "fan.x") === "usual"
    && powerStatus("on", "on", "switch.x") === "active" && powerStatus("unknown", "unknown", "light.x") === "noValue"
    && powerStatus("unknown", "opening", "cover.x") === "transitional");
-const button = (on) => draw(h(PowerToggle, { on, status: powerStatus(on ? "on" : "off", on ? "on" : "off", "light.x"), onClick: () => {} }));
-ck("  ...and the button is drawn in that colour, never a category's",
-   button(true).includes(STATUS_COLOR.active) && button(false).includes(STATUS_COLOR.usual) && !/--cat-|--device-/.test(button(true)),
-   button(true));
+// owner, 2026-11-13: the window's pill says the state; the power button names its action in the colour of where it leads
+const { actionColor: leadsTo } = await import("@/utils/stateColors");
+const { controlPill } = await import("@/config/reading");
+const button = (on) => draw(h(PowerToggle, { on, leads: leadsTo("light.x", on ? "off" : "on"), onClick: () => {} }));
+ck("  ...the power button says what a tap does, in the colour of where it leads (Turn off: usual; Turn on: active), never a category's",
+   button(true).includes("Turn off") && button(true).includes(STATUS_COLOR.usual) && button(false).includes("Turn on")
+   && button(false).includes(STATUS_COLOR.active) && !/--cat-|--device-/.test(button(true)), button(true));
+const light = (state) => ({ entity_id: "light.x", state, attributes: {} });
+ck("  ...and every window's pill says the state the same way: On active, Off usual, an A/C's mode in its words",
+   JSON.stringify(controlPill("light.x", light("on"), "on")) === JSON.stringify({ text: "On", tone: STATUS_PILL_CLASS.active })
+   && JSON.stringify(controlPill("fan.x", light("off"), "off")) === JSON.stringify({ text: "Off", tone: STATUS_PILL_CLASS.usual })
+   && controlPill("climate.x", { entity_id: "climate.x", state: "cool", attributes: {} }, null).tone === STATUS_PILL_CLASS.active);
 ck("a critical device: needs a look and lost contact become the alarm; every other meaning stays",
    criticalStatus("warn", true) === "alert" && criticalStatus("unavailable", true) === "alert"
    && criticalStatus("warn", false) === "warn" && KEYS.filter((k) => k !== "warn" && k !== "unavailable").every((k) => criticalStatus(k, true) === k));
