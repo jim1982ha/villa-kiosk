@@ -224,3 +224,19 @@ def test_no_device_is_missing_while_the_villas_system_restarts_nor_for_the_agree
     _recheck(tmp_path, {TH: _st()}, later, not_found=[LOCK, BATT], logbook=just)
     (f,) = _missing(tmp_path)                                         # settled and still not found: missing
     assert f["entity_id"] == LOCK
+
+
+def test_the_five_minute_check_closes_nothing_while_the_villas_system_restarts(tmp_path):
+    # owner, 2026-11-13: at 14:49, two minutes after a restart, two automation faults were "Cleared" while their device
+    # was still offline; nothing is opened or closed by the 5-minute check until the villa's system has settled
+    from vesta_shared import agreement
+    settle = agreement.section("restartSettle")["minutes"]
+    _seen(tmp_path)
+    _recheck(tmp_path, {TH: _st()}, T0, not_found=[LOCK, BATT])
+    (f,) = _missing(tmp_path)
+    back = {TH: _st(), LOCK: _st("locked"), BATT: _st("90")}
+    restarting = [_ha("stopped", T0 - timedelta(minutes=10)), _ha("started", T0 - timedelta(minutes=settle - 2))]
+    out = _recheck(tmp_path, back, T0 + timedelta(minutes=1), logbook=restarting)
+    assert _missing(tmp_path) == [f] and out["actions"] == []                  # still settling: left as it was
+    _recheck(tmp_path, back, T0 + timedelta(minutes=5), logbook=restarting)
+    assert _missing(tmp_path) == []                                            # settled, back: closed as before

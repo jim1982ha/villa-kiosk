@@ -549,6 +549,14 @@ def main(argv=None):
     a = ap.parse_args(argv)
     ctx = script.Context(a, skill=os.path.dirname(HERE))
     now = datetime.fromisoformat(a.now) if getattr(a, "now", None) else datetime.now(timezone.utc)
+    # ⚠️ NOTHING OPENED OR CLOSED WHILE THE VILLA'S SYSTEM RESTARTS (owner, 2026-11-13: stopped 14:43, started 14:47;
+    # at 14:49 this check cleared "The automation 'Server room person' watches 1 device that no longer answers" and its
+    # twin, read while the villa's devices were still loading, and opened "LED Strip is missing"): the whole tick rests
+    # while it is starting and for the agreement's restartSettle minutes after (nightly.restart_settling); the next
+    # tick reads everything as it is
+    if N.restart_settling(ctx.live_client, now):
+        print(json.dumps({"actions": [], "send": [], "edits": [], result.FAULTS_CHANGED: False}))
+        return 0
     settle = N.still_there_minutes(ctx.settings)
     # what is missing first: a fault whose device is gone then follows its missing fault (back_online)
     miss = gone_missing(ctx.store, ctx.pack, lambda: ctx.live_client, now, ctx.params, ctx.zone, settle)

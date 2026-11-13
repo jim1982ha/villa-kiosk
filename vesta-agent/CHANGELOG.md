@@ -1,3 +1,12 @@
+## 0.12.509
+
+- **VESTA's 5-minute check now rests while the villa's system restarts.** On 13/11 at 14:49, two minutes after a
+  restart, it cleared "The automation 'Server room person' watches 1 device that no longer answers" and the same for
+  "Outdoor motion at night", while that camera's detection was still offline: they moved to Watch with "Cleared on
+  13/11/2026 14:49", and nobody had pressed anything. While the villa's system is starting, and for 5 minutes after,
+  the check now opens and closes nothing (0.12.506 covered only "missing"); it reads everything at its next run.
+  Those two faults come back as open at tonight's check, since the device is still offline.
+
 ## 0.12.508
 
 - **Every message's "To:" says "FM", never "Facility Manager".** The daily report read "To: Facility Manager" just
