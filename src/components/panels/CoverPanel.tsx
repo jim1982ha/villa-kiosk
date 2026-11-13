@@ -9,6 +9,7 @@ import { useLiveDraft } from "@/hooks/useLiveDraft";
 import ControlFrame from "./ControlFrame";
 import CommandButton from "./CommandButton";
 import StatusPill from "./StatusPill";
+import { actionColor } from "@/utils/stateColors";
 
 export default function CoverPanel({ entity, mapping, onClose }: PanelProps) {
   const { ws } = useHA();
@@ -30,13 +31,16 @@ export default function CoverPanel({ entity, mapping, onClose }: PanelProps) {
         <StatusPill tone={pill.tone}>{pill.text}</StatusPill>
 
       <div className="row-buttons">
-        <CommandButton style={{ flex: 1 }} watch={moves} send={() => HAServices.openCover(ws, mapping.entityId)}>
+        {/* each in the colour of where it leads (stateColors.actionColor); Stop leads nowhere: plain */}
+        <CommandButton className="btn action" style={{ flex: 1, ["--state" as string]: actionColor(mapping.entityId, "open") }}
+          watch={moves} send={() => HAServices.openCover(ws, mapping.entityId)}>
           <ChevronUp size={20} /> Open
         </CommandButton>
-        <CommandButton style={{ flex: 1 }} watch={moves} send={() => HAServices.stopCover(ws, mapping.entityId)}>
+        <CommandButton className="btn plain" style={{ flex: 1 }} watch={moves} send={() => HAServices.stopCover(ws, mapping.entityId)}>
           <Square size={16} /> Stop
         </CommandButton>
-        <CommandButton style={{ flex: 1 }} watch={moves} send={() => HAServices.closeCover(ws, mapping.entityId)}>
+        <CommandButton className="btn action" style={{ flex: 1, ["--state" as string]: actionColor(mapping.entityId, "closed") }}
+          watch={moves} send={() => HAServices.closeCover(ws, mapping.entityId)}>
           <ChevronDown size={20} /> Close
         </CommandButton>
       </div>

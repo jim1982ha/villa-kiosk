@@ -113,13 +113,14 @@ input[type="range"]::-moz-range-thumb {
   color: var(--state);
   box-shadow: inset 0 0 0 1.5px var(--state);
 }
-/* An emphasised ACTION in the big-toggle shape (LockPanel's "Lock door"),
-   deliberately NOT .on — it carries no claim about the device's state, so it
-   keeps the app accent rather than the device's category colour. */
-.big-toggle.cta {
-  background: var(--accent-soft);
-  color: var(--accent);
-  box-shadow: inset 0 0 0 1.5px var(--accent);
+/* An ACTION that moves a device (LockPanel's "Unlock door…", a blind's Open and Close): the colour of the state it
+   leads to (utils/stateColors.actionColor, put in --state by the panel), drawn as the power button is. ⚠️ OWNER,
+   2026-11-13: "Unlock door…" wore the app's green accent, the colour of "on" everywhere else. */
+.big-toggle.action,
+.btn.action {
+  background: color-mix(in srgb, var(--state) 18%, transparent);
+  color: var(--state);
+  box-shadow: inset 0 0 0 1.5px var(--state);
 }
 .big-toggle:active { transform: scale(0.97); }
 /* THE WAITING SIGN, ONE RULE (UI scan, 2026-11-10): a button whose command is on its way to a device says it is busy

@@ -173,4 +173,12 @@ ck("no .ts/.tsx outside the table names a status or category token as a colour: 
      leak.rooms[0]?.alarm === true && !motion.rooms[0]?.alarm && again.length === 1 && again[0].on && again[0].alarm === true
      && motionChanges(NOTHING_LIT, calm).rooms[0]?.alarm === undefined, { leak, motion, again });
 }
+// an action wears the state it leads to (owner, 2026-11-13: "Unlock door" in the unlocked colour)
+{
+  const { actionColor, STATUS_COLOR: C } = await import("@/utils/stateColors");
+  ck("a button that moves a device is the colour of where it leads: unlock amber (red for a critical door), lock and close the usual colour, open the active one",
+     actionColor("lock.example_door", "unlocked") === C.warn && actionColor("lock.example_door", "unlocked", true) === C.alert
+     && actionColor("lock.example_door", "locked") === C.usual && actionColor("cover.example_blind", "open") === C.active
+     && actionColor("cover.example_blind", "closed") === C.usual);
+}
 done("✅ one colour per meaning, on every surface, for every device");

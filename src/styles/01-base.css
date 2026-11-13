@@ -631,6 +631,10 @@ button {
    button and its chosen mode do (.segmented-device): one vocabulary for "this belongs to this device". Only its
    .row-buttons: Edit and "Open a ticket" are the app's own, in the footer. */
 .panel-modal .row-buttons .btn { background: var(--device-fill, var(--bg-input)); color: var(--device-ink, var(--text-primary)); }
+/* …except an action, in the colour of the state it leads to (03-panels .btn.action), and a command that leads to no
+   state (a blind's Stop), plain: a category colour is the device's identity, never what a button does */
+.panel-modal .row-buttons .btn.action { background: color-mix(in srgb, var(--state) 18%, transparent); color: var(--state); }
+.panel-modal .row-buttons .btn.plain { background: var(--bg-input); color: var(--text-primary); }
 @media (hover: hover) {
   .panel-modal .row-buttons .btn:hover:not(:disabled) { background: var(--device-fill, var(--bg-input)); color: var(--device-ink, var(--text-primary)); filter: brightness(1.12); }
 }
