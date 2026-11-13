@@ -1,3 +1,11 @@
+## 2.496.795
+
+- **A button that moves a device wears the colour of where it leads.** "Unlock door…" is now the amber of "unlocked"
+  (red for a door on the villa's critical list), "Lock door" the purple of "locked", and a blind's Open and Close the
+  green of "open" and the purple of "closed"; Stop, which leads to no state, is plain. They wore the app's green
+  (which says "on" everywhere else) and the device's category colour (an identity, never a state). The rule lives in
+  the one colour table, for every device's buttons.
+
 ## 2.496.794
 
 - **Purple and green swapped, everywhere at once.** A device in its usual state (a light off, a curtain closed, locked,
