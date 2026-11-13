@@ -211,7 +211,7 @@ ck("a fault from a VESTA Agent alert carries \"#5\" for its card's strip, its wo
      JSON.stringify(head(ticketFace(taken))) === JSON.stringify(head(inbox)) && inbox.number === "#5-P2" && inbox.status[0]?.text === "Ticket in progress"
      && ticketFace(taken).title === "House Pump Power has not run", [head(ticketFace(taken)), head(inbox)]);
   const [closed] = closedCards(fm([shut]), null, new Date("2026-10-15T00:00:00.000Z"),
-    { devices: { deviceOf: (id) => id }, entities: {}, entityMap: {}, resolvedRooms: {}, may: () => true });
+    { devices: { deviceOf: (id) => id, isHidden: () => false }, entities: {}, entityMap: {}, resolvedRooms: {}, may: () => true });
   const under = closed && cardFace(closed).parts[0];
   ck("  ...and a closed one, under Closed in both tabs",
      !!under && JSON.stringify(head(ticketFace(shut))) === JSON.stringify(head(under)) && /Wayan/.test(under.who ?? ""), [head(ticketFace(shut)), under && head(under)]);
@@ -293,7 +293,7 @@ ck("  ...every source has its icon and its words in the (i)'s legend",
 
 console.log("\n  the Recap's readiness says what is found, never the goal over a contradiction (owner, 2026-10-14):");
 const { buildReadiness } = await import("@/fm/readiness");
-const noDevices = { ids: [], unavailable: [], has: () => false, deviceOf: (id) => id, deviceOfRecord: (id) => id, isCritical: () => false,
+const noDevices = { ids: [], unavailable: [], partlyLost: [], healthOf: () => ({ kind: "alive" }), has: () => false, deviceOf: (id) => id, deviceOfRecord: (id) => id, isCritical: () => false,
   isHidden: () => false };
 // the Recap reads ONE profile view: its devices and the problems the Overview lists for it (attention items)
 const ready = (tickets, devs = noDevices) => {

@@ -11,7 +11,7 @@
 // performance clauses exist to protect, whatever they happen to say.
 
 import type { HassEntity } from "@/types/ha.types";
-import { isOffline, missingFromHa, NOT_IN_HA } from "@/utils/stateColors";
+import { isOffline, missingFromHa, NOT_IN_HA } from "@/utils/deviceHealth";
 import { isTicketOpen, stageOf } from "./fmEngine";
 import { openCounts } from "./deviceWork";
 import { faultSource, ISSUE_SOURCES, type IssueSource } from "./issueSource";

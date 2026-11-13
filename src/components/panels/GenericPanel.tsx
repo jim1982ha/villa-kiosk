@@ -5,7 +5,7 @@ import { Info } from "lucide-react";
 import BasePanel from "./BasePanel";
 import LastDayTimeline from "./LastDayTimeline";
 import type { PanelProps } from "@/types/panel.types";
-import { isOffline } from "@/utils/stateColors";
+import { isOffline } from "@/utils/deviceHealth";
 
 export default function GenericPanel({ entity, mapping, onClose }: PanelProps) {
   return (

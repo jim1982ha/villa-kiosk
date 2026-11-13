@@ -102,7 +102,7 @@ export function VillaModelProvider({ value, children }: { value: VillaModel; chi
 
 export function useVillaModelValue(sets: VillaSets): VillaModel {
   const { mappedEntityIds, visibleEntities, sceneEntityIds, dismissedIds } = sets;
-  const { entities, entityDeviceIds, deviceUnits, connected, hiddenInHaEntityIds: hidden } = useHA();
+  const { entities, entityDeviceIds, deviceUnits, connected, hiddenInHaEntityIds: hidden, suppressedEntityIds: suppressed } = useHA();
   const { config, resolvedRooms } = useConfig();
   const { data: fmData } = useFmData();
   const critical = useCriticalDevices();
@@ -115,17 +115,17 @@ export function useVillaModelValue(sets: VillaSets): VillaModel {
   // the villa's look facts (critical, hidden), built ONCE: the devices below answer from them and the map's marks hold
   // them (deviceGroups.lookFacts). They change only with the registry, the critical list and the config, never per
   // state push (the map repaints on them)
-  const facts = useMemo(() => lookFacts({ critical, hidden, entityDeviceIds, deviceUnits }, folding),
-    [critical, hidden, entityDeviceIds, deviceUnits, folding]);
+  const facts = useMemo(() => lookFacts({ critical, hidden, suppressed, entityDeviceIds, deviceUnits, entityMap, deviceGroups }, folding),
+    [critical, hidden, suppressed, entityDeviceIds, deviceUnits, entityMap, deviceGroups, folding]);
   const devices = useMemo(
-    () => villaDevices({ entityMap, deviceGroups, dismissed: dismissedIds, hidden, mappedEntityIds, entities,
+    () => villaDevices({ entityMap, deviceGroups, dismissed: dismissedIds, hidden, suppressed, mappedEntityIds, entities,
       entityDeviceIds, folding, critical, deviceUnits, facts }),
-    [entityMap, deviceGroups, dismissedIds, hidden, mappedEntityIds, entities, entityDeviceIds, folding, critical, deviceUnits, facts],
+    [entityMap, deviceGroups, dismissedIds, hidden, suppressed, mappedEntityIds, entities, entityDeviceIds, folding, critical, deviceUnits, facts],
   );
   const visibleDevices = useMemo(
-    () => villaDevices({ entityMap, deviceGroups, dismissed: dismissedIds, hidden, mappedEntityIds, entities: visibleEntities,
+    () => villaDevices({ entityMap, deviceGroups, dismissed: dismissedIds, hidden, suppressed, mappedEntityIds, entities: visibleEntities,
       entityDeviceIds, folding, critical, deviceUnits, facts }),
-    [entityMap, deviceGroups, dismissedIds, hidden, mappedEntityIds, visibleEntities, entityDeviceIds, folding, critical, deviceUnits, facts],
+    [entityMap, deviceGroups, dismissedIds, hidden, suppressed, mappedEntityIds, visibleEntities, entityDeviceIds, folding, critical, deviceUnits, facts],
   );
   // since when a device on a card reads as it does: its history, never its last_changed (useStateSince)
   const sinceIds = useMemo(() => sinceEntities({ fmData, devices, entities, entityMap }), [fmData, devices, entities, entityMap]);

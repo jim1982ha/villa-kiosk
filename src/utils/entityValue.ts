@@ -18,7 +18,7 @@
 // any such check.
 import type { HassEntity } from "@/types/ha.types";
 import type { EntityType } from "@/types/scene.types";
-import { contactOf, isUnavailable } from "./stateColors.ts";
+import { contactOf, isUnavailable } from "./deviceHealth.ts";
 import { binaryWord } from "@/config/binarySensorWords";
 import { brightnessToPct } from "./colorUtils";
 

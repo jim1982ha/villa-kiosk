@@ -498,7 +498,7 @@ export function cockpitCard(group: AttentionGroup, cadence: AgentCadence | null,
  *  Watch section since 2026-10-28). Its card, one per fault: titled by its device and its room as an open issue's is,
  *  its fault's title as its line and "Done on 25/10/2026 14:10 (JM)" under it, "Closes 15:06" in its pill — no buttons
  *  (it is cleared). Only the faults whose device `may` be shown: the
- *  profile's own predicate (VillaAttention.shows, hidden devices out), passed by config/cockpitIssues, the one caller;
+ *  profile's own predicate for problems (VillaAttention.raises), passed by config/cockpitIssues, the one caller;
  *  `confirming`: what fm/faultStanding puts on Watch. */
 export function confirmingCards(confirming: readonly ConfirmingFault[], opts: CardsOpts): CardView[] {
   return oneCardPerDevice(confirming.flatMap((c): CardView[] => {
@@ -541,7 +541,7 @@ export function closedCards(fmData: FmData, cadence: AgentCadence | null, now: D
 }
 
 interface CardsOpts {
-  devices: Pick<VillaDevices, "deviceOf">;
+  devices: Pick<VillaDevices, "deviceOf" | "isHidden">;
   entities: Record<string, HassEntity>;
   entityMap: Parameters<typeof labelOf>[1];
   resolvedRooms: Record<string, string>;
@@ -550,17 +550,19 @@ interface CardsOpts {
 
 /** The card of a fault no longer open: titled by its device and its room as an open issue's is, its fault's title as
  *  its line and how it closed (`did`) under it; a Reopen only under Closed, on a "Not a problem while it lasts".
- *  None when the profile may not see its device. */
+ *  None when the profile may not see its device; on no device card, under "Other", when its device is hidden in the
+ *  villa's system (as attention.attentionOf files the open one). */
 function clearedCard(t: FmTicket, did: string, opts: CardsOpts, own: Pick<CardView, "key" | "look" | "nextCheck" | "watched" | "closedAt" | "erases">): CardView[] {
   const { devices, entities, entityMap, resolvedRooms, may } = opts;
   const entityId = recordEntity(t.entityId, (x) => x in entities);
   if (entityId && !may(entityId)) return [];
   // its device, title and room as an open issue's card has them (attention cardDevice / cardHead)
-  const device = entityId ? cardDevice(entityId, t.room, { devices, entityMap, entities, resolvedRooms }) : undefined;
+  const hidden = !!entityId && devices.isHidden(entityId);
+  const device = entityId && !hidden ? cardDevice(entityId, t.room, { devices, entityMap, entities, resolvedRooms }) : undefined;
   const title = faultName(t);
   return [{
     ...own,
-    ...cardHead(device, title, t.room),
+    ...cardHead(device, title, hidden ? undefined : t.room),
     entityId: device?.key,
     // ⚠️ A CLOSED CARD NEVER WEARS THE WATCH (owner, 2026-11-07: Closed cards showed the Watch list's green check):
     // the check is the Watch card's alone; a closed one wears where it came from, as an open issue does, in the status

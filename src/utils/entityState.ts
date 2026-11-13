@@ -7,7 +7,8 @@
 // deliberately doesn't attempt; this file is only the generic fallback.
 
 import type { HassEntity } from "@/types/ha.types";
-import { isUnavailable, lockBolt } from "@/utils/stateColors";
+import { lockBolt } from "@/utils/stateColors";
+import { isUnavailable } from "@/utils/deviceHealth";
 import { domainOf } from "./entityDomain";
 
 export const OFF_STATES = new Set(["off", "unavailable", "unknown", ""]);

@@ -71,7 +71,7 @@ export interface PanelActions {
     /** False when HA cannot say (unavailable, a lock in motion): the switch
      *  cannot be thrown (utils/devicePower). */
     known: boolean;
-    /** Where it stands with its device (stateColors.contactOf): the row's word
+    /** Where it stands with its device (deviceHealth.contactOf): the row's word
      *  is panelHeader.linkedStateWords — "Unavailable" only when LOST. */
     contact: "lost" | "no-value" | "ok";
     toggle: () => void;

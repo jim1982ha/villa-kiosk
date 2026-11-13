@@ -51,7 +51,7 @@ globalThis.WebSocket = FakeSocket;
 const { EntityStore } = await import("@/ha/entityStore");
 const { HAWebSocket } = await import("@/ha/HAWebSocket");
 const { villaDevices } = await import("@/config/deviceGroups");
-const { contactOf } = await import("@/utils/stateColors");
+const { contactOf } = await import("@/utils/deviceHealth");
 const until = async (pred, ms = 3000) => { const t0 = Date.now(); while (!pred() && Date.now() - t0 < ms) await new Promise((r) => setTimeout(r, 5)); return pred(); };
 
 // the villa's history: the door last reported "off" at T0, then dropped off; the shed door has nothing kept
@@ -92,7 +92,7 @@ ck("  ...once listed, the map heard the report and never \"unavailable\"",
 
 // every screen's "offline" is asked of what the store holds: the live cards, the counts, the badges, the critical list
 const map = Object.fromEntries([DOOR, LIGHT].map((id) => [id, { entityId: id, type: "sensor", label: id }]));
-const devices = (entities) => villaDevices({ entityMap: map, deviceGroups: [], dismissed: new Set(), hidden: new Set(),
+const devices = (entities) => villaDevices({ entityMap: map, deviceGroups: [], dismissed: new Set(), hidden: new Set(), suppressed: new Set(),
   mappedEntityIds: new Set(), entities, entityDeviceIds: {} });
 ck("so no screen calls it offline: not in the villa's unavailable devices, contact not lost",
    devices(store.getState().entities).unavailable.length === 0 && contactOf(shown(DOOR).state) === "ok");

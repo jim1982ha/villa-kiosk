@@ -23,7 +23,8 @@ import type { HassEntity } from "@/types/ha.types";
 // POWER, by name: "N on" counts a device switched on (deviceActivity owns both
 // meanings of "on"; a lights/AC tile counts this one).
 import { isSwitchedOn } from "@/utils/deviceActivity";
-import { contactOf, isOffline, lockBolt, type LockBolt } from "@/utils/stateColors";
+import { lockBolt, type LockBolt } from "@/utils/stateColors";
+import { contactOf, isOffline } from "@/utils/deviceHealth";
 import { effectiveSensorClass, toBaseUnit } from "./SensorClasses";
 import { domainOf, isDomain } from "@/utils/entityDomain";
 

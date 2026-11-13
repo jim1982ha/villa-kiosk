@@ -25,7 +25,7 @@ import { faultSource, type IssueSource } from "@/fm/issueSource";
 import type { FmData, FmTicketCheck } from "@/fm/fmTypes";
 import type { HassEntity } from "@/types/ha.types";
 import type { EntityMapping } from "@/types/scene.types";
-import { isOffline, lostContact, missingFromHa, NOT_IN_HA } from "@/utils/stateColors";
+import { isOffline, lostContact, lostPartsWords, missingFromHa, NOT_IN_HA, partName } from "@/utils/deviceHealth";
 import { countOf } from "@/utils/countOf";
 import type { Since } from "@/config/presence";
 
@@ -60,6 +60,9 @@ export interface AttentionItem {
   /** Set on a fault whose entity Home Assistant reports "unavailable" right now: its device is offline, and so is
    *  what the fault is about — it goes onto the device's Unavailable line (mergeFaults). */
   offline?: boolean;
+  /** Set on a line about a device hidden in the villa's system (attentionOf): no device card (the hidden device itself
+   *  has none), filed on its own under "Other", opening nothing. */
+  hidden?: true;
   /** Set on an offline device (kind "unavailable"): it is on the villa's ONE list of critical devices — the one its
    *  "critical devices offline" rule watches (agent-contract.json criticalDevices, owner 2026-10-18): red, the
    *  villa's health danger. Any other offline device is amber. */
@@ -139,7 +142,14 @@ export function sinceEntities(opts: { fmData: FmData; devices: VillaDevices; ent
   const { fmData, devices, entities, entityMap } = opts;
   const closing = fmAttention(fmData).unresolved.filter((t) => t.closesAt)
     .map((t) => recordEntity(t.entityId, (x) => x in entities)).filter((id): id is string => !!id);
-  return [...new Set([...closing, ...devices.unavailable, ...alarmIds(devices, entities, entityMap)])].sort();
+  return [...new Set([...closing, ...devices.unavailable, ...devices.partlyLost.flatMap((id) => lostPartsOf(devices, id)),
+    ...alarmIds(devices, entities, entityMap)])].sort();
+}
+
+/** The parts of a device that answers while they do not (VillaDevices.healthOf "partly"); [] for any other health. */
+function lostPartsOf(devices: VillaDevices, id: string): readonly string[] {
+  const h = devices.healthOf(id);
+  return h.kind === "partly" ? h.lost : [];
 }
 
 /**
@@ -211,7 +221,8 @@ export function groupAttention(items: readonly AttentionItem[]): AttentionGroup[
       // The DEVICE, as the map opens it — not the entity the problem names. A
       // ticket on a pump's energy meter opened the meter's chart while the
       // map's pump badge opens its power (2.496.258).
-      entityId: worst.device?.key ?? worst.entityId,
+      // a line about a hidden device opens nothing: the hidden device has no window to open
+      entityId: worst.hidden ? undefined : worst.device?.key ?? worst.entityId,
       items: sorted,
     });
   }
@@ -254,7 +265,7 @@ export function deviceIssues(groups: readonly AttentionGroup[]): DeviceIssues {
   for (const g of groups) {
     for (const item of g.items) {
       for (const one of item.fault ? [item, item.fault] : [item]) {
-        if (aboutActivity(one)) continue;
+        if (aboutActivity(one) || one.hidden) continue;
         const s = attentionSeverity(one);
         note(one.entityId, s);
         note(g.entityId, s);
@@ -479,6 +490,28 @@ export function attentionOf(opts: AttentionInputs): Pick<VillaProblems, "attenti
     });
   }
 
+  // ⚠️ A DEAD PART OF A LIVE DEVICE (architecture review item 4, 2026-11-13: a camera's person detection unavailable for
+  // days, on no card): one line on the device's card, its parts' names in the grey of lost contact, since the first of
+  // them went. Its entity is that part, so a fault about it is this line's (mergeFaults); never critical: the device
+  // answers.
+  for (const id of devices.partlyLost) {
+    const lost = lostPartsOf(devices, id);
+    if (!lost.length) continue;
+    const device = [labelOf(id, entityMap, entities), entities[id]?.attributes?.friendly_name as string | undefined];
+    const began = lost.map((p) => beganAt(p, entities[p], sinceOf))
+      .sort((a, b) => (Date.parse(a.openedAt ?? "") || Infinity) - (Date.parse(b.openedAt ?? "") || Infinity))[0];
+    items.push({
+      id: `parts:${id}`,
+      kind: "unavailable",
+      title: labelOf(id, entityMap, entities),
+      detail: lostPartsWords(lost.map((p) => partName(labelOf(p, entityMap, entities), device))),
+      source: "live",
+      room: deviceRoom(resolvedRooms, id),
+      entityId: lost[0],
+      ...began,
+    });
+  }
+
   const fm = fmAttention(fmData);
   for (const t of fm.unresolved) {
     const entityId = recordEntity(t.entityId, (x) => x in entities);   // the one the Tickets tab files it under too
@@ -557,14 +590,22 @@ export function attentionOf(opts: AttentionInputs): Pick<VillaProblems, "attenti
   // Each problem's device. An entity the fold does not know (a helper, a
   // template — no device in the registry, no owner group) is its own device:
   // the worst case is a row of its own, as before grouping. Never by name.
+  // ⚠️ A HIDDEN DEVICE'S FINDINGS ARE NOT HIDDEN WITH IT (architecture review item 5, 2026-11-13): hidden in the villa's
+  // system (devices.isHidden: the device or any of its folded entities) means never listed, picked or carded, and since
+  // 2026-10-25 its faults and late tasks were dropped too, so a VESTA finding "an automation still watches this hidden,
+  // offline device", which exists BECAUSE it is hidden, was silently lost. Its line is kept, filed on its own under
+  // "Other" (no device card, no room, opening nothing: `hidden`), counted as any problem; its badge, its window's sign
+  // and its live state stay out (the hidden device has no live line: devices.ids leaves it out).
   for (const i of items) {
     if (!i.entityId) continue;
+    if (devices.isHidden(i.entityId)) {
+      i.hidden = true;
+      i.room = undefined;
+      continue;
+    }
     i.device = cardDevice(i.entityId, i.room, { devices, entityMap, entities, resolvedRooms });
   }
 
-  // ⚠️ HIDDEN MEANS HIDDEN EVERYWHERE (owner, 2026-10-25): a device hidden in the villa's system had no badge on the
-  // map, yet its fault or late task was listed and counted by the Cockpit and lit its window's sign. The ONE list every
-  // count, card, mark and sign reads leaves it out (devices.isHidden: the device or any of its folded entities).
   // ⚠️ DONE MOVES THE CARD TO WATCH (owner, 2026-11-02: an offline device's Done closed its fault, and the device's live
   // state stayed as an open issue with nothing left to press): a device whose fault VESTA is watching has its live line
   // on Watch only, until VESTA's verdict; any other fault of the device stays. VESTA reopens it if it is still wrong.
@@ -591,7 +632,7 @@ export function attentionOf(opts: AttentionInputs): Pick<VillaProblems, "attenti
   // a live state of the device begun before the close (another of its entities, offline since)
   const heldLine = (i: AttentionItem) => live(i) && (Date.parse(i.openedAt ?? "") || 0) <= (lasting.get(devices.deviceOf(i.entityId!)) ?? -1);
   for (const i of items) if (heldLine(i)) held.add(devices.deviceOf(i.entityId!));
-  const shown = items.filter((i) => (!i.entityId || !devices.isHidden(i.entityId))
+  const shown = items.filter((i) => !(live(i) && i.hidden)
     && !(live(i) && watched.has(devices.deviceOf(i.entityId!)))
     && !heldLine(i));
   // ⚠️ RIGHT AGAIN, OR HELD AS EXPECTED, IS ON WATCH, NOT AN OPEN ISSUE (owner, 2026-11-12): an open fault the VESTA
@@ -633,9 +674,13 @@ export interface VillaAttention extends VillaProblems {
    *  the Cockpit list COUNT and show. */
   attentionGroups: AttentionGroup[];
   health: VillaHealth;
-  /** May this profile be shown anything about `entityId`: not hidden in the villa's system, and the profile may open
-   *  it. The one predicate every list of the profile's passes (the Cockpit's Watched list too: config/cockpitIssues). */
+  /** May this profile be shown `entityId` in a list or a picker: not hidden in the villa's system, and the profile may
+   *  open it. Every list of devices of the profile's passes it. */
   shows: (entityId: string) => boolean;
+  /** May this profile be told of a problem about `entityId`: the profile may open it, hidden or not — a hidden device's
+   *  findings are filed under "Other" (attentionOf), never dropped. Every list of problems passes it (the open issues,
+   *  Watch and Closed: config/cockpitIssues). */
+  raises: (entityId: string) => boolean;
 }
 
 export type VillaHealthLevel = "ok" | "warn" | "danger";
@@ -658,12 +703,14 @@ export interface VillaHealth {
  * Items with no device (a schedule) stand for themselves.
  */
 export function attentionFor(att: VillaProblems, may: (entityId: string) => boolean): VillaAttention {
-  // ⚠️ HIDDEN, FOR THE PROFILE TOO (owner, 2026-10-25: "hidden means hidden everywhere"): the items are built without
-  // a hidden device already (attentionOf, for the role-blind marks); a list built beside them, the Cockpit's
-  // Watched faults, asked the profile alone and showed one. The profile's lists read this one predicate.
+  // ⚠️ LISTED IS NOT RAISED (architecture review item 5, 2026-11-13): one predicate, "not hidden and the profile may
+  // open it", decided both what a list may name and which problems the profile is told of, so a hidden device's
+  // findings were dropped. A device list reads `shows`; a problem reads `raises`, the profile's own visibility alone
+  // (attentionOf has already filed a hidden device's problems under "Other").
   const shows = (id: string) => !att.devices.isHidden(id) && may(id);
-  const attentionItems = att.attentionItems.filter((i) => !i.entityId || shows(i.entityId));
-  const clearing = (att.clearing ?? []).filter((c) => !c.item.entityId || shows(c.item.entityId));
+  const raises = may;
+  const attentionItems = att.attentionItems.filter((i) => !i.entityId || raises(i.entityId));
+  const clearing = (att.clearing ?? []).filter((c) => !c.item.entityId || raises(c.item.entityId));
   // Grouped AFTER the profile's filter, never before: a row is built only
   // from problems this profile may open, so it cannot name a hidden one.
   const attentionGroups = groupAttention(attentionItems);
@@ -675,6 +722,7 @@ export function attentionFor(att: VillaProblems, may: (entityId: string) => bool
     attentionGroups,
     health: villaHealthFrom(attentionGroups),
     shows,
+    raises,
   };
 }
 

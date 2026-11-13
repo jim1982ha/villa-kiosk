@@ -29,7 +29,8 @@ import { binaryLook } from "./binaryLook";
 import { stateLabelFor } from "./BinarySensorClasses";
 import { deviceRowText, formatSensorParts } from "@/utils/entityValue";
 import { domainOf } from "@/utils/entityDomain";
-import { contactOf, criticalStatus, isNoHistory, isUnavailable, NO_RECORD, NO_RECORD_WORDS, NOT_KEPT, NOT_KEPT_COLOR, NOT_KEPT_WORDS, NOT_IN_HA, paintState, powerStatus, statusKeyFor, STATUS_COLOR, STATUS_PILL_CLASS, type StatusKey } from "@/utils/stateColors";
+import { criticalStatus, isNoHistory, NO_RECORD, NO_RECORD_WORDS, NOT_KEPT, NOT_KEPT_COLOR, NOT_KEPT_WORDS, paintState, powerStatus, statusKeyFor, STATUS_COLOR, STATUS_PILL_CLASS, type StatusKey } from "@/utils/stateColors";
+import { contactOf, isUnavailable, NOT_IN_HA } from "@/utils/deviceHealth";
 
 /** The stretch older than the villa's system keeps, as a history bar reads it (historySource.keptFrom). */
 export { NOT_KEPT, NOT_KEPT_WORDS, NO_RECORD, NO_RECORD_WORDS };
@@ -43,9 +44,9 @@ const LEVEL_COLOR: Record<AlertLevel, string> = {
 
 export interface Reading {
   kind: ReadingKind;
-  /** No value can be shown (stateColors.isUnavailable: lost contact OR "unknown"). */
+  /** No value can be shown (deviceHealth.isUnavailable: lost contact OR "unknown"). */
   unavailable: boolean;
-  /** Where the entity stands with its device (stateColors.contactOf): "lost" — the device is offline, the window
+  /** Where the entity stands with its device (deviceHealth.contactOf): "lost" — the device is offline, the window
    *  says so; "no-value" — the device reports but this entity has nothing to say ("unknown": a wind chill on a warm
    *  day); "ok". ⚠️ UNKNOWN IS NOT LOST CONTACT (owner, 2026-10-18; architecture review 2026-10-19): the window
    *  shouted UNAVAILABLE and "Contact with this device is lost" for a sensor whose device was answering. */
@@ -78,7 +79,7 @@ export interface Reading {
  * Offline always wins: an unavailable sensor never shows its class's "Clear"
  * or "No leak", which would claim a reading that was never taken. An entity
  * with NO VALUE ("unknown") shows UNKNOWN in the quiet pill — not an alarm,
- * not lost contact: its device is answering (stateColors.contactOf).
+ * not lost contact: its device is answering (deviceHealth.contactOf).
  */
 export function readingOf(
   id: string,

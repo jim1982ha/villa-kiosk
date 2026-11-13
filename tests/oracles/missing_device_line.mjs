@@ -14,7 +14,7 @@ import { h, draw } from "../consistency/screen.mjs";
 const { villaDevices } = await import("@/config/deviceGroups");
 const { attentionOf, attentionFor } = await import("@/config/attention");
 const { cockpitCard } = await import("@/config/cockpitCard");
-const { NOT_IN_HA } = await import("@/utils/stateColors");
+const { NOT_IN_HA } = await import("@/utils/deviceHealth");
 const { EMPTY_FM_DATA } = await import("@/fm/fmTypes");
 const { CockpitAttentionRow } = await import("@/components/cockpit/IssueCard");
 const { issueAsTold } = await import("@/messages/messagesModel");
@@ -31,7 +31,7 @@ const alert = parseVestaMessage({ seq: 1, key: "incident:7", title: "#7-P1 (new)
   body: "The door was unlocked while the villa was vacant.", status: ["⚠️ New alert"], buttons: [] });
 
 function cockpit(entities, tickets = []) {
-  const devices = villaDevices({ entityMap: {}, deviceGroups: [], dismissed: new Set(), hidden: new Set(),
+  const devices = villaDevices({ entityMap: {}, deviceGroups: [], dismissed: new Set(), hidden: new Set(), suppressed: new Set(),
     mappedEntityIds: mapped, entities, entityDeviceIds: {} });
   const problems = { devices, attentionItems: attentionOf({ devices, entities, entityMap: {}, resolvedRooms: {},
     fmData: { ...EMPTY_FM_DATA, tickets } }).attentionItems };

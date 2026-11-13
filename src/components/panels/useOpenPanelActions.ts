@@ -20,7 +20,7 @@ import { CATEGORY_LABELS } from "@/config/EntityCategories";
 import { patchMapping } from "@/config/mappingEdits";
 import { readingRows } from "@/config/readingRows";
 import { deviceSwitch } from "@/utils/devicePower";
-import { contactOf } from "@/utils/stateColors";
+import { contactOf } from "@/utils/deviceHealth";
 import { lookMarks, type DeviceMarks } from "@/utils/deviceActivity";
 import { HAServices } from "@/ha/HAServiceCalls";
 import { useOptimisticToggle } from "@/hooks/useOptimisticToggle";

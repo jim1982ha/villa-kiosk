@@ -4,7 +4,7 @@
 // ⚠️ ONE PLACE, AT THE SOURCE (owner, 2026-10-21: "a single place every consumer reads"). A battery sensor that
 // sleeps between reports — a Wi-Fi door contact drops off three minutes after each report, until the door moves again
 // — is not lost: its last report still holds. Every screen reads a device through the entity store, and every one of
-// them asks "is contact lost" of the state it is given (utils/stateColors.contactOf): the live "Unavailable" card, the
+// them asks "is contact lost" of the state it is given (utils/deviceHealth.contactOf): the live "Unavailable" card, the
 // offline counts, the top bar's and the Recap's badges, the critical devices, the map's amber look, a panel's
 // "Unavailable" notice. Twenty such readers. So the store hands them the device as it last reported, and none of them
 // needs to know the list: the lens below is applied where the villa's states come in (ha/entityStore), once.
@@ -18,7 +18,8 @@
 //     never lost, never a guessed state.
 
 import type { HassEntity } from "@/types/ha.types";
-import { contactOf, NOT_KEPT } from "@/utils/stateColors";
+import { NOT_KEPT } from "@/utils/stateColors";
+import { contactOf } from "@/utils/deviceHealth";
 import type { StateRow } from "./historySource";
 
 /** One recorded state, as the history read returns it (minimal_response: a state and when it changed). */
