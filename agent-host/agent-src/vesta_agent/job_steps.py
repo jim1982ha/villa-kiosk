@@ -12,6 +12,7 @@ import asyncio
 from dataclasses import dataclass
 
 from . import script_run
+from .outcome import has_work
 
 
 @dataclass
@@ -40,6 +41,7 @@ async def run(settings, state, skills, outcome, skill, steps: list[dict], values
         if res.get("send") and language:
             mine = lambda it: isinstance(it, dict) and it.get("to") == values.get("to")  # noqa: E731
             res = {**res, "send": [{**it, "language": language} if mine(it) else it for it in res["send"]]}
-        if res.get("send"):
+        # whatever the step asks for is carried out (outcome.has_work: its faults, edits and log rows, not only sends)
+        if has_work(res):
             sent += (await outcome.carry_out(res, sk.name, origin, settings.out_dir if settings else None))["sent"]
     return Done(sent, None)

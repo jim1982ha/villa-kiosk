@@ -170,6 +170,26 @@ def test_an_untouched_starter_skill_follows_the_release(tmp_path):
     assert not (skills / ".starter").exists()
 
 
+def test_a_tools_leftovers_inside_a_skill_are_never_part_of_it(tmp_path):
+    # 0.12.510 never published: a lint cache inside a starter skill on the machine that shipped was counted in its
+    # recorded version, so every install, whose copy has none, would have read the skill as edited here
+    import os as _os
+    old = _starters(tmp_path / "old", {"pool-care": "v1"})
+    new = _starters(tmp_path / "new", {"pool-care": "v2"})
+    for junk in (".ruff_cache/0.9/abc", ".pytest_cache/v/cache/nodeids", ".mypy_cache/x.json", "scripts/.DS_Store"):
+        _os.makedirs(_os.path.dirname(_os.path.join(new, "pool-care", junk)), exist_ok=True)
+        with open(_os.path.join(new, "pool-care", junk), "w") as f:
+            f.write("left by a tool")
+    skills = tmp_path / "skills"
+    Skills(str(skills), old).seed()
+    (skills / "pool-care" / ".ruff_cache").mkdir()                     # a tool run on the villa's copy: not an edit
+    (skills / "pool-care" / ".ruff_cache" / "x").write_text("x")
+    assert Skills(str(skills), new).update_starters() == (["pool-care"], [])
+    assert (skills / "pool-care" / "scripts" / "check.py").read_text() == "print('v2')\n"
+    assert not (skills / "pool-care" / ".pytest_cache").exists() and not (skills / "pool-care" / "scripts" / ".DS_Store").exists()
+    assert Skills(str(skills), new).update_starters() == ([], [])      # once: the leftovers count for nothing
+
+
 def test_an_edited_starter_skill_is_kept_and_the_new_one_left_beside_it(tmp_path):
     old = _starters(tmp_path / "old", {"pool-care": "v1"})
     new = _starters(tmp_path / "new", {"pool-care": "v2"})

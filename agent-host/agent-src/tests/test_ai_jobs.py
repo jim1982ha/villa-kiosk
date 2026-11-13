@@ -136,3 +136,21 @@ def test_a_run_that_sent_nothing_is_recorded_counted_and_told_once(jobs, monkeyp
     assert jobs.d.sent[0][1].endswith(NOT_COME("rep-weekly", "it stopped at its spending limit before sending it", NO_RESULT))
 
 
+
+
+def test_a_code_step_that_only_writes_faults_is_carried_out(tmp_path):
+    # architecture review, 2026-11-14: a step was carried out only when it sent a message, so one that closed a fault
+    # alone never reached the Agent's log nor the Kiosk
+    s = settings(str(tmp_path))
+    row = {"what": "closed", "rule": "PM-X", "device": "sensor.example", "words": "Pump weak", "note": "Cleared.",
+           "check": "night"}
+    make_skill(s.skills_dir, "rep", {"tools": []}, {"close.py": f"import json; print(json.dumps({{'fault_log': [{row!r}]}}))\n"})
+    st = State(s.state_path)
+    pol = Policy({}, Roster.of(owner=[(-1, "Owners")]))
+    d = Delivery()
+    out = Outcome(policy=lambda: pol, state=st, send=d.send, actions=None, tickets=None, buttons=None, thread=None)
+    skills = Skills(s.skills_dir)
+    done = asyncio.run(job_steps.run(s, st, skills, out, skills.all()["rep"], [{"run": "close.py"}], {}))
+    assert done.failed is None and d.sent == []
+    (logged,) = st.calls("fault_written")
+    assert '"Pump weak"' in logged["detail"] and '"Cleared."' in logged["detail"]

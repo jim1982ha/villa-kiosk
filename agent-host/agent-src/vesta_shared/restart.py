@@ -2,6 +2,7 @@
 
   minutes()                 the settle time: the agreement's restartSettle.minutes (DEFAULT_MINUTES without it)
   settling(client, now)     is it starting now, or started less than minutes() ago? (its logbook, read here)
+  Guard(client)             a check's run: was it restarting at any moment since the run began? (the wall clock)
   Restarts(rows)            its "stopped" and "started" entries in logbook rows: near(when), settling(now)
   RestartDrops(rows)        each drop of the rows judged against them: at_restart, theirs, kept_down
 
@@ -18,7 +19,8 @@ from __future__ import annotations
 
 import logging
 import sys
-from datetime import datetime, timedelta
+import time
+from datetime import datetime, timedelta, timezone
 
 from . import agreement
 from .device_state import is_offline
@@ -104,17 +106,67 @@ class Restarts:
         return bool(self.starts) and now - self.starts[-1] < timedelta(minutes=self.settle)
 
 
+    def during(self, start: datetime, end: datetime) -> bool:
+        """Was the villa's system restarting, or settling after a start, at any moment from `start` to `end`? (A stop
+        with no start after it, or a restart from its stop to `settle` after its start, meeting that span.)
+        during(now, now) is settling(now)."""
+        if self.stopped is not None and self.stopped <= end:
+            return True
+        pad = timedelta(minutes=self.settle)
+        return any(begin <= end and start < began + pad for begin, began in self.spans)
+
+
+def _logbook(client, start: datetime, end: datetime) -> list[dict] | None:
+    """The villa's logbook from `start` to `end`, None when it cannot be read (said on stderr)."""
+    try:
+        return client.logbook(start, end)
+    except Exception as e:  # noqa: BLE001 — not readable: judged as settled
+        print(f"The villa's logbook could not be read to tell a restart ({type(e).__name__})", file=sys.stderr)
+        return None
+
+
 def settling(client, now: datetime) -> bool:
     """Is the villa's system restarting at `now`, or settling after its start (Restarts.settling, its logbook read
     here)? Nothing is opened or closed then. A logbook that cannot be read: not settling (said on stderr) — a villa
     whose logbook never answers would otherwise never be checked."""
     settle = minutes()
-    try:
-        rows = client.logbook(now - timedelta(minutes=settle + STOP_READ_MINUTES), now)
-    except Exception as e:  # noqa: BLE001 — not readable: judged as settled
-        print(f"The villa's logbook could not be read to tell a restart ({type(e).__name__})", file=sys.stderr)
-        return False
-    return Restarts(rows, settle).settling(now)
+    rows = _logbook(client, now - timedelta(minutes=settle + STOP_READ_MINUTES), now)
+    return rows is not None and Restarts(rows, settle).settling(now)
+
+
+class Guard:
+    """One check's run against the villa system's restarts, judged on the WALL clock — the moment the villa's states
+    are read, never the day a night check judges (--as-of) — over the whole run: `settling()` asks whether it was
+    restarting at any moment from the run's start (`began`) to now. `now`: the moment the run began (the tests' --now;
+    the wall clock when not given), counted on by the time the run has taken. No `client` (no villa's system to read):
+    never settling.
+
+    ⚠️ JUDGED ONCE AT THE END OF A 30-MINUTE RUN (architecture review, 2026-11-14): the night check asked "is it
+    settling at the night's end?" (its --as-of day: a night check of an earlier day never rested), once, after up to 30
+    minutes of reading — a restart in the middle of its reading, settled by the end, was not seen."""
+
+    def __init__(self, client, now: datetime | None = None):
+        self.client = client
+        self.began = now or datetime.now(timezone.utc)
+        self._t0 = time.monotonic()
+
+    def now(self) -> datetime:
+        """The moment it is now, on the run's clock."""
+        return self.began + timedelta(seconds=time.monotonic() - self._t0)
+
+    def settling(self) -> bool:
+        """Was the villa's system restarting, or settling after a start, at any moment of this run so far
+        (Restarts.during)? A logbook that cannot be read: not settling (as settling())."""
+        if self.client is None:
+            return False
+        settle, end = minutes(), self.now()
+        rows = _logbook(self.client, self.began - timedelta(minutes=settle + STOP_READ_MINUTES),
+                        end + timedelta(seconds=1))
+        return rows is not None and Restarts(rows, settle).during(self.began, end)
+
+    def settled_at(self) -> datetime:
+        """When a run resting now may try again: the settle time from now."""
+        return self.now() + timedelta(minutes=minutes())
 
 
 class RestartDrops:

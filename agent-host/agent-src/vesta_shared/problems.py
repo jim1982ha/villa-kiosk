@@ -24,7 +24,7 @@ import json
 from datetime import datetime
 from typing import Callable
 
-from . import agreement, result
+from . import agreement, restart, result
 from .limits import limit
 from .messaging import headline, incident_tag, problem_title_chars
 from .store import Incident, Notes, Store, notes_of
@@ -172,9 +172,69 @@ def alert_name(store: Store, iid: int | str) -> str:
     return incident_tag(iid, priority_of(store.incident(int(iid)) if str(iid).isdigit() else None))
 
 
+class Resting(RuntimeError):
+    """A fault write refused: the check's run met a restart of the villa's system (Session)."""
+
+
+class Session:
+    """One check's run of fault writes (the night check, the frequent one): the ONE way a check opens, closes, rewords
+    or reopens a fault. Made at the run's start (Problems.session), attached to its store:
+      - it judges on the wall clock whether the villa's system restarted since the run began (restart.Guard): at the
+        start (`rested`: the run need read nothing) and at the first write (`writes()`, which every writer of Problems
+        asks: a refusal raises Resting) — once writing has begun, the run finishes what it writes;
+      - it keeps the moves of the faults' cards the run made (Problems.settle, Problems.reword), and `log()` gives them
+        as the result's fault log (result.fault_log), or the one row saying the run rested.
+
+    ⚠️ THE REST SAT AT THE CHECKS' main()s (architecture review, 2026-11-14): each check asked "is it settling?" once,
+    itself — the night check at its end and of the day it judged (--as-of), a person's Done on a missing device was
+    taken before the question, and the night check marked a rested night as run. Writing outside a session (the engine's
+    repair, a person's close, the tests) is not a check's reading, and is not judged."""
+
+    def __init__(self, store: Store, client, check: str, now: datetime | None = None):
+        self.store, self.check = store, check
+        self.guard = restart.Guard(client, now)
+        self.rows: list[dict] = []
+        self._writing = False
+        self.rested = self.guard.settling()
+        store.fault_session = self
+
+    def writes(self) -> bool:
+        """May this run write the faults now? The first time it is asked, judged again over the run so far
+        (restart.Guard.settling); after a yes, yes for the rest of the run; after a no (`rested`), no."""
+        if self._writing:
+            return True
+        if not self.rested and self.guard.settling():
+            self.rested = True
+        self._writing = not self.rested
+        return self._writing
+
+    def may_write(self) -> None:
+        if not self.writes():
+            raise Resting("the villa's system is restarting: this check writes no fault")
+
+    def log(self, then: str = "") -> list[dict]:
+        """The run's fault log (result.fault_log): each card's move, or the one row that it rested, saying `then`."""
+        return result.fault_log_skipped(self.check, then) if self.rested else result.fault_log(self.rows, self.check)
+
+    def again_at(self) -> str:
+        """When a rested run may try again (restart.Guard.settled_at), as ISO."""
+        return self.guard.settled_at().isoformat(timespec="seconds")
+
+
 class Problems:
     def __init__(self, store: Store):
         self.store = store
+
+    @staticmethod
+    def session(store: Store, client, check: str, now: datetime | None = None) -> Session:
+        """A check's run of fault writes (Session), judged against the villa system's restarts from now on."""
+        return Session(store, client, check, now)
+
+    def _may_write(self) -> None:
+        """Inside a check's run, its Session's answer (Resting when it rests); outside one, every write goes."""
+        s = getattr(self.store, "fault_session", None)
+        if s is not None:
+            s.may_write()
 
     # ---------------------------------------------------------------- opening
     def open_task(self, source: str, source_id: int, rule_id: str, entity_id: str, summary: str,
@@ -273,36 +333,57 @@ class Problems:
     def close_finding(self, finding: dict, day: str, note: str = "") -> list[dict]:
         """The night check no longer sees a finding: it closes, its task is cleared (its Kiosk fault follows: the
         repair). Returns a script's `actions` for it (result.moved)."""
+        self._may_write()
         self.store.close_finding(finding["rule_id"], finding["entity_id"], day)
-        self._wrote(result.CLOSED, finding["rule_id"], finding["entity_id"], dict(finding).get("summary"), note)
         return result.moved(self.settle(f"finding:{int(finding['id'])}", note=note))
 
     def reword(self, row: dict, finding) -> None:
         """Open finding `row` said again with `finding`'s words and detail, in place (its day kept): neither opened nor
         closed. The one writer of a fault's new words outside record (recheck.gone_missing: a missing device's words
         once its history said when it left)."""
+        self._may_write()
+        was = self._card_words(f"finding:{int(row['id'])}")
         self.store.raise_finding(finding.rule_id, finding.entity_id, finding.family, row["opened_day"], finding.severity,
                                  finding.summary, {**json.loads(row["detail"] or "{}"), **finding.detail,
                                                    "check": finding.check})
+        self._reworded(f"finding:{int(row['id'])}", was)
 
-    # ⚠️ EVERY OPEN AND CLOSE SAID (owner, 2026-11-13: two faults "Cleared" during a restart, nothing in the Agent's log):
-    # each write of a finding's state is one row of the run (store.fault_writes), which the script hands the engine in
-    # its result (result.fault_log) and the engine copies to its log
-    def _wrote(self, what: str, rule_id: str, entity_id: str, words, note: str = "") -> None:
-        rows = getattr(self.store, "fault_writes", None)
-        if rows is not None:
-            rows.append({"what": what, "rule": rule_id, "device": entity_id, "words": str(words or ""),
-                         "note": str(note or "")})
+    # ⚠️ EVERY MOVE OF A FAULT SAID (owner, 2026-11-13: two faults "Cleared" during a restart, nothing in the Agent's
+    # log): each move of a fault's card in a check's run is one row of its Session, which the script hands the engine in
+    # its result (result.fault_log) and the engine copies to its log. A finding with no card (below TASK_SEVERITIES, a
+    # one-night note) is no fault: it is not logged.
+    def _wrote(self, what: str, task: dict, words, note: str = "") -> None:
+        s = getattr(self.store, "fault_session", None)
+        if s is not None:
+            s.rows.append({"what": what, "rule": task.get("rule_id") or "", "device": task.get("entity_id") or "",
+                           "words": str(words or ""), "note": str(note or "")})
+
+    def _card_words(self, source: str) -> str:
+        """What the card of `source` says is wrong (current_title), its finding's last words even once it closed."""
+        kind, sid = self._source({"source": source})
+        row = self.store.finding(sid) if kind == "finding" else None
+        if row and row.get("summary"):
+            return problem_name(row["summary"], len(occurrences(row)) - 1)["headline"]
+        return self.current_title(self.store.last_task(source) or {"source": source, "summary": ""})
+
+    def _reworded(self, source: str, was: str) -> None:
+        """The card of `source`, open, now says other words than `was`: one row, saying what it said before."""
+        last = self.store.last_task(source)
+        now = self._card_words(source)
+        if last and last.get("status") == "open" and now != was:
+            self._wrote(result.REWORDED, last, now, f"was {was}")
 
     def written(self) -> list[dict]:
-        """The faults this run opened, opened again or closed, in order: {what (result.OPENED, OPENED_AGAIN, CLOSED),
-        rule, device, words, note (a close's)}."""
-        return list(getattr(self.store, "fault_writes", None) or [])
+        """The moves of the faults' cards in this check's run (its Session), in order: {what (result.OPENED,
+        OPENED_AGAIN, REWORDED, CLOSED), rule, device, words, note}; [] outside a check's run."""
+        s = getattr(self.store, "fault_session", None)
+        return list(s.rows) if s is not None else []
 
     def seen(self, finding_id: int, at: str, settle_minutes: float | None) -> list[int]:
         """Open finding `finding_id` read still bad at `at` (a reading of its source: the recheck's, every few minutes,
         for a rule its skill reads again) — recorded, then settled: the ids of the tasks that moved. `settle_minutes`:
         how long after a person's close such a reading must come to open the task again (wants_open)."""
+        self._may_write()
         self.store.finding_seen(int(finding_id), at, settle_minutes)
         return self.settle(f"finding:{int(finding_id)}")
 
@@ -330,6 +411,7 @@ class Problems:
         (architecture review round 13, card 2: a hidden or deleted device read "the nightly check no longer sees it" at
         night and its own sentence in the day). `handed_over` is what a skill edited before 0.12.430 still passes.
         Returns also `notes`: {finding id: the note it closed with}."""
+        self._may_write()
         handed_over = handed_over or {}
         out = self.record(findings, day, state_rules=state_rules, event_rules=event_rules, worsened_step=worsened_step,
                           at=at, settle_minutes=settle_minutes)
@@ -346,7 +428,6 @@ class Problems:
             # ⚠️ ITS TASK AND ITS KIOSK TICKET CLOSE WITH IT (villa, 2026-10-01): the finding closed, the ticket
             # stayed "Open fault" for ever, and the Kiosk's Cockpit filled with faults long gone
             self.store.close_finding(o["rule_id"], o["entity_id"], day)
-            self._wrote(result.CLOSED, o["rule_id"], o["entity_id"], dict(o).get("summary"), note or resolved_note)
             resolve += self.settle(f"finding:{int(o['id'])}", note=note or resolved_note)
         # `resolve_actions`: kept for a skill edited before 0.12.267 (its nightly.py reads each one's task_id)
         return {**out, "closed": closed, "handed_over": handed, "resolved": resolve, "notes": notes,
@@ -368,6 +449,7 @@ class Problems:
         task is settle()'s: a task a person reopened stays theirs, a person's close holds while it is not read again.
         `ended`: as record_night's — asked once with the findings no longer found, before `note`; `handed` is what a skill
         edited before 0.12.430 still passes."""
+        self._may_write()
         when = {int(k): v for k, v in seen.items()} if isinstance(seen, dict) else {}
         found, handed = {int(i) for i in seen}, {int(k): v for k, v in (handed or {}).items()}
         said: dict[int, str] = {}
@@ -391,7 +473,6 @@ class Problems:
                 # closed with that note, never counted cleared
                 self.store.close_finding(row["rule_id"], row["entity_id"], day)
                 notes[fid] = handed.get(fid) or said.get(fid) or note
-                self._wrote(result.CLOSED, row["rule_id"], row["entity_id"], row.get("summary"), notes[fid])
                 moved += self.settle(f"finding:{fid}", note=notes[fid])
                 (gone if fid in handed else closed).append(fid)
         return {"seen": out_seen, "closed": closed, "handed": gone, "notes": notes, "task_ids": moved}
@@ -405,6 +486,7 @@ class Problems:
 
         Each finding is recorded as SEEN at `at` (now when not said), with `settle_minutes` — the skill's settle time
         after a person's close (None: it named none, and a close then holds): the fact wants_open reads."""
+        self._may_write()
         new, still_open, again, held = [], [], [], []
         for f in findings:
             # ⚠️ MAINTENANCE MODE (vesta_shared.maintenance.takes_up): a problem not open yet, below P1, is not taken
@@ -423,9 +505,10 @@ class Problems:
             if back is not None:
                 fid, is_new = back, False
             else:
+                was = self._card_words(f"finding:{int(prev_row['id'])}") if prev_row else None
                 fid, is_new = self.store.raise_finding(f.rule_id, f.entity_id, f.family, day, f.severity, f.summary, f.detail)
-                if is_new or prev_row is None:        # new, or that day's closed row opened again (a rerun)
-                    self._wrote(result.OPENED if is_new else result.OPENED_AGAIN, f.rule_id, f.entity_id, f.summary)
+                if was is not None:
+                    self._reworded(f"finding:{int(fid)}", was)      # its open card's words, now the night's
             # seen when the reading shows it (a loop's latest drop, a day's start), else now: a close is answered only by
             # what came after it (rules.Finding.seen_at; architecture review 25)
             self.store.finding_seen(fid, getattr(f, "seen_at", "") or at or self.store.now(), settle_minutes)
@@ -440,7 +523,6 @@ class Problems:
                 # "nothing new", the monthly page "Fixed". It closes when a night passes without it, or a person does.
                 if f.severity not in TASK_SEVERITIES:
                     self.store.close_finding(f.rule_id, f.entity_id, day)    # no fault: closes the same night, as ever
-                    self._wrote(result.CLOSED, f.rule_id, f.entity_id, f.summary)
                 if is_new:                                                    # a rerun of the same night: told already
                     new.append(d)
                 elif f.severity in TASK_SEVERITIES and prev_row and prev_row["opened_day"] != day:
@@ -507,7 +589,6 @@ class Problems:
         # yesterday, back today — "(again: …)" was not said at all, the message read as a new problem
         seen = ([x for x in runs if x >= since] or [since]) + [day]
         self.store.reopen_finding(last["id"], f.severity, f.summary, f.detail, day, seen)
-        self._wrote(result.OPENED_AGAIN, f.rule_id, f.entity_id, f.summary)
         return last["id"]
 
     def closed_in_kiosk(self, task_id: int, said=None, at: str | None = None, who: str | None = None,
@@ -703,6 +784,7 @@ class Problems:
         kind, sid = self._source({"source": source})
         if kind not in ("finding", "incident"):
             return []                                    # no source of its own: it waits for a person
+        self._may_write()
         last = self.store.last_task(source)
         if not self.wants_open(source):
             if not last or last["status"] != "open":
@@ -712,6 +794,7 @@ class Problems:
             if status == CLEARED and self.in_persons_hands(last):
                 return []                                # a person's reopening: only a person closes it (their Done does)
             self.close(last["id"], status, note, who if status == DONE else None)
+            self._wrote(result.CLOSED, last, self._card_words(source), note)
             return [last["id"]]
         if last and last["status"] == "open":
             return []
@@ -722,12 +805,16 @@ class Problems:
             why = STILL_THERE if kind == "finding" and self.still_there_after_close(source) else note or "Back again."
             tid, how = self.reopen_task(kind, sid, last["rule_id"], last["entity_id"], title,
                                         self.check_of(last), note=why)
+            if how == "reopened":
+                self._wrote(result.OPENED_AGAIN, last, title, why)
             return [tid] if how == "reopened" else []
         if kind != "finding":
             return []
         row = self.store.finding(sid)
         check = json.loads(row.get("detail") or "{}").get("check") or ""
-        return [self.store.add_task(row["rule_id"], row["entity_id"], title, source=source, check_text=check or None)]
+        tid = self.store.add_task(row["rule_id"], row["entity_id"], title, source=source, check_text=check or None)
+        self._wrote(result.OPENED, row, title)
+        return [tid]
 
     def settle_all(self, faults: set[str] | None = None) -> list[int]:
         """settle() for every open problem and every open task — the repair's one pass: the ids of the tasks that moved.

@@ -23,7 +23,7 @@ from vesta_shared.limits import FILE as LIMITS_FILE
 from ..config import Settings
 from ..history import History, policy_change
 from ..policy import Policy, problems as policy_problems
-from ..skills import FILE_NAME, SKILL_NAME, SkillError, parse_skill, to_trash
+from ..skills import FILE_NAME, SKILL_NAME, SkillError, copy_skill, parse_skill, to_trash
 from .policy_doc import ai_moved, apply_form, kiosk_moved, known_off, to_form
 
 log = logging.getLogger("vesta.ui")
@@ -156,7 +156,7 @@ class PageFiles:
         folder = self.skill_dir(name)
         with tempfile.TemporaryDirectory() as tmp:
             trial = os.path.join(tmp, name)
-            shutil.copytree(folder, trial, ignore=shutil.ignore_patterns("__pycache__"))
+            copy_skill(folder, trial)
             target = os.path.join(trial, rel)
             if content is None:
                 os.unlink(target)

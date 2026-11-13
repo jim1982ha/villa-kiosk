@@ -653,13 +653,26 @@ then fixed with the probe's scenarios as the tests. Decided:
 - **`vesta_shared/restart.py`** owns "is the villa's system restarting, was this the restart's" (review, 2026-11-13,
   0.12.510): `minutes()` (the agreement's restartSettle, DEFAULT_MINUTES 5 when it has none — never "off"),
   `settling(client, now)` (its logbook read there; unreadable: not settling, said on stderr), `Restarts` (each restart
-  from its "stopped" to settle after its "started") and `RestartDrops`. recheck.main and the night check's writes
-  (nightly.persist_night) rest while settling and say so once (result.fault_log_skipped); the night's drops, stamps and
-  the investigation use the same minutes (the skills' restart_settle_minutes is gone). device_state keeps the old names
-  for a villa-edited skill. The alert desk's rule_gone is left alone: it asks "gone for clear_minutes", already held.
-- **Every fault write is a log row** (0.12.510): Problems records each finding opened, opened again or closed in
-  `store.fault_writes` (`Problems.written`); recheck and nightly put them in their result (`result.FAULT_LOG`), and
-  outcome.carry_out copies each to the Agent's log (`fault_lines`) and the calls table (`fault_written`).
+  from its "stopped" to settle after its "started") and `RestartDrops`; `Guard(client, now)` judges a check's run on the
+  wall clock (never the --as-of day) over its whole span (`Restarts.during`). The night's drops, stamps and the
+  investigation use the same minutes. device_state keeps the old names for a villa-edited skill
+  (tests/test_shared_names.py lists every name a released starter skill imported). The alert desk's rule_gone is left
+  alone: it asks "gone for clear_minutes", already held.
+- **A check writes its faults through one Session** (review, 2026-11-14, 0.12.512): `Problems.session(store, client,
+  check, now)` (problems.Session, attached as `store.fault_session`) judges the restart at the run's start (`rested`:
+  nightly and recheck return at once) and at the first write (`writes()`; every writer of Problems asks it and raises
+  `Resting` on a no; after a yes the run finishes). A person's Done on a missing device (forget_dismissed) waits too.
+  A rested night returns `result.RUN_AGAIN_AT` (settle time from now) and does not beat; `Scheduler._again` runs the
+  same slot once more at that moment, even past its window (in memory only). Writes outside a session (the engine's
+  repair, a person's close, tests) are not judged.
+- **The fault log follows the cards** (0.12.512): a row per move of a fault's card in a session: opened, reopened,
+  closed (Problems.settle), reworded (Problems.reword, record's new words for an open card: note "was …"). A finding
+  with no card (below TASK_SEVERITIES) is not logged. outcome.carry_out copies each to the Agent's log (`fault_lines`)
+  and the calls table (`fault_written`); a rested run is one line.
+- **Which files make up a skill** (0.12.512): `skills.skill_paths(folder, villa=)` (is_junk: dot names, __pycache__,
+  *.pyc) is the one list behind seed, the reference copy, _replace (villa=False), skill_files, fingerprint
+  (villa=False; a clean folder hashes as before), the editor's trial copy, the Files listing and an import's zip
+  entries. `release.py ship` refuses while the starter folder holds untracked or ignored files (but Python's caches).
 - **`vesta_shared/battery.py`** owns a battery's charge (`charge`; device_state.battery_charge is a re-export for a
   villa-edited skill), its projection (`projection(points, floor_pct, level)`, the floor the caller's setting) and the
   rule ids the reports read (CRIT, LOW, TREND, REPLACE) — kept out of result.py on purpose (one owner per subject).

@@ -761,7 +761,7 @@ class Skills:
         for name in starters:
             dst = os.path.join(self.dir, name)
             if name not in given and not os.path.exists(dst):
-                shutil.copytree(os.path.join(self.starter_dir, name), dst, ignore=shutil.ignore_patterns("__pycache__"))
+                copy_skill(os.path.join(self.starter_dir, name), dst)
                 copied.append(name)
         if not os.path.exists(marker):
             with open(marker, "w", encoding="utf-8") as f:
@@ -809,8 +809,7 @@ class Skills:
         if kept:
             os.makedirs(ref, exist_ok=True)
             for name in kept:
-                shutil.copytree(os.path.join(self.starter_dir, name), os.path.join(ref, name),
-                                ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+                copy_skill(os.path.join(self.starter_dir, name), os.path.join(ref, name))
         return updated, kept
 
     # ------------------------------------------------------------------ reading
@@ -936,7 +935,7 @@ class Skills:
         src, dst = os.path.join(self.starter_dir, name), os.path.join(self.dir, name)
         tmp, old = dst + ".new", dst + ".old"
         shutil.rmtree(tmp, ignore_errors=True)
-        shutil.copytree(src, tmp, ignore=shutil.ignore_patterns("__pycache__", "*.pyc", VILLA_PREFIX + "*"))
+        copy_skill(src, tmp, villa=False)
         carry_villa_files(dst, tmp)                      # the villa's own files go with it
         shutil.rmtree(old, ignore_errors=True)
         os.rename(dst, old)
@@ -1096,44 +1095,73 @@ def to_trash(skills_dir: str, path: str, name: str) -> str:
     return dest
 
 
+# ⚠️ WHICH FILES MAKE UP A SKILL, ONE ANSWER (architecture review, 2026-11-14: 0.12.510 never published): seven places
+# decided it — the first copy, the reference copy, an update, the diff, the fingerprint, an import, the editor's trial —
+# each with its own list, and the fingerprint skipped no folder: a lint cache left inside a starter skill on the machine
+# that shipped was hashed into shipped-skills.json, so the image's own copy, without it, read as "edited here".
+#: A tool's leftovers inside a skill folder, never a file of the skill: Python's caches, and any dot folder or dot file
+#: (.ruff_cache, .pytest_cache, .mypy_cache, .DS_Store …; the editor accepts no name with a leading dot: FILE_NAME).
+CACHE_DIRS = ("__pycache__",)
+CACHE_SUFFIXES = (".pyc",)
+
+
+def is_junk(name: str, folder: bool = False) -> bool:
+    """Is `name` (one part of a path; `folder`: a folder's) a tool's leftover, never part of a skill (CACHE_DIRS,
+    CACHE_SUFFIXES, a leading dot)? "." and ".." are no leftover: a path naming them is refused, never skipped."""
+    if name in (".", ".."):
+        return False
+    return name.startswith(".") or (name in CACHE_DIRS if folder else name.endswith(CACHE_SUFFIXES))
+
+
+def skill_paths(folder: str, villa: bool = True) -> list[str]:
+    """The files that make up a skill folder, each its path inside it ("/" between folders), in a fixed order: every
+    file but a tool's leftovers (is_junk) — and but this villa's own villa.* files when `villa` is False. The ONE list
+    every copy, hash and diff of a skill reads."""
+    out = []
+    for root, dirs, files in os.walk(folder):
+        dirs[:] = sorted(d for d in dirs if not is_junk(d, folder=True))
+        for name in sorted(files):
+            if is_junk(name) or (not villa and name.startswith(VILLA_PREFIX)):
+                continue
+            out.append(os.path.relpath(os.path.join(root, name), folder).replace(os.sep, "/"))
+    return out
+
+
+def copy_skill(src: str, dst: str, villa: bool = True) -> None:
+    """Skill folder `src` copied to `dst` (made new): its files (skill_paths), villa.* ones only when `villa`."""
+    os.makedirs(dst)
+    for rel in skill_paths(src, villa=villa):
+        os.makedirs(os.path.dirname(os.path.join(dst, rel)), exist_ok=True)
+        shutil.copy2(os.path.join(src, rel), os.path.join(dst, rel))
+
+
 def carry_villa_files(old: str, new: str) -> None:
     """This villa's own files (villa.*) of a skill folder, copied into its replacement where it has none: an update,
     "Take the release version" and an import all keep them (VILLA_PREFIX)."""
-    for root, _, files in os.walk(old):
-        for f in files:
-            if f.startswith(VILLA_PREFIX):
-                rel = os.path.relpath(os.path.join(root, f), old)
-                if not os.path.exists(os.path.join(new, rel)):
-                    os.makedirs(os.path.dirname(os.path.join(new, rel)), exist_ok=True)
-                    shutil.copy2(os.path.join(root, f), os.path.join(new, rel))
+    for rel in skill_paths(old):
+        if os.path.basename(rel).startswith(VILLA_PREFIX) and not os.path.exists(os.path.join(new, rel)):
+            os.makedirs(os.path.dirname(os.path.join(new, rel)), exist_ok=True)
+            shutil.copy2(os.path.join(old, rel), os.path.join(new, rel))
 
 
 def skill_files(folder: str) -> dict[str, str]:
-    """Each file of a skill folder (its path inside it) → a hash of its content; Python's caches left out."""
+    """Each file of a skill folder (skill_paths, villa.* included) → a hash of its content."""
     out = {}
-    for root, dirs, files in os.walk(folder):
-        dirs[:] = [d for d in dirs if d != "__pycache__"]
-        for name in files:
-            if name.endswith(".pyc"):
-                continue
-            path = os.path.join(root, name)
-            with open(path, "rb") as f:
-                out[os.path.relpath(path, folder).replace(os.sep, "/")] = hashlib.sha256(f.read()).hexdigest()
+    for rel in skill_paths(folder):
+        with open(os.path.join(folder, rel), "rb") as f:
+            out[rel] = hashlib.sha256(f.read()).hexdigest()
     return out
 
 
 def fingerprint(folder: str) -> str:
-    """One hash for a skill folder's files (names and contents; not Python's caches)."""
+    """One hash for a skill folder's files, names and contents (skill_paths without this villa's villa.* files): what
+    shipped-skills.json records. A folder without leftovers hashes as it did before 0.12.512 (the same files, the
+    same order): only a leftover is no longer counted."""
     h = hashlib.sha256()
-    for root, dirs, files in os.walk(folder):
-        dirs.sort()                          # a fixed order; Python's caches hold only .pyc, skipped below
-        for name in sorted(files):
-            if name.endswith(".pyc") or name.startswith(VILLA_PREFIX):
-                continue
-            path = os.path.join(root, name)
-            h.update(os.path.relpath(path, folder).replace(os.sep, "/").encode() + b"\0")
-            with open(path, "rb") as f:
-                h.update(hashlib.sha256(f.read()).digest())
+    for rel in skill_paths(folder, villa=False):
+        h.update(rel.encode() + b"\0")
+        with open(os.path.join(folder, rel), "rb") as f:
+            h.update(hashlib.sha256(f.read()).digest())
     return h.hexdigest()
 
 

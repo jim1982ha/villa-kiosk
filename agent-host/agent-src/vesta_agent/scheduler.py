@@ -17,6 +17,12 @@ held the whole scheduler: the alert chase (every_5_min) did not run while it wor
 slot whose window closed meanwhile was lost. Each job is now a task the tick starts and
 leaves; a job still running is not started again; a scheduled job waits for a pack rebuild
 still in progress, so the night's checks never read a half-built pack.
+
+⚠️ A RESTED RUN IS RUN AGAIN (architecture review, 2026-11-14): the night check rests while the villa's system restarts
+(vesta_shared.problems.Session) and its slot was spent: that night's findings were never looked for. A code job whose
+result names a moment to run again (result.RUN_AGAIN_AT) is started once more for the same slot at that moment, even
+past its window (a restart may outlast it); a newer slot claimed meanwhile replaces it. Kept in memory: an agent
+restarted meanwhile does not run it again.
 """
 
 from __future__ import annotations
@@ -27,6 +33,7 @@ from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from vesta_shared.limits import limit
+from vesta_shared.result import RUN_AGAIN_AT
 from vesta_shared.when import Spec
 
 from .in_progress import AGAIN, SCHEDULED, InProgress, Item
@@ -118,6 +125,7 @@ class Scheduler:
         self.housekeeping = housekeeping    # async () -> None, every tick
         self._last_every: datetime | None = None
         self._running: dict[str, asyncio.Task] = {}     # job key → its task, while it runs
+        self._again: dict[str, tuple[datetime, datetime]] = {}   # job key → (its slot, when to run it again)
         # ⚠️ A RUN CUT BY A STOP IS RUN AGAIN (architecture review 21): the slot was claimed before the run, so an update
         # in the middle of the morning report lost it for the day, without a word. A run in progress is recorded
         # (in_progress.InProgress.kept); one still recorded at start was cut, and its slot may be claimed once more in its
@@ -221,7 +229,13 @@ class Scheduler:
                 # was claimed per entry (skill:i:when) and started per time (skill:when) — two jobs of a skill at the
                 # same time, and the second, claimed, was refused as "still running": lost for the day
                 key = job_key(sk.name, sk.schedule, i)
-                if not slot or not self._claim(key, slot, job_ident(sk.name, sk.schedule, i)):
+                owed = self._again.get(key)
+                if slot and self._claim(key, slot, job_ident(sk.name, sk.schedule, i)):
+                    self._again.pop(key, None)          # a newer slot: the one owed is run by it
+                elif owed and now >= owed[1]:
+                    slot = owed[0]                      # a rested run, now run again for its own slot
+                    del self._again[key]
+                else:
                     continue
                 name = f"{sk.name}:{job['when']}"
 
@@ -230,7 +244,7 @@ class Scheduler:
                     async with self.work.kept(Item(SCHEDULED, key, slot=slot.isoformat())):
                         await self._after_pack()
                         if job.get("run"):
-                            await self.run_code(sk, job["run"], job["timeout"])
+                            self._run_again(key, slot, await self.run_code(sk, job["run"], job["timeout"]))
                         else:
                             await self.run_model(sk, job)
                 if self._start(key, run):
@@ -239,6 +253,19 @@ class Scheduler:
             # beside the tick like every job, never inside it: it may wait on HA MCP (90 s) when it is down
             self._start("engine:housekeeping", self.housekeeping)
         return started
+
+    def _run_again(self, key: str, slot: datetime, res) -> None:
+        """A code job's result asking to be run again (result.RUN_AGAIN_AT): its slot kept for that moment."""
+        at = res.get(RUN_AGAIN_AT) if isinstance(res, dict) else None
+        try:
+            when = datetime.fromisoformat(str(at)) if at else None
+        except ValueError:
+            when = None
+        if when is None:
+            return
+        when = when if when.tzinfo else when.replace(tzinfo=slot.tzinfo)
+        self._again[key] = (slot, when)
+        log.info("%s rested while the villa's system restarts: run again at %s", key, when.isoformat(timespec="seconds"))
 
     async def run(self, stop: asyncio.Event) -> None:
         while not stop.is_set():

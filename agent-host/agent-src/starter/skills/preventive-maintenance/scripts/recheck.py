@@ -59,8 +59,8 @@ from zoneinfo import ZoneInfo
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
-from vesta_shared import kiosk_words, restart, result, script  # noqa: E402
-from vesta_shared.problems import Problems  # noqa: E402
+from vesta_shared import kiosk_words, result, script  # noqa: E402
+from vesta_shared.problems import Problems, Resting  # noqa: E402
 from vesta_shared.timeutil import moment_label  # noqa: E402  (a moment as every notice and the agreement write it)
 import nightly as N  # noqa: E402  (what is offline: the night's one reading of it)
 import endings as E  # noqa: E402  (how a fault ends: one table, the night's too)
@@ -552,11 +552,27 @@ def main(argv=None):
     # at 14:49 this check cleared "The automation 'Server room person' watches 1 device that no longer answers" and its
     # twin, read while the villa's devices were still loading, and opened "LED Strip is missing"): the whole tick rests
     # while it is starting and for the agreement's restartSettle minutes after (vesta_shared.restart, the night check's
-    # rest too); the next tick reads everything as it is. Said once in the Agent's log (result.fault_log_skipped)
-    if restart.settling(ctx.live_client, now):
-        print(json.dumps({"actions": [], "send": [], "edits": [], result.FAULTS_CHANGED: False,
-                          result.FAULT_LOG: result.fault_log_skipped(result.FREQUENT_CHECK)}))
-        return 0
+    # rest too); the next tick reads everything as it is. The tick's Session judges it, on the wall clock, at the start
+    # and at its first write (a person's Done on a missing device too: nightly.forget_dismissed), over the whole tick;
+    # said once in the Agent's log
+    faults = Problems.session(ctx.store, ctx.live_client, result.FREQUENT_CHECK, now=ctx.now)
+    if faults.rested:
+        return rested(faults)
+    try:
+        return tick(ctx, now, faults)
+    except Resting:
+        return rested(faults)
+
+
+def rested(faults) -> int:
+    """A tick that rested while the villa's system restarts: nothing written, nothing sent, one line in the log."""
+    print(json.dumps({"actions": [], "send": [], "edits": [], result.FAULTS_CHANGED: False,
+                      result.FAULT_LOG: faults.log()}))
+    return 0
+
+
+def tick(ctx, now: datetime, faults) -> int:
+    """One tick's reading and writing (main), its fault log `faults`' (Problems.Session)."""
     settle = N.still_there_minutes(ctx.settings)
     # what is missing first: a fault whose device is gone then follows its missing fault (back_online)
     miss = gone_missing(ctx.store, ctx.pack, lambda: ctx.live_client, now, ctx.params, ctx.zone, settle)
@@ -586,8 +602,8 @@ def main(argv=None):
                       "send": miss["send"] + found["send"] + told, "edits": N.one_edit_per_message(edits),
                       result.FAULTS_CHANGED: bool(closed or handed or again["actions"] or found["actions"]
                                                   or miss["actions"]),
-                      # every fault this tick opened or closed, for the Agent's log
-                      result.FAULT_LOG: result.fault_log(Problems(ctx.store).written(), result.FREQUENT_CHECK)},
+                      # every move of a fault's card this tick, for the Agent's log
+                      result.FAULT_LOG: faults.log()},
                      default=str))
     return 0
 

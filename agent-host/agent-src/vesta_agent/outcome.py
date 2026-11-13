@@ -71,8 +71,10 @@ CARRIED_KEYS = ("send", "actions", "siren_gate", "settle", "ha_messages", "edits
 
 
 def has_work(res) -> bool:
-    """Whether a script's result asks for anything carry_out does."""
-    return isinstance(res, dict) and any(res.get(k) for k in CARRIED_KEYS)
+    """Whether a script's result asks for anything carry_out does: a carried key, or its faults brought up to date
+    (FAULTS_CHANGED). ⚠️ ONE TEST (architecture review, 2026-11-14): an AI job's code step was carried out only when it
+    sent something, so a step that closed a fault or edited a message alone was never carried out."""
+    return isinstance(res, dict) and (any(res.get(k) for k in CARRIED_KEYS) or bool(res.get(FAULTS_CHANGED)))
 
 
 def check_words(check: str, skill_name: str | None = None) -> str:
@@ -93,12 +95,11 @@ def fault_lines(rows, skill_name: str | None = None) -> list[str]:
     for r in rows:
         by = check_words(str(r.get("check") or ""), skill_name)
         if r.get("what") == R.SKIPPED:
-            out.append(f"{by[0].upper()}{by[1:]} opened and closed no fault: the villa's system is restarting.")
+            then = f" {str(r['note']).strip()}" if r.get("note") else ""
+            out.append(f"{by[0].upper()}{by[1:]} opened and closed no fault: the villa's system is restarting.{then}")
             continue
         words = str(r.get("words") or r.get("device") or r.get("rule") or "").strip()
         why = f"{by}: {str(r['note']).strip()}" if r.get("note") else by
-        if r.get("settling"):
-            why += ", while the villa's system was restarting"
         out.append(f'Fault {r.get("what") or "changed"}: "{words}" ({why})')
     return out
 

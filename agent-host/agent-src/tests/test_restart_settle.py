@@ -10,11 +10,15 @@ import json
 import os
 import subprocess
 import sys
+import types
 from datetime import datetime, timedelta, timezone
+
+import pytest
 
 from helpers import PYTHONPATH, STARTER_SKILLS
 from vesta_agent.outcome import fault_lines
 from vesta_shared import agreement, restart
+from vesta_shared.problems import Problems, Resting
 from vesta_shared import result as R
 from vesta_shared.store import Store
 
@@ -31,8 +35,8 @@ def _ha(message, at):
     return {"name": "Home Assistant", "message": message, "domain": "homeassistant", "when": at.isoformat()}
 
 
-def _night(tmp, as_of, state="unavailable", changed="2026-10-03T00:00:00+00:00", logbook=()):
-    """The night check of `as_of` (its end, the next midnight, is its now), the hidden device in `state` since
+def _night(tmp, as_of, state="unavailable", changed="2026-10-03T00:00:00+00:00", logbook=(), now=None):
+    """The night check of `as_of`, run at `now` (the next midnight when not said), the hidden device in `state` since
     `changed`: its result."""
     fx = tmp / "fx"
     fx.mkdir(exist_ok=True)
@@ -45,7 +49,8 @@ def _night(tmp, as_of, state="unavailable", changed="2026-10-03T00:00:00+00:00",
         "channels": {}, "unknown_area": [], "unclassified": [], "retention": {"raw_history_days": 10},
         "families": {}, "assets": {}, "hidden": [RAW]}))
     r = subprocess.run([sys.executable, NIGHTLY, "--pack", str(tmp / "pack.json"), "--store", str(tmp / "s.sqlite"),
-                        "--fixture-dir", str(fx), "--skip-raw", "--as-of", as_of],
+                        "--fixture-dir", str(fx), "--skip-raw", "--as-of", as_of, "--now",
+                        (now or datetime.fromisoformat(as_of).replace(tzinfo=timezone.utc) + timedelta(days=1)).isoformat()],
                        capture_output=True, text=True, env={**os.environ, "PYTHONPATH": PYTHONPATH}, timeout=120)
     assert r.returncode == 0, r.stderr
     return json.loads(r.stdout)
@@ -124,3 +129,68 @@ def test_a_device_that_dropped_while_the_villas_system_was_stopped_did_not_drop_
             {"when": (t + timedelta(hours=3, minutes=5)).isoformat(), "entity_id": "switch.example_relay", "state": "on"}]
     drops = features.drop_times(rows, restart.minutes())
     assert drops == {"switch.example_relay": [t + timedelta(hours=3)]}                # its own drop only
+
+
+def test_a_night_check_of_an_earlier_day_rests_while_the_villas_system_restarts_now_and_asks_to_run_again(tmp_path):
+    # architecture review, 2026-11-14: the rest was judged at the end of the day judged, so a night check of an earlier
+    # day, run while the villa's system restarted, read loading devices as back and closed their faults
+    _night(tmp_path, "2026-10-03")
+    (f,) = _open(tmp_path)
+    now = datetime(2026, 10, 20, 2, 0, tzinfo=timezone.utc)
+    restarting = [_ha("stopped", now - timedelta(minutes=3)), _ha("started", now - timedelta(minutes=1))]
+    out = _night(tmp_path, "2026-10-04", state="unlocked", logbook=restarting, now=now)
+    assert [g["id"] for g in _open(tmp_path)] == [f["id"]]                     # nothing closed
+    (line,) = fault_lines(out[R.FAULT_LOG])
+    assert "runs again" in line
+    again = datetime.fromisoformat(out[R.RUN_AGAIN_AT])                         # once it has settled, never sooner
+    assert now + timedelta(minutes=SETTLE) <= again < now + timedelta(minutes=SETTLE + 1)
+
+
+def test_a_restart_in_the_middle_of_a_long_reading_rests_its_writes_even_once_settled(tmp_path, monkeypatch):
+    # architecture review, 2026-11-14: judged once at the end of a run of up to 30 minutes, a restart in its middle,
+    # settled by the end, was not seen, and what was read while the devices loaded was written
+    began = datetime(2026, 11, 13, 2, 0, tzinfo=timezone.utc)
+    clock = [0.0]
+    monkeypatch.setattr(restart, "time", types.SimpleNamespace(monotonic=lambda: clock[0]))
+    store = Store(str(tmp_path / "s.sqlite"))
+    fid, _ = store.raise_finding("PM-X", "sensor.example", "power", "2026-11-12", "P3", "Pump weak", {})
+    villa = _Villa([_ha("stopped", began + timedelta(minutes=10)), _ha("started", began + timedelta(minutes=13))])
+    run = Problems.session(store, villa, R.NIGHT_CHECK, now=began)
+    assert not run.rested                                                      # nothing restarting when it began
+    clock[0] = 30 * 60                                                         # its writes, 30 minutes on: settled
+    with pytest.raises(Resting):
+        Problems(store).close_finding(store.finding(fid), "2026-11-12", "Cleared.")
+    assert store.finding(fid)["status"] == "open"
+    assert len(fault_lines(run.log())) == 1 and run.log()[0]["what"] == R.SKIPPED
+
+
+class _F:
+    """A finding as the night check makes it (rules.Finding's shape)."""
+    def __init__(self, rule_id, entity_id, severity, summary):
+        self.rule_id, self.entity_id, self.family, self.severity, self.summary = rule_id, entity_id, "power", severity, summary
+        self.detail, self.check, self.day = {}, "look", ""
+
+    def as_dict(self):
+        return {"rule_id": self.rule_id, "entity_id": self.entity_id, "family": self.family, "severity": self.severity,
+                "summary": self.summary, "detail": self.detail, "check": self.check, "day": self.day}
+
+
+def test_the_agents_log_follows_each_faults_card_and_only_what_has_one(tmp_path):
+    # architecture review, 2026-11-14: the log followed the findings: a one-night note with no card read "Fault opened"
+    # then "Fault closed", and a card opened again or given new words said nothing
+    store = Store(str(tmp_path / "s.sqlite"))
+    run = Problems.session(store, None, R.NIGHT_CHECK)
+    pb = Problems(store)
+    rules = dict(state_rules={"S-POWER"}, event_rules={"E-RUN"}, worsened_step=15, resolved_note="Cleared.")
+
+    def night(day, *found):
+        n = len(run.rows)
+        pb.record_night(list(found), day, **rules)
+        return fault_lines(run.log()[n:])
+    assert night("2026-10-06", _F("S-POWER", "sensor.a", "P2", "Pump weak"), _F("E-RUN", "sensor.c", "P4", "Ran once")) \
+        == ['Fault opened: "Pump weak" (the night check)']                      # the note with no card: no fault
+    assert night("2026-10-07", _F("S-POWER", "sensor.a", "P2", "Pump weaker")) \
+        == ['Fault reworded: "Pump weaker" (the night check: was Pump weak)']
+    assert night("2026-10-08") == ['Fault closed: "Pump weaker" (the night check: Cleared.)']
+    (line,) = night("2026-10-09", _F("S-POWER", "sensor.a", "P2", "Pump weak"))
+    assert line.startswith('Fault reopened: "Pump weak') and line.endswith("(the night check: Back again.)")

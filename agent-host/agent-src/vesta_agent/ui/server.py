@@ -33,7 +33,8 @@ from .. import __version__, requests_box, status, tool_access
 from ..config import STARTER_DIR, Settings
 from ..history import History, file_change
 from ..places import ORDER, PLACES, TABS
-from ..skills import FILE_NAME, REQUIRED_FILES, SKILL_NAME, TRASH, VILLA_CHOICES, Skills, switch_command, to_trash
+from ..skills import (FILE_NAME, REQUIRED_FILES, SKILL_NAME, TRASH, VILLA_CHOICES, Skills, skill_paths, switch_command,
+                      to_trash)
 from ..state import State
 from . import kinds, links, setup_copy
 from .changes import PageFiles, Refused, _read, _write, page_policy, rev, rules_problems, undoable
@@ -562,15 +563,9 @@ class UI:
 
     async def skill_files(self, request):
         folder = self.files.skill_dir(request.match_info["name"])
-        out = []
-        for root, dirs, files in os.walk(folder):
-            dirs[:] = sorted(d for d in dirs if FILE_NAME.match(d) and d != "__pycache__")
-            for f in sorted(files):
-                if not FILE_NAME.match(f) or f.endswith(".pyc"):
-                    continue
-                p = os.path.join(root, f)
-                rel = os.path.relpath(p, folder).replace(os.sep, "/")
-                out.append({"path": rel, "size": os.path.getsize(p), "deletable": rel not in REQUIRED_FILES})
+        # the skill's files as every copy and hash reads them (skills.skill_paths), each a name the editor accepts
+        out = [{"path": rel, "size": os.path.getsize(os.path.join(folder, rel)), "deletable": rel not in REQUIRED_FILES}
+               for rel in skill_paths(folder) if all(FILE_NAME.match(p) for p in rel.split("/"))]
         return web.json_response({"files": out})
 
     async def file_get(self, request):

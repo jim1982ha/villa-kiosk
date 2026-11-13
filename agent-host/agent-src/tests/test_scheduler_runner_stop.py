@@ -37,6 +37,34 @@ def test_a_slot_is_due_inside_its_window():
     assert due("Mon 08:00", at(8, 5, day=6)) is None
 
 
+def test_a_night_check_that_rested_through_a_restart_runs_again_once_settled_and_once(tmp_path):
+    # architecture review, 2026-11-14: a night check that rested while the villa's system restarted spent its slot,
+    # and that night's findings were never looked for
+    from vesta_shared.result import RUN_AGAIN_AT
+    s = settings(str(tmp_path))
+    copy_skill("preventive-maintenance", s.skills_dir)
+    nights, again = [], [at(2, 8), at(2, 45), None]                    # rests twice (past its window), then runs
+
+    async def run_code(skill, command, timeout):
+        if command.startswith("nightly.py"):
+            nights.append(1)
+            when = again[len(nights) - 1]
+            return {RUN_AGAIN_AT: when.isoformat()} if when else {}
+        return {}
+
+    async def nothing(*a):
+        pass
+    sch = Scheduler(s, Skills(s.skills_dir), State(s.state_path), run_code, nothing, nothing)
+
+    async def go():
+        for t, runs in ((at(2, 1), 1), (at(2, 5), 1), (at(2, 9), 2), (at(2, 20), 2), (at(2, 50), 3), (at(3, 0), 3),
+                        (at(4, 0), 3)):
+            await sch.tick(t)
+            await sch.idle()
+            assert len(nights) == runs, t
+    asyncio.run(go())
+
+
 def test_the_schedule_comes_from_the_skills_and_runs_once_per_slot(tmp_path):
     s = settings(str(tmp_path))
     copy_skill("preventive-maintenance", s.skills_dir)

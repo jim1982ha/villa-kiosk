@@ -1,3 +1,19 @@
+## 0.12.512
+
+- **A night check that rests during a restart now runs again once the villa's system has settled**, instead of
+  waiting for the next night: that night's new faults are no longer skipped. It rests whatever day it checks, and also
+  when the villa's system restarted while it was still reading, even if it had settled by the end. A Done pressed on a
+  missing device waits for the settle too, like every other change.
+- **The log's fault lines follow the fault cards.** "Fault opened", "reopened", "reworded" and "closed" each say what
+  happened to a card in the VESTA UI, for example: Fault reopened: "Pump weak" (the night check: Back again.). A
+  one-night note that never had a card is no longer logged as a fault, and a card given new words says what it said
+  before.
+- **A starter skill is no longer taken for "edited here" because a tool left a cache folder inside it.** Such
+  leftovers (cache folders, hidden files) are never copied, compared or counted in a skill, and a release refuses to
+  ship while the starter skills hold one.
+- **A report's step that only closes a fault or edits a message is now carried out**; before, it was carried out only
+  when it also sent something.
+
 ## 0.12.511
 
 - **The night check also rests while the villa's system restarts.** Like the 5-minute check since 0.12.509, it now

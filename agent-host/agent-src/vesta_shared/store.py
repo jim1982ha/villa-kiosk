@@ -187,8 +187,8 @@ def _now() -> str:
 class Store:
     def __init__(self, path: str | None = None):
         self.path = path or os.environ.get("VESTA_STORE", "vesta_store.sqlite")
-        #: the faults this run opened, opened again or closed, in order (Problems writes them; Problems.written reads)
-        self.fault_writes: list[dict] = []
+        #: the check's run writing the faults (problems.Session: its restart guard and its fault log), None outside one
+        self.fault_session = None
         self.db = sqlite3.connect(self.path)
         self.db.row_factory = sqlite3.Row
         self.db.executescript(SCHEMA)

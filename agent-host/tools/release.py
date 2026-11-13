@@ -36,7 +36,8 @@ CHANGELOG = "vesta-agent/CHANGELOG.md"
 VERSION_SITES = ("vesta-agent/config.yaml", "agent-host/agent-src/vesta-agent.yaml")
 #: Every version of each starter skill a release shipped (vesta_agent.skills.record_shipped): a skill whose
 #: fingerprint is not in it is taken for one the villa edited, and never updated again.
-STARTER_SKILLS = "agent-host/agent-src/starter/skills/"
+STARTER = "agent-host/agent-src/starter/"
+STARTER_SKILLS = STARTER + "skills/"
 SHIPPED_SKILLS = "agent-host/agent-src/starter/shipped-skills.json"
 #: The agreement with the VESTA Kiosk: the Kiosk's file on its branch, and this app's copy of it.
 KIOSK_AGREEMENT, KIOSK_BRANCH = "rootfs/usr/share/vesta/agent-contract.json", "dev2"
@@ -172,6 +173,15 @@ def copy_agreement(dry_run: bool) -> None:
         git("add", AGREEMENT_COPY)
 
 
+def starter_strays() -> list[str]:
+    """The files under the starter folder git does not track (untracked or ignored), but Python's caches: the image
+    has none of them, so a fingerprint counting one would record a version no install has (0.12.510: a lint cache)."""
+    out = git("status", "--porcelain", "--ignored", "--untracked-files=all", "--", STARTER)
+    paths = [ln[3:].strip() for ln in out.splitlines() if ln[:2] in ("??", "!!")]
+    return [p for p in paths
+            if not p.endswith(".pyc") and "/__pycache__/" not in f"/{p}" and not p.rstrip("/").endswith("__pycache__")]
+
+
 # ── ship ─────────────────────────────────────────────────────────────────────
 
 def ship(message: str | None, dry_run: bool, wait_minutes: float, poll_seconds: float = 15) -> int:
@@ -191,6 +201,10 @@ def ship(message: str | None, dry_run: bool, wait_minutes: float, poll_seconds: 
     if parse_version(version) <= parse_version(before):
         raise ReleaseError(f"{CHANGELOG}'s top entry is {version}, not above {before}: add the new entry at the TOP")
     skills = any(f.startswith(STARTER_SKILLS) for f in staged)
+    stray = starter_strays()
+    if stray:
+        raise ReleaseError("the starter folder holds files git does not ship, which would be counted in the skills' "
+                           f"fingerprints: {', '.join(stray)}. Delete them, then ship again")
 
     print(f"VESTA Agent (dev) {before} → {version}: {len(staged)} files staged")
     if dry_run:

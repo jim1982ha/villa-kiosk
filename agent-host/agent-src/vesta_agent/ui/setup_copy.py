@@ -38,7 +38,7 @@ from .. import __version__, tool_access
 from ..history import policy_change
 from ..places import title, where
 from ..policy import RULE_WORDS, WORDS, Policy, problems as policy_problems, setup_fields
-from ..skills import FILE_NAME, SKILL_NAME, VILLA_PREFIX, SkillError, skill_files, parse_skill, ai_jobs, job_owners, job_starters
+from ..skills import FILE_NAME, SKILL_NAME, VILLA_PREFIX, SkillError, is_junk, skill_files, parse_skill, ai_jobs, job_owners, job_starters
 from vesta_shared import limits as code_limits
 from .policy_doc import existing_off
 
@@ -87,8 +87,14 @@ class NotASkill(ValueError):
     pass
 
 
-#: what a zip made on a Mac or by hand carries and nobody wrote: never a file of the skill
-_JUNK = ("__MACOSX/", ".DS_Store")
+#: what a zip made on a Mac carries and nobody wrote, beside a tool's leftovers (skills.is_junk): never a file
+_ZIP_JUNK = ("__MACOSX",)
+
+
+def _junk(path: str) -> bool:
+    """Is a zip entry a leftover in any part of its path (skills.is_junk, the one rule of what makes up a skill)?"""
+    parts = path.split("/")
+    return parts[0] in _ZIP_JUNK or any(is_junk(p, folder=True) for p in parts[:-1]) or is_junk(parts[-1])
 
 
 def _entries(data: bytes, refused, what: str) -> list[tuple[str, bytes]]:
@@ -98,8 +104,7 @@ def _entries(data: bytes, refused, what: str) -> list[tuple[str, bytes]]:
         z = zipfile.ZipFile(io.BytesIO(data))
     except zipfile.BadZipFile:
         raise refused(f"Not {what}.") from None
-    infos = [i for i in z.infolist() if not i.is_dir()
-             and not any(i.filename.startswith(j) or i.filename.endswith("/" + j) or i.filename == j for j in _JUNK)]
+    infos = [i for i in z.infolist() if not i.is_dir() and not _junk(i.filename)]
     if len(infos) > MAX_FILES or sum(i.file_size for i in infos) > MAX_UNPACKED:
         raise refused(f"This file is too large for {what}.")
     return [(i.filename, z.read(i)) for i in infos]
