@@ -75,6 +75,7 @@ export default function EntityPicker({
       compact={compact}
       startOpen={startOpen}
       placeholder={selectedLabel ?? placeholder ?? "Search entities…"}
+      chosen={selectedLabel !== undefined}
       before={(query) => (allowCustom && ENTITY_ID_RE.test(query.trim()) && !entities[query.trim()]
         ? { key: query.trim(), label: `Use "${query.trim()}"`, sub: "entity not there yet, will activate when it appears", strong: true }
         : null)}

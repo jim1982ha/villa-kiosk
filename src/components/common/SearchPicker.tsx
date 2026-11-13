@@ -13,7 +13,7 @@
 
 import { useRef, useState, type ReactNode } from "react";
 import { useOutsideClose } from "@/hooks/useOutsideClose";
-import { Search, X } from "lucide-react";
+import { Link2, Search, X } from "lucide-react";
 import IconButton from "./IconButton";
 
 export interface SearchRow {
@@ -31,7 +31,7 @@ export interface SearchRow {
 export const SEARCH_ROWS = 60;
 
 export default function SearchPicker({
-  rows, onPick, placeholder, compact, before, empty, none, clear, onOpenChange, text, startOpen, enterPicks,
+  rows, onPick, placeholder, compact, before, empty, none, clear, onOpenChange, text, startOpen, enterPicks, chosen,
 }: {
   /** The rows matching what is typed ("" when nothing is). */
   rows: (query: string) => readonly SearchRow[];
@@ -57,6 +57,10 @@ export default function SearchPicker({
   startOpen?: boolean;
   /** Enter picks the `before` row, or the one row listed (a list's search-or-add field, components/common/SearchOrAdd). */
   enterPicks?: boolean;
+  /** The box shows a CHOSEN value while closed (EntityPicker's linked entity), not a hint: its words in the text's own
+   *  colour behind a link mark. ⚠️ A PICK THAT LOOKED EMPTY (owner, 2026-11-14, of Villa presence: "it's not clear if an
+   *  entity has been set"): the chosen sensor's name sat in the hint's dim grey, as "Search…" does. */
+  chosen?: boolean;
 }) {
   const [own, setOwn] = useState("");
   const query = text ? text.value : own;
@@ -73,8 +77,8 @@ export default function SearchPicker({
 
   return (
     <div ref={containerRef} className="picker">
-      <div className={`config-search${compact ? " config-search-compact" : ""}`}>
-        <Search size={compact ? 13 : 16} />
+      <div className={`config-search${compact ? " config-search-compact" : ""}${chosen && !open ? " config-search-chosen" : ""}`}>
+        {chosen && !open ? <Link2 size={compact ? 13 : 16} aria-hidden /> : <Search size={compact ? 13 : 16} />}
         <input
           placeholder={placeholder}
           aria-label={placeholder}
