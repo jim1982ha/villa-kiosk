@@ -11,12 +11,12 @@ import ReadingHistory from "./ReadingHistory";
 import ReadingPill from "./ReadingPill";
 import type { PanelProps } from "@/types/panel.types";
 import { readingOf } from "@/config/reading";
-import { useOnCriticalList } from "./PanelActionsContext";
+import { useStatusRule } from "./PanelActionsContext";
 import { binarySensorClassInfo } from "@/config/BinarySensorClasses";
 import { effectiveSensorClass, SENSOR_CLASS_ICON } from "@/config/SensorClasses";
 
 export default function SensorPanel({ entity, mapping, onClose }: PanelProps) {
-  const r = readingOf(mapping.entityId, entity, mapping.type, useOnCriticalList());
+  const r = readingOf(mapping.entityId, entity, mapping.type, useStatusRule());
   const isBinary = r.kind === "binary";
   const unit = entity?.attributes.unit_of_measurement ?? "";
 

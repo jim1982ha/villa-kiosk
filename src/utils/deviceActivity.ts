@@ -20,7 +20,7 @@ import type { EntityMapping, EntityType } from "@/types/scene.types";
 import type { DeviceSurfaceState } from "@/config/EntityCategories";
 import { conditionOf, windowStatusOf, type DeviceCondition } from "@/config/deviceCondition";
 import { deviceTypeOf } from "@/config/EntityMap";
-import { criticalStatus, TRANSITIONAL_STATES, lockBolt, type StatusKey } from "@/utils/stateColors";
+import { statusRule, TRANSITIONAL_STATES, lockBolt, type StatusKey, type StatusRule } from "@/utils/stateColors";
 import { devicePower } from "@/utils/devicePower";
 import type { SwitchPosition } from "@/utils/entityState";
 import { phantomEntity } from "@/utils/phantomEntity";
@@ -67,7 +67,7 @@ export interface DeviceReading {
    *  said what was wrong, and in use was worked out again beside it (inUseNow), a lock a third way. */
   condition: DeviceCondition;
   /** On the villa's critical list (LookSource.config.isCritical — the list its "critical devices offline" rule
-   *  watches, folded onto the device). Only matters once contact is lost: the mark turns red. */
+   *  watches, folded onto the device): its rule (`rule`) makes its "needs a look" and its lost contact red. */
   critical: boolean;
   /** Hidden in the villa's system (LookSource.config.isHidden — VillaDevices.isHidden): no device, so never red, never
    *  lost (badgeKindFor), and no badge on the map at all (drawsBadge). Required, like alertState: "not hidden" is
@@ -79,8 +79,17 @@ export interface DeviceReading {
   /** Asleep by design and shown with its last report (ha/unavailableByDesign.shownAsleep): the grey "z". */
   asleep: boolean;
   /** It answers while a part of it does not (deviceHealth.lostParts, its linked entity aside: that is its own corner):
-   *  the grey "?" on a face that still says what it does. */
+   *  the "?" on a face that still says what it does. */
   partLost: boolean;
+  /** Its device's rule for every status it shows (stateColors.statusRule: critical and hidden applied). */
+  rule: StatusRule;
+  /** THE status of this device, its rule applied: what its window's pill says (deviceCondition.windowStatusOf), lost
+   *  contact and no value first. Its badge's mark, its 3D object, its room's number and the Cockpit's alarms project
+   *  this one value: a critical door unlocked is "alert" here, so it is red on all of them. */
+  status: StatusKey;
+  /** The status of its lost parts, its rule applied: "alert" for a critical device's (its red "?"), "unavailable"
+   *  else (the grey "?"); null when no part is lost. */
+  partStatus: StatusKey | null;
 }
 
 /** The five-way live-state reading a badge is painted from: this module's own
@@ -92,8 +101,9 @@ export type BadgeKind = DeviceActivity | "unavailable";
  * order (owner, 2026-10-22: badge proposal 2, "Corner dot": the square says what the device does, the dot says what is
  * wrong):
  *
- *   critical  a critical device has lost contact   red "?"
- *   alarm     an alarm, the condition "wrong" (a leak, a low battery, a jammed lock)   red "!"
+ *   critical  a critical device has lost contact, with it or with a part of it   red "?"
+ *   alarm     its status is the alarm (DeviceReading.status: a leak, a low battery, a jammed lock, a critical door
+ *             unlocked)   red "!"
  *   fault     an open Cockpit fault                 amber "!"
  *   lost      contact lost, with it or with a part of it (DeviceReading.partLost)   grey "?"
  *   asleep    asleep by design, its last report shown   grey "z"
@@ -184,8 +194,11 @@ export function badgeMarkOf(r: DeviceReading): BadgeMark | null {
   const kind = badgeKindFor(r);
   const lost = kind === "unavailable";
   return badgeMarkFor({
-    critical: lost && r.critical,
-    alarm: kind === "alert",
+    // ⚠️ THE STATUS, READ ONCE (architecture review item 5, 2026-11-14): the mark asked "critical" of lost contact only
+    // and "alarm" of the condition, so a critical door unlocked, red in its window and in 3D, wore the plain "in use"
+    // dot, and a critical camera's lost motion part the grey "?". Both are the device's one status now.
+    critical: (lost && r.status === "alert") || r.partStatus === "alert",
+    alarm: !lost && r.status === "alert",
     fault: r.fault,
     // ⚠️ A DEAD PART IS SAID TOO (architecture review item 4, 2026-11-13): a camera streaming with its person detection
     // unavailable for days wore no mark; its face still says what it does, its corner the grey "?"
@@ -305,7 +318,8 @@ export function classifyDeviceActivity({ type, entity: s, condition }: DeviceRea
  * ⚠️ THE WINDOW'S STATUS, NEVER A CALMER ONE (owner, 2026-11-04: "remove all notion of stays calm and always align it
  * with assigned device state"): from 2026-10-26 an unlocked lock was the teal "in use" glow on the map while its
  * window said a red Unlocked, and an open door or a detection did not pulse while its window was red. The mesh reads
- * deviceCondition.windowStatusOf, what the window's pill and history bar read.
+ * deviceCondition.windowStatusOf, what the window's pill and history bar read, through its device's rule
+ * (DeviceReading.status).
  *   * `dark` — no emissive at all (the baked marker glow must not show);
  *   * `none` — nothing to paint here (lights: BulbSet; covers: their pose).
  */
@@ -319,23 +333,28 @@ type MeshLook =
 export function meshLookFor(entityId: string, source: LookSource): MeshLook {
   const r = deviceReadingOf(entityId, source);
   const kind = badgeKindFor(r);
-  const status = windowStatusOf(r.entity);
+  // the device's ONE status (its rule applied: a critical lock unlocked or lost red, as its window's pill and its badge)
+  const status = r.status;
+  // ⚠️ HIDDEN MEANS HIDDEN (architecture review item 6, 2026-11-14): its object read the raw state, so a hidden leak
+  // sensor pulsed red and a hidden lock unlocked glowed amber while no list, badge or card named it. Its object shows no
+  // status at all now: no pulse, no glow, no outline, a lock its rest tint. Lights and covers show what they physically
+  // do (a lamp lit, a blind's pose), never a status.
+  const quiet = r.hidden;
   switch (r.type) {
     case "light":
     case "cover":
       return { kind: "none" };
-    // a critical lock unlocked or lost: red, as its window's pill (stateColors.criticalStatus)
     case "lock":
-      return { kind: "tint", tone: criticalStatus(kind === "unavailable" ? "unavailable" : status, r.critical && !r.hidden) };
+      return { kind: "tint", tone: quiet ? "usual" : status };
     case "binary_sensor":
-      return { kind: "pulse", on: kind !== "unavailable" && (status === "alert" || status === "active"),
-        unavailable: kind === "unavailable", tone: status };
+      return { kind: "pulse", on: !quiet && kind !== "unavailable" && (status === "alert" || status === "active"),
+        unavailable: !quiet && kind === "unavailable", tone: status };
     case "switch":
     case "media_player":
-      return { kind: "glow", on: kind === "on", tone: status };
+      return { kind: "glow", on: !quiet && kind === "on", tone: status };
     // a running climate device's outline, in its window's colour ("Cool" green), off when its window says off
     case "climate":
-      return kind === "on" ? { kind: "dark", outline: status } : { kind: "dark" };
+      return kind === "on" && !quiet ? { kind: "dark", outline: status } : { kind: "dark" };
     case "fan":
     case "sensor":
       return { kind: "dark" };
@@ -407,23 +426,23 @@ export interface LookSource {
   /** What the caller DRAWS this device as (the map: the mesh's resolved
    *  mapping; a list: the entity map, else the id's domain). */
   typeOf(entityId: string): EntityType;
-  /** The entity map (for `linkedEntityId`) — resolved here, never by a caller. `isCritical`: is this device
-   *  on the villa's critical list, folded onto its device (deviceGroups
-   *  `devices.isCritical` — the predicate the Cockpit's red reads). Absent:
-   *  nothing is critical (the Cockpit's own tiles, which say it themselves). */
+  /** The entity map (for `linkedEntityId`) — resolved here, never by a caller — and what the villa says of each device
+   *  (DeviceMarks, through lookMarks). `isCritical`: is this device on the villa's critical list, folded onto its
+   *  device (deviceGroups `devices.isCritical`, the predicate the Cockpit's red reads).
+   *  ⚠️ ALL FOUR REQUIRED (architecture review item 5, 2026-11-14): three were optional, and a caller that forgot one
+   *  drew a device with no critical red (the Cockpit's alarms read a critical door unlocked as no alarm), no fault or no
+   *  dead part. A caller with nothing to say passes lookMarks(NO_MARKS). */
   config: {
     entityMap: Record<string, EntityMapping>;
-    isCritical?: (entityId: string) => boolean;
-    /** Hidden in the villa's system (VillaDevices.isHidden, deviceGroups.hiddenIn). REQUIRED: a caller that forgot it
-     *  painted a hidden device red where every other surface had dropped it. */
+    isCritical: (entityId: string) => boolean;
+    /** Hidden in the villa's system (VillaDevices.isHidden, deviceGroups.hiddenIn): a caller that forgot it painted a
+     *  hidden device red where every other surface had dropped it. */
     isHidden: (entityId: string) => boolean;
     /** The device has an amber Cockpit issue, a fault or late maintenance (attention.deviceIssues, onto the device too):
-     *  its amber "!" (owner, 2026-10-22: badge proposal 2). Absent: no fault is drawn (the Cockpit's own counts, which
-     *  list the faults themselves). */
-    hasFault?: (entityId: string) => boolean;
-    /** Each device's parts its health asks (deviceGroups.LookFacts.partsOf): a dead one is its grey "?". Absent: a device
-     *  is its own entity (the Cockpit's own tiles). */
-    partsOf?: PartsOf;
+     *  its amber "!" (owner, 2026-10-22: badge proposal 2). */
+    hasFault: (entityId: string) => boolean;
+    /** Each device's parts its health asks (deviceGroups.LookFacts.partsOf): a dead one is its "?". */
+    partsOf: PartsOf;
   };
   /** A linked switch the person has just thrown and Home Assistant has not yet
    *  confirmed: true/false while it is pending, undefined otherwise. Only the
@@ -485,21 +504,26 @@ export interface DeviceLook {
   own: BadgeKind;
   /** ACTIVITY: doing something (kind "on"). An idle camera is active. */
   active: boolean;
-  /** Its OWN reading is an alarm (the red "!" — a linked entity's alarm is the linked entity's line): what "Needs
-   *  attention" lists. */
+  /** Its OWN status is the alarm while it answers (DeviceReading.status: a leak, a jammed lock, a critical door
+   *  unlocked; the red "!" — a linked entity's alarm is the linked entity's line): what "Needs attention" lists. */
   alert: boolean;
   /** Home Assistant has lost it (or never reported it). */
   unavailable: boolean;
-  /** A CRITICAL device that has lost contact (on the villa's critical list AND `unavailable`): red, never grey — its
-   *  badge's mark, its room chip's number, its list row and its window's pill. */
+  /** A CRITICAL device that has lost contact (its status the alarm AND `unavailable`): red, never grey — its badge's
+   *  mark, its room chip's number, its list row and its window's pill. */
   critical: boolean;
-  /** On the villa's critical list, whatever its contact: its window's "needs a look" is an alarm (an unlocked critical
-   *  door is red: stateColors.criticalStatus, owner 2026-11-13). */
-  onCriticalList: boolean;
+  /** THE device's status, its rule applied (DeviceReading.status): what its 3D object paints, its "!" and its line in
+   *  the Cockpit read. */
+  status: StatusKey;
+  /** Its device's rule (stateColors.statusRule: on the villa's critical list its "needs a look" and lost contact are
+   *  red, hidden never red or amber): every pill of its window applies it (PanelActions.badge.statusRule). */
+  statusRule: StatusRule;
   /** It has an open Cockpit fault (LookSource.config.hasFault) — its room chip's number is amber for it. */
   fault: boolean;
-  /** It answers, and a part of it does not (DeviceReading.partLost): its grey "?", its room's grey number. */
+  /** It answers, and a part of it does not (DeviceReading.partLost): its "?" (red for a critical device: its mark),
+   *  its room's number. */
   partLost: boolean;
+
   /** Hidden in the villa's system: the map draws no badge for it (drawsBadge). */
   hidden: boolean;
   /** POWER: its switch's position, "none" when it has no switch. */
@@ -515,6 +539,7 @@ export interface DeviceLook {
  *  window; a device's reading is only ever read through its look. */
 function deviceReadingOf(entityId: string, source: LookSource): DeviceReading {
   const linkedId = source.config.entityMap[entityId]?.linkedEntityId;
+  const own = ownReadingOf(entityId, source, linkedId);
   let linkedOn = false;
   let link: DeviceReading | null = null;
   if (linkedId) {
@@ -527,19 +552,26 @@ function deviceReadingOf(entityId: string, source: LookSource): DeviceReading {
     if (source.state(linkedId)) {
       // a detection on a camera's bottom-right pill is the camera doing its job (owner, 2026-10-22): filled while motion
       // is on, its other problems (lost, a fault…) kept — in use is its plain dot (pillOf), so it is "on"
-      link = ownReadingOf(linkedId, source);
+      // ⚠️ A PART OF A CRITICAL DEVICE IS CRITICAL (architecture review item 5, 2026-11-14): a critical camera's lost motion
+      // detection, its linked entity, was red in its window and the grey "?" on its badge's bottom-right pill
+      link = ownReadingOf(linkedId, source, undefined, own.critical);
     }
   }
-  return { ...ownReadingOf(entityId, source, linkedId), linked: !!linkedId, linkedOn, link };
+  return { ...own, linked: !!linkedId, linkedOn, link };
 }
 
 /** One entity's reading on its own facts, its link not followed (`linkedId`: its linked entity, never one of its lost
- *  parts here: its own corner says it). */
-function ownReadingOf(entityId: string, source: LookSource, linkedId?: string): DeviceReading {
+ *  parts here: its own corner says it). `ofCritical`: it is the linked entity of a critical device, critical with it. */
+function ownReadingOf(entityId: string, source: LookSource, linkedId?: string, ofCritical = false): DeviceReading {
   const own = source.state(entityId);
   const entity = own ?? phantomEntity(entityId);
   const condition = conditionOf(source.typeOf(entityId), entity);
-  const parts = source.config.partsOf;
+  const critical = ofCritical || source.config.isCritical(entityId);
+
+  const hidden = source.config.isHidden(entityId);
+  const rule = statusRule({ critical, hidden });
+  const partLost = condition !== "lost"
+    && lostParts(entityId, source.config.partsOf, (id) => source.state(id)).some((p) => p !== linkedId);
   return {
     type: source.typeOf(entityId),
     entity,
@@ -547,12 +579,15 @@ function ownReadingOf(entityId: string, source: LookSource, linkedId?: string): 
     linkedOn: false,
     link: null,
     condition,
-    critical: source.config.isCritical?.(entityId) ?? false,
-    hidden: source.config.isHidden(entityId),
-    fault: source.config.hasFault?.(entityId) ?? false,
+    critical,
+    hidden,
+    fault: source.config.hasFault(entityId),
     asleep: shownAsleep(own),
-    partLost: condition !== "lost" && !!parts
-      && lostParts(entityId, parts, (id) => source.state(id)).some((p) => p !== linkedId),
+    partLost,
+    rule,
+    // contact first, whatever the state says (a lost lock is no "unlocked"), then what its window's pill says
+    status: rule(condition === "lost" ? "unavailable" : condition === "noValue" ? "noValue" : windowStatusOf(entity)),
+    partStatus: partLost ? rule("unavailable") : null,
   };
 }
 
@@ -565,10 +600,11 @@ export function deviceLook(entityId: string, source: LookSource): DeviceLook {
   return {
     type: r.type, face: badgeFace(r), mark: badgeMarkOf(r), linkPill: linkPillOf(r), kind, own,
     active: kind === "on",
-    alert: own === "alert",
+    alert: own !== "unavailable" && r.status === "alert",
     unavailable: own === "unavailable",
-    critical: r.critical && own === "unavailable",
-    onCriticalList: r.critical && !r.hidden,
+    critical: own === "unavailable" && r.status === "alert",
+    status: r.status,
+    statusRule: r.rule,
     fault: r.fault && !r.hidden,
     partLost: r.partLost && !r.hidden,
     hidden: r.hidden,
@@ -639,9 +675,9 @@ export function mapLookSource(
 /** What a summary of several devices — a room chip, a group card, a Cockpit
  *  tile, a device list's header — shows. */
 interface GroupLook {
-  /** Red ring: needs attention — a member alerting, or a CRITICAL member that
-   *  lost contact (DeviceLook.critical). Never for "on" (owner, 2026-10-01: red
-   *  is the Map-colours legend's "Needs attention"). */
+  /** Red ring: needs attention — a member whose status is the alarm (a leak, a critical door unlocked) or a CRITICAL
+   *  member that lost contact, itself or a part (its red corner mark). Never for "on" (owner, 2026-10-01: red is the
+   *  Map-colours legend's "Needs attention"). */
   ringRed: boolean;
   /** The neutral "a member is on" ring (ACTIVITY), only when nothing is red. */
   ringOn: boolean;
@@ -674,7 +710,8 @@ interface GroupLook {
  *   DRAWING A COUNT      nothing inside says anything, so: red if ANY member's
  *     kind alerts; else the neutral "on" ring if any member is active.
  */
-/** The corner pills that say "needs attention" (STATUS_COLOR.alert): an alarm, a critical device silent. */
+/** The corner pills that say "needs attention" (STATUS_COLOR.alert): an alarm (a critical door unlocked included), a
+ *  critical device silent or with a part silent — the device's ONE status, as its mark says it (badgeMarkOf). */
 const RED_PILLS: ReadonlySet<BadgeMark | LinkPill> = new Set<BadgeMark | LinkPill>(["alarm", "critical"]);
 
 export function groupLook(
@@ -690,8 +727,8 @@ export function groupLook(
     // (a pump's relay lost: the room's number grey), as it did when the linked alarm rang the device itself.
     const link = m.linkPill;
     // ⚠️ RED, READ ONCE (architecture review, 2026-10-26): a member needing attention was read three ways here (its
-    // kind, its critical flag, its pills). It is a red pill on either corner: an alarm (the condition "wrong"), or a
-    // critical device that lost contact (owner, 2026-10-19), its own or its linked entity's. In use is never red.
+    // kind, its critical flag, its pills). It is a red pill on either corner: an alarm (its status the alarm), or a
+    // critical device that lost contact (owner, 2026-10-19), its own, a part's or its linked entity's. In use is never red.
     const red = RED_PILLS.has(m.mark) || RED_PILLS.has(link);
     if (red) anyAlert = true;
     else everyRingAlert = false;

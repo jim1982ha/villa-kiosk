@@ -10,6 +10,7 @@ import type { DeviceSurfaceState } from "@/config/EntityCategories";
 import type { BadgeMark, LinkPill } from "@/utils/deviceActivity";
 import type { ReadingRow } from "@/config/readingRows";
 import { linkedStateWords } from "./panelHeader";
+import { PLAIN_STATUS, type StatusRule } from "@/utils/stateColors";
 
 export interface PanelActions {
   /** The HA entity_id the open panel controls (shown under the title). */
@@ -47,9 +48,9 @@ export interface PanelActions {
     mark: BadgeMark | null;
     /** Its bottom-right pill — its linked entity: its problem, else on or off (deviceActivity.linkPillOf). */
     linkPill: LinkPill;
-    /** On the villa's critical list (DeviceLook.onCriticalList): every pill of this window, its notice and its rows,
-     *  takes its meaning with it (config/reading.statusOf: "needs a look" and lost contact red). */
-    onCriticalList: boolean;
+    /** Its device's rule (DeviceLook.statusRule, stateColors.statusRule): every pill of this window, its notice and its
+     *  rows apply it, as its badge and its 3D object do ("needs a look" and lost contact red for a critical device). */
+    statusRule: StatusRule;
   };
   /** Persist a new badge colour for the open entity (null = category default). Without may.edit the badge is a
    *  plain, non-interactive icon. */
@@ -141,6 +142,7 @@ export function linkedSwitchProps(linked: NonNullable<PanelActions["linked"]>) {
 export const PanelActionsProvider = PanelActionsContext.Provider;
 export const usePanelActions = (): PanelActions => useContext(PanelActionsContext);
 
-/** Whether the open window's device is on the villa's critical list (badge.onCriticalList): the `critical` every pill
- *  of the window is read with (config/reading.statusOf). False outside a window. */
-export const useOnCriticalList = (): boolean => usePanelActions().badge?.onCriticalList ?? false;
+/** The open window's device's rule (badge.statusRule): what every pill of the window applies to its meaning. Every
+ *  meaning as it is outside a window. */
+export const useStatusRule = (): StatusRule => usePanelActions().badge?.statusRule ?? PLAIN_STATUS;
+

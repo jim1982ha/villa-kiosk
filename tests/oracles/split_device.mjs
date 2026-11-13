@@ -33,7 +33,7 @@ function villa({ groups, registry, deviceUnits = {}, critical, states }) {
   const entities = Object.fromEntries(states.map((e) => [e.entity_id, e]));
   const suppressed = new Set([BATTERY]), hidden = new Set();
   const folding = deviceFolding(entityMap, groups, registry, deviceUnits);
-  const input = { entityMap, deviceGroups: groups, dismissed: new Set(), hidden, suppressed, mappedEntityIds: new Set(placed),
+  const input = { entityMap, deviceGroups: groups, dismissed: new Set(), hidden, suppressed, batteries: new Set([BATTERY]), mappedEntityIds: new Set(placed),
     entities, entityDeviceIds: registry, deviceUnits, critical, folding };
   const facts = lookFacts(input, folding);
   const devices = villaDevices({ ...input, facts });
@@ -43,9 +43,9 @@ function villa({ groups, registry, deviceUnits = {}, critical, states }) {
   // what each group's window shows: its sign, its badge, and its "Also on this device" rows with their pill tones
   const win = (rep) => {
     const look = deviceLook(rep, source);
-    const ids = deviceReadings(rep, folding, entities, suppressed, groups, registry, hidden);
+    const ids = deviceReadings(rep, folding, facts.partsOf, entities);
     return { sign: issueSeverity(view.attentionGroups, [rep], devices.deviceOf), mark: look.mark,
-      rows: Object.fromEntries(readingRows(ids, entities, entityMap, look.onCriticalList).map((r) => [r.id, r.tone ?? ""])) };
+      rows: Object.fromEntries(readingRows(ids, entities, entityMap, look.statusRule).map((r) => [r.id, r.tone ?? ""])) };
   };
   return { devices, view, indoor: win(IN_T), outdoor: win(OUT_T) };
 }
@@ -96,6 +96,10 @@ console.log("  the station on the critical list (its outdoor reading named), its
   const v = villa({ groups: [OUTDOOR, INDOOR], registry: oneDevice, critical: new Set([OUT_T]), states: states("unavailable") });
   ck("the outdoor window's lost rain gauge is red, as its badge says a critical device needs a look",
      v.outdoor.rows[RAIN] === "danger", v.outdoor.rows);
+  // architecture review item 5, 2026-11-14: the badge wore the grey "?" and the card was grey beside the red row
+  ck("  ...its badge's corner the RED \"?\", its card and its window's sign red, the villa's health danger",
+     v.outdoor.mark === "critical" && v.outdoor.sign === "danger" && v.view.health.level === "danger",
+     { mark: v.outdoor.mark, sign: v.outdoor.sign, health: v.view.health });
 }
 
 console.log("  everything reporting:");

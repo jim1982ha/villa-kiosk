@@ -18,6 +18,7 @@ const cfg = () => ({
   meshBindings: { lamp_mesh: "light.a" },
   dismissedEntityIds: [],
   deviceGroups: [],
+  unavailableByDesign: [],
 });
 // What update() does with an edit: compute from the CURRENT config, merge.
 const apply = (c, ...edits) => edits.reduce((acc, e) => ({ ...acc, ...e(acc) }), c);
@@ -249,4 +250,41 @@ console.log("\n  nothing builds a mapping patch by hand any more:");
   ck("  ...and removed by its name whatever the case, the other rooms (fitted ones too) untouched",
      removeRoom("KITCHEN")(later).teleportPoints.map((p) => p.name).join() === "Fitted,Pool");
 }
+console.log("\n  a device's id changed: every reference the config holds to it follows (architecture review item 9, 2026-11-14):");
+// ⚠️ ONLY THE 3D OBJECTS AND THE SETTINGS MOVED: the owner's group still named the old id, so the Cockpit showed a
+// "Missing" device for it, its members' readings were on neither card, and a device linked to it had a hollow pill.
+{
+  const { villaDevices, deviceFolding } = await import("@/config/deviceGroups");
+  const OLD = "light.example_old", NEW = "light.example_new", POWER = "sensor.example_lamp_power", PLUG = "switch.example_plug";
+  const before = { ...cfg(),
+    entityMap: { [PLUG]: { entityId: PLUG, type: "switch", linkedEntityId: OLD }, [OLD]: { entityId: OLD, type: "light", label: "Desk lamp" },
+      "light.a": { entityId: "light.a", type: "light", label: "A" } },
+    meshBindings: { lamp_mesh: OLD },
+    deviceGroups: [{ id: "g1", primaryEntityId: OLD, memberEntityIds: [POWER] }],
+    unavailableByDesign: [OLD] };
+  const after = apply(before, me.repointDevice(OLD, NEW));
+  ck("its group now stands under the new id, its member kept", J(after.deviceGroups) === J([{ id: "g1", primaryEntityId: NEW, memberEntityIds: [POWER] }]),
+     after.deviceGroups);
+  ck("  ...a device linked to it is linked to the new id", after.entityMap[PLUG].linkedEntityId === NEW, after.entityMap[PLUG]);
+  ck("  ...asleep by design it stays", J(after.unavailableByDesign) === J([NEW]), after.unavailableByDesign);
+  ck("  ...and it keeps its place in the owner's order (2.496.798)", Object.keys(after.entityMap).join() === [PLUG, NEW, "light.a"].join(),
+     Object.keys(after.entityMap));
+  // the villa built from it, as the app builds it: one device, its member on its card, nothing "Missing"
+  const now = (id, state) => ({ entity_id: id, state, attributes: {} });
+  const entities = { [NEW]: now(NEW, "on"), [POWER]: now(POWER, "12"), [PLUG]: now(PLUG, "on"), "light.a": now("light.a", "off") };
+  const folding = deviceFolding(after.entityMap, after.deviceGroups, {});
+  const devices = villaDevices({ entityMap: after.entityMap, deviceGroups: after.deviceGroups, dismissed: new Set(), hidden: new Set(),
+    suppressed: new Set(), batteries: new Set(), mappedEntityIds: new Set([NEW]), entities, entityDeviceIds: {}, deviceUnits: {}, folding });
+  ck("  ...the villa has the new device and no ghost of the old one, its power reading on the new device's card",
+     devices.has(NEW) && !devices.has(OLD) && devices.unavailable.length === 0 && devices.deviceOf(POWER) === NEW,
+     { ids: devices.ids, unavailable: devices.unavailable, power: devices.deviceOf(POWER) });
+  // one entity, one group: a member whose new id already stands in a group stays where that one stood
+  const clash = apply({ ...cfg(), deviceGroups: [{ id: "g1", primaryEntityId: "sensor.x", memberEntityIds: [OLD] },
+    { id: "g2", primaryEntityId: "sensor.y", memberEntityIds: [NEW] }] }, me.repointDevice(OLD, NEW));
+  ck("  ...never in two groups: the new id stays in the group it was already in",
+     J(clash.deviceGroups.map((g) => g.memberEntityIds)) === J([[], [NEW]]), clash.deviceGroups);
+  ck("  ...and a config naming the old id nowhere else changes only its objects and settings",
+     !("deviceGroups" in me.repointDevice("light.a", NEW)(cfg())) && !("unavailableByDesign" in me.repointDevice("light.a", NEW)(cfg())));
+}
+
 done("✅ every mapping edit reads the latest config; two in a moment both land");

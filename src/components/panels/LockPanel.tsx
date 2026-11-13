@@ -7,7 +7,7 @@ import { HAServices } from "@/ha/HAServiceCalls";
 import { usePendingAck } from "@/hooks/usePendingAck";
 import { lockBolt, lockButtons, lockPill } from "@/config/reading";
 import { actionColor } from "@/utils/stateColors";
-import { useOnCriticalList } from "./PanelActionsContext";
+import { useStatusRule } from "./PanelActionsContext";
 import { tapFeedback, successFeedback } from "@/utils/haptics";
 import ControlFrame from "./ControlFrame";
 import InlineConfirm from "@/components/common/InlineConfirm";
@@ -26,9 +26,9 @@ export default function LockPanel({ entity, mapping, onClose }: PanelProps) {
   // motor reports for a second or two, and "jammed" — was announced as a red
   // "UNLOCKED": an alarming claim about a door that was in fact busy securing
   // itself. Reporting the state HA actually sent is both truer and shorter.
-  // a critical lock unlocked or lost: red, as the Cockpit and its 3D object paint it (reading.statusOf)
-  const onCriticalList = useOnCriticalList();
-  const pill = lockPill(mapping.entityId, entity?.state, onCriticalList);
+  // a critical lock unlocked or lost: red, as its badge, the Cockpit and its 3D object paint it (its device's rule)
+  const rule = useStatusRule();
+  const pill = lockPill(mapping.entityId, entity?.state, rule);
   // A deadbolt is the SLOWEST device class in the villa — a Z-Wave/Zigbee
   // lock routinely takes seconds to report back, and unlike a light there is
   // usually no way to see the result from where you're standing. This panel
@@ -78,7 +78,7 @@ export default function LockPanel({ entity, mapping, onClose }: PanelProps) {
         }
         const Icon = b === "lock" ? Lock : Unlock;
         // the colour of where it leads: "Unlock door…" the unlocked amber (red for a critical door), "Lock door" locked's
-        const leads = { ["--state" as string]: actionColor(mapping.entityId, b === "lock" ? "locked" : "unlocked", onCriticalList) };
+        const leads = { ["--state" as string]: actionColor(mapping.entityId, b === "lock" ? "locked" : "unlocked", rule) };
         return n === 0 ? (
           <button key={b}
             className="big-toggle action" style={leads}

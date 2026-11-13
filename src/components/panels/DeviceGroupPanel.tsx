@@ -11,7 +11,7 @@ import { Layers } from "lucide-react";
 import BasePanel from "./BasePanel";
 import NumericHistory from "./NumericHistory";
 import ReadingPill from "./ReadingPill";
-import { useOnCriticalList } from "./PanelActionsContext";
+import { useStatusRule } from "./PanelActionsContext";
 import { useHA } from "@/ha/HAStateStore";
 import type { DeviceGroup } from "@/config/AppConfig";
 import type { EntityMapping } from "@/types/scene.types";
@@ -48,7 +48,7 @@ const SERIES_COLORS = ["var(--accent-teal)", "var(--accent)", "var(--accent-warm
 export default function DeviceGroupPanel({ group, primaryMapping, onClose }: Props) {
   const { entities } = useHA();
   const entityLabel = useEntityLabel();
-  const critical = useOnCriticalList();
+  const rule = useStatusRule();
   const ids = [group.primaryEntityId, ...group.memberEntityIds];
 
   // Each member's reading is config/reading's — the SAME answer its own
@@ -58,7 +58,7 @@ export default function DeviceGroupPanel({ group, primaryMapping, onClose }: Pro
   const rows = ids.map((id) => {
     const entity = entities[id];
     const numeric = Number(entity?.state);
-    const reading = readingOf(id, entity, domainOf(id) === "binary_sensor" ? "binary_sensor" : "sensor", critical);
+    const reading = readingOf(id, entity, domainOf(id) === "binary_sensor" ? "binary_sensor" : "sensor", rule);
     return {
       id,
       label: entityLabel(id),

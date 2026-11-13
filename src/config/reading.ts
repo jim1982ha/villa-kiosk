@@ -29,7 +29,7 @@ import { binaryLook } from "./binaryLook";
 import { stateLabelFor } from "./BinarySensorClasses";
 import { deviceRowText, formatSensorParts } from "@/utils/entityValue";
 import { domainOf } from "@/utils/entityDomain";
-import { criticalStatus, isNoHistory, NO_RECORD, NO_RECORD_WORDS, NOT_KEPT, NOT_KEPT_COLOR, NOT_KEPT_WORDS, paintState, powerStatus, statusKeyFor, STATUS_COLOR, STATUS_PILL_CLASS, type StatusKey } from "@/utils/stateColors";
+import { isNoHistory, NO_RECORD, NO_RECORD_WORDS, NOT_KEPT, NOT_KEPT_COLOR, NOT_KEPT_WORDS, paintState, PLAIN_STATUS, powerStatus, statusKeyFor, STATUS_COLOR, STATUS_PILL_CLASS, type StatusKey, type StatusRule } from "@/utils/stateColors";
 import { contactOf, isUnavailable, NOT_IN_HA } from "@/utils/deviceHealth";
 
 /** The stretch older than the villa's system keeps, as a history bar reads it (historySource.keptFrom). */
@@ -58,7 +58,7 @@ export interface Reading {
   value: string;
   /** The number's unit, already scaled with it ("kW"); "" otherwise. */
   unit: string;
-  /** The meaning of its pill (binary, or offline), the critical list already applied (statusOf), or null for a number
+  /** The meaning of its pill (binary, or offline), its device's rule already applied (stateColors.statusRule), or null for a number
    *  or words printed in `color`. */
   status: StatusKey | null;
   /** Drawn as a `.status-pill` of this tone: `status` painted (STATUS_PILL_CLASS), null with it. */
@@ -83,14 +83,14 @@ export interface Reading {
  * with NO VALUE ("unknown") shows UNKNOWN in the quiet pill — not an alarm,
  * not lost contact: its device is answering (deviceHealth.contactOf).
  *
- * `critical`: the device is on the villa's critical list (DeviceLook.onCriticalList): its lost contact is red, in its
- * pill and its colour (statusOf).
+ * `rule`: its device's rule (DeviceLook.statusRule, the window's PanelActions.badge.statusRule): a critical device's
+ * lost contact and "needs a look" are red, in its pill and its colour; a hidden one's never red or amber.
  */
 export function readingOf(
   id: string,
   entity: HassEntity | undefined,
   mappingType: string,
-  critical = false,
+  rule: StatusRule = PLAIN_STATUS,
 ): Reading {
   const kind = readingKind(entity, mappingType);
   const unavailable = isUnavailable(entity);
@@ -108,7 +108,7 @@ export function readingOf(
     const alarm = !unavailable && level === "danger";
     const words = look.word(state);
     // no value is the empty track's tone (stateColors noValue): nothing to say, nothing wrong
-    const status = statusOf(lost ? "unavailable" : noValue ? "noValue" : alarm ? "alert" : look.status(state), critical);
+    const status = rule(lost ? "unavailable" : noValue ? "noValue" : alarm ? "alert" : look.status(state));
     return {
       kind, unavailable, contact, level, status,
       // ⚠️ SAID ONCE, SHOUTED BY ITS PILL (owner, 2026-11-13: one style in every window): an alarm's and a lost
@@ -124,7 +124,7 @@ export function readingOf(
   }
   const level = readingLevel(entity, kind, undefined);
   const parts = entity ? formatSensorParts(entity) : { value: "", unit: "" };
-  const status = lost ? statusOf("unavailable", critical) : noValue ? "noValue" : null;
+  const status = lost ? rule("unavailable") : noValue ? "noValue" : null;
   return {
     kind, unavailable, contact, level, status,
     value: lost ? lostWord : noValue ? "Unknown" : parts.value || (entity?.state ?? "—"),
@@ -132,7 +132,7 @@ export function readingOf(
     pill: status && STATUS_PILL_CLASS[status],
     alarm: lost || level === "danger",
     // lost contact is its light grey, as everywhere (it was amber, a fault's colour, to 2026-11-13)
-    color: lost ? STATUS_COLOR[statusOf("unavailable", critical)] : noValue || kind === "text" ? "var(--text-primary)" : LEVEL_COLOR[level],
+    color: lost ? STATUS_COLOR[rule("unavailable")] : noValue || kind === "text" ? "var(--text-primary)" : LEVEL_COLOR[level],
     seriesColor: LEVEL_COLOR[level],
     stateColor: null,
   };
@@ -188,28 +188,17 @@ interface StatePill {
   tone: string;
 }
 
-/**
- * THE ONE RULE FOR A CRITICAL DEVICE'S STATUS IN ITS WINDOW: a state's meaning, once it is known whether its device is
- * on the villa's critical list (`critical`: DeviceLook.onCriticalList, the window's PanelActions.badge.onCriticalList)
- * — its "needs a look" and its lost contact are the alarm's red (stateColors.criticalStatus, owner 2026-11-13: "a
- * critical door unlocked" is red, an ordinary one amber). Every pill of a window (a reading's, a lock's, a blind's, the
- * "UNAVAILABLE" notice's, "Also on this device"'s rows) and the camera's bar take their meaning HERE, before anything
- * is painted; the 3D object (deviceActivity.meshLookFor) applies the same criticalStatus to the same fact.
- *
- * ⚠️ TWO RULES, AND A CLASS READ BACK INTO ITS MEANING (architecture review item 6, 2026-11-13): the lost pills turned
- * red on "a critical device that lost contact" (badge.critical), the lock's and the control pills on "on the critical
- * list" (badge.onCriticalList), by reading the painted CSS class back into its key. A critical sensor's part that lost
- * contact stayed grey in the window where its lock was red.
- */
-export function statusOf(key: StatusKey, critical: boolean): StatusKey {
-  return criticalStatus(key, critical);
-}
+/* ⚠️ `statusOf`, `lostPillTone` AND `lostColor` ARE GONE (architecture review item 5, 2026-11-14): three pass-throughs
+   to stateColors.criticalStatus, each handed the window's "on the critical list" flag, while the badge, the room's
+   number and the Cockpit's alarms read "critical" a second way (only once contact was lost), so a critical door
+   unlocked was red in its window and a plain "in use" dot on its badge. A window now takes its device's ONE rule from
+   its look (DeviceLook.statusRule, stateColors.statusRule) and applies it, as every other surface does. */
 
 /** The tone of a state's pill — the same reading of the state that colours
- *  its history bar (stateColors.statusKeyFor, by the entity's domain), the critical list applied (statusOf). */
-const pillTone = (id: string, state: string | undefined, critical: boolean): string =>
+ *  its history bar (stateColors.statusKeyFor, by the entity's domain), its device's rule applied. */
+const pillTone = (id: string, state: string | undefined, rule: StatusRule): string =>
   // no entity at all is lost contact (contactOf), never the empty track of a blank state
-  STATUS_PILL_CLASS[statusOf(state === undefined ? "unavailable" : statusKeyFor(state, id), critical)];
+  STATUS_PILL_CLASS[rule(state === undefined ? "unavailable" : statusKeyFor(state, id))];
 
 /** Where a lock's bolt is (stateColors.lockBolt): the one reading a panel asks here, with its pill. */
 export { lockBolt } from "@/utils/stateColors";
@@ -226,25 +215,13 @@ export function lockButtons(bolt: "thrown" | "open" | "jammed" | "moving" | "unk
 }
 
 
-/** The "UNAVAILABLE" notice's pill tone (statusOf): red for a device on the critical list, as the Cockpit paints it. */
-export function lostPillTone(critical: boolean): string {
-  return STATUS_PILL_CLASS[statusOf("unavailable", critical)];
-}
-
-/** The same rule for a lost device drawn as a colour, not a pill: the camera window's bar, where its camera could not
- *  be reached (architecture review P, 2026-10-27: a critical camera that lost contact was red in the Cockpit and on
- *  the map, grey in its own window). */
-export function lostColor(critical: boolean): string {
-  return STATUS_COLOR[statusOf("unavailable", critical)];
-}
-
 /** The lock window's pill: the state the lock actually reported ("Unlocking", "Jammed"), "Unknown" when there is no
  *  lock entity at all. A lock reporting "unknown" (no value, its device answering) takes the empty track's tone, never
  *  the grey of a lost lock (statusKeyFor). ⚠️ NOT SHOUTED BY ITS WORDS (owner, 2026-11-13: "LOCKED" beside a blind's
  *  "Open"): an alarm's pill is in capitals by its tone, every window alike (03-panels .status-pill). */
-export function lockPill(id: string, state: string | undefined, critical = false): StatePill {
+export function lockPill(id: string, state: string | undefined, rule: StatusRule = PLAIN_STATUS): StatePill {
   const words = (state ?? "unknown").replace(/_/g, " ");
-  return { text: words.charAt(0).toUpperCase() + words.slice(1), tone: pillTone(id, state, critical) };
+  return { text: words.charAt(0).toUpperCase() + words.slice(1), tone: pillTone(id, state, rule) };
 }
 
 /** A device window's state pill when its panel gives none of its own (ControlFrame): a device with a switch says On
@@ -252,17 +229,17 @@ export function lockPill(id: string, state: string | undefined, critical = false
  *  ("Cool", "Playing"). ⚠️ EVERY WINDOW SAYS ITS STATE THE SAME WAY (owner, 2026-11-13: "there is no pill showing the
  *  current state for the Fan as it appear for other device"): a light, a fan, a switch, a player and an A/C said it
  *  only on their power button, a lock and a blind in a pill above their buttons. */
-export function controlPill(id: string, entity: HassEntity | undefined, power: "on" | "off" | "unknown" | null, critical = false): StatePill {
-  if (power && power !== "unknown") return { text: power === "on" ? "On" : "Off", tone: STATUS_PILL_CLASS[statusOf(powerStatus(power, entity?.state, id), critical)] };
+export function controlPill(id: string, entity: HassEntity | undefined, power: "on" | "off" | "unknown" | null, rule: StatusRule = PLAIN_STATUS): StatePill {
+  if (power && power !== "unknown") return { text: power === "on" ? "On" : "Off", tone: STATUS_PILL_CLASS[rule(powerStatus(power, entity?.state, id))] };
   const dc = entity?.attributes.device_class as string | undefined;
-  return { text: entity ? stateWords(id, dc)(entity.state) : NOT_IN_HA, tone: pillTone(id, entity?.state, critical) };
+  return { text: entity ? stateWords(id, dc)(entity.state) : NOT_IN_HA, tone: pillTone(id, entity?.state, rule) };
 }
 
 /** The cover window's pill: "Open", "Partially open (40%)", "Closed" —
  *  `position` is the slider's (it follows a drag), undefined when the cover
  *  reports none; any other state as the villa's system sent it. */
-export function coverPill(id: string, state: string | undefined, position: number | undefined, critical = false): StatePill {
-  return { text: coverStateLabel(state, position), tone: pillTone(id, state, critical) };
+export function coverPill(id: string, state: string | undefined, position: number | undefined, rule: StatusRule = PLAIN_STATUS): StatePill {
+  return { text: coverStateLabel(state, position), tone: pillTone(id, state, rule) };
 }
 
 /** A history bar's colours: the window's own, except that an unavailable

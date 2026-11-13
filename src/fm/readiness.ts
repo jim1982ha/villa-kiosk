@@ -191,18 +191,27 @@ export function buildReadiness(
   // so a two-entity combo sensor could read as two broken devices here and
   // one on the HUD badge); see unavailableDeviceIds's docstring.
   const offline = devices.unavailable.filter((id) => !held(id));
+  // ⚠️ A DEVICE WITH A DEAD PART IS NOT "REPORTING" (architecture review item 8, 2026-11-14): this read the lost devices
+  // only, so the Recap said "Every configured device is reporting." beside Open issues' card for a camera whose motion
+  // detection was unavailable. The device's health (partly lost) counts here too, named for what it is.
+  const partly = devices.partlyLost.filter((id) => !held(id));
+  const behind = [...offline, ...partly];
+  const devicesDetail = behind.length === 0
+    ? "Every configured device is reporting."
+    : `${[offline.length ? notAnswering(offline, "offline or not reporting", "device") : "",
+      partly.length ? `${countOf(partly.length, "device")} partly unavailable` : ""].filter(Boolean).join(", ")}.`;
   checks.push({
     id: "devices-online",
     label: AVAILABILITY_CHECK_LABEL,
-    state: offlineState(offline),
-    detail: offline.length === 0
-      ? "Every configured device is reporting."
-      : `${notAnswering(offline, "offline or not reporting", "device")}.`,
-    entityIds: offline,
-    // its words open the list, as "faults" and "tickets" do on the tickets check (owner, 2026-11-05: no button)
-    goes: offline.length ? [{ word: offline.length === 1 ? "device" : "devices",
-      to: { place: "devices", list: { label: "Unavailable devices", group: { title: "Unavailable devices", icon: WifiOff, entityIds: offline }, health: true } } }] : [],
+    state: offlineState(behind),
+    detail: devicesDetail,
+    entityIds: behind,
+    // its words open the list, as "faults" and "tickets" do on the tickets check (owner, 2026-11-05: no button): the
+    // first of them its line says
+    goes: behind.length ? [{ word: (devicesDetail.match(/\bdevices?\b/) ?? ["device"])[0],
+      to: { place: "devices", list: { label: "Unavailable devices", group: { title: "Unavailable devices", icon: WifiOff, entityIds: behind }, health: true } } }] : [],
   });
+
 
   // ── Doors locked ─────────────────────────────────────────────────────────
   // `lock.*` entities only — see summaryGroups.locksGroup's docstring for why
@@ -228,10 +237,13 @@ export function buildReadiness(
       locks.unknown.length ? `${locks.unknown.length} not reporting` : "",
     ].filter(Boolean);
     const answering = locks.ids.length - locks.lost.length;
+    // a lock in alarm (its one status: jammed, or a critical door unlocked, the Cockpit's red line about it) fails the
+    // check, as the alarm check fails for every other device: this check is that lock's alone
+    const lockAlarm = alarms.some((a) => a.kind === "alarm" && !!a.entityId && lockIds.has(a.entityId));
     checks.push({
       id: "locks",
       label: "Doors locked",
-      state: notLocked.length === 0 ? "pass" : "warn",
+      state: notLocked.length === 0 ? "pass" : lockAlarm ? "fail" : "warn",
       detail: notLocked.length === 0
         ? `All ${countOf(answering, "lock")} secured.`
         : `${parts.join(", ")}.`,
@@ -300,11 +312,13 @@ export function buildReadiness(
   const faults = records.filter((t) => stageOf(t) === "fault");
   const where = [open.faults ? "the faults in Inbox › Open issues" : "", open.tickets ? "the tickets in Tickets" : ""].filter(Boolean);
   // ⚠️ ITS DEVICES, EACH ONCE (owner, 2026-11-05: "show the device pills concerned by either the Ticket or Faults, the
-  // same way there is device pills for All devices reporting … never duplicate"): one per device, the device's own
-  // entity (deviceOfRecord: a record naming several sensors included), as Open issues and Tickets draw one card per
-  // device; a whole-villa fault names no device
+  // same way there is device pills for All devices reporting … never duplicate"): one per device card, the device its
+  // card opens (VillaDevices.recordCard via cardOfRecord: a record naming several sensors included), as Open issues and
+  // Tickets draw one card per device; a whole-villa fault names no device, and neither does one about a device hidden
+  // in the villa's system (its card opens nothing: architecture review item 7, 2026-11-14, a pill named it and the
+  // faults link opened nothing)
   const named = (rs: typeof records) => [...new Set(rs.filter((t) => isTicketOpen(t) && t.entityId)
-    .map((t) => devices.deviceOfRecord(t.entityId!)))];
+    .flatMap((t) => { const d = devices.cardOfRecord(t.entityId!); return d === undefined ? [] : [d]; }))];
   const found = new Set(faults.map(faultSource));
   checks.push({
     id: "tickets",

@@ -32,7 +32,7 @@ function seen(id, { state, unavailable = [], tickets = [], schedules = [] }) {
   const att = attentionFor({ devices, attentionItems: items }, () => true);
   const issues = deviceIssues(att.attentionGroups);
   const mark = deviceLook(id, storeLookSource(entities, { entityMap, isHidden: () => false,
-    isCritical: devices.isCritical, hasFault: (x) => issues.amber.has(x) })).mark;
+    isCritical: devices.isCritical, hasFault: (x) => issues.amber.has(x), partsOf: () => [] })).mark;
   const sign = issueSeverity(att.attentionGroups, [id], (x) => x);
   const group = att.attentionGroups.find((g) => g.entityId === id);
   const card = group && cockpitCard(group, { checkMinutes: 5, nightlyAt: "02:00" });
@@ -127,7 +127,7 @@ console.log("\n  a camera and its motion sensor (owner, 2026-11-07, visit #148-P
     const fmData = { ...EMPTY_FM_DATA, tickets: [t] };
     const att = attentionFor({ devices, attentionItems: attentionOf({ devices, entities, entityMap, resolvedRooms: {}, fmData }).attentionItems }, () => true);
     const amber = deviceIssues(att.attentionGroups).amber;
-    const l = deviceLook(cam, storeLookSource(entities, { entityMap, isHidden: () => false, isCritical: () => false, hasFault: (x) => amber.has(x) }));
+    const l = deviceLook(cam, storeLookSource(entities, { entityMap, isHidden: () => false, isCritical: () => false, hasFault: (x) => amber.has(x), partsOf: () => [] }));
     return { mark: l.mark, linkPill: l.linkPill, cards: att.attentionGroups.length };
   };
   const fault = { ...ticket("t1", motion, "Camera A detection stuck"), source: "vesta_agent", origin: "alert", alertNumber: 91 };

@@ -76,7 +76,7 @@ const seen = TABLE.map(([type, id, dc, state, want, windowWant]) => {
   const host = "switch.host";   // a device this one is the linked entity of
   const entities = { [id]: entity, [host]: { entity_id: host, state: "off", attributes: {} } };
   const entityMap = { [id]: { entityId: id, type }, [host]: { entityId: host, type: "switch", linkedEntityId: id } };
-  const src = storeLookSource(entities, { entityMap, isHidden: () => false });
+  const src = storeLookSource(entities, { entityMap, isCritical: () => false, isHidden: () => false, hasFault: () => false, partsOf: () => [] });
   const look = deviceLook(id, src);
   const mesh = meshLookFor(id, src);
   const items = attentionOf({ devices: devicesOf({ ids: [id] }), entities, entityMap, resolvedRooms: {},

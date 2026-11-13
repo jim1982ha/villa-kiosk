@@ -18,7 +18,7 @@ import { useStateSince } from "@/hooks/useStateSince";
 import { useConfig } from "./ConfigContext";
 import { useFmData } from "@/fm/FmDataContext";
 import { useCriticalDevices } from "@/ha/criticalDevices";
-import { villaDevices, deviceFolding, deviceOf, deviceReadings, lookFacts, recordDeviceOf, type VillaDevices } from "./deviceGroups";
+import { villaDevices, deviceFolding, deviceOf, devicePartsOf, deviceReadings, lookFacts, recordDeviceOf, type VillaDevices } from "./deviceGroups";
 import { roomLabel } from "./devicePlace";
 import { marksOf, type DeviceMarks } from "@/utils/deviceActivity";
 import { effectiveMapped, visibleEntitiesOf, visibleTo } from "./villaVisibility";
@@ -111,21 +111,21 @@ export function useVillaModelValue(sets: VillaSets): VillaModel {
 
   // Which entity stands for which device — a function of CONFIG and the
   // registry, so it is computed when those change, not on every state push.
-  const { folding } = useDeviceIdentity();
+  const { folding, batteries } = useDeviceIdentity();
   // the villa's look facts (critical, hidden), built ONCE: the devices below answer from them and the map's marks hold
   // them (deviceGroups.lookFacts). They change only with the registry, the critical list and the config, never per
   // state push (the map repaints on them)
-  const facts = useMemo(() => lookFacts({ critical, hidden, suppressed, entityDeviceIds, deviceUnits, entityMap, deviceGroups }, folding),
-    [critical, hidden, suppressed, entityDeviceIds, deviceUnits, entityMap, deviceGroups, folding]);
+  const facts = useMemo(() => lookFacts({ critical, hidden, suppressed, batteries, entityDeviceIds, deviceUnits, entityMap, deviceGroups }, folding),
+    [critical, hidden, suppressed, batteries, entityDeviceIds, deviceUnits, entityMap, deviceGroups, folding]);
   const devices = useMemo(
-    () => villaDevices({ entityMap, deviceGroups, dismissed: dismissedIds, hidden, suppressed, mappedEntityIds, entities,
+    () => villaDevices({ entityMap, deviceGroups, dismissed: dismissedIds, hidden, suppressed, batteries, mappedEntityIds, entities,
       entityDeviceIds, folding, critical, deviceUnits, facts }),
-    [entityMap, deviceGroups, dismissedIds, hidden, suppressed, mappedEntityIds, entities, entityDeviceIds, folding, critical, deviceUnits, facts],
+    [entityMap, deviceGroups, dismissedIds, hidden, suppressed, batteries, mappedEntityIds, entities, entityDeviceIds, folding, critical, deviceUnits, facts],
   );
   const visibleDevices = useMemo(
-    () => villaDevices({ entityMap, deviceGroups, dismissed: dismissedIds, hidden, suppressed, mappedEntityIds, entities: visibleEntities,
+    () => villaDevices({ entityMap, deviceGroups, dismissed: dismissedIds, hidden, suppressed, batteries, mappedEntityIds, entities: visibleEntities,
       entityDeviceIds, folding, critical, deviceUnits, facts }),
-    [entityMap, deviceGroups, dismissedIds, hidden, suppressed, mappedEntityIds, visibleEntities, entityDeviceIds, folding, critical, deviceUnits, facts],
+    [entityMap, deviceGroups, dismissedIds, hidden, suppressed, batteries, mappedEntityIds, visibleEntities, entityDeviceIds, folding, critical, deviceUnits, facts],
   );
   // since when a device on a card reads as it does: its history, never its last_changed (useStateSince)
   const sinceIds = useMemo(() => sinceEntities({ fmData, devices, entities, entityMap }), [fmData, devices, entities, entityMap]);
@@ -178,17 +178,30 @@ export function useDeviceIdentity() {
   const { entityMap, deviceGroups } = config;
   const folding = useMemo(() => deviceFolding(entityMap, deviceGroups, entityDeviceIds, deviceUnits),
     [entityMap, deviceGroups, entityDeviceIds, deviceUnits]);
+  const batteries = useBatteryIds(entities);
+  // each device's parts: the ones its health asks (lookFacts builds the same, from the same inputs)
+  const partsOf = useMemo(() => devicePartsOf({ hidden: hiddenInHaEntityIds, suppressed: suppressedEntityIds, batteries,
+    entityDeviceIds, entityMap, deviceGroups }, folding),
+  [hiddenInHaEntityIds, suppressedEntityIds, batteries, entityDeviceIds, entityMap, deviceGroups, folding]);
   return useMemo(() => ({
     folding,
+    batteries,
     /** What a tap on anything of `id`'s device opens. */
     deviceOf: (id: string) => deviceOf(folding, id),
     /** The device a fault's or ticket's entity field names — the card it sits on in every screen. */
     deviceOfRecord: recordDeviceOf(folding, (id: string) => id in entities),
-    /** What else is on the open entity's device, listed under its panel. */
-    readingsOf: (id: string) => deviceReadings(id, folding, entities, suppressedEntityIds, deviceGroups, entityDeviceIds,
-      hiddenInHaEntityIds),
-  }), [folding, entities, suppressedEntityIds, deviceGroups, entityDeviceIds, hiddenInHaEntityIds]);
+    /** What else is on the open entity's device, listed under its panel: its parts (devicePartsOf) that are readings. */
+    readingsOf: (id: string) => deviceReadings(id, folding, partsOf, entities),
+  }), [folding, batteries, entities, partsOf]);
 }
+
+/** The entities that are batteries (device_class "battery"), as one set that changes only when that list does — never
+ *  per state push, so the parts built on it (devicePartsOf) and the map's marks stay the same objects. */
+function useBatteryIds(entities: Record<string, HassEntity>): ReadonlySet<string> {
+  const key = Object.keys(entities).filter((id) => entities[id]?.attributes?.device_class === "battery").sort().join("\n");
+  return useMemo(() => new Set(key ? key.split("\n") : []), [key]);
+}
+
 
 /** The room a stored record shows now (attention.recordRoom). Every screen storing a ticket's room asks this. */
 export function useRecordRoom(): (r: { entityId?: string; room?: string }) => string {

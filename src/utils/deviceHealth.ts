@@ -123,28 +123,44 @@ export type PartsOf = (deviceId: string) => readonly string[];
 
 export const NO_PARTS: PartsOf = () => [];
 
-/** Each device's parts (PartsOf), as "Also on this device" chooses what a person sees of a device
- *  (deviceGroups.deviceReadings): never one a person hid in the villa's system (`hidden`), never one it files as
- *  configuration or diagnostic (`suppressed`: a restart button, a signal strength, normally unavailable or noise),
- *  unless the owner grouped it (`chosen`: an owner's group member), never one switched off in Advanced Settings
- *  (`disabled`). A part the villa's system sends no state for (disabled there, or removed) is no part: lostParts
- *  never asks it. */
+/** THE parts of each device (PartsOf): what its health asks (its card and its "?" for a dead one) AND what "Also on
+ *  this device" lists of it (deviceGroups.deviceReadings, its readings among them) — one set, so a dead part listed
+ *  there is the part that gets the card. Never one a person hid in the villa's system (`hidden`), never one it files
+ *  as configuration or diagnostic (`suppressed`: a restart button, a signal strength, normally unavailable or noise)
+ *  unless the owner grouped it (`chosen`: an owner's group member) or it is a BATTERY (`batteries`: a level to act on,
+ *  filed as diagnostic by most integrations), never one switched off in Advanced Settings (`disabled`). A device
+ *  nobody placed on the map (no fold: neither `placed` nor folded) has the other entities of its device in the
+ *  villa's system (`entityDeviceIds`) that are folded nowhere. A part the villa's system sends no state for (disabled
+ *  there, or removed) is no part: lostParts never asks it.
+ *
+ *  ⚠️ TWO DEFINITIONS OF "A DEVICE'S PARTS" (architecture review item 8, 2026-11-14): "Also on this device" kept a
+ *  diagnostic battery and its own registry siblings, the health dropped the battery, so a dead battery was listed
+ *  Unavailable in the window with no card and no "?". One builder now, and the battery is a part on both sides. */
 export function partsOfFolding(folding: ReadonlyMap<string, string>, opts: {
   suppressed: ReadonlySet<string>;
   hidden: ReadonlySet<string>;
   chosen: ReadonlySet<string>;
   disabled: (entityId: string) => boolean;
+  batteries: ReadonlySet<string>;
+  entityDeviceIds: Readonly<Record<string, string>>;
+  placed: (entityId: string) => boolean;
 }): PartsOf {
+  const counts = (part: string) => !opts.hidden.has(part) && !opts.disabled(part)
+    && (!opts.suppressed.has(part) || opts.chosen.has(part) || opts.batteries.has(part));
+  const add = (m: Map<string, string[]>, key: string, part: string) => {
+    const list = m.get(key);
+    if (list) list.push(part); else m.set(key, [part]);
+  };
   const parts = new Map<string, string[]>();
-  for (const [part, device] of folding) {
-    if (part === device || opts.hidden.has(part) || opts.disabled(part)) continue;
-    if (opts.suppressed.has(part) && !opts.chosen.has(part)) continue;
-    const list = parts.get(device);
-    if (list) list.push(part); else parts.set(device, [part]);
-  }
-  for (const list of parts.values()) list.sort();
-  return (id) => parts.get(id) ?? [];
+  for (const [part, device] of folding) if (part !== device && counts(part)) add(parts, device, part);
+  // a device nobody placed: its registry device's entities folded nowhere
+  const unplaced = new Map<string, string[]>();
+  for (const [id, dev] of Object.entries(opts.entityDeviceIds)) if (!folding.has(id) && !opts.placed(id) && counts(id)) add(unplaced, dev, id);
+  for (const list of [...parts.values(), ...unplaced.values()]) list.sort();
+  return (id) => parts.get(id)
+    ?? (folding.has(id) || opts.placed(id) ? [] : (unplaced.get(opts.entityDeviceIds[id]) ?? []).filter((p) => p !== id));
 }
+
 
 /** The parts of `deviceId` the villa's system has lost contact with ("unavailable"), in id order: never "unknown" (a
  *  part with no value to give is answering), never a part it sends no state for. `state`: each entity's state as the

@@ -211,7 +211,7 @@ ck("a fault from a VESTA Agent alert carries \"#5\" for its card's strip, its wo
      JSON.stringify(head(ticketFace(taken))) === JSON.stringify(head(inbox)) && inbox.number === "#5-P2" && inbox.status[0]?.text === "Ticket in progress"
      && ticketFace(taken).title === "House Pump Power has not run", [head(ticketFace(taken)), head(inbox)]);
   const [closed] = closedCards(fm([shut]), null, new Date("2026-10-15T00:00:00.000Z"),
-    { devices: { deviceOf: (id) => id, isHidden: () => false }, entities: {}, entityMap: {}, resolvedRooms: {}, may: () => true });
+    { devices: devicesOf(), entities: {}, entityMap: {}, resolvedRooms: {}, may: () => true });
   const under = closed && cardFace(closed).parts[0];
   ck("  ...and a closed one, under Closed in both tabs",
      !!under && JSON.stringify(head(ticketFace(shut))) === JSON.stringify(head(under)) && /Wayan/.test(under.who ?? ""), [head(ticketFace(shut)), under && head(under)]);
@@ -293,8 +293,11 @@ ck("  ...every source has its icon and its words in the (i)'s legend",
 
 console.log("\n  the Recap's readiness says what is found, never the goal over a contradiction (owner, 2026-10-14):");
 const { buildReadiness } = await import("@/fm/readiness");
-const noDevices = { ids: [], unavailable: [], partlyLost: [], healthOf: () => ({ kind: "alive" }), has: () => false, deviceOf: (id) => id, deviceOfRecord: (id) => id, cardOfRecord: (id) => id, isCritical: () => false,
-  isHidden: () => false };
+const { recordCardOf } = await import("@/config/deviceGroups");
+// a villa's devices with its fold `deviceOf`: which card a record is on is the app's own answer over it (recordCardOf)
+const foldedBy = (deviceOf) => ({ deviceOf, recordCard: recordCardOf({ deviceOf, isHidden: () => false, has: () => false }) });
+const noDevices = { ids: [], unavailable: [], partlyLost: [], healthOf: () => ({ kind: "alive" }), has: () => false, ...foldedBy((id) => id),
+  cardOfRecord: (id) => id, isCritical: () => false, isHidden: () => false };
 // the Recap reads ONE profile view: its devices and the problems the Overview lists for it (attention items)
 const ready = (tickets, devs = noDevices) => {
   const data = fm(tickets);
@@ -313,16 +316,15 @@ ck("4 faults and 1 ticket: \"4 open faults · 1 ticket in progress\" (owner, 202
 // ticket card in Tickets, so one open ticket — not "2 open tickets" over one card
 const pumpBy = (devs) => ready([{ ...rec("p1", "switch.pump"), status: "in_progress" },
   { ...rec("p2", "sensor.pump_power"), status: "in_progress" }, rec("p3", "sensor.pump_temp")],
-  { ...noDevices, deviceOf: devs, deviceOfRecord: devs, cardOfRecord: devs });
+  { ...noDevices, ...foldedBy(devs), cardOfRecord: devs });
 const onePump = pumpBy((id) => (id.includes("pump") ? "switch.pump" : id));
 ck("  ...counted per device, as drawn: one device's 2 tickets + 1 fault = \"1 open fault · 1 ticket in progress\"",
    onePump.label === "1 open fault · 1 ticket in progress" && onePump.state === "warn", onePump);
 ck("  ...and three devices are three", pumpBy((id) => id).label === "1 open fault · 2 tickets in progress", pumpBy((id) => id));
-// the Recap files a record as every screen does — by the record's device (deviceOfRecord: a list of several sensors
+// the Recap files a record as every screen does — by the record's device (cardOfRecord: a list of several sensors
 // included), never by its raw field looked up as one entity (review "One answer per question" #1, 2026-10-19)
 const byRecord = ready([rec("m1", "sensor.gone,sensor.pump_power"), rec("m2", "sensor.pump_power")],
-  { ...noDevices, deviceOf: (id) => id, deviceOfRecord: (id) => (id.includes("pump") ? "sensor.pump_power" : id),
-    cardOfRecord: (id) => (id.includes("pump") ? "sensor.pump_power" : id) });
+  { ...noDevices, cardOfRecord: (id) => (id.includes("pump") ? "sensor.pump_power" : id) });
 ck("  ...a fault naming several sensors counts on its device's card", byRecord.label === "1 open fault", byRecord);
 const onlyFaults = readyWith([agentRec({ id: "n1", origin: "night" })]);
 ck("  ...one fault, no ticket: singular, no ticket said, and only Open issues", onlyFaults.label === "1 open fault"

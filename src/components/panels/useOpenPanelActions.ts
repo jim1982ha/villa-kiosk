@@ -94,9 +94,9 @@ export function useOpenPanelActions({ screen, open: activePanel, go, panelFor, r
     linkedSwitch: linkedPower && linkedEntityId
       ? { isOn: linkedToggle.isOn, known: linkedPower.position !== "unknown", contact: contactOf(entities[linkedEntityId]?.state) }
       : null });
-  // "Also on this device": its parts read with the window's critical-list fact, as its own pills (reading.statusOf)
+  // "Also on this device": its parts read with its device's rule, as its own pills (DeviceLook.statusRule)
   const readings: ReadingRow[] = readingRows(readingsOf(activePanel.entityId), entities, config.entityMap,
-    header.badge.onCriticalList);
+    header.badge.statusRule);
   return {
     linkedAsk,
     actions: {

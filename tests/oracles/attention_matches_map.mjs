@@ -36,7 +36,7 @@ const selectableIds = STATES.map(([id]) => id);
 const unavailableIds = ["light.lost", "lock.lost"];
 const resolvedRooms = {};
 
-const map = mapLookSource(new Map(Object.entries(entities)), new Map(Object.entries(entityMap)), () => ({ entityMap, isHidden: () => false }));
+const map = mapLookSource(new Map(Object.entries(entities)), new Map(Object.entries(entityMap)), () => ({ entityMap, isCritical: () => false, isHidden: () => false, hasFault: () => false, partsOf: () => [] }));
 // red on the map: its own red "!" (deviceLook `alert`); in use (owner, 2026-10-26: a lock unlocked, a door open,
 // someone seen) is the plain "active" dot, no alarm and never listed
 const redOnMap = selectableIds.filter((id) => deviceLook(id, map).alert).sort();

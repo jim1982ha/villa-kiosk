@@ -7,7 +7,8 @@
 import { register } from "node:module";
 register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
-const { deviceFolding, villaDevices, lookFacts } = await import("@/config/deviceGroups");
+const { deviceFolding, villaDevices, lookFacts, deviceReadings } = await import("@/config/deviceGroups");
+const { buildReadiness } = await import("@/fm/readiness");
 const { attentionOf, attentionFor, issueSeverity } = await import("@/config/attention");
 const { cockpitCard, cardTop } = await import("@/config/cockpitCard");
 const { deviceLook, storeLookSource, lookMarks, marksOf } = await import("@/utils/deviceActivity");
@@ -18,26 +19,30 @@ const SINCE = "2026-11-10T10:02:00.000Z";
 const ent = (id, state, name, at = "2026-11-13T08:00:00.000Z") =>
   ({ entity_id: id, state, attributes: { friendly_name: name }, last_changed: at, last_updated: at });
 const CAM = "camera.shed", PERSON = "binary_sensor.shed_person", SIGNAL = "sensor.shed_signal",
-  PRIVACY = "switch.shed_privacy", RESTART = "button.shed_restart", PET = "binary_sensor.shed_pet";
+  PRIVACY = "switch.shed_privacy", RESTART = "button.shed_restart", PET = "binary_sensor.shed_pet", BATTERY = "sensor.shed_battery";
 // one camera in the villa's system: its stream (placed on the map), a person detection, a signal strength filed as
 // diagnostic, a privacy switch a person hid, a restart button filed as configuration, and a pet detection switched off
 // there (in the registry, no state at all)
-const registry = Object.fromEntries([CAM, PERSON, SIGNAL, PRIVACY, RESTART, PET].map((id) => [id, "dev-shed"]));
+// and a battery, filed as diagnostic too (most integrations do): a level to act on
+const registry = Object.fromEntries([CAM, PERSON, SIGNAL, PRIVACY, RESTART, PET, BATTERY].map((id) => [id, "dev-shed"]));
 const entityMap = { [CAM]: { entityId: CAM, type: "camera", label: "Shed camera" } };
-const suppressed = new Set([SIGNAL, PRIVACY, RESTART]), hidden = new Set([PRIVACY]);
+const suppressed = new Set([SIGNAL, PRIVACY, RESTART, BATTERY]), hidden = new Set([PRIVACY]);
 const folding = deviceFolding(entityMap, [], registry);
 
-function villa(states, fmData = EMPTY_FM_DATA) {
+function villa(states, fmData = EMPTY_FM_DATA, may = () => true) {
   const entities = Object.fromEntries(states.map((e) => [e.entity_id, e]));
-  const input = { entityMap, deviceGroups: [], dismissed: new Set(), hidden, suppressed, mappedEntityIds: new Set([CAM]),
+  const input = { entityMap, deviceGroups: [], dismissed: new Set(), hidden, suppressed, batteries: new Set([BATTERY]), mappedEntityIds: new Set([CAM]),
     entities, entityDeviceIds: registry, deviceUnits: {}, folding };
   const facts = lookFacts(input, folding);
   const devices = villaDevices({ ...input, facts });
   const view = attentionFor({ devices, attentionItems: attentionOf({ devices, entities, entityMap,
-    resolvedRooms: { [CAM]: "Shed" }, fmData }).attentionItems }, () => true);
+    resolvedRooms: { [CAM]: "Shed" }, fmData }).attentionItems }, may);
   const look = deviceLook(CAM, storeLookSource(entities, { entityMap, ...lookMarks(marksOf(facts, new Set())) }));
   const card = view.attentionGroups[0] ? cardTop(cockpitCard(view.attentionGroups[0], null)) : null;
-  return { devices, view, look, card, sign: issueSeverity(view.attentionGroups, [CAM], devices.deviceOf) };
+  return { devices, view, look, card, sign: issueSeverity(view.attentionGroups, [CAM], devices.deviceOf),
+    // what its window lists under "Also on this device", and the Recap's "All devices reporting"
+    also: deviceReadings(CAM, folding, facts.partsOf, entities),
+    recap: buildReadiness(entities, fmData, view, entityMap).checks.find((c) => c.id === "devices-online") };
 }
 
 const dead = villa([ent(CAM, "idle", "Shed camera"), ent(PERSON, "unavailable", "Shed camera Person detection", SINCE),
@@ -60,6 +65,28 @@ ck("  ...its window's warning sign grey, its badge's corner the grey \"?\", its 
    { sign: dead.sign, mark: dead.look.mark, room: roomLook([dead.look]).health });
 ck("  ...counted as a thing that needs attention, never the villa's danger: the device answers",
    dead.view.health.level === "warn");
+
+// ⚠️ THE RECAP SAID "Every configured device is reporting." BESIDE THE CARD (architecture review item 8, 2026-11-14)
+ck("  ...the Recap's \"All devices reporting\" says so, a warning naming the camera: \"1 device partly unavailable.\"",
+   dead.recap.state === "warn" && dead.recap.detail === "1 device partly unavailable." && dead.recap.entityIds.join() === CAM
+     && dead.recap.goes[0]?.word === "device", dead.recap);
+// a profile that may open only what is on the map (listedDevices without listUnmappedDevices): the dead part is not on
+// the map, its device is, and the map shows everyone the device's "?"
+const placedOnly = villa([ent(CAM, "idle", "Shed camera"), ent(PERSON, "unavailable", "Shed camera Person detection", SINCE)],
+  EMPTY_FM_DATA, (id) => id === CAM);
+ck("  ...a profile that may open only what is on the map is told too: the question is asked of the device, not of its part",
+   placedOnly.view.attentionGroups.length === 1 && placedOnly.view.attentionGroups[0].entityId === CAM,
+   placedOnly.view.attentionGroups.map((g) => g.entityId));
+
+console.log("  one set of parts: what the window lists is what the health asks (a battery filed as diagnostic included):");
+const flat = villa([ent(CAM, "idle", "Shed camera"), ent(PERSON, "off", "Shed camera Person detection"),
+  ent(BATTERY, "unavailable", "Shed camera Battery", SINCE)]);
+ck("its dead battery is listed under \"Also on this device\" AND is the card, the \"?\" and the room's number",
+   flat.also.includes(BATTERY) && JSON.stringify(flat.devices.healthOf(CAM)) === JSON.stringify({ kind: "partly", lost: [BATTERY] })
+     && flat.card?.status.map((x) => x.text).join() === "Battery unavailable" && flat.look.mark === "lost",
+   { also: flat.also, health: flat.devices.healthOf(CAM), card: flat.card, mark: flat.look.mark });
+ck("  ...and the parts it never asks are never listed: no signal strength, no restart button, no hidden switch",
+   [SIGNAL, RESTART, PRIVACY].every((id) => !flat.also.includes(id)), flat.also);
 
 const told = villa([ent(CAM, "idle", "Shed camera"), ent(PERSON, "unavailable", "Shed camera Person detection", SINCE)],
   { ...EMPTY_FM_DATA, tickets: [{ id: "t1", title: "Shed camera Person detection offline for 3 days", status: "open",

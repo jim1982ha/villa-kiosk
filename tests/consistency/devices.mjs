@@ -4,20 +4,24 @@
 //
 //   devicesOf({ ids, unavailable, folding, critical, hidden, partlyLost })   // folding: member → the entity standing for its device
 //   partlyLost: { device: [its lost parts] } — devices that answer while those parts do not (VillaDevices.healthOf "partly")
-export function devicesOf({ ids = [], unavailable = [], folding = new Map(), critical = new Set(), hidden = new Set(), partlyLost = {} } = {}) {
+//   entities: the villa's system's states, for a record naming several entities (recordEntity: the first it has)
+const { recordCardOf } = await import("@/config/deviceGroups");
+export function devicesOf({ ids = [], unavailable = [], folding = new Map(), critical = new Set(), hidden = new Set(), partlyLost = {}, entities = {} } = {}) {
   const set = new Set(ids);
   const of = (id) => folding.get(id) ?? id;
   const crit = new Set([...critical].flatMap((e) => [e, of(e)]));
   const isHidden = (id) => hidden.has(id) || hidden.has(of(id));
+  // the app's own decision of which card a record is on (deviceGroups.recordCardOf), over this villa
+  const recordCard = recordCardOf({ deviceOf: of, isHidden, has: (x) => x in entities });
   return {
     ids, unavailable,
     partlyLost: Object.keys(partlyLost),
     healthOf: (id) => (unavailable.includes(id) ? { kind: "lost" } : partlyLost[id] ? { kind: "partly", lost: partlyLost[id] } : { kind: "alive" }),
     has: (id) => set.has(id),
     deviceOf: of,
-    deviceOfRecord: (field) => of(String(field ?? "").split(",")[0].trim()),
+    recordCard,
     // a hidden device's record is a card of its own (VillaDevices.cardOfRecord)
-    cardOfRecord: (field) => { const id = String(field ?? "").split(",")[0].trim(); return isHidden(id) ? undefined : of(id); },
+    cardOfRecord: (field) => recordCard({ entityId: field }).opens,
     isCritical: (id) => crit.has(id),
     isHidden,
   };
