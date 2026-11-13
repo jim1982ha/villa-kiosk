@@ -50,7 +50,7 @@ const CHIP_RINGS: { label: string; frame: "active" | "rest"; note: string }[] = 
   { label: "No border", frame: "rest", note: "Everything in the room is off or resting" },
 ];
 const CHIP_COUNTS: { label: string; health: RoomHealth; note: string }[] = [
-  { label: "Green number", health: "ok", note: "All right, every device is reporting and nothing needs attention" },
+  { label: "Purple number", health: "ok", note: "All right, every device is reporting and nothing needs attention" },
   { label: "Grey number", health: "unavailable", note: "No contact with a device in the room" },
   { label: "Amber number", health: "fault", note: "A device in the room has an open fault, shown before grey" },
   { label: "Red number", health: "alert", note: "Act now: an alarm, or a critical device gone silent, shown first" },
@@ -58,7 +58,7 @@ const CHIP_COUNTS: { label: string; health: RoomHealth; note: string }[] = [
 
 /** The seven status colours, as every pill, history bar, On button and 3D object paints them (utils/stateColors
  *  STATUS_COLOR, read here so the legend cannot describe another colour). ⚠️ ONE MEANING PER COLOUR (owner,
- *  2026-11-13): green is "the device is alive, and reporting the usual state", never a judgement. */
+ *  2026-11-13): purple is "the device is alive, and reporting the usual state", green "on", never a judgement. */
 const STATUS_ITEMS: { label: string; swatch: string; note: string }[] = [
   { label: "Usual", swatch: STATUS_COLOR.usual, note: "Alive, in its usual state: off, closed, locked, no motion, no leak, disarmed" },
   { label: "On / active", swatch: STATUS_COLOR.active, note: "Doing something, nothing wrong: on, open, motion seen, occupied, playing, armed" },

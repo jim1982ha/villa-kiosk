@@ -597,7 +597,7 @@
 .panel-reading-value { flex: 0 0 auto; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
 /* A binary reading in its own window's colour (config/readingRows): the .status-pill tones (utils/stateColors
    STATUS_PILL_CLASS), as text; no value keeps the secondary grey, lost contact's words in --status-lost-ink. */
-.panel-reading-value.usual { color: var(--status-on); }
+.panel-reading-value.usual { color: var(--status-usual); }
 .panel-reading-value.active { color: var(--status-active); }
 .panel-reading-value.transitional { color: var(--status-pending); }
 .panel-reading-value.warn { color: var(--status-warning); }

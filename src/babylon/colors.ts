@@ -31,6 +31,9 @@ export const LOST_GREY = Color3.FromHexString("#9A9F98");
 // A Babylon GUI control can't consume a CSS custom property, so this is a
 // static match to the light-theme value rather than a live read.
 export const AVAILABLE_GREEN_HEX = "#34845A";
+// --status-usual (light theme): alive in its usual state (owner, 2026-11-13) — a room whose devices all report that is
+// "all right" in this colour (healthPill "ok"), as their windows say it.
+export const USUAL_HEX = "#6E57B8";
 // --status-warning (light theme): a FAULT, check soon — as a hex for the pill below.
 const FAULT_AMBER_HEX = "#B8801F";
 // --status-lost (light theme): no contact — the same grey as LOST_GREY, as a hex for the pill below.
@@ -54,7 +57,7 @@ export function healthPill(health: "alert" | "fault" | "unavailable" | "ok"): { 
   return health === "alert" ? { fill: ALERT_RED_HEX, ink: "#ffffff" }
     : health === "fault" ? { fill: FAULT_AMBER_HEX, ink: "#17191A" }
     : health === "unavailable" ? { fill: LOST_GREY_HEX, ink: "#17191A" }
-    : { fill: AVAILABLE_GREEN_HEX, ink: "#ffffff" };
+    : { fill: USUAL_HEX, ink: "#ffffff" };
 }
 
 /** The status vocabulary's colours (utils/stateColors.STATUS_COLOR) for a 3D object, light-theme values like every
@@ -62,8 +65,8 @@ export function healthPill(health: "alert" | "fault" | "unavailable" | "ok"): { 
  *  consistent with the device status"). It had its own: a locked lock a brighter green than its pill, an unlocked one
  *  a teal glow beside a red "Unlocked". The same keys as STATUS_COLOR, one value each (tests/oracles/colour_rules.mjs). */
 export const STATUS_COLOR3: Record<StatusKey, Color3> = {
-  usual: Color3.FromHexString(AVAILABLE_GREEN_HEX), // --status-on
-  active: Color3.FromHexString("#6E57B8"),         // --status-active
+  usual: Color3.FromHexString(USUAL_HEX),          // --status-usual
+  active: Color3.FromHexString(AVAILABLE_GREEN_HEX), // --status-active
   transitional: Color3.FromHexString("#1F7F8C"),   // --status-pending
   warn: Color3.FromHexString(FAULT_AMBER_HEX),     // --status-warning
   alert: ALERT_RED,                                // --status-danger

@@ -12,7 +12,7 @@
 //                    (skipped on a pose mesh — see below, its pose already
 //                    shows the state).
 //   switch/media  -> emissive "active" tint when on/playing.
-//   binary_sensor -> pulsing red when triggered (e.g. leak/motion/etc),
+//   binary_sensor -> pulsing in its status colour while on (a detection, a leak),
 //                    skipped on a pose mesh for the same reason lock's tint
 //                    is.
 //
@@ -725,7 +725,9 @@ export class EntityVisuals {
    *  case) has no entry at all — applyMeshVariant treats <2 words as "nothing
    *  to toggle". */
   private meshVariants = new Map<string, Map<string, AbstractMesh[]>>();
-  private pulsing = new Set<AbstractMesh>();
+  /** The meshes pulsing, each in its window's status colour (meshLookFor's `tone`), with its own scratch colour: the
+   *  material keeps the Color3 it is given, so two pulses of different colours cannot share one. */
+  private pulsing = new Map<AbstractMesh, { tone: Color3; now: Color3 }>();
 
   // ── Badge-layout frame budget (2.113.0) ──────────────────────────────────
   // cullLabels() runs from registerBeforeRender, i.e. on EVERY rendered frame,
@@ -777,8 +779,6 @@ export class EntityVisuals {
     this.gate.markDirty();   // and the frame that draws it (layoutGate.ts)
   }
   private pulseT = 0;
-  /** Scratch for animatePulse — see its comment. */
-  private pulseColor = new Color3(0, 0, 0);
 
   /** Every bulb and every light it gives — its own glow and off-state
    *  transparency, PointLights, floor pools, the furniture light, the shadow
@@ -5601,7 +5601,7 @@ export class EntityVisuals {
           this.pulsing.delete(mesh);
           setEmissive?.(LOST_GREY.scale(0.4));
         } else if (look.on) {
-          this.pulsing.add(mesh);
+          this.pulsing.set(mesh, { tone: STATUS_COLOR3[look.tone ?? "alert"], now: new Color3(0, 0, 0) });
         } else {
           this.pulsing.delete(mesh);
           setEmissive?.(Color3.Black());
@@ -5627,14 +5627,12 @@ export class EntityVisuals {
     if (this.pulsing.size === 0 && !this.beams.hasActive()) return;
     this.pulseT += (dtMs / 1000) * PULSE_RAD_PER_SEC;
     const intensity = (Math.sin(this.pulseT) + 1) / 2; // 0..1
-    // Reused, not rebuilt: this runs every frame for as long as an alert stays
-    // triggered, and re-arms the render loop itself (below), so a `new Color3`
-    // here is a permanent allocation stream on a kiosk nobody is touching.
-    const col = this.pulseColor;
-    col.r = intensity;
-    col.g = 0;
-    col.b = 0;
-    for (const mesh of this.pulsing) this.emissiveOf(mesh)?.(col);
+    // Reused, not rebuilt (each pulse's own `now`): this runs every frame for as long as a sensor stays on, and
+    // re-arms the render loop itself (below), so a `new Color3` here is a permanent allocation stream.
+    for (const [mesh, p] of this.pulsing) {
+      p.tone.scaleToRef(intensity, p.now);
+      this.emissiveOf(mesh)?.(p.now);
+    }
     this.beams.applyPulse(intensity);
     this.requestAnimationRender();
   }

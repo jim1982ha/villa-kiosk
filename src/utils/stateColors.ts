@@ -126,16 +126,18 @@ export function lostContact(entities: Record<string, HassEntity>, id: string): b
  * colour code for every status"). The same table paints the state pill, the history bar, the On button, the 3D
  * object, the map, the Cockpit, the presence tile, the camera's bar and the "Map colours & keys" legend.
  *
- *   usual         green        alive, in its usual state: off, closed, locked, clear, disarmed, docked, idle
- *   active        purple       on, doing something, nothing wrong: on, open, motion seen, occupied, playing, armed
+ *   usual         purple       alive, in its usual state: off, closed, locked, clear, disarmed, docked, idle
+ *   active        green        on, doing something, nothing wrong: on, open, motion seen, occupied, playing, armed
  *   transitional  teal         moving, only while it moves: opening, closing, locking, arming, returning
  *   warn          amber        needs a look: a lock unlocked, a late maintenance, a state marked as a warning
  *   alert         red          an alarm: a leak, smoke, jammed, a fault word, a critical door unlocked or offline
  *   unavailable   light grey   lost contact ("unavailable"), a plain colour, never striped
  *   noValue       empty track  nothing to show: "unknown", blank, "none", and history no longer kept
  *
- * ⚠️ GREEN IS "THE DEVICE IS ALIVE, AND REPORTING THE USUAL STATE" (owner, 2026-11-13), never a judgement: where a
- * state is a problem, its usual state is green and the problem amber or red. Until 2.496.792 "active" was green for
+ * ⚠️ ONE COLOUR IS "THE DEVICE IS ALIVE, AND REPORTING THE USUAL STATE" (owner, 2026-11-13), never a judgement: where a
+ * state is a problem, its usual state is that colour and the problem amber or red. ⚠️ PURPLE, ACTIVE GREEN (owner, the
+ * same evening: "consistently and globally invert" the two): the swap is these two lines and their tokens
+ * (--status-usual, --status-active), nothing else. Until 2.496.792 "active" was green for
  * on and "idle" the empty track for off, so a light off, a curtain closed and a sensor with no value were one colour;
  * 2.496.792 then gave a closed curtain the Access control category's purple ("shut"). ⚠️ A CATEGORY COLOUR (--cat-*)
  * IS NEVER A STATUS: it is a device's identity, on its icon tile only. Stripes are not a colour either: a chart's
@@ -146,7 +148,7 @@ export function lostContact(entities: Record<string, HassEntity>, id: string): b
  * camera being offline while the legend told the user that losing contact was another colour.
  */
 export const STATUS_COLOR = {
-  usual: "var(--status-on)",
+  usual: "var(--status-usual)",
   active: "var(--status-active)",
   /** A device DOING something on request, neither of the two rest states it sits between and emphatically not a
    *  fault: without it every transitional state fell onto lost contact's colour, so a lock's history read "lost

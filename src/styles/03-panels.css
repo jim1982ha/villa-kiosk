@@ -179,7 +179,7 @@ button[aria-busy="true"] { animation: command-waiting 0.9s ease-in-out infinite;
 .reading-large { text-align: center; margin: 8px 0 16px; }
 /* ⚠️ ONE PILL PER MEANING (owner, 2026-11-13: one colour code for every status), the DOM side of utils/stateColors
    STATUS_COLOR and its STATUS_PILL_CLASS: a tint of the meaning's colour, its words in it. */
-.status-pill.usual { background: color-mix(in srgb, var(--status-on) 20%, transparent); color: var(--status-on); }
+.status-pill.usual { background: color-mix(in srgb, var(--status-usual) 20%, transparent); color: var(--status-usual); }
 .status-pill.active { background: color-mix(in srgb, var(--status-active) 22%, transparent); color: var(--status-active); }
 /* Mid-transition (locking, opening, arming…). Named for the status meaning it
    paints rather than "pending", which on .big-toggle above means something

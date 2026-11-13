@@ -1,3 +1,13 @@
+## 2.496.794
+
+- **Purple and green swapped, everywhere at once.** A device in its usual state (a light off, a curtain closed, locked,
+  no motion, the villa empty) is now purple, and a device on or in use (a light on, a curtain open, motion seen, someone
+  home) is green, on every screen: pills, history bars, the On button, the 3D map, the room chips' "all right" number
+  and the legend. It was one change in the one colour table.
+- **A motion sensor's 3D object pulses again while it sees someone.** Since the colour code made a detection "on,
+  nothing wrong" instead of red, its object stayed still; it now pulses in its state colour (green for a detection, red
+  for a leak or smoke).
+
 ## 2.496.793
 
 - **One colour code for every status, on every screen.** Each colour now says one thing, in the state pill, the history
