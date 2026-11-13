@@ -1,3 +1,10 @@
+## 2.496.790
+
+- **Uploading a model no longer pushes Advanced Settings down with a green band.** "Uploaded 17.9 MB → villa.glb with
+  its room data. Reloading…" appeared as a line above the Villa tab's settings. The Upload Model button now says
+  "Uploaded, reloading…" for a few seconds, as it already says "Uploading… 42%" and "Retrying (2 of 5)…". Only a
+  refused or failed upload, whose reason you need to read, still shows a line.
+
 ## 2.496.789
 
 - **A problem right again stays on Watch while the fault records are still loading.** Just after the page opened, a
