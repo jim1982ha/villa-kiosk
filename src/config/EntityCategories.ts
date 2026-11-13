@@ -72,7 +72,10 @@ const FALLBACK_CATEGORY_COLOR: Record<Category, string> = {
 };
 const FALLBACK_DANGER = "#B24232";
 const FALLBACK_WARNING = "#B8801F";
-const FALLBACK_LOST = "#6B706B";
+const FALLBACK_LOST = "#9A9F98";
+/** A corner mark's symbol: white, dark on the light grey of lost contact. */
+const WHITE_INK = "#ffffff";
+const DARK_INK = "#17191A";
 const FALLBACK_PENDING = "#1F7F8C";
 const FALLBACK_NEUTRAL_GLYPH = "#5A5F5B";
 const FALLBACK_HAIRLINE = "rgba(23, 25, 26, 0.10)";
@@ -236,17 +239,18 @@ export function categorySurface(category: Category, state: DeviceSurfaceState, o
    (a linked switch on, a critical device lost) in another state's colour. Those facts are the badge's bottom-right pill and
    corner MARK now (markSurface, below); a ring is only ever its face's own. */
 
-/** A badge's corner mark, as painted: its fill and its white symbol (deviceActivity.BadgeMark — the same red, amber,
+/** A badge's corner mark, as painted: its fill and its symbol, in its ink (deviceActivity.BadgeMark — the same red, amber,
  *  grey and teal every other surface paints those meanings in: utils/stateColors STATUS_COLOR, the Cockpit's
  *  severities). Resolved to literal colours, like categorySurface, for the canvas bake. */
-export function markSurface(mark: Exclude<BadgeMark, "active">): { fill: string; symbol: string } {
+export function markSurface(mark: Exclude<BadgeMark, "active">): { fill: string; symbol: string; ink: string } {
   switch (mark) {
-    case "critical": return { fill: cssVar("--status-danger") || FALLBACK_DANGER, symbol: "?" };
-    case "alarm": return { fill: cssVar("--status-danger") || FALLBACK_DANGER, symbol: "!" };
-    case "fault": return { fill: cssVar("--status-warning") || FALLBACK_WARNING, symbol: "!" };
-    case "lost": return { fill: cssVar("--status-lost") || FALLBACK_LOST, symbol: "?" };
-    case "asleep": return { fill: cssVar("--status-lost") || FALLBACK_LOST, symbol: "z" };
-    case "moving": return { fill: cssVar("--status-pending") || FALLBACK_PENDING, symbol: "\u2026" };
+    case "critical": return { fill: cssVar("--status-danger") || FALLBACK_DANGER, symbol: "?", ink: WHITE_INK };
+    case "alarm": return { fill: cssVar("--status-danger") || FALLBACK_DANGER, symbol: "!", ink: WHITE_INK };
+    case "fault": return { fill: cssVar("--status-warning") || FALLBACK_WARNING, symbol: "!", ink: WHITE_INK };
+    // ⚠️ DARK ON THE LIGHT GREY (owner, 2026-11-13: lost contact is a light grey): white on it is under 2:1
+    case "lost": return { fill: cssVar("--status-lost") || FALLBACK_LOST, symbol: "?", ink: DARK_INK };
+    case "asleep": return { fill: cssVar("--status-lost") || FALLBACK_LOST, symbol: "z", ink: DARK_INK };
+    case "moving": return { fill: cssVar("--status-pending") || FALLBACK_PENDING, symbol: "\u2026", ink: WHITE_INK };
     // in use has no surface of its own: it is drawn as the linked entity's "on", filled in the badge's colour
     // (deviceActivity.pillOf)
   }

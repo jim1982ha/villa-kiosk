@@ -8,7 +8,7 @@
 //
 // Pure: tests/oracles/room_glow_switch.mjs drives it (and motionLit / motionChanges, through EntityVisuals' real painter).
 
-import { glowsRoom } from "@/config/deviceCondition";
+import { glowIsAlarm, glowsRoom } from "@/config/deviceCondition";
 import { roomKey } from "@/config/roomKey";
 import type { EntityType } from "@/types/scene.types";
 
@@ -35,7 +35,8 @@ interface MotionRoutingInput {
 
 export interface MotionRouting {
   beams: { cameraId: string; on: boolean }[];
-  rooms: { room: string; on: boolean }[];
+  /** `alarm`: the glow is an alarm's (red), else a room in use (purple). */
+  rooms: { room: string; on: boolean; alarm?: boolean }[];
 }
 
 /**
@@ -53,7 +54,7 @@ export function motionRouting(i: MotionRoutingInput): MotionRouting {
     return { beams: [], rooms: rooms.map((room) => ({ room, on: i.on })) };
   }
   if (i.type === "binary_sensor" && i.room && glowsRoom(i.entityId, i.deviceClass)) {
-    return { beams: [], rooms: [{ room: i.room, on: i.on }] };
+    return { beams: [], rooms: [{ room: i.room, on: i.on, ...(glowIsAlarm(i.entityId, i.deviceClass) ? { alarm: true } : {}) }] };
   }
   return none;
 }
@@ -63,9 +64,11 @@ export function motionRouting(i: MotionRoutingInput): MotionRouting {
 export interface MotionLit {
   beams: ReadonlySet<string>;
   rooms: ReadonlyMap<string, string>;
+  /** The lit rooms (their keys) one of whose sensors is an alarm: glowing red, not purple. */
+  alarms?: ReadonlySet<string>;
 }
 
-export const NOTHING_LIT: MotionLit = { beams: new Set(), rooms: new Map() };
+export const NOTHING_LIT: MotionLit = { beams: new Set(), rooms: new Map(), alarms: new Set() };
 
 /**
  * Everything lit by every sensor's routing as it stands (`current`): a cone or a room is lit while ANY of its sensors
@@ -78,11 +81,16 @@ export const NOTHING_LIT: MotionLit = { beams: new Set(), rooms: new Map() };
 export function motionLit(current: Iterable<MotionRouting>): MotionLit {
   const beams = new Set<string>();
   const rooms = new Map<string, string>();
+  const alarms = new Set<string>();
   for (const r of current) {
     for (const b of r.beams) if (b.on) beams.add(b.cameraId);
-    for (const g of r.rooms) if (g.on && !rooms.has(roomKey(g.room))) rooms.set(roomKey(g.room), g.room);
+    for (const g of r.rooms) {
+      if (!g.on) continue;
+      if (!rooms.has(roomKey(g.room))) rooms.set(roomKey(g.room), g.room);
+      if (g.alarm) alarms.add(roomKey(g.room));
+    }
   }
-  return { beams, rooms };
+  return { beams, rooms, alarms };
 }
 
 /**
@@ -96,8 +104,11 @@ export function motionChanges(painted: MotionLit, lit: MotionLit): MotionRouting
   const beams = [...new Set([...painted.beams, ...lit.beams])]
     .filter((id) => painted.beams.has(id) !== lit.beams.has(id))
     .map((cameraId) => ({ cameraId, on: lit.beams.has(cameraId) }));
+  // a room lit both times whose alarm changed is lit again, in its new colour
+  const alarmOf = (m: MotionLit, k: string) => !!m.alarms?.has(k);
   const rooms = [...new Set([...painted.rooms.keys(), ...lit.rooms.keys()])]
-    .filter((k) => painted.rooms.has(k) !== lit.rooms.has(k))
-    .map((k) => ({ room: (lit.rooms.get(k) ?? painted.rooms.get(k))!, on: lit.rooms.has(k) }));
+    .filter((k) => painted.rooms.has(k) !== lit.rooms.has(k) || (lit.rooms.has(k) && alarmOf(painted, k) !== alarmOf(lit, k)))
+    .map((k) => ({ room: (lit.rooms.get(k) ?? painted.rooms.get(k))!, on: lit.rooms.has(k),
+      ...(alarmOf(lit, k) ? { alarm: true } : {}) }));
   return { beams, rooms };
 }

@@ -2,13 +2,12 @@
 // Camera motion-detection beams, extracted from EntityVisuals so beam mesh
 // lifecycle lives in one place (same pattern as RoomHighlight).
 //
-// A simulated "diffused red light beam" pointing the way a camera prop was
+// A simulated "diffused light beam" pointing the way a camera prop was
 // rotated AND tilted in SweetHome 3D (see sh3dParser's `angle` for yaw and
 // `pitch` for tilt), toggled by that camera's linked motion binary_sensor
 // (its linkedEntityId when that detects presence — BinarySensorClasses.cameraMotionId). It is a translucent unlit cone, not a real
 // light — no shadow map, no surface interaction.
 
-import { Color3 } from "@babylonjs/core/Maths/math.color";
 import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder";
 import { Quaternion, Vector3 } from "@babylonjs/core/Maths/math.vector";
 import { Ray } from "@babylonjs/core/Culling/ray";
@@ -20,8 +19,11 @@ import { ModelKeyedStore } from "./modelStore";
 // Babylon prototype patches this module depends on — see babylonSideEffects.
 import "./babylonSideEffects";
 import { CAMERA_BEAM_ALPHA_INDEX } from "./seeThroughOrder";
+import { STATUS_COLOR3 } from "./colors";
 
-const BEAM_COLOR = new Color3(0.95, 0.15, 0.12);
+// ⚠️ MOTION SEEN IS ACTIVE, NOT RED (owner, 2026-11-13: one colour code for every status): the status table's purple,
+// as the camera window's motion marks; it was its own red
+const BEAM_COLOR = STATUS_COLOR3.active;
 // A wide "spotlight" cone at ROOM scale. Two rounds of feedback shaped this:
 // the original 6m/1.6m combo (2026-07-03, before) read as a long thin streak
 // reaching across multiple rooms, not a beam coming out of the camera — fixed

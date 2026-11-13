@@ -12,7 +12,7 @@ import type { LucideIcon } from "lucide-react";
 import InfoTip from "@/components/common/InfoTip";
 
 export default function StatusPill({ tone, icon: Icon, large = false, inline = false, info, children }: {
-  /** A `.status-pill` tone: "on", "off", "danger", "transitional", "unavailable" (config/reading). */
+  /** A `.status-pill` tone (utils/stateColors STATUS_PILL_CLASS): "usual", "active", "transitional", "warn", "danger", "unavailable", "novalue". */
   tone: string;
   icon?: LucideIcon;
   large?: boolean;

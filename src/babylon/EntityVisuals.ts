@@ -2179,7 +2179,7 @@ export class EntityVisuals {
     const lit = motionLit(this.motionRoutes.values());
     const change = motionChanges(this.motionPainted, lit);
     for (const b of change.beams) this.setBeamActive(b.cameraId, b.on);
-    for (const r of change.rooms) this.roomHighlight.setActive(r.room, r.on);
+    for (const r of change.rooms) this.roomHighlight.setActive(r.room, r.on, !!r.alarm);
     this.motionPainted = lit;
   }
 

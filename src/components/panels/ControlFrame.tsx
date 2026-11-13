@@ -14,7 +14,7 @@ import type { ReactNode } from "react";
 import { PowerSection } from "./PowerToggle";
 import { useHA } from "@/ha/HAStateStore";
 import { HAServices } from "@/ha/HAServiceCalls";
-import { isOffline } from "@/utils/stateColors";
+import { isOffline, powerStatus } from "@/utils/stateColors";
 import { deviceSwitch } from "@/utils/devicePower";
 import type { HassEntity } from "@/types/ha.types";
 import type { EntityMapping } from "@/types/scene.types";
@@ -44,6 +44,7 @@ export default function ControlFrame({ entity, mapping, power, beside, children 
         return (
           <PowerSection
             on={sw.position === "on"}
+            status={powerStatus(sw.position, entity?.state, mapping.entityId)}
             onClick={() => HAServices.power(ws, entity, mapping.entityId)}
             ask={sw.ask}
             beside={beside}

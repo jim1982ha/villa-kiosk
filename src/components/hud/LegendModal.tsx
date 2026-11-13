@@ -11,7 +11,7 @@ import { CATEGORY_ORDER, CATEGORY_LABELS, categorySurface, type DeviceSurfaceSta
 import { badgeImage } from "@/babylon/badgeIcons";
 import type { BadgeMark, LinkPill } from "@/utils/deviceActivity";
 import { useResolvedTheme } from "@/hooks/useResolvedTheme";
-import { STATUS_COLOR } from "@/utils/stateColors";
+import { NOT_KEPT_COLOR, STATUS_COLOR } from "@/utils/stateColors";
 import { useConfig } from "@/config/ConfigContext";
 import { overviewKeyHelp } from "@/babylon/overviewKeys";
 import { healthPill } from "@/babylon/colors";
@@ -56,19 +56,19 @@ const CHIP_COUNTS: { label: string; health: RoomHealth; note: string }[] = [
   { label: "Red number", health: "alert", note: "Act now: an alarm, or a critical device gone silent, shown first" },
 ];
 
-/** The coloured status pill each device PANEL shows, and the colours of the
- *  history bar underneath it (both read utils/stateColors' STATUS_COLOR — a
- *  finer vocabulary than the map badge above, because a panel has room for
- *  the distinction and a history bar genuinely needs it). */
+/** The seven status colours, as every pill, history bar, On button and 3D object paints them (utils/stateColors
+ *  STATUS_COLOR, read here so the legend cannot describe another colour). ⚠️ ONE MEANING PER COLOUR (owner,
+ *  2026-11-13): green is "the device is alive, and reporting the usual state", never a judgement. */
 const STATUS_ITEMS: { label: string; swatch: string; note: string }[] = [
-  { label: "On / active", swatch: STATUS_COLOR.active, note: "Device is on, locked-secure, or open, or a detector finding nothing wrong (no leak, no smoke, no motion), a door or window closed" },
-  { label: "Off / idle", swatch: STATUS_COLOR.idle, note: "Device is off or in its resting state, or a door or window standing open" },
-  { label: "In progress", swatch: STATUS_COLOR.transitional,
-    note: "Moving between the two: opening, closing, locking, arming" },
-  { label: "Unavailable", swatch: STATUS_COLOR.unavailable, note: "No contact" },
-  // "unknown": the device answers with nothing to say (stateColors.contactOf "no-value") — idle, never "no contact"
-  { label: "No value reported", swatch: STATUS_COLOR.idle, note: "The device is answering but has no value to give right now" },
-  { label: "Alert", swatch: STATUS_COLOR.alert, note: "Needs attention (e.g. unlocked door, jammed lock, leak), or a detection (motion, occupancy), which is not a fault" },
+  { label: "Usual", swatch: STATUS_COLOR.usual, note: "Alive, in its usual state: off, closed, locked, no motion, no leak, disarmed" },
+  { label: "On / active", swatch: STATUS_COLOR.active, note: "Doing something, nothing wrong: on, open, motion seen, occupied, playing, armed" },
+  { label: "Moving", swatch: STATUS_COLOR.transitional, note: "Only while it moves: opening, closing, locking, arming" },
+  { label: "Needs a look", swatch: STATUS_COLOR.warn, note: "A door unlocked, a late maintenance, a state marked as a warning" },
+  { label: "Alarm", swatch: STATUS_COLOR.alert, note: "Act now: a leak or smoke, a jammed lock, a fault, a critical door unlocked or offline" },
+  { label: "Unavailable", swatch: STATUS_COLOR.unavailable, note: "No contact with the device" },
+  { label: "No value", swatch: STATUS_COLOR.noValue, note: "The device answers with no value to give right now" },
+  // the same empty track, said apart (stateColors.NOT_KEPT_COLOR)
+  { label: "Not kept", swatch: NOT_KEPT_COLOR, note: "A history older than the villa's system keeps" },
 ];
 
 export default function LegendModal({ onClose, listable, onListCategory }: {
@@ -191,9 +191,10 @@ export default function LegendModal({ onClose, listable, onListCategory }: {
           Walking: ↑ ↓ or W S walk, ← → or A D turn, Q / E step sideways, Shift + ↑ ↓ look up or down.
         </p>
 
-        <div className="section-title">On a device panel (status pill)</div>
+        <div className="section-title">Status colours</div>
         <p className="muted body-text" style={{ marginTop: 4 }}>
-          Shown when you open a device's controls.
+          One colour for each meaning, on a device's status pill, its history bar and its On button.
+          A striped period in a bar mixed several states, in their colours.
         </p>
         <div className="legend-grid">
           {STATUS_ITEMS.map((s) => (

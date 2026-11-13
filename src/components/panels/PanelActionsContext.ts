@@ -50,6 +50,8 @@ export interface PanelActions {
     /** A CRITICAL device that lost contact (deviceLook.critical, 2.496.428): every lost pill of this window — the
      *  reading's, the "UNAVAILABLE" notice's, the lock's — takes the danger red (config/reading.lostPillTone). */
     critical: boolean;
+    /** On the villa's critical list (DeviceLook.onCriticalList): its "needs a look" pill is red (reading.criticalPillTone). */
+    onCriticalList: boolean;
   };
   /** Persist a new badge colour for the open entity (null = category default). Without may.edit the badge is a
    *  plain, non-interactive icon. */

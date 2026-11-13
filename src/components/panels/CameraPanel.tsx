@@ -648,7 +648,7 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
           only answers the same question in retrospect. On the viewport, not on
           .camera-zoom: that element carries the pinch-zoom transform, so a
           border there would scale and slide with the zoom instead of framing
-          the feed. Colour from the shared vocabulary, so it is the same red the
+          the feed. Colour from the shared vocabulary, so it is the same purple the
           bar and the legend already use for a detection. */}
       {/* The ring is drawn on the media ELEMENT (see .camera-detecting in
           styles.css), which is already sized to exactly the picture — the
@@ -659,7 +659,8 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
           it still comes from the shared vocabulary. */}
       <div
         className={`camera-viewport${motionActive ? " camera-detecting" : ""}`}
-        style={{ ["--detect-color" as string]: STATUS_COLOR.alert }}
+        // motion seen is "on, doing something", never an alarm (owner, 2026-11-13: the camera's motion marks were red)
+        style={{ ["--detect-color" as string]: STATUS_COLOR.active }}
         // On the FEED region, not the panel root: a tap on a control is that
         // control's business, and must not also toggle the chrome away from
         // under the finger that is pressing it.
@@ -691,7 +692,7 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
         )}
       </div>
 
-      {/* Bottom row: status strip (green online / red motion / black gap)
+      {/* Bottom row: status strip (green online / purple motion / grey gap)
           sharing the same offset + height as the control cluster, sized to
           fill the space left of it (see .camera-bottom-row flex rule) so it
           stays aligned with prev/next/zoom/fullscreen/close regardless of
@@ -737,16 +738,17 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
             // paints red alongside "error"/"unreachable". Same word, two
             // vocabularies; don't collapse them.
             colorFor={(s) => (
-              s === "motion" ? STATUS_COLOR.alert
+              // ⚠️ MOTION IS ACTIVE, NOT RED (owner, 2026-11-13: one colour code for every status): someone seen is the
+              // camera doing its job, purple as an occupied room; red is an alarm
+              s === "motion" ? STATUS_COLOR.active
                 // the camera unreachable: red for a critical one, as the Cockpit and the map (reading.lostColor)
                 : s === "offline" ? lostColor(badge?.critical ?? false)
                 : s === "motion-unavailable" ? STATUS_COLOR.unavailable
-                  // A camera that is up and recording is ON, which the legend
-                  // calls "On / active" and paints green. It is emphatically
-                  // not "Off / idle" — that token means a device at rest, and
-                  // using it here painted a perfectly healthy camera the same
-                  // colour as the empty track behind it.
-                  : STATUS_COLOR.active
+                  // A camera that is up and recording is alive in its usual
+                  // state: green. It is emphatically not the empty track,
+                  // which painted a perfectly healthy camera the same colour
+                  // as a stretch with nothing to show.
+                  : STATUS_COLOR.usual
             )}
           />
           {/* the linked sensor (a noise or door sensor): its state over the same day, named on hover — the strip the

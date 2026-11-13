@@ -30,6 +30,8 @@ interface PanelHeader {
     state: DeviceSurfaceState; mark: BadgeMark | null; linkPill: LinkPill;
     /** A critical device that lost contact (deviceLook.critical): the window's lost pill is red (reading.lostPillTone). */
     critical: boolean;
+    /** On the villa's critical list (deviceLook.onCriticalList): its "needs a look" pill is red (reading.criticalPillTone). */
+    onCriticalList: boolean;
   };
   /** The linked switch (EntityMapping.linkedEntityId), when it has one, it can be switched and
    *  this profile may control it. */
@@ -107,6 +109,7 @@ export function panelHeader({ panel, entities, config, canControl, linkedSwitch 
       mark: look.mark,
       linkPill: look.linkPill,
       critical: look.critical,
+      onCriticalList: look.onCriticalList,
     },
     linked: linkedId && !linkedIsSensor && canControl && linkedSwitch
       ? { label: labelOf(linkedId, config.entityMap, entities), ...linkedSwitch }
