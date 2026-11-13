@@ -21,13 +21,16 @@ still in progress, so the night's checks never read a half-built pack.
 ⚠️ A RESTED RUN IS RUN AGAIN (architecture review, 2026-11-14): the night check rests while the villa's system restarts
 (vesta_shared.problems.Session) and its slot was spent: that night's findings were never looked for. A code job whose
 result names a moment to run again (result.RUN_AGAIN_AT) is started once more for the same slot at that moment, even
-past its window (a restart may outlast it); a newer slot claimed meanwhile replaces it. Kept in memory: an agent
-restarted meanwhile does not run it again.
+past its window (a restart may outlast it); a newer slot claimed meanwhile replaces it. ⚠️ KEPT IN THE STATE DATABASE
+("jobagain:"), NOT ONLY IN MEMORY: a full reboot of the box restarts the agent with the villa's system, and the rerun
+was lost. Read back at start; still run once when due (or overdue), unless a newer slot of the job ran meanwhile or the
+job's next slot has come; cleared once the rerun ended without asking again.
 """
 
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
@@ -126,6 +129,14 @@ class Scheduler:
         self._last_every: datetime | None = None
         self._running: dict[str, asyncio.Task] = {}     # job key → its task, while it runs
         self._again: dict[str, tuple[datetime, datetime]] = {}   # job key → (its slot, when to run it again)
+        for key, v in self.state.runs_again().items():                 # owed before a restart (see the module's ⚠️)
+            try:
+                d = json.loads(v)
+                self._again[key] = (datetime.fromisoformat(d["slot"]), datetime.fromisoformat(d["at"]))
+            except (ValueError, KeyError, TypeError):
+                self.state.keep_run_again(key, None)
+        if self._again:
+            log.info("Rested runs owed again since before the restart: %s", ", ".join(sorted(self._again)))
         # ⚠️ A RUN CUT BY A STOP IS RUN AGAIN (architecture review 21): the slot was claimed before the run, so an update
         # in the middle of the morning report lost it for the day, without a word. A run in progress is recorded
         # (in_progress.InProgress.kept); one still recorded at start was cut, and its slot may be claimed once more in its
@@ -230,11 +241,15 @@ class Scheduler:
                 # same time, and the second, claimed, was refused as "still running": lost for the day
                 key = job_key(sk.name, sk.schedule, i)
                 owed = self._again.get(key)
+                if owed and self._stale(key, owed[0], job["when"], now):
+                    self._forget(key)
+                    owed = None
                 if slot and self._claim(key, slot, job_ident(sk.name, sk.schedule, i)):
-                    self._again.pop(key, None)          # a newer slot: the one owed is run by it
+                    if owed:
+                        self._forget(key)               # a newer slot: the one owed is run by it
                 elif owed and now >= owed[1]:
                     slot = owed[0]                      # a rested run, now run again for its own slot
-                    del self._again[key]
+                    del self._again[key]                # kept in the state until it ends (_run_again)
                 else:
                     continue
                 name = f"{sk.name}:{job['when']}"
@@ -254,17 +269,32 @@ class Scheduler:
             self._start("engine:housekeeping", self.housekeeping)
         return started
 
+    def _stale(self, key: str, slot: datetime, when: str, now: datetime) -> bool:
+        """A rested run no longer owed: a newer slot of its job ran meanwhile, or the job's next slot has come."""
+        last = dict(self.state.jobs_run()).get(key)
+        if last is not None and last != slot.isoformat():
+            return True
+        nxt = Spec.parse(when).next_after(slot)
+        return nxt is None or now >= nxt
+
+    def _forget(self, key: str) -> None:
+        self._again.pop(key, None)
+        self.state.keep_run_again(key, None)
+
     def _run_again(self, key: str, slot: datetime, res) -> None:
-        """A code job's result asking to be run again (result.RUN_AGAIN_AT): its slot kept for that moment."""
+        """A code job's result asking to be run again (result.RUN_AGAIN_AT): its slot kept for that moment, in the state
+        database too. A result asking nothing clears what this slot owed."""
         at = res.get(RUN_AGAIN_AT) if isinstance(res, dict) else None
         try:
             when = datetime.fromisoformat(str(at)) if at else None
         except ValueError:
             when = None
         if when is None:
+            self._forget(key)
             return
         when = when if when.tzinfo else when.replace(tzinfo=slot.tzinfo)
         self._again[key] = (slot, when)
+        self.state.keep_run_again(key, json.dumps({"slot": slot.isoformat(), "at": when.isoformat()}))
         log.info("%s rested while the villa's system restarts: run again at %s", key, when.isoformat(timespec="seconds"))
 
     async def run(self, stop: asyncio.Event) -> None:

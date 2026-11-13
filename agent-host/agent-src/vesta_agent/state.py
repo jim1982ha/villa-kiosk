@@ -115,6 +115,7 @@ KV_FAMILIES: dict[str, str] = {
     "jobrun:": CURRENT,             # a scheduled run in progress: one left at start was cut by a stop (in_progress.py)
     "jobend:": CURRENT,             # how a scheduled job's last run ended (ended / failed / cut, when, why): in_progress.py
     "jobday:": CURRENT,             # the day a scheduled job last ran, by the job itself (claim_job_slot, review K/L)
+    "jobagain:": CURRENT,           # a rested run owed again: its slot and when (scheduler.Scheduler._run_again)
     "chatjob:": CURRENT,            # a chat's job or question in progress: one left at start was cut (in_progress.py)
     "siren:": CURRENT,              # when the siren must stop
     "listening_since": CURRENT,     # when the agent's record started (agent_records.listening_since)
@@ -530,6 +531,17 @@ class State:
     def runs_kept(self) -> dict[str, str]:
         """{job: value} of every scheduled run's row."""
         return {k[len("jobrun:"):]: v for k, v in self.kv_prefix("jobrun:").items()}
+
+    def keep_run_again(self, job: str, value: str | None) -> None:
+        """A rested run of `job` owed again (its json: slot and when; None: none owed)."""
+        if value is None:
+            self.drop(f"jobagain:{job}")
+        else:
+            self.put(f"jobagain:{job}", value)
+
+    def runs_again(self) -> dict[str, str]:
+        """{job: value} of every rested run owed again."""
+        return {k[len("jobagain:"):]: v for k, v in self.kv_prefix("jobagain:").items()}
 
     def keep_run_end(self, job: str, value: str) -> None:
         """How `job`'s last scheduled run ended (in_progress.py writes it, its json; one row per job)."""

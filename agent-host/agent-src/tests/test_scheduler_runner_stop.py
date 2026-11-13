@@ -65,6 +65,46 @@ def test_a_night_check_that_rested_through_a_restart_runs_again_once_settled_and
     asyncio.run(go())
 
 
+def test_a_rested_night_check_runs_again_once_even_when_the_agent_restarted_in_between(tmp_path):
+    # a full reboot of the villa's box restarts the agent too: the rerun it owed was kept only in memory, and lost
+    from vesta_shared.result import RUN_AGAIN_AT
+    s = settings(str(tmp_path))
+    copy_skill("preventive-maintenance", s.skills_dir)
+    nights = []
+
+    async def run_code(skill, command, timeout):
+        if command.startswith("nightly.py"):
+            nights.append(1)
+            return {RUN_AGAIN_AT: at(2, 8).isoformat()} if len(nights) == 1 else {}
+        return {}
+
+    async def nothing(*a):
+        pass
+
+    def agent():                                                         # a new agent, the same state file
+        return Scheduler(s, Skills(s.skills_dir), State(s.state_path), run_code, nothing, nothing)
+
+    async def go():
+        for t, runs in ((at(2, 1), 1), (at(2, 50), 2), (at(2, 55), 2), (at(3, 30), 2), (at(2, 5, day=2), 3)):
+            sch = agent()                                                # restarted before every tick
+            await sch.tick(t)
+            await sch.idle()
+            assert len(nights) == runs, t
+        nights.clear()
+        sch = agent()
+        await sch.tick(at(2, 1, day=3))                                  # rests again; the agent is down all day
+        await sch.idle()
+        sch = agent()
+        await sch.tick(at(2, 10, day=4))                                 # the next night's slot runs, once
+        await sch.idle()
+        assert len(nights) == 2
+        sch = agent()
+        await sch.tick(at(2, 20, day=4))
+        await sch.idle()
+        assert len(nights) == 2
+    asyncio.run(go())
+
+
 def test_the_schedule_comes_from_the_skills_and_runs_once_per_slot(tmp_path):
     s = settings(str(tmp_path))
     copy_skill("preventive-maintenance", s.skills_dir)
