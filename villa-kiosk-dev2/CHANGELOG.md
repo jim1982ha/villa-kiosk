@@ -1,3 +1,10 @@
+## 2.496.802
+
+- **"Asleep between reports" is now "Unavailable by design", for parts too.** A camera's control it never uses, such as
+  "Move to Preset" with no preset saved, made the camera "partly unavailable". Put it on this list in Advanced Settings
+  and the camera reads as working again: no card, no grey "?", nothing in the Recap. Battery sensors that sleep
+  between reports stay on it as before.
+
 ## 2.496.801
 
 - **A shared room chip lists every room.** Zoomed out, rooms too close together share one chip, which read "Living
