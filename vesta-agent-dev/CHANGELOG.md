@@ -1,3 +1,18 @@
+## 0.12.511
+
+- **The night check also rests while the villa's system restarts.** Like the 5-minute check since 0.12.509, it now
+  opens and closes no fault while the villa's system is starting and for 5 minutes after; that night's new faults
+  wait for the next night, and the 5-minute check reads the open ones again once it has settled. Every check now
+  takes the same 5 minutes (the setting the VESTA Kiosk uses), even if that setting cannot be read: the 10-minute
+  setting the night check and the investigation kept for themselves is gone. A device that dropped while the villa's
+  system was stopped is the restart's, not a reconnect of its own.
+- **Every fault opened or closed is now a line in the VESTA Agent's log**, with its words, which check did it and how
+  it ended, for example: Fault closed: "The automation 'Server room person' watches 1 device that no longer answers"
+  (the check every 5min: Cleared: back online.). A check that rested during a restart says so in one line.
+- **A device that answers with no value is not "back" until that has lasted 5 minutes.** A device still loading after
+  a restart answers that way first; its "watches 1 device that no longer answers" fault now stays open until it
+  really answers, the same test that opened it.
+
 ## 0.12.509
 
 - **VESTA's 5-minute check now rests while the villa's system restarts.** On 13/11 at 14:49, two minutes after a
