@@ -1,3 +1,18 @@
+## 2.496.798
+
+- **A device on the critical list is red the same way in every window.** A critical lock unlocked or out of contact
+  was red, but a critical sensor out of contact, a lost reading under "Also on this device", a blind's pill and the
+  camera's bar for its lost motion sensor could stay grey or amber. Now every pill of a critical device's window turns
+  red when it needs a look or loses contact, by one rule, as its badge and its 3D object already did.
+- **A device split into two of your groups keeps its other parts with the right one.** When one physical device is
+  shown as two groups on the map (a weather station's indoor and outdoor readings), its parts that are not on the map
+  (its battery, a rain gauge) went to whichever group's name came first in the alphabet, so a dead rain gauge could
+  show on the indoor card. They now go to the group on the same module in the villa's system, else to the group listed
+  first in Advanced Settings, and renaming a device no longer moves them. The same goes for which device a suggested
+  group stands under: the one you added first.
+- **A hidden device's tickets match Open issues.** The Tickets tab now gives each ticket about a device hidden in the
+  villa's system its own card, under "Other", opening nothing, as Open issues does, and the Tickets count agrees.
+
 ## 2.496.797
 
 - **A device that works but has a dead part now says so.** A camera that streams while its person detection has been

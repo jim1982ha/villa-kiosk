@@ -90,10 +90,15 @@ ck("a live report, then asleep again: it keeps showing that report (open, since 
 ck("  ...once listed, the map heard the report and never \"unavailable\"",
    heard.at(-1) === `${DOOR}=on` && !heard.slice(listedAt).includes(`${DOOR}=unavailable`), heard.slice(listedAt));
 
-// every screen's "offline" is asked of what the store holds: the live cards, the counts, the badges, the critical list
+// every screen's "offline" is asked of what the store holds: the live cards, the counts, the badges, the critical list —
+// the villa built as the app builds it (VillaModel): the store's registry, its sub-devices, hidden and suppressed sets
 const map = Object.fromEntries([DOOR, LIGHT].map((id) => [id, { entityId: id, type: "sensor", label: id }]));
-const devices = (entities) => villaDevices({ entityMap: map, deviceGroups: [], dismissed: new Set(), hidden: new Set(), suppressed: new Set(),
-  mappedEntityIds: new Set(), entities, entityDeviceIds: {} });
+const devices = (entities) => {
+  const st = store.getState();
+  return villaDevices({ entityMap: map, deviceGroups: [], dismissed: new Set(), hidden: st.hiddenInHaEntityIds,
+    suppressed: st.suppressedEntityIds, mappedEntityIds: new Set(), entities, entityDeviceIds: st.entityDeviceIds,
+    deviceUnits: st.deviceUnits });
+};
 ck("so no screen calls it offline: not in the villa's unavailable devices, contact not lost",
    devices(store.getState().entities).unavailable.length === 0 && contactOf(shown(DOOR).state) === "ok");
 

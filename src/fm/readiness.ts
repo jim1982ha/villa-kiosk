@@ -296,7 +296,7 @@ export function buildReadiness(
   // 2026-10-19) — the Recap counted faults about devices the Overview did not list for the same person
   const shown = new Set(alarms.flatMap((i) => (i.kind === "fault" && i.ticketId ? [i.ticketId] : [])));
   const records = fm.tickets.filter((t) => shown.has(t.id));
-  const open = openCounts(records, devices.deviceOfRecord);
+  const open = openCounts(records, devices.cardOfRecord);
   const faults = records.filter((t) => stageOf(t) === "fault");
   const where = [open.faults ? "the faults in Inbox › Open issues" : "", open.tickets ? "the tickets in Tickets" : ""].filter(Boolean);
   // ⚠️ ITS DEVICES, EACH ONCE (owner, 2026-11-05: "show the device pills concerned by either the Ticket or Faults, the

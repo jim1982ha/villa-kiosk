@@ -47,10 +47,8 @@ export interface PanelActions {
     mark: BadgeMark | null;
     /** Its bottom-right pill — its linked entity: its problem, else on or off (deviceActivity.linkPillOf). */
     linkPill: LinkPill;
-    /** A CRITICAL device that lost contact (deviceLook.critical, 2.496.428): every lost pill of this window — the
-     *  reading's, the "UNAVAILABLE" notice's, the lock's — takes the danger red (config/reading.lostPillTone). */
-    critical: boolean;
-    /** On the villa's critical list (DeviceLook.onCriticalList): its "needs a look" pill is red (reading.criticalPillTone). */
+    /** On the villa's critical list (DeviceLook.onCriticalList): every pill of this window, its notice and its rows,
+     *  takes its meaning with it (config/reading.statusOf: "needs a look" and lost contact red). */
     onCriticalList: boolean;
   };
   /** Persist a new badge colour for the open entity (null = category default). Without may.edit the badge is a
@@ -142,3 +140,7 @@ export function linkedSwitchProps(linked: NonNullable<PanelActions["linked"]>) {
 
 export const PanelActionsProvider = PanelActionsContext.Provider;
 export const usePanelActions = (): PanelActions => useContext(PanelActionsContext);
+
+/** Whether the open window's device is on the villa's critical list (badge.onCriticalList): the `critical` every pill
+ *  of the window is read with (config/reading.statusOf). False outside a window. */
+export const useOnCriticalList = (): boolean => usePanelActions().badge?.onCriticalList ?? false;

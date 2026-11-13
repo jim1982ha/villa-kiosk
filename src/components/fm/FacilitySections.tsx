@@ -40,7 +40,7 @@ import ReadinessTab from "./ReadinessTab";
 import TicketsTab from "./TicketsTab";
 import SpendTab from "./SpendTab";
 import ScheduleEditor from "./ScheduleEditor";
-import { useDeviceIdentity, useVillaModel } from "@/config/VillaModel";
+import { useVillaModel } from "@/config/VillaModel";
 
 export type FacilityTab = "tickets" | "schedule" | "recap" | "spend";
 
@@ -99,10 +99,10 @@ export default function FacilitySections({
     [entities, data, view, config.entityMap]);
   // what every document is made from, once (monthlyDocument.DocumentInputs) — the tabs only draw
   const terms = useFmTerms();
-  const { deviceOfRecord } = useDeviceIdentity();
+  const { cardOfRecord } = devices;
   const villaName = resolveSiteTitle(config, haConfig?.location_name);
-  const inputs = useMemo((): DocumentInputs => ({ fm: data, terms, readiness, villaName, deviceOfRecord }),
-    [data, terms, readiness, villaName, deviceOfRecord]);
+  const inputs = useMemo((): DocumentInputs => ({ fm: data, terms, readiness, villaName, cardOfRecord }),
+    [data, terms, readiness, villaName, cardOfRecord]);
   const deviceOptions = useMemo(
     () => buildDeviceOptions(devices, config.entityMap, entities, resolvedRooms),
     [devices, config.entityMap, entities, resolvedRooms],

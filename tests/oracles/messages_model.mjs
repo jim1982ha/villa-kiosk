@@ -156,7 +156,7 @@ ck("  ...a notification, folded: the same card: its title and when it came in it
      strip(3).includes("<span>Tickets (3)</span>") && strip(0).includes("<span>Tickets</span>") && strip(3).includes("<span>Inbox</span>"), strip(3));
   const modalSrc = readFileSync(new URL("../../src/components/cockpit/CockpitModal.tsx", import.meta.url), "utf8");
   ck("  ...counted as the tab's own \"in progress\" figure is (openCounts), on the window's strip",
-     /openCounts\(data\.tickets, deviceOfRecord\)\.tickets/.test(modalSrc) && /counts=\{\{ tickets: ticketsOpen \}\}/.test(modalSrc));
+     /openCounts\(data\.tickets, cardOfRecord\)\.tickets/.test(modalSrc) && /counts=\{\{ tickets: ticketsOpen \}\}/.test(modalSrc));
 }
 
 console.log("\n  the window and the tab read the model:");

@@ -41,7 +41,7 @@ type DeviceActivity = "on" | "off" | "alert" | "info";
  * omission that looks exactly like "there is nothing to pass".
  *
  * ⚠️ `condition` IS REQUIRED: "this reading is at rest" is a statement the
- * caller makes; forgetting to look is not. It is resolved by readingOf (below)
+ * caller makes; forgetting to look is not. It is resolved by deviceReadingOf (below)
  * from a LookSource, through config/deviceCondition — no caller builds a
  * DeviceReading by hand any more.
  */
@@ -316,7 +316,8 @@ type MeshLook =
   | { kind: "pulse"; on: boolean; unavailable: boolean; tone?: StatusKey }
   | { kind: "tint"; tone: StatusKey };
 
-export function meshLookFor(r: DeviceReading): MeshLook {
+export function meshLookFor(entityId: string, source: LookSource): MeshLook {
+  const r = deviceReadingOf(entityId, source);
   const kind = badgeKindFor(r);
   const status = windowStatusOf(r.entity);
   switch (r.type) {
@@ -509,8 +510,10 @@ export interface DeviceLook {
 }
 
 /** The one DeviceReading for this device, its linked entity
- *  resolved from the source — what the mesh rule (meshLookFor) reads too. */
-export function readingOf(entityId: string, source: LookSource): DeviceReading {
+ *  resolved from the source — what deviceLook and the mesh rule (meshLookFor) read. ⚠️ NOT EXPORTED (architecture
+ *  review item 6, 2026-11-13): it was a second public `readingOf` beside config/reading's, a sensor's reading in a
+ *  window; a device's reading is only ever read through its look. */
+function deviceReadingOf(entityId: string, source: LookSource): DeviceReading {
   const linkedId = source.config.entityMap[entityId]?.linkedEntityId;
   let linkedOn = false;
   let link: DeviceReading | null = null;
@@ -555,7 +558,7 @@ function ownReadingOf(entityId: string, source: LookSource, linkedId?: string): 
 
 /** How this device looks — face, top-right mark, bottom-right pill, kind, ACTIVITY and POWER. */
 export function deviceLook(entityId: string, source: LookSource): DeviceLook {
-  const r = readingOf(entityId, source);
+  const r = deviceReadingOf(entityId, source);
   const kind = badgeKindFor(r);
   const own = kind;
   const switchable = hasOnOff(entityId);

@@ -232,7 +232,7 @@
   --text-on-accent: #FFFDF9;
 
   /* ⚠️ THE SEVEN MEANINGS (owner, 2026-11-13: one colour code for every status, utils/stateColors STATUS_COLOR): usual
-     green (--status-on), active purple, moving teal (--status-pending), needs a look amber, alarm red, lost contact a
+     purple, active green (--status-on), moving teal (--status-pending), needs a look amber, alarm red, lost contact a
      light grey, nothing to show the empty track (--bg-input). Purple is its own: never --cat-access-control's, a
      category colour being a device's identity, never a state. */
   --status-on: #34845A;

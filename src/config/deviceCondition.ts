@@ -76,7 +76,7 @@ export function glowsRoom(entityId: string, deviceClass: string | undefined): bo
 }
 
 /** Whether its room's glow is an alarm (a leak, smoke: its "on" is WRONG), red, rather than a room in use (someone
- *  there, a door open), purple — the status table's alert and active (owner, 2026-11-13: one colour code). */
+ *  there, a door open), green — the status table's alert and active (owner, 2026-11-13: one colour code). */
 export function glowIsAlarm(entityId: string, deviceClass: string | undefined): boolean {
   return binaryCondition(entityId, deviceClass, "on") === "wrong";
 }
@@ -85,7 +85,7 @@ export function glowIsAlarm(entityId: string, deviceClass: string | undefined): 
  *  problem state when that state is WRONG (a leak, smoke, a low battery, connectivity off): never a class in use (a door,
  *  a detection, a "…_pir" with no class: inUseClass, as the map reads it). ⚠️ IN USE IS ACTIVE, NOT RED (owner, 2026-11-13: one colour code for every status, red is an
  *  alarm): an open door, a detection were red in their window since 2026-10-26 ("keep red there") while calm on the map
- *  and in the Cockpit; they are the purple of "on, doing something" now, there as on the map (conditionOf: in use). */
+ *  and in the Cockpit; they are the green of "on, doing something" now, there as on the map (conditionOf: in use). */
 export function windowProblemState(entityId: string, deviceClass: string | undefined): string | undefined {
   return inUseClass(entityId, deviceClass) ? undefined : alertStateFor(deviceClass);
 }

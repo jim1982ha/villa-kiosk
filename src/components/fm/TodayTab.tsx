@@ -10,7 +10,7 @@ import InfoTip from "@/components/common/InfoTip";
 import { Fragment, useState } from "react";
 import { Check, CalendarClock, Trash2 } from "lucide-react";
 import { useFmData } from "@/fm/FmDataContext";
-import { useCardRoom, useDeviceIdentity } from "@/config/VillaModel";
+import { useCardRoom, useVillaModel } from "@/config/VillaModel";
 import { openCounts } from "@/fm/deviceWork";
 import { budgetStatus, scheduleBoard, parseAmount, fmAttention } from "@/fm/fmEngine";
 import { COST_CATEGORY_NAMES } from "@/fm/fmTypes";
@@ -32,7 +32,7 @@ import { useListEditor } from "./ListEditor";
 export default function TodayTab({ onOpenEntity }: { onOpenEntity: (id: string) => void }) {
   const { data, logCompletion, removeSchedule, removeAllSchedules } = useFmData();
   const roomOf = useCardRoom();
-  const { deviceOfRecord } = useDeviceIdentity();
+  const { cardOfRecord } = useVillaModel().devices;
   const terms = useFmTerms();
   const board = scheduleBoard(data);
   // the task whose Log is open (ListEditor): paused or erased on another tablet, its form closes
@@ -61,7 +61,7 @@ export default function TodayTab({ onOpenEntity }: { onOpenEntity: (id: string) 
   const attention = fmAttention(data).lateTasks;
   // a fault waits on the Overview until someone takes it on; then it is a ticket (owner, 2026-10-14)
   // counted per device, as the Overview and Tickets draw them (openCounts)
-  const open = openCounts(data.tickets, deviceOfRecord);
+  const open = openCounts(data.tickets, cardOfRecord);
 
   return (
     <div className="fm-stack">

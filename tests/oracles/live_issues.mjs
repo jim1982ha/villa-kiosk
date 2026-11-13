@@ -293,7 +293,7 @@ ck("  ...every source has its icon and its words in the (i)'s legend",
 
 console.log("\n  the Recap's readiness says what is found, never the goal over a contradiction (owner, 2026-10-14):");
 const { buildReadiness } = await import("@/fm/readiness");
-const noDevices = { ids: [], unavailable: [], partlyLost: [], healthOf: () => ({ kind: "alive" }), has: () => false, deviceOf: (id) => id, deviceOfRecord: (id) => id, isCritical: () => false,
+const noDevices = { ids: [], unavailable: [], partlyLost: [], healthOf: () => ({ kind: "alive" }), has: () => false, deviceOf: (id) => id, deviceOfRecord: (id) => id, cardOfRecord: (id) => id, isCritical: () => false,
   isHidden: () => false };
 // the Recap reads ONE profile view: its devices and the problems the Overview lists for it (attention items)
 const ready = (tickets, devs = noDevices) => {
@@ -313,7 +313,7 @@ ck("4 faults and 1 ticket: \"4 open faults · 1 ticket in progress\" (owner, 202
 // ticket card in Tickets, so one open ticket — not "2 open tickets" over one card
 const pumpBy = (devs) => ready([{ ...rec("p1", "switch.pump"), status: "in_progress" },
   { ...rec("p2", "sensor.pump_power"), status: "in_progress" }, rec("p3", "sensor.pump_temp")],
-  { ...noDevices, deviceOf: devs, deviceOfRecord: devs });
+  { ...noDevices, deviceOf: devs, deviceOfRecord: devs, cardOfRecord: devs });
 const onePump = pumpBy((id) => (id.includes("pump") ? "switch.pump" : id));
 ck("  ...counted per device, as drawn: one device's 2 tickets + 1 fault = \"1 open fault · 1 ticket in progress\"",
    onePump.label === "1 open fault · 1 ticket in progress" && onePump.state === "warn", onePump);
@@ -321,7 +321,8 @@ ck("  ...and three devices are three", pumpBy((id) => id).label === "1 open faul
 // the Recap files a record as every screen does — by the record's device (deviceOfRecord: a list of several sensors
 // included), never by its raw field looked up as one entity (review "One answer per question" #1, 2026-10-19)
 const byRecord = ready([rec("m1", "sensor.gone,sensor.pump_power"), rec("m2", "sensor.pump_power")],
-  { ...noDevices, deviceOf: (id) => id, deviceOfRecord: (id) => (id.includes("pump") ? "sensor.pump_power" : id) });
+  { ...noDevices, deviceOf: (id) => id, deviceOfRecord: (id) => (id.includes("pump") ? "sensor.pump_power" : id),
+    cardOfRecord: (id) => (id.includes("pump") ? "sensor.pump_power" : id) });
 ck("  ...a fault naming several sensors counts on its device's card", byRecord.label === "1 open fault", byRecord);
 const onlyFaults = readyWith([agentRec({ id: "n1", origin: "night" })]);
 ck("  ...one fault, no ticket: singular, no ticket said, and only Open issues", onlyFaults.label === "1 open fault"
@@ -387,7 +388,7 @@ ck("lists that only grow are ONE folded, paged list (owner, 2026-10-14): Tickets
   ck("a ticket in progress is \"In progress\" in the warning tone, a closed one \"Resolved\" in the ok tone, an open fault's word is \"Open\"",
      pill(taken).text === "In progress" && pill(taken).tone === "tone-warn" && pill(closed).text === "Resolved" && pill(closed).tone === "tone-ok"
      && E.STAGE_WORDS.fault.word === "Open", [pill(taken), pill(closed)]);
-  const recap = buildMonthlyRecap({ fm: fm([taken, closed]), month: "2026-09", villaName: "V", readiness: null, deviceOfRecord: deviceOf });
+  const recap = buildMonthlyRecap({ fm: fm([taken, closed]), month: "2026-09", villaName: "V", readiness: null, cardOfRecord: deviceOf });
   const row = (t) => recap.split("\n").find((l) => l.includes(`| ${t.title} |`)) ?? "";
   ck("  ...the recap's Status column says the SAME word as the pill, for both", row(taken).includes(`| ${pill(taken).text} |`)
      && row(closed).includes(`| ${pill(closed).text} |`) && !/\| in progress \|/.test(recap), [row(taken), row(closed)]);
@@ -406,7 +407,7 @@ ck("lists that only grow are ONE folded, paged list (owner, 2026-10-14): Tickets
     { ...rec("k1", "sensor.pump_energy", "in_progress"), openedAt: "2026-09-01T10:00:00.000Z" },
     { ...rec("k2", "sensor.pump_power", "in_progress"), openedAt: "2026-09-02T10:00:00.000Z" }];
   const counts = W.openCounts(pumpWork, deviceOf);
-  const pumpRecap = buildMonthlyRecap({ fm: fm(pumpWork), month: "2026-09", villaName: "V", readiness: null, deviceOfRecord: deviceOf });
+  const pumpRecap = buildMonthlyRecap({ fm: fm(pumpWork), month: "2026-09", villaName: "V", readiness: null, cardOfRecord: deviceOf });
   const openLine = pumpRecap.split("\n").find((l) => l.startsWith("- Open faults:")) ?? "";
   ck("the recap's open figures equal the Tickets tab's cards: one device, one fault card, one ticket card — never the four records",
      counts.faults === 1 && counts.tickets === 1 && W.ticketCards(pumpWork, deviceOf).length === 1
@@ -486,7 +487,7 @@ const tt = src("components/fm/TicketsTab.tsx");
 // what ticketCards lists is checked by value above ("Tickets lists the device whose ticket was opened last first");
 // here, that the tab draws it (its figures above the cards went: owner, 2026-11-03)
 ck("the Tickets tab draws ticketCards — the tickets in progress, by device — and Closed",
-   /ticketCards\(data\.tickets, deviceOfRecord\)/.test(tt) && !/Raise a fault/.test(tt));
+   /ticketCards\(data\.tickets, cardOfRecord\)/.test(tt) && !/Raise a fault/.test(tt));
 // owner, 2026-11-03: "Remove the redundant line with the high level numbers above the list of opened tickets": no figures
 ck("  ...and no figures above them (in progress, mean resolution, closed with no action, the kept record)",
    !/fm-summary|fm-stat|mean resolution|Over the kept record/.test(tt));

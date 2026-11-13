@@ -77,7 +77,14 @@ export function repointDevice(oldId: string, newId: string, entity?: Pick<HassEn
       : rest[newId] && isOwnLabel(newId, targetLabel) ? targetLabel : undefined;
     const moved = { ...targetSettings, ...settings, entityId: newId } as EntityMapping;
     if (label !== undefined) moved.label = label;
-    return { meshBindings, entityMap: { ...rest, [newId]: moved } };
+    // in the old id's place: the device keeps its place in the owner's order (deviceGroups.deviceFolding PLACED_ORDER)
+    const entityMap: Record<string, EntityMapping> = {};
+    for (const [id, m] of Object.entries(config.entityMap)) {
+      if (id === oldId) entityMap[newId] = moved;
+      else if (id !== newId) entityMap[id] = m;
+    }
+    if (!(newId in entityMap)) entityMap[newId] = moved;
+    return { meshBindings, entityMap };
   };
 }
 

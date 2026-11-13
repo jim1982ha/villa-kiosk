@@ -27,6 +27,8 @@ export function readingRows(
   ids: readonly string[],
   entities: Record<string, HassEntity>,
   entityMap: Record<string, { label?: string } | undefined>,
+  /** The window's device is on the villa's critical list (reading.statusOf): its parts' lost contact is red too. */
+  critical = false,
 ): ReadingRow[] {
   return ids.map((id) => {
     const e = entities[id];
@@ -37,7 +39,7 @@ export function readingRows(
       text: e ? rowText(id, e) : "",
       // A sensor's row takes the tone its own window gives it (config/reading): a binary state's pill tone.
       tone: e && (domain === "binary_sensor" || domain === "sensor")
-        ? rowTone(readingOf(id, e, domain))
+        ? rowTone(readingOf(id, e, domain, critical))
         : undefined,
     };
   });

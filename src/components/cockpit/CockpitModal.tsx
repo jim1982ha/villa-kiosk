@@ -23,7 +23,7 @@ import FacilitySections, { FACILITY_TABS, type FacilityTab } from "@/components/
 import { useFacilityLiveView, useFmData } from "@/fm/FmDataContext";
 import { fmRecordLine, heldLine } from "@/fm/fmSave";
 import { openCounts } from "@/fm/deviceWork";
-import { useDeviceIdentity } from "@/config/VillaModel";
+import { useVillaModel } from "@/config/VillaModel";
 import MessagesTab from "./MessagesTab";
 import { useAnnouncements } from "@/messages/AnnouncementsContext";
 import InfoTip from "@/components/common/InfoTip";
@@ -87,8 +87,9 @@ export default function CockpitModal({
   // another device") is said where every save that did not happen is (hud/ProblemNotices), over this window.
   const { data, ready, unreachable, heldFor } = useFmData();
   // the tickets in progress, counted on the Tickets tab's name as its cards are (openCounts: one per device)
-  const { deviceOfRecord } = useDeviceIdentity();
-  const ticketsOpen = useMemo(() => openCounts(data.tickets, deviceOfRecord).tickets, [data.tickets, deviceOfRecord]);
+  // a hidden device's ticket its own card, as the tab and Open issues draw it (VillaDevices.cardOfRecord)
+  const { cardOfRecord } = useVillaModel().devices;
+  const ticketsOpen = useMemo(() => openCounts(data.tickets, cardOfRecord).tickets, [data.tickets, cardOfRecord]);
   const held = heldLine(heldFor);
   const recordLine = fmRecordLine({ ready, unreachable });
   // Firmware / add-on updates waiting — Home Assistant's own `update` domain counts them, per device and per add-on.

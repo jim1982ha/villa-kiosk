@@ -17,7 +17,8 @@ import { Wrench } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
 import { recordDevicePill } from "@/config/attention";
 import { ticketFace } from "@/config/cockpitCard";
-import { useCardRoom, useDeviceIdentity } from "@/config/VillaModel";
+import { useCardRoom, useDeviceIdentity, useVillaModel } from "@/config/VillaModel";
+import { roomLabel } from "@/config/devicePlace";
 import { useFmData } from "@/fm/FmDataContext";
 import { useHA } from "@/ha/HAStateStore";
 import { closedTickets } from "@/fm/fmEngine";
@@ -49,15 +50,20 @@ export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, on
   onRaiseOpened?: () => void;
 }) {
   const { data, removeTicket } = useFmData();
-  const roomOf = useCardRoom();
+  const cardRoom = useCardRoom();
   const terms = useFmTerms();
-  const { deviceOf, deviceOfRecord } = useDeviceIdentity();
+  const { deviceOf } = useDeviceIdentity();
+  // ⚠️ A HIDDEN DEVICE'S TICKET IS A CARD OF ITS OWN, AS IN OPEN ISSUES (architecture review item 8, 2026-11-13): under
+  // "Other", opening nothing — the hidden device has no window (VillaDevices.cardOfRecord, attention.attentionOf)
+  const { cardOfRecord, isHidden } = useVillaModel().devices;
+  /** A ticket's room line: its device's, "Other" for a hidden device's (cardOfRecord), as its Open issues card. */
+  const roomOf = (t: FmTicket) => (t.entityId && cardOfRecord(t.entityId) === undefined ? roomLabel(undefined) : cardRoom(t));
   const { config, resolvedRooms } = useConfig();
   const { entities } = useHA();
   /** Every card's buttons carried out: Done's form, Need help, Close's question, Reopen's form (WorkButtons). */
   const work = useCardWork();
 
-  const tickets = useMemo(() => ticketCards(data.tickets, deviceOfRecord), [data.tickets, deviceOfRecord]);
+  const tickets = useMemo(() => ticketCards(data.tickets, cardOfRecord), [data.tickets, cardOfRecord]);
   // ⚠️ THE CLOSED ONES ARE A SECTION OF THEIR OWN, FOLDED AND PAGED (owner, 2026-10-14): the VESTA Agent clears several
   // a day. Latest closed first; the server drops them after their retention window (supervisor-proxy _fm_expire).
   // ...THE TICKETS', NOT EVERY RECORD'S (owner, 2026-11-01): a fault the VESTA Agent cleared with nobody taking it on was
@@ -98,7 +104,7 @@ export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, on
   const card = (t: FmTicket, actions?: ReactNode, framed = true, stated = true) => {
     const work = data.completions.find((c) => c.ticketId === t.id && c.costId);
     const cost = work ? data.costs.find((c) => c.id === work.costId) : undefined;
-    const pill = recordDevicePill(t, { devices: { deviceOf }, entityMap: config.entityMap, entities, resolvedRooms });
+    const pill = recordDevicePill(t, { devices: { deviceOf, isHidden }, entityMap: config.entityMap, entities, resolvedRooms });
     // ⚠️ ITS HEAD AS ITS INBOX CARD'S (cockpitCard.ticketFace; owner, 2026-11-05, the "Status on top" card): its stage in
     // its strip, who moved it under its words, never the stage or the time twice; its alert's name the strip's chip
     const face = ticketFace(t, stated);

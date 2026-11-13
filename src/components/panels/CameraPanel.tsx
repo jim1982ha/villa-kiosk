@@ -87,7 +87,7 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
   // `motion`: its linked entity when that detects presence (panelHeader, BinarySensorClasses.cameraMotionId).
   // ⚠️ AND THE SAME PIECES AS EVERY DEVICE WINDOW (architecture review P, 2026-10-27): its warning sign, Edit,
   // Open Ticket and "Also on this device" are DeviceWindowPieces', placed in this window's header; a critical camera that
-  // lost contact is red (badge.critical, reading.lostColor), as the Cockpit and the map paint it.
+  // lost contact is red (badge.onCriticalList, reading.lostColor), as the Cockpit and the map paint it.
   const { linked, linkedSensor, motion, back, badge, readings } = usePanelActions();
   const warning = useDeviceWarning();
   const [readingsOpen, setReadingsOpen] = useState(false);
@@ -649,7 +649,7 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
           only answers the same question in retrospect. On the viewport, not on
           .camera-zoom: that element carries the pinch-zoom transform, so a
           border there would scale and slide with the zoom instead of framing
-          the feed. Colour from the shared vocabulary, so it is the same purple the
+          the feed. Colour from the shared vocabulary, so it is the same green the
           bar and the legend already use for a detection. */}
       {/* The ring is drawn on the media ELEMENT (see .camera-detecting in
           styles.css), which is already sized to exactly the picture — the
@@ -693,7 +693,7 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
         )}
       </div>
 
-      {/* Bottom row: status strip (green online / purple motion / grey gap)
+      {/* Bottom row: status strip (purple online / green motion / grey gap)
           sharing the same offset + height as the control cluster, sized to
           fill the space left of it (see .camera-bottom-row flex rule) so it
           stays aligned with prev/next/zoom/fullscreen/close regardless of
@@ -740,13 +740,13 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
             // vocabularies; don't collapse them.
             colorFor={(s) => (
               // ⚠️ MOTION IS ACTIVE, NOT RED (owner, 2026-11-13: one colour code for every status): someone seen is the
-              // camera doing its job, purple as an occupied room; red is an alarm
+              // camera doing its job, green as an occupied room; red is an alarm
               s === "motion" ? STATUS_COLOR.active
                 // the camera unreachable: red for a critical one, as the Cockpit and the map (reading.lostColor)
-                : s === "offline" ? lostColor(badge?.critical ?? false)
-                : s === "motion-unavailable" ? STATUS_COLOR.unavailable
+                // and its motion part lost: the same rule, a part of a critical device as the device (reading.statusOf)
+                : s === "offline" || s === "motion-unavailable" ? lostColor(badge?.onCriticalList ?? false)
                   // A camera that is up and recording is alive in its usual
-                  // state: green. It is emphatically not the empty track,
+                  // state: purple. It is emphatically not the empty track,
                   // which painted a perfectly healthy camera the same colour
                   // as a stretch with nothing to show.
                   : STATUS_COLOR.usual

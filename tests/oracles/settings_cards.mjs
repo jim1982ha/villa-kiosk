@@ -123,7 +123,7 @@ const grouped = (view = "groups") => { globalThis.__gview = view; try { return d
 // [kind, drawn, its name, its bar's words ("" no bar), its remove's tooltip at its strip's right, or none]
 const KINDS = [
   ["a device group", grouped(), "Kitchen Temperature", "", "Delete the group Kitchen Temperature"],
-  ["  ...a suggested group, its main action first", grouped("suggested"), "Pool Pump Power", "Create this group"],
+  ["  ...a suggested group, its main action first", grouped("suggested"), "Pool Pump", "Create this group"],   // the device placed first (deviceFolding PLACED_ORDER), never the name that sorts first,
   ["a device asleep between reports", drawIn(h(UnavailableByDesign, { title: "Asleep between reports" })), "Back Door", "", "Take Back Door off Asleep between reports"],
   ["a device of Devices", devices(), "Pool Pump", "", "Remove Pool Pump's settings"],
   ["a device not on the map (Devices' second list)", devices("off"), "Ceiling Fan", ""],
@@ -423,7 +423,7 @@ console.log("\n  Grouped devices: its title's counts show its groups or its sugg
      [views(head(groupsHtml)), head(groupsHtml).slice(0, 400)]);
   ck("  ...the groups: the groups' cards, no suggestion", JSON.stringify(shown(groupsHtml)) === JSON.stringify([["Kitchen Temperature", ""]]), shown(groupsHtml));
   ck("  ...the suggested: the suggestion cards, Create this group their main action, no group",
-     JSON.stringify(shown(suggestedHtml)) === JSON.stringify([["Pool Pump Power", "Create this group"]])
+     JSON.stringify(shown(suggestedHtml)) === JSON.stringify([["Pool Pump", "Create this group"]])
      && JSON.stringify(views(head(suggestedHtml))) === JSON.stringify([["1 group", false], ["1 suggested", true]]), [shown(suggestedHtml), views(head(suggestedHtml))]);
   const typedIn = (q, view) => { globalThis.__q = q; try { return grouped(view); } finally { globalThis.__q = undefined; } };
   ck("  ...the search narrows the list shown (a suggestion found by either of its devices)",

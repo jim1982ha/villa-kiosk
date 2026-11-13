@@ -32,7 +32,7 @@ import { Storeys } from "./storeys";
 import { STATUS_COLOR3 } from "./colors";
 import { ROOM_GLOW_ALPHA_INDEX } from "./seeThroughOrder";
 
-// ⚠️ THE PURPLE OF "ON, DOING SOMETHING" (owner, 2026-11-13: "a person seen on the map is purple too"): someone there or
+// ⚠️ THE GREEN OF "ON, DOING SOMETHING" (owner, 2026-11-13: "a person seen on the map is purple too", the table's active, green since its swap with usual): someone there or
 // a door open is in use, never an alarm; it was the alert red (colors.ts ALERT_RED). The status table's own value.
 const GLOW_COLOR = STATUS_COLOR3.active;
 // …and a leak's or smoke's room, an alarm, in the table's red (setActive's `alarm`)

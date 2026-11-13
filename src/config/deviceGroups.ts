@@ -87,8 +87,10 @@ interface DeviceGroupSuggestion {
  *      temperature/humidity/battery/battery_voltage/…, not just a
  *      hardcoded pair). A `_temperature` sibling is preferred as the
  *      suggested primary when one exists (same reasoning as the suffix
- *      fallback below); otherwise the alphabetically first, so the choice
- *      is deterministic rather than registry-fetch-order noise.
+ *      fallback below); otherwise the one the owner placed first (the
+ *      device settings' own order, PLACED_ORDER), never the name that sorts
+ *      first, so the choice is deterministic rather than registry-fetch-order
+ *      noise.
  *   2. The PAIRABLE_SUFFIXES name-matching fallback, for anything signal 1
  *      didn't cover — no device_id available at all (a profile without
  *      registry read access), or an entity HA itself doesn't attribute to
@@ -117,9 +119,9 @@ export function suggestDeviceGroups(
   }
   for (const members of byDevice.values()) {
     if (members.length < 2) continue;
-    const sorted = [...members].sort();
-    const primary = sorted.find((id) => id.endsWith("_temperature")) ?? sorted[0];
-    for (const id of sorted) {
+    // in the order the owner placed them (the entity map's own order: PLACED_ORDER)
+    const primary = members.find((id) => id.endsWith("_temperature")) ?? members[0];
+    for (const id of members) {
       if (id === primary) continue;
       suggestions.push({ primaryEntityId: primary, memberEntityId: id });
       coveredByDeviceId.add(id);
@@ -214,7 +216,11 @@ function selectableDeviceIds(
 
 /** member entity_id → the entity_id that REPRESENTS it on the map. Covers
  *  both explicit groups and the ones only suggested so far, so a device folds
- *  identically whether or not the owner has confirmed the grouping. */
+ *  identically whether or not the owner has confirmed the grouping.
+ *
+ *  PLACED_ORDER: where a choice is left between the owner's devices, the one placed first — the entity map's own key
+ *  order, the order the devices were added in the device settings (a rename keeps its place: mappingEdits) — never
+ *  the order their ids sort in. */
 export function deviceFolding(
   entityMap: Record<string, EntityMapping>,
   deviceGroups: readonly DeviceGroup[],
@@ -246,34 +252,54 @@ export function deviceFolding(
   // the pump the map shows. Home Assistant's registry says which device it is;
   // it folds to that device's representative. Only unplaced ids are added, and
   // every count (selectableDeviceIds) walks placed ids, so no number moves.
-  const repOfDevice = new Map<string, string>();
-  for (const id of Object.keys(entityMap).sort()) {
-    const deviceId = entityDeviceIds[id];
-    if (!deviceId || entityMap[id]?.disabled || repOfDevice.has(deviceId)) continue;
-    repOfDevice.set(deviceId, repOf.get(id) ?? id);
-  }
+  //
   // ⚠️ A PART OF A DEVICE IS THAT DEVICE (owner, 2026-10-18: "all device / sub-device are seen the same way"): a
   // reading on a meter's phase device, never placed, folds to the meter — one card, as the VESTA Agent counts it.
   // Entities the owner placed keep the device they were placed as: a placement is the owner's own grouping, and
   // two pumps on one relay box stay two pumps on the map.
-  const repOfUnit = new Map<string, string>();
-  const byOwnEntity = new Set<string>();
-  for (const id of Object.keys(entityMap).sort()) {
+  //
+  // WHERE AN UNPLACED PART GOES, closest link first:
+  //   1. the placed devices on its OWN device in the registry (the same device_id);
+  //   2. else those of its whole device (deviceUnits): the whole's own placed entity, else a placed part of it;
+  //   3. where that still names several devices — the owner's own groups splitting one physical device (a weather
+  //      station's indoor and outdoor readings, two groups on the map) — standOf: the owner's group listed first in
+  //      Settings, else the device placed first (PLACED_ORDER).
+  // ⚠️ NEVER THE ALPHABET (architecture review item 7, 2026-11-13): each step took the placed entity whose id sorted
+  // first, so a split station's battery went to whichever group's reading happened to be named "humidity…" or
+  // "indoor…", and renaming an entity moved its battery to another card.
+  const groupOrder = new Map(deviceGroups.map((g, i) => [g.primaryEntityId, i]));
+  const placed = Object.keys(entityMap).filter((id) => !entityMap[id]?.disabled);
+  const placedOrder = new Map(placed.map((id, i) => [id, i]));
+  const rank = (rep: string): [number, number] =>
+    [groupOrder.get(rep) ?? Infinity, placedOrder.get(rep) ?? Infinity];
+  /** The device standing for a part several of the owner's devices share (step 3 above). */
+  const standOf = (reps: ReadonlySet<string> | undefined): string | undefined => {
+    if (!reps || reps.size === 0) return undefined;
+    return [...reps].reduce((a, b) => {
+      const [ga, pa] = rank(a), [gb, pb] = rank(b);
+      return gb < ga || (gb === ga && pb < pa) ? b : a;
+    });
+  };
+  const add = (m: Map<string, Set<string>>, key: string, rep: string) => {
+    const set = m.get(key) ?? new Set<string>();
+    set.add(rep);
+    m.set(key, set);
+  };
+  const onDevice = new Map<string, Set<string>>();
+  const unitOwn = new Map<string, Set<string>>();
+  const unitParts = new Map<string, Set<string>>();
+  for (const id of placed) {
     const deviceId = entityDeviceIds[id];
-    if (!deviceId || entityMap[id]?.disabled) continue;
+    if (!deviceId) continue;
     const unit = deviceUnits[deviceId] ?? deviceId;
     const rep = repOf.get(id) ?? id;
-    // the whole device's own placed entity stands for it, else the first placed entity of one of its parts
-    if (deviceId === unit && !byOwnEntity.has(unit)) {
-      byOwnEntity.add(unit);
-      repOfUnit.set(unit, rep);
-    } else if (!repOfUnit.has(unit)) {
-      repOfUnit.set(unit, rep);
-    }
+    add(onDevice, deviceId, rep);
+    add(deviceId === unit ? unitOwn : unitParts, unit, rep);
   }
   for (const [id, deviceId] of Object.entries(entityDeviceIds)) {
     if (entityMap[id] || repOf.has(id)) continue;
-    const rep = repOfDevice.get(deviceId) ?? repOfUnit.get(deviceUnits[deviceId] ?? deviceId);
+    const unit = deviceUnits[deviceId] ?? deviceId;
+    const rep = standOf(onDevice.get(deviceId)) ?? standOf(unitOwn.get(unit)) ?? standOf(unitParts.get(unit));
     if (rep && rep !== id) repOf.set(id, rep);
   }
   return repOf;
@@ -322,9 +348,10 @@ interface VillaDeviceInput {
   folding?: ReadonlyMap<string, string>;
   /** The villa's critical entities (useCriticalDevices). Absent: none is (the list not read yet, or no such rule). */
   critical?: ReadonlySet<string>;
-  /** device_id → the whole device it is a part of (registryResolve.deviceUnits): a critical part makes the whole's
-   *  placed devices critical (criticalDevices). Absent: each device is its own whole. */
-  deviceUnits?: Readonly<Record<string, string>>;
+  /** device_id → the whole device it is a part of (registryResolve.deviceUnits): an unplaced part folds onto its whole
+   *  (deviceFolding), a critical part makes the whole's placed devices critical (criticalDevices). Required, as the
+   *  registry: `{}` says each device is its own whole, never a forgotten argument. */
+  deviceUnits: Readonly<Record<string, string>>;
   /** The villa's marks of each device as the villa model built them ONCE (lookFacts): handed in, they are the very
    *  objects the map's marks hold. Absent: built here from `critical`, `hidden` and the fold. */
   facts?: LookFacts;
@@ -375,6 +402,12 @@ export interface VillaDevices {
   deviceOf(entityId: string): string;
   /** The device a fault's or ticket's entity field names — a list of several included (recordDeviceOf). */
   deviceOfRecord(field: string): string;
+  /** The device a fault's or ticket's CARD is filed under (fm/deviceWork.recordWorkKey): its device, or undefined for
+   *  one hidden in the villa's system, whose record is a card of its own under "Other", opening nothing — the rule the
+   *  Open issues follow (attention.attentionOf asks isHidden of the same entity). ⚠️ THE TICKETS TAB FILED IT UNDER THE
+   *  HIDDEN DEVICE (architecture review item 8, 2026-11-13): one card per hidden device there, one per record in Open
+   *  issues. */
+  cardOfRecord(field: string): string | undefined;
   /** Is this device critical — it, or an entity folded onto it, is on the villa's critical list (criticalDevices). */
   isCritical(entityId: string): boolean;
   /** Hidden in the villa's system (hiddenIn): never one of `ids`, and never red or amber anywhere (its look). */
@@ -384,7 +417,9 @@ export interface VillaDevices {
 }
 
 export function villaDevices(input: VillaDeviceInput): VillaDevices {
-  const folding = input.folding ?? deviceFolding(input.entityMap, input.deviceGroups, input.entityDeviceIds);
+  // the villa model's own set-up when no fold is handed in (VillaModel: useDeviceIdentity, lookFacts), sub-devices
+  // included: a check builds the villa the way the app does
+  const folding = input.folding ?? deviceFolding(input.entityMap, input.deviceGroups, input.entityDeviceIds, input.deviceUnits);
   const facts = input.facts ?? lookFacts(input, folding);
   const ids = selectableDeviceIds(input.entityMap, input.mappedEntityIds, input.entities, input.dismissed, folding,
     facts.isHidden);
@@ -407,6 +442,10 @@ export function villaDevices(input: VillaDeviceInput): VillaDevices {
     has: (id) => set.has(id),
     deviceOf: (id) => deviceOf(folding, id),
     deviceOfRecord: recordDeviceOf(folding, (id) => id in input.entities),
+    cardOfRecord: (field) => {
+      const id = recordEntity(field, (x) => x in input.entities) ?? field;
+      return facts.isHidden(id) ? undefined : deviceOf(folding, id);
+    },
     isCritical: (id) => facts.critical.has(id),
     isHidden: facts.isHidden,
     facts,

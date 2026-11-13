@@ -37,8 +37,8 @@ export interface DocumentInputs {
   villaName: string;
   /** The moment of the document; absent: the clock when it is made (a document is of the moment someone asked). */
   now?: number;
-  /** The device a record's entity field names (VillaModel.useDeviceIdentity) — open work counted per device card. */
-  deviceOfRecord: (field: string) => string;
+  /** The device a record's card is filed under (VillaDevices.cardOfRecord) — open work counted per card, as drawn. */
+  cardOfRecord: (field: string) => string | undefined;
 }
 
 interface DocumentKindInfo {

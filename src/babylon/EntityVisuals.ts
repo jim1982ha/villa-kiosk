@@ -96,7 +96,7 @@ import { resolveMeshToMapping, extractVariantSuffix, hasVariantSuffix, deviceTyp
 import { groupMemberIds, groupForPrimary } from "@/config/deviceGroups";
 import { effectiveCategory, subjectOf, categorySurface } from "@/config/EntityCategories";
 import {
-  badgeOwnerOf, deviceLook, drawsBadge, lookMarks, mapLookSource, meshLookFor, NO_MARKS, readingOf, sameMarks,
+  badgeOwnerOf, deviceLook, drawsBadge, lookMarks, mapLookSource, meshLookFor, NO_MARKS, sameMarks,
   type DeviceMarks, type LookSource,
 } from "@/utils/deviceActivity";
 import { hsToRgb, kelvinToRgb } from "@/utils/colorUtils";
@@ -810,7 +810,7 @@ export class EntityVisuals {
   /** The cones and rooms painted on now (relight switches only what differs from it). */
   private motionPainted: MotionLit = NOTHING_LIT;
   /** The map's LookSource (utils/deviceActivity): every badge, card cell,
-   *  room-chip member and mesh here is painted from deviceLook / readingOf
+   *  room-chip member and mesh here is painted from deviceLook / meshLookFor
    *  through this — the live cache above, the mesh-resolved mappings, and the
    *  current config (read through a getter: the object is replaced per edit). */
   private readonly lookSource: LookSource = mapLookSource(this.lastState, this.mapping, () => this.lookConfig());
@@ -5454,7 +5454,7 @@ export class EntityVisuals {
 
   // ⚠️ `reading()` AND `badgeKind()` ARE GONE (2.496.245): this layer assembled
   // its own DeviceReading — its own alertStateFor lookup, its own linked set.
-  // utils/deviceActivity.deviceLook / readingOf do both, through
+  // utils/deviceActivity.deviceLook / meshLookFor do both, through
   // `this.lookSource`, exactly as every panel and list does through the store.
 
   /** For a device-group PRIMARY, combine its own reading with its members'
@@ -5587,7 +5587,7 @@ export class EntityVisuals {
     // What the mesh shows is utils/deviceActivity's meshLookFor — the SAME
     // classification the badge is painted from (device_class, in-between
     // states). Only the painting is here.
-    const look = meshLookFor(readingOf(state.entity_id, this.lookSource));
+    const look = meshLookFor(state.entity_id, this.lookSource);
     // A device authored as POSE meshes (lock.foo__locked / __unlocked, a
     // door "__open"/"__closed") shows its state by which pose is visible
     // (applyMeshVariant); tinting or pulsing that same mesh on top is

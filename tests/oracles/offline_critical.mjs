@@ -37,7 +37,7 @@ const ids = Object.keys(entities);
 const entityMap = Object.fromEntries(ids.map((id) => [id, { entityId: id, type: id.split(".")[0], label: id }]));
 const folding = deviceFolding(entityMap, [], { "lock.door": "dev-door", "sensor.door_battery": "dev-door" });
 const d = villaDevices({ entityMap, deviceGroups: [], hidden: new Set(), suppressed: new Set(), dismissed: new Set(), mappedEntityIds: new Set(ids),
-  entities, entityDeviceIds: { "lock.door": "dev-door", "sensor.door_battery": "dev-door" }, folding });
+  entities, entityDeviceIds: { "lock.door": "dev-door", "sensor.door_battery": "dev-door" }, deviceUnits: {}, folding });
 ck("the Cockpit's offline list leaves out the unknown sensor and keeps the lost ones",
    !d.unavailable.includes("sensor.windchill") && d.unavailable.includes("sensor.th_humidity") && d.unavailable.includes("lock.door"),
    d.unavailable);
@@ -45,7 +45,7 @@ ck("the Cockpit's offline list leaves out the unknown sensor and keeps the lost 
 console.log("  one list of critical devices:");
 // the villa's devices with the rule's critical list — the device list answers which are critical (villaDevices.isCritical)
 const build = (critical) => attentionOf({ devices: villaDevices({ entityMap, deviceGroups: [], hidden: new Set(), suppressed: new Set(), dismissed: new Set(),
-  mappedEntityIds: new Set(ids), entities, entityDeviceIds: { "lock.door": "dev-door", "sensor.door_battery": "dev-door" }, folding, critical }),
+  mappedEntityIds: new Set(ids), entities, entityDeviceIds: { "lock.door": "dev-door", "sensor.door_battery": "dev-door" }, deviceUnits: {}, folding, critical }),
   entities, entityMap, resolvedRooms: {}, fmData: EMPTY_FM_DATA }).attentionItems;
 // the rule names the lock's BATTERY sensor; the model shows the lock: the device is critical
 const items = build(new Set(["sensor.door_battery"]));
@@ -83,10 +83,10 @@ console.log("  a critical device that lost contact is red everywhere, not only o
   const { deviceLook, storeLookSource, mapLookSource } = await import("@/utils/deviceActivity");
   const { roomLook } = await import("@/babylon/summaryLook");
   const { panelHeader } = await import("@/components/panels/panelHeader");
-  const { lostPillTone, criticalPillTone, lockPill } = await import("@/config/reading");
+  const { lostPillTone, lockPill, readingOf, controlPill } = await import("@/config/reading");
   const { markSurface, categorySurface } = await import("@/config/EntityCategories");
   const crit = villaDevices({ entityMap, deviceGroups: [], hidden: new Set(), suppressed: new Set(), dismissed: new Set(), mappedEntityIds: new Set(ids),
-    entities, entityDeviceIds: { "lock.door": "dev-door", "sensor.door_battery": "dev-door" }, folding,
+    entities, entityDeviceIds: { "lock.door": "dev-door", "sensor.door_battery": "dev-door" }, deviceUnits: {}, folding,
     critical: new Set(["sensor.door_battery"]) });
   const config = { entityMap, isCritical: crit.isCritical, isHidden: () => false };
   const store = storeLookSource(entities, config);
@@ -104,28 +104,29 @@ console.log("  a critical device that lost contact is red everywhere, not only o
      roomLook([door]).health === "alert" && roomLook([th]).health === "unavailable" && roomLook([door, th]).health === "alert");
   // the list rows read deviceLook over this same store (SummaryGroupPanel, pinned in device_look_source.mjs)
   const win = (id) => panelHeader({ panel: { entityId: id, mapping: entityMap[id] }, entities, config, canControl: false, linkedSwitch: null });
-  ck("the window: its lost pill is the danger red for the critical device, grey for the other",
-     lostPillTone("unavailable", win("lock.door").badge.critical) === "danger"
-     && lostPillTone("unavailable", win("sensor.th_humidity").badge.critical) === "unavailable");
-  ck("  ...and only the LOST pill: a critical device's other tones are its own", lostPillTone("on", true) === "on");
+  ck("the window: its lost notice is the danger red for the critical device, grey for the other",
+     lostPillTone(win("lock.door").badge.onCriticalList) === "danger"
+     && lostPillTone(win("sensor.th_humidity").badge.onCriticalList) === "unavailable");
+  // ⚠️ ONE RULE (architecture review item 6, 2026-11-13): a critical device's lost part kept the grey in the window
+  // where its lock was red; every pill now takes the window's one fact, the critical list
+  const lostReading = (crit) => readingOf("sensor.door_battery", e("sensor.door_battery", "unavailable"), "sensor", crit).pill;
+  const lostBinary = (crit) => readingOf("binary_sensor.door_contact", e("binary_sensor.door_contact", "unavailable"), "binary_sensor", crit).pill;
+  ck("  ...and a reading of it that lost contact, a number or an on/off one, red on the list and grey off it",
+     lostReading(true) === "danger" && lostBinary(true) === "danger" && lostReading(false) === "unavailable" && lostBinary(false) === "unavailable");
+  ck("  ...only lost contact and \"needs a look\": a critical device's other tones are its own",
+     controlPill("switch.pump", e("switch.pump", "on"), "on", true).tone === "active"
+     && readingOf("sensor.door_battery", e("sensor.door_battery", "80"), "sensor", true).pill === null);
   const back = deviceLook("lock.door", storeLookSource({ ...entities, "lock.door": e("lock.door", "locked") }, config));
   ck("a critical device that answers is not red (critical needs lost contact)", !back.critical && back.mark !== "critical", back);
-  const { readFileSync } = await import("node:fs");
-  const src = (f) => readFileSync(new URL(`../../src/${f}`, import.meta.url), "utf8");
-  ck("  ...the two lost pills of a window ask it, with the header's fact (pin the caller)",
-     ["components/panels/ReadingPill.tsx", "components/panels/UnavailableNotice.tsx"]
-       .every((f) => /lostPillTone\(/.test(src(f)) && /usePanelActions\(\)\.badge\?\.critical/.test(src(f)))
-     && !/status-pill unavailable" title/.test(src("components/panels/UnavailableNotice.tsx")));
+  ck("  ...the window has that one fact, no second one for \"critical and lost\"",
+     !("critical" in win("lock.door").badge));
   // owner, 2026-11-13: "a critical door unlocked" is red, an ordinary one amber; lost, red too (stateColors.criticalStatus)
   ck("a critical lock's window: unlocked red, lost red; an ordinary one's unlocked amber; locked green for both",
      win("lock.door").badge.onCriticalList && !win("sensor.th_humidity").badge.onCriticalList
-     && criticalPillTone(lockPill("lock.door", "unlocked").tone, true) === "danger"
-     && criticalPillTone(lockPill("lock.door", "unlocked").tone, false) === "warn"
-     && criticalPillTone(lockPill("lock.door", "unavailable").tone, true) === "danger"
-     && criticalPillTone(lockPill("lock.door", "locked").tone, true) === "usual");
-  ck("  ...the lock window's pill asks it, with the header's critical-list fact (pin the caller)",
-     /criticalPillTone\(/.test(src("components/panels/LockPanel.tsx"))
-     && /usePanelActions\(\)\.badge\?\.onCriticalList/.test(src("components/panels/LockPanel.tsx")));
+     && lockPill("lock.door", "unlocked", true).tone === "danger"
+     && lockPill("lock.door", "unlocked", false).tone === "warn"
+     && lockPill("lock.door", "unavailable", true).tone === "danger"
+     && lockPill("lock.door", "locked", true).tone === "usual");
   ck("nothing is red before the list is read", !deviceLook("lock.door", storeLookSource(entities, { entityMap, isHidden: () => false })).critical);
 }
 
