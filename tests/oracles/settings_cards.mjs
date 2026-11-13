@@ -124,7 +124,7 @@ const grouped = (view = "groups") => { globalThis.__gview = view; try { return d
 const KINDS = [
   ["a device group", grouped(), "Kitchen Temperature", "", "Delete the group Kitchen Temperature"],
   ["  ...a suggested group, its main action first", grouped("suggested"), "Pool Pump", "Create this group"],   // the device placed first (deviceFolding PLACED_ORDER), never the name that sorts first,
-  ["a device asleep between reports", drawIn(h(UnavailableByDesign, { title: "Asleep between reports" })), "Back Door", "", "Take Back Door off Asleep between reports"],
+  ["a device unavailable by design", drawIn(h(UnavailableByDesign, { title: "Unavailable by design" })), "Back Door", "", "Take Back Door off Unavailable by design"],
   ["a device of Devices", devices(), "Pool Pump", "", "Remove Pool Pump's settings"],
   ["a device not on the map (Devices' second list)", devices("off"), "Ceiling Fan", ""],
   ["a 3D object whose entity is gone", devices(), "Example Gone Fan", "Point it there"],
@@ -135,7 +135,7 @@ console.log("  every record of Settings is the Cockpit's card:");
 for (const [kind, html, name, action, remove] of KINDS) {
   const card = cards(html).find((c) => c.name === name);
   // ⚠️ ONE REMOVE ICON (owner, 2026-11-06): the bin on every card, its tooltip its own words; it was an ✕ on a card
-  // taking a thing off a list (a device off Asleep between reports, a chat off a role's list)
+  // taking a thing off a list (a device off Unavailable by design, a chat off a role's list)
   const said = remove ? `its bin "${remove}" at its strip's right` : "no remove";
   ck(`${kind}: a card named "${name}" in its strip, ${action ? `"${action}" in its bar` : "no bar"}, ${said}`,
      !!card && card.bar === action && card.bars === (action ? 1 : 0)
@@ -218,11 +218,11 @@ console.log("\n  one field per list (owner, 2026-11-06): it narrows the list and
   const offers = (html) => [...field(html).matchAll(/<button class="row picker-option( strong)?">([\s\S]*?)<\/button>/g)]
     .map((m) => (m[1] ? "! " : "") + text(m[2]).replace(/^\||\|$/g, "").replace(/\|/g, " / "));
   const groups = (q) => typed(q, h(GroupedDevices, { title: "Grouped devices" }));
-  const asleep = (q) => typed(q, h(UnavailableByDesign, { title: "Asleep between reports" }));
+  const asleep = (q) => typed(q, h(UnavailableByDesign, { title: "Unavailable by design" }));
   const names = (html) => cards(html).map((c) => c.name);
   const SECTIONS = [
     ["Grouped devices", groups(""), "Search groups, or a device to group…"],
-    ["Asleep between reports", asleep(""), "Search, or a device to add…"],
+    ["Unavailable by design", asleep(""), "Search, or a device to add…"],
     [DEVICES, devices(), "Search, or a device to prepare…"],
     [`${DEVICES}, not on the map`, devices("off"), "Search, or a device to prepare…"],
   ];
@@ -251,7 +251,7 @@ console.log("\n  one field per list (owner, 2026-11-06): it narrows the list and
      && offers(groups("switch.example_no_such_thing")).length === 0, offers(exact));
   ck("  ...cleared: every group again, no suggestion", names(groups("")).includes("Kitchen Temperature") && offers(groups("")).length === 0);
   const door = asleep("door"), lamp = asleep("lamp");
-  ck("Asleep between reports: the same — a device on the list \"On the list\", another \"Add to the list\"; the cards narrowed",
+  ck("Unavailable by design: the same — a device on the list \"On the list\", another \"Add to the list\"; the cards narrowed",
      JSON.stringify(offers(door)) === JSON.stringify(["Back Door / binary_sensor.example_back_door / On the list"]) && JSON.stringify(names(door)) === JSON.stringify(["Back Door"])
      && JSON.stringify(offers(lamp)) === JSON.stringify(["Terrace Lamp / light.example_terrace_lamp / Add to the list"]) && names(lamp).length === 0
      && /No device on the list has “lamp”\./.test(text(lamp)) && />Add Terrace Lamp to the list</.test(lamp), [offers(door), offers(lamp), names(lamp)]);
@@ -374,7 +374,7 @@ console.log("\n  every card for an entity: its friendly name in its strip, its i
   const ENTITY = [
     ["a device group", drawIn(h(GroupedDevices, { title: "Grouped devices" })), "sensor.example_kitchen_temperature"],
     ["a device not on the map", devices("off"), "fan.example_ceiling_fan"],
-    ["a device asleep between reports", drawIn(h(UnavailableByDesign, { title: "Asleep between reports" })), "binary_sensor.example_back_door"],
+    ["a device unavailable by design", drawIn(h(UnavailableByDesign, { title: "Unavailable by design" })), "binary_sensor.example_back_door"],
     ["a 3D object whose entity is gone", devices(), "fan.example_gone_fan"],
   ];
   for (const [kind, html, id] of ENTITY) {

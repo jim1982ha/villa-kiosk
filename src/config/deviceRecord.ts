@@ -108,7 +108,7 @@ export function entitySearch(query: string, src: SearchSource, domains?: readonl
 }
 
 /** Does a search find this device, by what any device is found by, or one of its 3D objects (`objects`: a card of
- *  Devices, its "3D object" field's). Every list of devices asks it (Devices, Asleep between reports). Case-insensitive;
+ *  Devices, its "3D object" field's). Every list of devices asks it (Devices, Unavailable by design). Case-insensitive;
  *  an empty search finds everything. Pure. */
 export function deviceMatches(id: string, query: string, src: SearchSource, objects: readonly string[] = []): boolean {
   return matchesQuery(query, ...deviceSearchTexts(id, src), ...objects);

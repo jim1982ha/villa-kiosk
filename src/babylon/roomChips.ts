@@ -36,16 +36,15 @@ export interface RoomChip {
    */
   keys: string[];
   /** The raw name this chip stands for — the identity a person reads and the
-   *  modal title. NOT necessarily what is drawn: see `label`. */
+   *  modal title. What is drawn is `lines`. */
   room: string;
   /**
-   * The string actually PRINTED, i.e. `room` (+ any "+N") after truncation to
-   * the viewport budget. Set by `measure` so the width the merge test reserves
-   * and the width `renderChips` paints are the same string through the same
-   * estimator — reserving one width and painting another is this subsystem's
-   * oldest rule broken.
+   * What the chip PRINTS: one line per room it stands for, each with that
+   * room's own name, count and health — a merged chip lists its rooms rather
+   * than "Living Room +4" beside one total (owner, 2026-11-14). In
+   * `orderLines` order. One line for an unmerged chip.
    */
-  label: string;
+  lines: ChipLine[];
   ids: string[]; centre: Vector3; rooms: number; roomNames: string[];
   /** red: a member needs attention; on: a member is on (and none needs attention) — never red for "on".
    *  deviceActivity.groupLook's count rule; combineChips ORs them on a merge. */
@@ -59,12 +58,43 @@ export interface RoomChip {
    *  CHIP_COLLISION for why the two spaces are not the same one. */
   x: number; y: number; halfW: number; halfH: number;
 }
-/** A merged chip says so with "+N", so the count pill's total is never
- *  mistaken for one room's device count. */
-/** The "+N" a chip carries when it has swallowed other rooms, or "" when it
- *  names exactly one. Kept SEPARATE from the room name because fitChipLabel
- *  must never truncate it — see that function. */
-export const chipSuffixOf = (c: RoomChip) => (c.rooms > 1 ? `+${c.rooms - 1}` : "");
+
+/**
+ * One room's line in a chip: its name, its own devices and what its own chip
+ * would ring — so a merged chip's line shows exactly the count and pill colour
+ * that room's chip shows when it stands alone (summaryLook.roomChipModel).
+ */
+export interface ChipLine {
+  /** roomKey() of the room. */
+  key: string;
+  /** The raw spelling. */
+  room: string;
+  /**
+   * The string actually PRINTED: `room` after truncation to the viewport
+   * budget (labelLayout.fitChipLabel), each line on its own. Set by the
+   * caller's `measure`, so the width the merge test reserves and the width
+   * `renderChips` paints are the same string through the same estimator —
+   * reserving one width and painting another is this subsystem's oldest rule
+   * broken.
+   */
+  label: string;
+  ids: string[];
+  /** This room's own groupLook count rule — summaryLook.roomHealth reads them. */
+  ringRed: boolean; fault: boolean; unavailable: boolean;
+}
+
+/**
+ * A merged chip's lines, busiest room first (most devices), then by room key.
+ *
+ * ⚠️ NOT SCREEN POSITION, AND NOT MERGE ORDER: both follow the camera, so the
+ * lines would reshuffle while the map turns. A room's device count does not
+ * move with the camera, and the busiest room is the one the old "+N" label
+ * named first. The key is only the tie-break, so two callers holding the same
+ * rooms print the same chip (boxMerge's order-independence rule).
+ */
+export function orderLines(lines: ChipLine[]): ChipLine[] {
+  return lines.sort((a, b) => b.ids.length - a.ids.length || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
+}
 
 /** One shown badge, as a chip needs it. `look` is its deviceLook
  *  (utils/deviceActivity); undefined while Home Assistant has not reported it
@@ -105,7 +135,8 @@ export function bucketRoomChips(
     const room = display(key);
     const look = groupLook(g.looks, { showingDevices: false });
     chips.push({
-      key, keys: [key], room, label: room, ids: g.ids.slice(),
+      key, keys: [key], room, ids: g.ids.slice(),
+      lines: [{ key, room, label: room, ids: g.ids.slice(), ringRed: look.ringRed, fault: look.fault, unavailable: look.unavailable }],
       centre: g.sum.scale(1 / g.ids.length), rooms: 1, roomNames: [room],
       ringRed: look.ringRed, ringOn: look.ringOn, unavailable: look.unavailable, fault: look.fault, anyOn: look.anyOn,
       x: 0, y: 0, halfW: 0, halfH: 0,
@@ -123,7 +154,7 @@ export function bucketRoomChips(
 /**
  * What `keep` becomes when `drop` merges into it: the members of both, a
  * centre weighted by member count (so a chip of eight is not dragged halfway
- * to a chip of one), every room key and name, and either one's ring or
+ * to a chip of one), every room key, name and line, and either one's ring or
  * unavailable flag. Measuring the result is the caller's (it needs the text
  * metrics and the projection).
  */
@@ -136,6 +167,9 @@ export function combineChips(keep: RoomChip, drop: RoomChip): void {
   // offer the rooms it swallowed when it is tapped, and "+2" cannot.
   keep.roomNames = [...keep.roomNames, ...drop.roomNames];
   keep.keys = [...keep.keys, ...drop.keys];
+  // Each room keeps its own line — its count and health are its own, not the
+  // merged chip's (the chip's frame below is the merged one).
+  keep.lines = orderLines([...keep.lines, ...drop.lines]);
   keep.ringRed = keep.ringRed || drop.ringRed;
   keep.ringOn = (keep.ringOn || drop.ringOn) && !keep.ringRed;
   keep.unavailable = keep.unavailable || drop.unavailable;

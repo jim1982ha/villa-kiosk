@@ -66,8 +66,8 @@ export function chipWidthPx(text: string, m: ChipTextMetrics): number {
  * Shorten a room name until the chip that prints it fits `maxPx`.
  *
  * A chip's width follows its TEXT — `chipWidthPx` above is length times a
- * character advance — so a long room name, or a merged chip carrying a "+N"
- * suffix, produces a chip sized by the name rather than by anything on screen.
+ * character advance — so a long room name produces a chip sized by the name
+ * rather than by anything on screen.
  * On a laptop that is unremarkable; on a phone the same chip is around half
  * the width of the device, and one anchored near the villa's edge runs off it.
  *
@@ -90,32 +90,21 @@ const CHIP_ELLIPSIS = "…";
 const CHIP_MIN_NAME_CHARS = 4;
 export function fitChipLabel(
   name: string,
-  /** The merged-rooms marker ("+2"), or "" for a chip that names one room.
-   *  Passed SEPARATELY and never truncated — see below. */
-  suffix: string,
   /** The SAME metrics the caller will measure the returned string with — that
    *  identity is the rule this function exists to keep. */
   m: ChipTextMetrics,
   maxPx: number,
 ): string {
-  const join = (n: string) => (suffix ? `${n} ${suffix}` : n);
-  // ⚠️ THE SUFFIX IS NOT PART OF THE NAME, and folding it in was a real bug.
-  // Until 2.304.0 the caller pre-joined them and handed "Living Room +1" over
-  // as the name, so the truncation loop — which cuts from the END — ate the
-  // "+1" first and printed "Living Room…". A chip that has swallowed other
-  // rooms then looked exactly like one that had not, while its tap did
-  // something entirely different (frame several rooms, not one), and its count
-  // pill silently included devices from rooms it no longer admitted to
-  // covering. The name is the only part a fragment still identifies; "+1" and
-  // the count are not recoverable from anything, so they are spent first and
-  // the name gets what is left. Same rule the count already followed.
-  const whole = join(name);
-  if (!(maxPx > 0)) return whole;
+  // ⚠️ ONE ROOM PER CALL. A merged chip prints one line per room (2.496.801),
+  // each truncated on its own. It used to print "Living Room +1", and until
+  // 2.304.0 the caller pre-joined the "+1" into the name, so the cut from the
+  // END ate it first and a merged chip read like a single room.
+  if (!(maxPx > 0)) return name;
   const fits = (s: string) => chipWidthPx(s, m) <= maxPx;
-  if (fits(whole)) return whole;
+  if (fits(name)) return name;
   for (let n = name.length - 1; n >= CHIP_MIN_NAME_CHARS; n--) {
-    const cut = join(name.slice(0, n).trimEnd() + CHIP_ELLIPSIS);
+    const cut = name.slice(0, n).trimEnd() + CHIP_ELLIPSIS;
     if (fits(cut)) return cut;
   }
-  return join(name.slice(0, CHIP_MIN_NAME_CHARS).trimEnd() + CHIP_ELLIPSIS);
+  return name.slice(0, CHIP_MIN_NAME_CHARS).trimEnd() + CHIP_ELLIPSIS;
 }

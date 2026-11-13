@@ -35,7 +35,7 @@
   --cat-light: #C08A2E;
   --cat-network: #2F6B4F;
   --cat-energy: #2E6E8F;
-  --cat-access-control: #6B5AA6;
+  --cat-access-control: #A8457F;
   --cat-others: #6E7B72;
 
   /* Not a light/dark concern — one shape constant for every standalone HUD
@@ -234,7 +234,8 @@
   /* ⚠️ THE SEVEN MEANINGS (owner, 2026-11-13: one colour code for every status, utils/stateColors STATUS_COLOR): usual
      purple, active green (--status-on), moving teal (--status-pending), needs a look amber, alarm red, lost contact a
      light grey, nothing to show the empty track (--bg-input). Purple is its own: never --cat-access-control's, a
-     category colour being a device's identity, never a state. */
+     category colour being a device's identity, never a state; Access control is a raspberry pink since 2.496.801
+     (owner, 2026-11-14: its purple read as the status purple). */
   --status-on: #34845A;
   --status-usual: #6E57B8;
   --status-active: #34845A;
@@ -338,7 +339,7 @@
   --cat-light: #DFAB4D;
   --cat-network: #62B584;
   --cat-energy: #5AA3C9;
-  --cat-access-control: #9B8AD4;
+  --cat-access-control: #D27AAE;
   --cat-others: #93A199;
 }
 
@@ -391,7 +392,7 @@
   --cat-light: #DFAB4D;
   --cat-network: #62B584;
   --cat-energy: #5AA3C9;
-  --cat-access-control: #9B8AD4;
+  --cat-access-control: #D27AAE;
   --cat-others: #93A199;
 }
 

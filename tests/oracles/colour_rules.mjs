@@ -113,6 +113,24 @@ for (const [name, b] of Object.entries(THEMES)) {
 }
 ck("every theme gives the seven meanings seven colours, its purple none of its category colours", themeBad.length === 0, themeBad);
 
+// ...and no category colour LOOKS like the usual purple either: a hue at least 30° away (owner, 2026-11-14: the Access
+// control family's #6B5AA6 read as the purple of a room all right; it is a raspberry pink since 2.496.801)
+const hue = (hex) => {
+  const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
+  const max = Math.max(r, g, b), d = max - Math.min(r, g, b);
+  if (!d) return 0;
+  const h = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return (h * 60 + 360) % 360;
+};
+const apart = (a, b) => { const d = Math.abs(hue(a) - hue(b)); return Math.min(d, 360 - d); };
+const lookAlike = [];
+for (const [name, b] of Object.entries(THEMES)) {
+  const own = (t) => val(b, t) ?? val(BASE, t);
+  for (const m of BASE.matchAll(/--(cat-[\w-]+):/g))
+    if (apart(own(m[1]), own("status-usual")) < 30) lookAlike.push({ name, cat: m[1], colour: own(m[1]), usual: own("status-usual") });
+}
+ck("no category colour is within 30° of the usual purple's hue, in any theme", lookAlike.length === 0, lookAlike);
+
 console.log("\n  the villa's presence, the On button, a critical device:");
 const st = { sensorId: "sensor.<villa>_stage", order: [["home", "Someone home"], ["quiet", "Waiting for indoor quiet"],
   ["settle", "Settling"], ["empty", "Empty"]], now: "home", since: null };

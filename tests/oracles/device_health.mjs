@@ -15,17 +15,18 @@ const { deviceLook, storeLookSource, lookMarks, marksOf } = await import("@/util
 const { roomLook } = await import("@/babylon/summaryLook");
 const { EMPTY_FM_DATA } = await import("@/fm/fmTypes");
 const { buildMonthlyRecap } = await import("@/fm/fmDocuments");
+const { UnavailableByDesign } = await import("@/ha/unavailableByDesign");
 
 const SINCE = "2026-11-10T10:02:00.000Z";
 const ent = (id, state, name, at = "2026-11-13T08:00:00.000Z") =>
   ({ entity_id: id, state, attributes: { friendly_name: name }, last_changed: at, last_updated: at });
 const CAM = "camera.shed", PERSON = "binary_sensor.shed_person", SIGNAL = "sensor.shed_signal",
-  PRIVACY = "switch.shed_privacy", RESTART = "button.shed_restart", PET = "binary_sensor.shed_pet", BATTERY = "sensor.shed_battery";
+  PRIVACY = "switch.shed_privacy", RESTART = "button.shed_restart", PET = "binary_sensor.shed_pet", BATTERY = "sensor.shed_battery", PRESET = "select.shed_move_to_preset";
 // one camera in the villa's system: its stream (placed on the map), a person detection, a signal strength filed as
 // diagnostic, a privacy switch a person hid, a restart button filed as configuration, and a pet detection switched off
 // there (in the registry, no state at all)
 // and a battery, filed as diagnostic too (most integrations do): a level to act on
-const registry = Object.fromEntries([CAM, PERSON, SIGNAL, PRIVACY, RESTART, PET, BATTERY].map((id) => [id, "dev-shed"]));
+const registry = Object.fromEntries([CAM, PERSON, SIGNAL, PRIVACY, RESTART, PET, BATTERY, PRESET].map((id) => [id, "dev-shed"]));
 const entityMap = { [CAM]: { entityId: CAM, type: "camera", label: "Shed camera" } };
 const suppressed = new Set([SIGNAL, PRIVACY, RESTART, BATTERY]), hidden = new Set([PRIVACY]);
 const folding = deviceFolding(entityMap, [], registry);
@@ -127,5 +128,19 @@ ck("the camera itself unavailable: lost, its one \"Unavailable\" line, no second
    gone.devices.healthOf(CAM).kind === "lost" && gone.devices.unavailable.join() === CAM && gone.devices.partlyLost.length === 0
      && gone.view.attentionGroups.length === 1 && gone.card.status.map((s) => s.text).join() === "Unavailable",
    { health: gone.devices.healthOf(CAM), card: gone.card });
+
+// A CAMERA'S CONTROL IT NEVER USES (owner, 2026-11-14: "Move to Preset", no preset saved, unavailable since it
+// appeared, listed both Tapo cameras as partly lost): put on Advanced Settings' "Unavailable by design", the lens the
+// store applies (ha/unavailableByDesign) hands it over as "unknown", and the camera reads alive, no card, no "?"
+const lens = new UnavailableByDesign();
+lens.setIds(new Set([PRESET]), {});
+const unused = (preset) => villa([ent(CAM, "idle", "Shed camera"), ent(PERSON, "off", "Shed camera Person detection"), preset]);
+const offList = unused(ent(PRESET, "unavailable", "Shed camera Move to Preset"));
+const onList = unused(lens.see(ent(PRESET, "unavailable", "Shed camera Move to Preset")));
+ck("a control never used counts as a dead part until it is put on \"Unavailable by design\"",
+   offList.devices.healthOf(CAM).kind === "partly" && offList.card !== null, offList.devices.healthOf(CAM));
+ck("  ...on the list: the camera alive, no card, no partly-unavailable line in the Recap",
+   onList.devices.healthOf(CAM).kind === "alive" && onList.card === null && onList.devices.partlyLost.length === 0
+     && onList.recap.state !== "warn", { health: onList.devices.healthOf(CAM), recap: onList.recap });
 
 done("✅ one health per device: a dead part of a live device is its card, its grey sign and its grey \"?\"");

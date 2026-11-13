@@ -45,7 +45,7 @@ import { PageLink } from "@/components/messages/AnnouncementContent";
 
 /** A Settings card's remove, a small round bin at the right of its strip (owner, 2026-11-06: ONE remove icon on every
  *  card, the bin; it had been an ✕ on a card taking a thing off a list). `label` is its tooltip and its accessible
- *  name, saying what goes ("Delete the group Kitchen Temperature", "Take Back Door off Asleep between reports"). */
+ *  name, saying what goes ("Delete the group Kitchen Temperature", "Take Back Door off Unavailable by design"). */
 export interface CardRemove { label: string; run: () => void }
 
 /** ⚠️ A CARD'S BIN ASKS FIRST (owner, 2026-11-10: a task's bin and a saved document's deleted at one press, nothing to

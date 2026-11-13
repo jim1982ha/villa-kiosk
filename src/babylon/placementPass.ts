@@ -39,7 +39,7 @@ import {
   type PlacementItem, type DeferralBucket, type PlacementScratch, type PlacementStats,
 } from "./badgePlacement";
 import { channelEnabled } from "@/utils/tapDebug";
-import { bucketRoomChips, combineChips, chipSuffixOf, type ChipMember, type RoomChip } from "./roomChips";
+import { bucketRoomChips, combineChips, type ChipMember, type RoomChip } from "./roomChips";
 import { RoomFocus } from "./roomFocus";
 import { arrange, cardLift, gridCells, MAX_TOTAL_CHIPS, type CardArrangement } from "./badgeCard";
 import { badgeRank } from "./badgePriority";
@@ -1783,7 +1783,8 @@ export class PlacementPass {
     if (focusBoxes.length === 0) return rendered;
     return rendered.filter((c) => {
       const q = planeOf(clearance, c.centre.x, c.centre.y, c.centre.z, this.glass);
-      const cx = q.sx, cy = q.sy - half, hw = c.halfW + gapPx, hh = half + gapPx;
+      // The chip's OWN height: a merged chip is one line per room tall.
+      const cx = q.sx, cy = q.sy - c.halfH, hw = c.halfW + gapPx, hh = c.halfH + gapPx;
       for (const b of focusBoxes) {
         if (groundOf(cx - b.cx, q.sz - b.cz) < hw + b.hw && Math.abs(cy - b.cy) < hh + b.hh) return false;
       }
@@ -1800,8 +1801,9 @@ export class PlacementPass {
    * ⚠️ A CHIP MUST NEVER LEAVE THE ROOM IT NAMES (2.120.0): a force solver used
    * to separate chips by displacement and put the Master Bedroom chip on the
    * lawn. Every chip renders at its own anchor; the only way an overlap is
-   * resolved is two chips becoming one — the busier room's name plus "+N", at
-   * the device-count-weighted centroid, owning the union of their ids.
+   * resolved is two chips becoming one — one line per room, each with its own
+   * count (roomChips.ChipLine), at the device-count-weighted centroid, owning
+   * the union of their ids.
    *
    * ⚠️ ONLY CHIPS IN FRONT OF THE CAMERA MERGE (2.496.177). A room behind the
    * walker projects to a MIRRORED point that can land on the screen and
@@ -1814,7 +1816,8 @@ export class PlacementPass {
     const scale = f.scale;
     const behind = new Set<RoomChip>();
     const measure = (ch: RoomChip) => {
-      ch.label = fitChipLabel(ch.room, chipSuffixOf(ch), c.text, c.budget);
+      // Each line truncated on its own: one room's long name never shortens another's.
+      for (const l of ch.lines) l.label = fitChipLabel(l.room, c.text, c.budget);
       if (c.view) {
         const p = Vector3.Project(ch.centre, Matrix.IdentityReadOnly, c.view.tm, c.view.vp);
         ch.x = p.x; ch.y = p.y;
@@ -1823,20 +1826,45 @@ export class PlacementPass {
       // A width ESTIMATE (chipWidthPx) — close enough to decide overlap. The
       // LABEL alone: the count is a corner overlay inside padding chipWidthPx
       // already reserves (charging it again merged pills that were clear).
-      ch.halfW = (chipWidthPx(ch.label, c.text) / 2) * scale;
-      ch.halfH = (f.summary.size / 2) * scale;
+      // The WIDEST line: every line of a merged chip shares its width, names
+      // on the left and the pills in one right-hand column.
+      let widest = 0;
+      for (const l of ch.lines) widest = Math.max(widest, chipWidthPx(l.label, c.text));
+      ch.halfW = (widest / 2) * scale;
+      // One badge unit per line, as renderChips draws it.
+      ch.halfH = ((ch.lines.length * f.summary.size) / 2) * scale;
     };
     for (const ch of chips) measure(ch);
     const front = chips.filter((ch) => !behind.has(ch));
     if (merge && c.view && front.length > 1) {
       const gap = f.metrics.minGapPx * scale;
+      // ── MERGED ON THE DRAWN BOX (2.496.801) ──────────────────────────────
+      // A chip sits ENTIRELY ABOVE its anchor (renderChips lifts it by half
+      // its own height), and a merged chip is one line per room tall — so two
+      // chips of different heights are not centred on the same row as their
+      // anchors, and testing anchor ± halfH would merge a short chip into the
+      // air below a tall one and miss it in the tall one's real top half.
+      // placementCheck's chip-vs-chip counter reads this same drawn box.
+      //
+      // ⚠️ IT STILL CONVERGES, AND CANNOT OSCILLATE. A merge makes the
+      // survivor taller and maybe wider, which can make it overlap a third
+      // chip — that only adds merges. Every merge removes one box and nothing
+      // ever splits inside the loop, so it stops after at most n-1 merges
+      // however much the chips grow. And it starts from the UNMERGED chips on
+      // every pass, so the result is a function of the camera alone: no merge
+      // carries over from the last frame to be undone in this one.
+      const boxOf = (ch: RoomChip) => ({ ch, x: ch.x, y: ch.y - ch.halfH, halfW: ch.halfW, halfH: ch.halfH });
       const merged = mergeOverlapping(
-        front,
+        front.map(boxOf),
         gap,
-        (ch) => ch.ids.length,
-        (keep, drop) => { combineChips(keep, drop); measure(keep); },
+        (b) => b.ch.ids.length,
+        (keep, drop) => {
+          combineChips(keep.ch, drop.ch);
+          measure(keep.ch);
+          Object.assign(keep, boxOf(keep.ch));
+        },
       );
-      return [...merged, ...chips.filter((ch) => behind.has(ch))];
+      return [...merged.map((b) => b.ch), ...chips.filter((ch) => behind.has(ch))];
     }
     return chips;
   }

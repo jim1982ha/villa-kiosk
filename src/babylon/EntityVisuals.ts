@@ -514,6 +514,8 @@ const CAMERA_LOCAL_FORWARD = new Vector3(0, 0, 1);
  *  hue (green/orange/purple/gold/blue) so a chip reads as UI chrome — a
  *  navigation affordance, not a device — rather than any category's badge. */
 const CLUSTER_BG_COLOR = "#475569"; // until the first pass paints the idle badge's surface (renderChips)
+/** How far a room chip's count pill sits inside its line's top-right corner. */
+const CHIP_COUNT_INSET_PX = 3;
 /**
  * ── The summaries are ONE family, built from ONE unit ────────────────────
  * A summary is never given a size of its own. Every dimension of the room
@@ -633,9 +635,13 @@ export interface LabelControls {
  *  a DOM icon and a Babylon GUI chip (a canvas control can't consume CSS). */
 interface ClusterControls {
   container: Rectangle;
-  text: TextBlock;
-  /** The count pill — a baked picture (badgeText.countBadgeImage). */
-  countBadge: Image;
+  /** One per printed line — one room each (summaryLook.roomChipModel's
+   *  `lines`). Grow-only pool, like a group card's chips: lines past the
+   *  current count are hidden, never disposed. */
+  lines: ChipLineControls[];
+  /** What each live line stands for, in line order — the room a tap on that
+   *  line names. */
+  lineRooms: { room: string; entityIds: string[] }[];
   node: TransformNode;
   entityIds: string[];
   /** The raw room name to show a person. The Map key is a roomKey(), which is
@@ -643,6 +649,16 @@ interface ClusterControls {
   displayName: string;
   /** Every room this chip stands for — one unless chips merged. */
   roomNames: string[];
+}
+
+/** One line of a room chip: the room's name, its count pill, and an invisible
+ *  hit zone one line tall spanning the chip's width (the zones TILE the chip,
+ *  so every tap on it names exactly one line). */
+interface ChipLineControls {
+  text: TextBlock;
+  /** The count pill — a baked picture (badgeText.countBadgeImage). */
+  count: Image;
+  zone: Rectangle;
 }
 
 /** One entity group: several of a room's badges drawn as a single badge,
@@ -5148,20 +5164,24 @@ export class EntityVisuals {
       c.entityIds = model.entityIds;
       c.displayName = model.displayName;
       c.roomNames = model.roomNames;
+      c.lineRooms = model.lines.map((l) => ({ room: l.room, entityIds: l.entityIds }));
       c.node.position.copyFrom(chip.centre);
-      // Room name and count render as separate controls (see ensureCluster).
-      // A chip that absorbed others says so with a "+N" suffix, so the count
-      // pill's total is never mistaken for one room's device count.
-      c.text.text = model.label;
       // The chip's ring: the neutral "on" ring when a member is on, none
       // otherwise. Never red: whether the room is all right is the COUNT's
       // job (summaryLook.roomHealth) — one place for it, not a red border
       // beside a green number (owner, 2026-10-04).
       const frame = badgeRing(chipFrames[model.frame], this.metrics.cardHeightPx, this.metrics);
       applyBadgeFrame(c.container, frame, this.summaryMetrics().size);
-      // The count pill carries the room's HEALTH (colors.healthPill): red if a
-      // member needs attention, amber if Home Assistant lost one, green
-      // otherwise.
+      // ── ONE LINE PER ROOM (2.496.801) ───────────────────────────────────
+      // A merged chip lists its rooms, each line that room's own name and
+      // count pill — it was "Living Room +4" beside one total (owner,
+      // 2026-11-14). One badge unit per line, the unit placementPass measures
+      // the chip with; names left-aligned, pills in one right-hand column.
+      // Room name and count render as separate controls (see ensureCluster).
+      //
+      // Each pill carries ITS room's HEALTH (colors.healthPill): red if a
+      // member needs attention, amber for an open fault, grey for lost
+      // contact, purple otherwise — what that room's own chip would show.
       // A baked picture, number ink-centred inside it — see
       // badgeText.countBadgeImage for why it is no longer a Rectangle and a
       // TextBlock.
@@ -5175,26 +5195,45 @@ export class EntityVisuals {
       // 2.496.263). Baked once for this device's best case, a zoom costs a
       // container re-scale and nothing else — glyphBakePx's rule.
       const csm = this.summaryMetrics();
-      c.countBadge.source = countBadgeImage({
-        text: model.count,
-        ...healthPill(model.health),
-        drawnPx: badgeBakePx(csm.countSize, this.iconUserScale, this.bestCssToGui()),
-        fontOfSize: csm.countFont / csm.countSize,
-      });
+      const n = model.lines.length;
+      c.container.height = `${n * csm.size}px`;
+      for (let i = 0; i < n; i++) {
+        const line = model.lines[i];
+        const row = this.ensureChipLine(c, i);
+        row.text.text = line.label;
+        row.text.color = chipRest.ink;
+        // Centred on its own line: (i - (n-1)/2) units from the chip's centre,
+        // plus the optical nudge badgeText gives every string.
+        row.text.top = `${(i - (n - 1) / 2) * csm.size + csm.font * this.metrics.textOpticalTopEm}px`;
+        row.count.top = `${CHIP_COUNT_INSET_PX + i * csm.size}px`;
+        row.zone.top = `${i * csm.size}px`;
+        row.zone.height = `${csm.size}px`;
+        row.count.source = countBadgeImage({
+          text: line.count,
+          ...healthPill(line.health),
+          drawnPx: badgeBakePx(csm.countSize, this.iconUserScale, this.bestCssToGui()),
+          fontOfSize: csm.countFont / csm.countSize,
+        });
+        row.text.isVisible = row.count.isVisible = row.zone.isVisible = true;
+      }
+      for (let i = n; i < c.lines.length; i++) {
+        const row = c.lines[i];
+        row.text.isVisible = row.count.isVisible = row.zone.isVisible = false;
+      }
       // Themed here rather than at creation: a chip outlives a theme change,
       // and Babylon GUI cannot consume a CSS variable, so the value has to be
       // read and re-applied. Doing it on the pass that already runs keeps it in
       // step with the badges without a second notification path.
       // Same neutral resting surface as an idle badge — see updateEntityGroups.
       c.container.background = chipRest.fill;
-      c.text.color = chipRest.ink;
       c.container.scaleX = scale;
       c.container.scaleY = scale;
       // ZERO horizontal offset, always: the chip sits exactly on its anchor.
-      // The only Y offset is the fixed half-height that centres the chip on
-      // that anchor (see ensureCluster) — not a nudge.
+      // The only Y offset is half the chip's own height, which puts the chip
+      // entirely above that anchor (see ensureCluster) — not a nudge. A merged
+      // chip grows UPWARD, line by line, as placementPass measures it.
       c.container.linkOffsetXInPixels = 0;
-      c.container.linkOffsetYInPixels = -(this.summaryMetrics().size / 2) * scale;
+      c.container.linkOffsetYInPixels = -((n * csm.size) / 2) * scale;
       c.container.isVisible = true;
     }
     // Chips with no visible member (floor switch, category filter) — and rooms
@@ -5233,57 +5272,6 @@ export class EntityVisuals {
     badgeShadow(container, "surface");
     container.isPointerBlocker = false; // taps resolve via pickClusterAt, like badges
 
-    // Room name — the chip's only FLOW content; the count renders as a
-    // corner overlay (below), not inline in this row, so it can't widen or
-    // otherwise perturb this text's own layout. Right padding is wide enough
-    // to reserve the corner badge's own full footprint (diameter + its inset
-    // + a small gap) as dead space the text never renders into — an overlay
-    // alone doesn't prevent overlap, since the text box itself still spans
-    // the container's full width by default; THIS is what stops a long room
-    // name's last letters from landing under the badge (reported: "Guest
-    // Bathroom" read as "Guest Bathroo[4]" with the badge over the "m").
-    const text = badgeText(`clusterText_${key}`, {
-      fontPx: sm.font, color: "#ffffff", weight: "600", metrics: this.metrics,
-    });
-    // Placeholder only: updateClusters overwrites this with chipLabel(chip)
-    // (the raw spelling, plus a "+N" when chips merged) on the same pass that
-    // created the control, so the key is never what a person reads.
-    text.text = key;
-    // ⚠️ THE SAME NUMBER chipTextMetrics() models this chip's width with. A
-    // literal here and an estimate there is how labelLayout came to carry a
-    // pad of 24 against a real inset of 40-50 (/dry-audit, 2.422.0).
-    text.paddingLeft = `${this.metrics.chipTextPadPx}px`;
-    text.paddingRight = `${sm.countSize + this.metrics.chipTextPadPx}px`;
-    container.addControl(text);
-
-    // The device count as a small corner-overlay pill — matching the HUD's
-    // unavailable-devices/facility icons' .icon-btn-count CONVENTION (small
-    // circle, white bold number, tucked into the top-right corner, INSIDE
-    // the parent's own bounds rather than hanging off it — see
-    // icon-btn-count's own comment for why: fully inside reads as the normal
-    // look for a count badge). A Babylon GUI control can't consume CSS, so
-    // the shape/position are re-expressed here rather than literally reused,
-    // but utils/countBadge.ts's cap-at-99+ formatting is the exact same
-    // function both sides call. Added to `container` (not the room-name row)
-    // and LAST, so it paints on top as a true overlay instead of sharing the
-    // row's flow — the earlier version put it inline in the row, which read
-    // as "a second word next to the room name", not a badge. Its colour is
-    // the room's HEALTH (colors.healthPill), set every update in
-    // renderChips.
-    const countBadge = new Image(`clusterCount_${key}`);
-    countBadge.width = `${sm.countSize}px`;
-    countBadge.height = `${sm.countSize}px`;
-    countBadge.stretch = Image.STRETCH_UNIFORM;
-    countBadge.horizontalAlignment = Control.HORIZONTAL_ALIGNMENT_RIGHT;
-    countBadge.verticalAlignment = Control.VERTICAL_ALIGNMENT_TOP;
-    // Small INWARD inset (negative left pulls it left off the right edge,
-    // positive top pushes it down off the top edge) — tucked just inside
-    // the chip's own corner, not straddling/hanging off it.
-    countBadge.left = "-3px";
-    countBadge.top = "3px";
-    container.addControl(countBadge);
-
-
     // ── A ROOM CHIP PAINTS BEHIND BADGES AND CARDS (2.430.0) ───────────────
     // Reported: focus a room and its devices draw "behind" other rooms' chips.
     // They did. Every control here shares one layer at the default zIndex, so
@@ -5306,11 +5294,78 @@ export class EntityVisuals {
     container.linkOffsetYInPixels = -sm.size / 2;
 
     const c: ClusterControls = {
-      container, text, countBadge, node,
+      container, lines: [], lineRooms: [], node,
       entityIds: [], displayName: key, roomNames: [],
     };
     this.clusters.set(key, c);
     return c;
+  }
+
+  /** Line `i` of a room chip, grown on demand — see ChipLineControls. Its
+   *  text, top offsets and pill are written by renderChips on every pass. */
+  private ensureChipLine(c: ClusterControls, i: number): ChipLineControls {
+    const have = c.lines[i];
+    if (have) return have;
+    const sm = this.summaryMetrics();
+    const name = `${c.container.name}_${i}`;
+    // Room name — the line's only FLOW content; the count renders as a
+    // corner overlay (below), not inline in this row, so it can't widen or
+    // otherwise perturb this text's own layout. Right padding is wide enough
+    // to reserve the corner badge's own full footprint (diameter + its inset
+    // + a small gap) as dead space the text never renders into — an overlay
+    // alone doesn't prevent overlap, since the text box itself still spans
+    // the container's full width by default; THIS is what stops a long room
+    // name's last letters from landing under the badge (reported: "Guest
+    // Bathroom" read as "Guest Bathroo[4]" with the badge over the "m").
+    // LEFT-aligned so every line's name starts at the same x; the container
+    // adapts its width to the widest line, so the pills form one column.
+    const text = badgeText(`clusterText_${name}`, {
+      fontPx: sm.font, color: "#ffffff", weight: "600", metrics: this.metrics, align: "left",
+    });
+    // ⚠️ THE SAME NUMBER chipTextMetrics() models this chip's width with. A
+    // literal here and an estimate there is how labelLayout came to carry a
+    // pad of 24 against a real inset of 40-50 (/dry-audit, 2.422.0).
+    text.paddingLeft = `${this.metrics.chipTextPadPx}px`;
+    text.paddingRight = `${sm.countSize + this.metrics.chipTextPadPx}px`;
+    c.container.addControl(text);
+
+    // The device count as a small corner-overlay pill — matching the HUD's
+    // unavailable-devices/facility icons' .icon-btn-count CONVENTION (small
+    // circle, white bold number, tucked into the line's top-right corner,
+    // INSIDE the chip's own bounds rather than hanging off it). A Babylon GUI
+    // control can't consume CSS, so the shape/position are re-expressed here
+    // rather than literally reused, but utils/countBadge.ts's cap-at-99+
+    // formatting is the exact same function both sides call. Added to the
+    // container after its text, so it paints on top as a true overlay
+    // instead of sharing the row's flow. Its colour is the line's room's
+    // HEALTH (colors.healthPill), set every update in renderChips.
+    const count = new Image(`clusterCount_${name}`);
+    count.width = `${sm.countSize}px`;
+    count.height = `${sm.countSize}px`;
+    count.stretch = Image.STRETCH_UNIFORM;
+    count.horizontalAlignment = Control.HORIZONTAL_ALIGNMENT_RIGHT;
+    count.verticalAlignment = Control.VERTICAL_ALIGNMENT_TOP;
+    // Small INWARD inset (negative left pulls it left off the right edge;
+    // renderChips pushes it down off its line's top edge) — tucked just
+    // inside the line's corner, not straddling it.
+    count.left = `-${CHIP_COUNT_INSET_PX}px`;
+    c.container.addControl(count);
+
+    // The line's tap zone: a transparent box one line tall and the chip's
+    // full width ("100%" is not a pixel width, so it never drives the
+    // container's adaptWidthToChildren), never a pointer blocker — taps
+    // resolve through pickClusterAt.
+    const zone = new Rectangle(`clusterZone_${name}`);
+    zone.width = "100%";
+    zone.verticalAlignment = Control.VERTICAL_ALIGNMENT_TOP;
+    zone.thickness = 0;
+    zone.background = "";
+    zone.isPointerBlocker = false;
+    c.container.addControl(zone);
+
+    const row = { text, count, zone };
+    c.lines.push(row);
+    return row;
   }
 
   /** Entity ids behind the cluster chip at these CSS-pixel client coords, or
@@ -5319,7 +5374,9 @@ export class EntityVisuals {
    *  way. Checked BEFORE badges by SceneManager: a room's individual badges
    *  are hidden exactly while that room's chip is visible (cullLabels), so a
    *  chip can never steal a tap from a badge the user can actually see. */
-  pickClusterAt(clientX: number, clientY: number): { room: string; entityIds: string[]; roomNames: string[] } | null {
+  pickClusterAt(clientX: number, clientY: number): {
+    room: string; entityIds: string[]; roomNames: string[]; line: { room: string; entityIds: string[] } | null;
+  } | null {
     if (this.clusters.size === 0) return null;
     const at = this.guiPoint(clientX, clientY);
     if (!at) return null;
@@ -5330,10 +5387,20 @@ export class EntityVisuals {
       // sheet and matched against teleport points, both of which want the
       // room as HA spells it.
       if (c.container.contains(px, py)) {
+        // The line under the point: one room of a merged chip. Its zones tile
+        // the chip, so a point inside the chip is inside one of them.
+        let line: { room: string; entityIds: string[] } | null = null;
+        for (let i = 0; i < c.lineRooms.length; i++) {
+          if (c.lines[i]?.zone.contains(px, py)) {
+            line = { room: c.lineRooms[i].room, entityIds: [...c.lineRooms[i].entityIds] };
+            break;
+          }
+        }
         return {
           room: c.displayName,
           entityIds: [...c.entityIds],
           roomNames: [...c.roomNames],
+          line,
         };
       }
     }

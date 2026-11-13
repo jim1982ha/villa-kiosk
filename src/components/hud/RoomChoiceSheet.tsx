@@ -3,14 +3,16 @@
 //
 // Room chips MERGE when they would overlap (see EntityVisuals.updateClusters —
 // they are never pushed apart, because a chip that travels stops naming the
-// room it sits in). A merged chip reads "Master Bedroom +1", and tapping it
+// room it sits in). A merged chip once read "Master Bedroom +1", and tapping it
 // used to fly to whichever room won the label, silently discarding the other.
 // The user had no way to reach it and no way to know it had been chosen for
 // them.
 //
-// So a merged chip asks. One row per room it stands for, with that room's
-// device count, and a tap goes there — the same "disambiguate rather than
-// guess" pattern a map uses when several places share a pin.
+// So a merged chip asks, on press-and-hold. One row per room it stands for,
+// with that room's device count, and a tap goes there — the same
+// "disambiguate rather than guess" pattern a map uses when several places
+// share a pin. (Since 2.496.801 the chip itself prints one line per room, and
+// a tap on a line goes to that room.)
 //
 // ── Built on BasePanel, like every other short dialog (2.208.0) ────────────
 // It previously wrote its own `.modal-backdrop` + `.modal` markup. That IS the
@@ -38,7 +40,7 @@
 import { MapPin } from "lucide-react";
 import BasePanel from "@/components/panels/BasePanel";
 import { categorySurface } from "@/config/EntityCategories";
-import type { RoomChipModel } from "@/babylon/summaryLook";
+import type { roomLook } from "@/babylon/summaryLook";
 import { healthPill } from "@/babylon/colors";
 import { countOf } from "@/utils/countOf";
 
@@ -47,7 +49,7 @@ import { countOf } from "@/utils/countOf";
  *  its border — the "on" ring = something is on — and its count's colour —
  *  red / amber / grey / green, the room's health — so choosing a room does not mean
  *  losing what the chip was telling you. */
-export interface RoomChoice extends Pick<RoomChipModel, "frame" | "health"> {
+export interface RoomChoice extends ReturnType<typeof roomLook> {
   room: string;
   count: number;
 }
