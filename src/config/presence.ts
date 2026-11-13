@@ -9,7 +9,7 @@
 import type { HassEntity } from "@/types/ha.types";
 import { labelOf } from "./EntityMap";
 import type { StateSince } from "@/ha/historySource";
-import { STATUS_COLOR, UNKNOWN_STATES, type StatusKey } from "@/utils/stateColors";
+import { STATUS_COLOR, statusKeyFor, UNKNOWN_STATES, type StatusKey } from "@/utils/stateColors";
 import { fmtDuration } from "@/components/panels/chartUtils";
 
 export type PresenceState = "occupied" | "empty" | "unknown";
@@ -18,7 +18,8 @@ export interface Presence {
   state: PresenceState;
   /** The tile's word, and the panel's heading. */
   label: string;
-  /** Its colour, as Map colours & keys says it: someone there = active, empty = off/idle, unknown = unavailable. */
+  /** Its colour, as Map colours & keys says it: someone there active, empty usual (the villa's usual state while
+   *  nobody stays), lost contact unavailable, no value noValue (stateColors.STATUS_COLOR). */
   tone: StatusKey;
   /** When the villa became empty, as the sensor itself states it (its `empty_since` attribute, epoch ms) — only
    *  while it says empty; null otherwise (the history's start of the run answers: presenceSince). */
@@ -52,21 +53,28 @@ export function presenceOf(sensorId: string, entities: Readonly<Record<string, H
   const e = entities[sensorId];
   if (e && (e.state === "on" || e.state === "off")) {
     return e.state === "on"
-      ? { state: "empty", label: "Empty", tone: "idle", stated: statedEmptySince(e) }
+      ? { state: "empty", label: "Empty", tone: "usual", stated: statedEmptySince(e) }
       : { state: "occupied", label: "Occupied", tone: "active", stated: null };
   }
   // the state's NAME and the map's colour for it, not the pair of states nobody can read (that is UNKNOWN_STATES)
   const unknown: PresenceState = "unknown";
-  return { state: unknown, label: "Presence unknown", tone: "unavailable", stated: null };
+  return { state: unknown, label: "Presence unknown", tone: unknownTone(e?.state), stated: null };
 }
 
 /** One state of the picked sensor in the villa's words — "Empty" (on), "Occupied" (off), "Presence unknown" — and its
  *  colour, the same as presenceOf's: what the presence window's band says over time (owner, 2026-10-20: the band under
  *  "Latest movement" said "Clear" — a motion sensor's word — while the villa was Occupied). */
 export function presenceStateWords(state: string): { label: string; tone: StatusKey } {
-  if (state === "on") return { label: "Empty", tone: "idle" };
+  if (state === "on") return { label: "Empty", tone: "usual" };
   if (state === "off") return { label: "Occupied", tone: "active" };
-  return { label: "Presence unknown", tone: "unavailable" };
+  return { label: "Presence unknown", tone: unknownTone(state) };
+}
+
+/** A presence that cannot be told, coloured as every state is (stateColors.statusKeyFor): lost contact (unavailable,
+ *  or no sensor state at all) its light grey, "unknown" the empty track — a state an on/off sensor never has, too. */
+function unknownTone(state: string | undefined): StatusKey {
+  const key = statusKeyFor(state ?? "unavailable", "binary_sensor");
+  return key === "unavailable" ? key : "noValue";
 }
 
 export interface PresencePerson { entityId: string; name: string; home: boolean; place: string; since: Since }
@@ -140,20 +148,24 @@ export function presenceHeading(p: Presence, when: string, stages: PresenceStage
   return { label: stages.order[i][1], color: stageColor(stages, stages.now), when: sinceWords(stages.since) };
 }
 
-/** The colours of the steps between someone home and empty, in order: amber, then teal (the app's own). */
-const STAGE_STEPS = ["var(--status-warning)", STATUS_COLOR.transitional] as const;
-
-/** A stage's colour: the first (someone home) red, as a detection is on the map; the last (empty) the green the other
- *  bands use (owner, 2026-10-25: "the 'empty' color must be the green colour as used in other mini chart"); each step
- *  between them one of STAGE_STEPS in order — never shades of one colour (owner, 2026-10-25: "the different levels of
- *  green are not clear enough … when the villa is occupied, use the red \"active\" colour"); a state the sensor does
- *  not list: no contact's grey. */
-export function stageColor(stages: PresenceStages, state: string): string {
+/** A stage's meaning, as every state's (stateColors.STATUS_COLOR): the first (someone home) active, the last (empty)
+ *  usual, the villa's usual state while nobody stays (owner, 2026-10-25: "the 'empty' color must be the green colour as
+ *  used in other mini chart"); each step between them on its way to empty, moving, as a lock locking; a state the
+ *  sensor does not list: lost contact, or no value, as presenceStateWords says it.
+ *  ⚠️ SOMEONE HOME IS NOT AN ALARM (owner, 2026-11-13): the first stage was red ("use the red \"active\" colour",
+ *  2026-10-25, when active was red's word), and the steps between amber then teal. Red is an alarm: someone seen while
+ *  the villa should be empty is the visit alert's red, on its card. */
+export function stageStatus(stages: PresenceStages, state: string): StatusKey {
   const i = stages.order.findIndex(([s]) => s === state), n = stages.order.length;
-  if (i < 0) return STATUS_COLOR.unavailable;
-  if (i === 0 || n < 2) return STATUS_COLOR.alert;
-  if (i === n - 1) return STATUS_COLOR.active;
-  return STAGE_STEPS[(i - 1) % STAGE_STEPS.length];
+  if (i < 0) return presenceStateWords(state).tone;
+  if (i === 0 || n < 2) return "active";
+  if (i === n - 1) return "usual";
+  return "transitional";
+}
+
+/** A stage's colour: its meaning's (stageStatus). */
+export function stageColor(stages: PresenceStages, state: string): string {
+  return STATUS_COLOR[stageStatus(stages, state)];
 }
 
 export interface PresenceWhy {

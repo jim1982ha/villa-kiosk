@@ -10,7 +10,7 @@
 
 import { AlertTriangle } from "lucide-react";
 import { useHA } from "@/ha/HAStateStore";
-import { missingAdvice, missingFromHa, NOT_IN_HA } from "@/utils/stateColors";
+import { missingAdvice, missingFromHa, NOT_IN_HA, STATUS_PILL_CLASS } from "@/utils/stateColors";
 import { useVillaModel } from "@/config/VillaModel";
 import { lostPillTone } from "@/config/reading";
 import { usePanelActions } from "./PanelActionsContext";
@@ -27,7 +27,7 @@ export default function UnavailableNotice({ entityId }: Props) {
   const { entities } = useHA();
   const { mappedEntityIds } = useVillaModel();
   // a critical device that lost contact: red, as the Cockpit paints it (the header's look decides — reading.lostPillTone)
-  const tone = lostPillTone("unavailable", usePanelActions().badge?.critical ?? false);
+  const tone = lostPillTone(STATUS_PILL_CLASS.unavailable, usePanelActions().badge?.critical ?? false);
   const missing = !!entityId && missingFromHa(entities, entityId);
   // whether the villa's system had it before: read only for a Missing device, one read per window (useLastSeen)
   const seen = useLastSeen(missing ? entityId! : null);
@@ -41,7 +41,7 @@ export default function UnavailableNotice({ entityId }: Props) {
       // each a line of the window's body, no box round them: the first and the last line of a window keep the
       // window's own distance to its header and footer (04-modals.css .modal-body)
       <>
-        <StatusPill tone="unavailable" icon={AlertTriangle}>{NOT_IN_HA.toUpperCase()}</StatusPill>
+        <StatusPill tone={STATUS_PILL_CLASS.unavailable} icon={AlertTriangle}>{NOT_IN_HA.toUpperCase()}</StatusPill>
         {seen !== "loading" && (
           <p className="muted body-text center">
             {missingAdvice(mappedEntityIds.has(entityId!), seen)}

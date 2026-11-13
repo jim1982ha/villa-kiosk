@@ -10,9 +10,12 @@ import { useAskFirst } from "@/hooks/useAskFirst";
 import type { SwitchAsk } from "@/utils/devicePower";
 import { tapFeedback } from "@/utils/haptics";
 import InlineConfirm from "@/components/common/InlineConfirm";
+import { STATUS_COLOR, type StatusKey } from "@/utils/stateColors";
 
 interface Props {
   on: boolean;
+  /** Its state's meaning (stateColors.powerStatus): the button's colour, purple on, green off. */
+  status: StatusKey;
   onClick: () => unknown;
   /** devicePower.deviceSwitch's `ask` — the device's own answer to "ask
    *  before throwing it": always for an unlock, and whenever the owner set
@@ -41,7 +44,7 @@ export function PowerSection({ beside, ...props }: Omit<Props, "compact"> & { be
   );
 }
 
-export default function PowerToggle({ on, onClick, ask = null, compact = false }: Props) {
+export default function PowerToggle({ on, status, onClick, ask = null, compact = false }: Props) {
   // `on` is derived purely from HA's live entity state, so the button gave no
   // feedback at all for the round-trip between a tap and the real
   // state_changed event landing — on a slow link that read as "did that even
@@ -54,12 +57,9 @@ export default function PowerToggle({ on, onClick, ask = null, compact = false }
   // usePendingAck now, shared with the lock panel.
   const { pending, markPending } = usePendingAck(on);
 
-  // The "on" look is the device's OWN category colour, not the app accent —
-  // but the colour is not read here. BasePanel puts --device-fill/-ink/-ring
-  // on the panel, so this button, the speed/preset chips beside it and the
-  // header icon above it are three renderings of one value, and a panel type
-  // that grows another stateful control gets it without wiring. See
-  // .big-toggle.on in styles.css.
+  // ⚠️ THE STATE'S COLOUR (owner, 2026-11-13: "the big On button follows the state"): the table's (stateColors
+  // STATUS_COLOR), purple on, green off, as its history bar. It was the device's category colour (--device-*), a
+  // category colour being a device's identity, never a state. See .big-toggle.power in 03-panels.css.
 
   const { asking, request, confirm, cancel } = useAskFirst(ask, () => {
     tapFeedback();
@@ -72,7 +72,8 @@ export default function PowerToggle({ on, onClick, ask = null, compact = false }
 
   return (
     <button
-      className={`big-toggle${compact ? " compact" : ""}${on ? " on" : ""}`}
+      className={`big-toggle power${compact ? " compact" : ""}${on ? " on" : ""}`}
+      style={{ ["--state" as string]: STATUS_COLOR[status] }}
       onClick={request}
       aria-busy={pending || undefined}
     >

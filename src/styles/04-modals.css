@@ -595,12 +595,14 @@
 }
 .panel-reading-label { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .panel-reading-value { flex: 0 0 auto; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
-/* A binary reading in its own window's colour (config/readingRows): the
-   .status-pill tones, as text. "off" (idle) keeps the secondary grey. */
-.panel-reading-value.on { color: var(--status-on); }
-.panel-reading-value.danger { color: var(--status-danger); font-weight: 600; }
+/* A binary reading in its own window's colour (config/readingRows): the .status-pill tones (utils/stateColors
+   STATUS_PILL_CLASS), as text; no value keeps the secondary grey, lost contact's words in --status-lost-ink. */
+.panel-reading-value.usual { color: var(--status-on); }
+.panel-reading-value.active { color: var(--status-active); }
 .panel-reading-value.transitional { color: var(--status-pending); }
-.panel-reading-value.unavailable { color: var(--status-lost); }
+.panel-reading-value.warn { color: var(--status-warning); }
+.panel-reading-value.danger { color: var(--status-danger); font-weight: 600; }
+.panel-reading-value.unavailable { color: var(--status-lost-ink); }
 
 /* Villa presence (PresenceTile's panel): the state in its colour, then rows that open what they name. */
 .presence-now { display: flex; align-items: baseline; gap: 4px; padding: 10px 14px; border-radius: 12px;

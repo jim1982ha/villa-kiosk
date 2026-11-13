@@ -22,7 +22,8 @@ export const ALERT_RED_HEX = "#B24232";
 // (a lock that had lost contact rendered as a confident red "unlocked").
 // ⚠️ GREY, NO LONGER AMBER (owner, 2026-10-22: badge proposal 2): amber is a fault — check soon — and grey "no
 // contact", on every surface. Matches --status-lost (light theme) across the 2D panels for the same signal.
-export const LOST_GREY = new Color3(0.42, 0.44, 0.42);
+// ⚠️ LIGHTER (owner, 2026-11-13: lost contact is a plain light grey, far from the dark empty track of "nothing to show").
+export const LOST_GREY = Color3.FromHexString("#9A9F98");
 
 // Same green as --status-on across the 2D panels ("this is reporting fine" /
 // "available") — for the one place on the Babylon GUI side that needs it
@@ -33,7 +34,7 @@ export const AVAILABLE_GREEN_HEX = "#34845A";
 // --status-warning (light theme): a FAULT, check soon — as a hex for the pill below.
 const FAULT_AMBER_HEX = "#B8801F";
 // --status-lost (light theme): no contact — the same grey as LOST_GREY, as a hex for the pill below.
-const LOST_GREY_HEX = "#6B706B";
+const LOST_GREY_HEX = "#9A9F98";
 
 /** A room's count pill, by the room's HEALTH (summaryLook.roomHealth): red —
  *  something needs attention; amber — a device has an open fault; grey —
@@ -48,23 +49,25 @@ const LOST_GREY_HEX = "#6B706B";
  *
  *  Static light-theme values, like every colour in this file: the map chip's
  *  pill is a baked picture. Dark ink on the amber: white on it is 3.4:1, too
- *  faint for a digit this small; dark is 5.2:1. White on the grey is 5.1:1. */
+ *  faint for a digit this small; dark is 5.2:1. Dark on the light grey too (white on it is 2.6:1). */
 export function healthPill(health: "alert" | "fault" | "unavailable" | "ok"): { fill: string; ink: string } {
   return health === "alert" ? { fill: ALERT_RED_HEX, ink: "#ffffff" }
     : health === "fault" ? { fill: FAULT_AMBER_HEX, ink: "#17191A" }
-    : health === "unavailable" ? { fill: LOST_GREY_HEX, ink: "#ffffff" }
+    : health === "unavailable" ? { fill: LOST_GREY_HEX, ink: "#17191A" }
     : { fill: AVAILABLE_GREEN_HEX, ink: "#ffffff" };
 }
 
 /** The status vocabulary's colours (utils/stateColors.STATUS_COLOR) for a 3D object, light-theme values like every
  *  colour here: a mesh shows the status its device's window shows, in that window's colour (owner, 2026-11-04: "always
  *  consistent with the device status"). It had its own: a locked lock a brighter green than its pill, an unlocked one
- *  a teal glow beside a red "Unlocked". */
+ *  a teal glow beside a red "Unlocked". The same keys as STATUS_COLOR, one value each (tests/oracles/colour_rules.mjs). */
 export const STATUS_COLOR3: Record<StatusKey, Color3> = {
-  active: Color3.FromHexString("#34845A"),        // --status-on
-  idle: Color3.FromHexString("#D8D3C7"),          // --status-off
-  transitional: Color3.FromHexString("#1F7F8C"),  // --status-pending
-  shut: Color3.FromHexString("#6B5AA6"),          // --cat-access-control
-  unavailable: LOST_GREY,                         // --status-lost
-  alert: ALERT_RED,                               // --status-danger
+  usual: Color3.FromHexString(AVAILABLE_GREEN_HEX), // --status-on
+  active: Color3.FromHexString("#6E57B8"),         // --status-active
+  transitional: Color3.FromHexString("#1F7F8C"),   // --status-pending
+  warn: Color3.FromHexString(FAULT_AMBER_HEX),     // --status-warning
+  alert: ALERT_RED,                                // --status-danger
+  unavailable: LOST_GREY,                          // --status-lost
+  // nothing to show: a mesh has no empty track, so the quiet --status-off a resting object takes
+  noValue: Color3.FromHexString("#D8D3C7"),
 };

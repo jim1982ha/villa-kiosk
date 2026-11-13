@@ -29,16 +29,17 @@ import type { FloorProbe } from "./floorProbe";
 import type { FrameRequests } from "./frameScheduler";
 import { roomKey } from "@/config/roomKey";
 import { Storeys } from "./storeys";
-import { ALERT_RED } from "./colors";
+import { STATUS_COLOR3 } from "./colors";
 import { ROOM_GLOW_ALPHA_INDEX } from "./seeThroughOrder";
 
-// Same red as a running climate device's mesh outline / the badge alert ring
-// — see colors.ts. Was its own slightly-off Color3 before.
-const GLOW_COLOR = ALERT_RED;
-// The alert ring on a badge is a flat, fully-opaque 2D stroke — it always
-// reads as a vivid, saturated red. This glow is a translucent 3D overlay
-// blended with the floor beneath it, so it can never look pixel-identical,
-// but it should still clearly read as RED rather than a pale wash. 0.28/0.5
+// ⚠️ THE PURPLE OF "ON, DOING SOMETHING" (owner, 2026-11-13: "a person seen on the map is purple too"): someone there or
+// a door open is in use, never an alarm; it was the alert red (colors.ts ALERT_RED). The status table's own value.
+const GLOW_COLOR = STATUS_COLOR3.active;
+// …and a leak's or smoke's room, an alarm, in the table's red (setActive's `alarm`)
+const ALARM_GLOW_COLOR = STATUS_COLOR3.alert;
+// This glow is a translucent 3D overlay blended with the floor beneath it, so
+// it can never look pixel-identical to a flat 2D colour, but it should still
+// clearly read as its colour rather than a pale wash. 0.28/0.5
 // (still used further below) made the glow visibly duller than intended.
 const BASE_ALPHA = 0.5;
 const PULSE_ALPHA = 0.75;
@@ -312,10 +313,11 @@ export class RoomHighlight {
    *  Config Editor field — case/whitespace-insensitive). No-op if the name
    *  doesn't match any calibrated room or named viewpoint (e.g. an outdoor
    *  sensor with no Room set). */
-  setActive(roomName: string, on: boolean): void {
+  setActive(roomName: string, on: boolean, alarm = false): void {
     const key = RoomHighlight.normalise(roomName);
     const entry = this.polyRooms.get(key) ?? this.pointRooms.get(key);
     if (!entry) return;
+    entry.material.emissiveColor = alarm ? ALARM_GLOW_COLOR : GLOW_COLOR;
     if (on) this.active.add(key);
     else this.active.delete(key);
     if (!on) entry.material.alpha = 0;

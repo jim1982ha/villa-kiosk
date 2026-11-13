@@ -65,6 +65,9 @@ const BINARY_SENSOR_CLASSES: Record<string, BinarySensorClassInfo> = {
   // in error"): a detection, a door or window open, a lock sensor unlocked keeps its red in its WINDOW and history bar
   // (owner, the same day: "keep red there"), but its badge wears the plain dot and it is no line in "Needs attention"
   // (config/deviceCondition: in use on the map and in the Cockpit, windowProblemState in its window).
+  // ⚠️ AND NOW ACTIVE IN ITS WINDOW TOO (owner, 2026-11-13: one colour code for every status, red is an alarm): a
+  // detection or an open door is the purple of "on" there (windowProblemState leaves a class in use out, so a class in
+  // use has no problem state anywhere).
   motion: { icon: Activity, alarmState: "on", detects: true },
   moving: { icon: Activity, alarmState: "none", detects: true },
   occupancy: { icon: Eye, alarmState: "on", detects: true },

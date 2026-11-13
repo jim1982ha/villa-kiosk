@@ -25,6 +25,7 @@ import type { TelemetryKind } from "@/utils/telemetry";
 import { backendFetch } from "@/auth/sessionLost";
 import { refusalOf } from "@/utils/storeSave";
 import { useOutsideClose } from "@/hooks/useOutsideClose";
+import { STATUS_COLOR } from "@/utils/stateColors";
 
 interface TelemetryEvent {
   // ⚠️ `string`, not TelemetryKind, and deliberately (2.427.0): these events are
@@ -306,13 +307,14 @@ export function telemetryTime(at: string | undefined): string {
   return at ? momentText(at, true) : "";
 }
 
+// an event's meaning, in the status table's colours (utils/stateColors STATUS_COLOR): a failure an alarm, a recovery a look
 const TONE: Record<string, string> = {
-  error: "var(--status-danger)",
-  freeze: "var(--status-danger)",
-  "context-lost": "var(--status-danger)",
-  "context-restored": "var(--status-warning)",
-  recovered: "var(--status-warning)",
-  csp: "var(--status-warning)",
+  error: STATUS_COLOR.alert,
+  freeze: STATUS_COLOR.alert,
+  "context-lost": STATUS_COLOR.alert,
+  "context-restored": STATUS_COLOR.warn,
+  recovered: STATUS_COLOR.warn,
+  csp: STATUS_COLOR.warn,
 };
 
 /** One event, one line: ⚠️ ITS TIME FIRST, THEN ITS KIND, ITS DEVICE, ITS WORDS (owner, 2026-11-06: the kind led and

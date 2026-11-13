@@ -1,3 +1,18 @@
+## 2.496.793
+
+- **One colour code for every status, on every screen.** Each colour now says one thing, in the state pill, the history
+  bars, the On button, the 3D map, the Cockpit, the presence tile and the camera timeline:
+  - **green**: the device answers and is in its usual state (a light off, a curtain closed, locked, motion clear, the
+    villa empty);
+  - **purple**: on, doing something, nothing wrong (a light on, a curtain open, a door open, someone home, a camera's
+    motion);
+  - **teal**: moving (opening, closing, locking; the villa waiting for indoor quiet);
+  - **amber**: needs a look (a door unlocked); **red**: an alarm (a leak, a jammed lock, a critical door unlocked);
+  - **light grey**: contact lost, a plain colour now; **the empty track**: nothing to show (history not kept, no value).
+  Stripes only mark a period of a history bar that mixed states. The big On button follows the state (purple on, green
+  off) instead of the device's category colour, and a leak's room glows red while a room in use glows purple. The
+  colours live in one table that every screen reads, and a check refuses a new screen that paints a status by itself.
+
 ## 2.496.792
 
 - **Curtains and fans use the lock's colours.** A curtain opening or closing, and a fan turning, are the teal a lock

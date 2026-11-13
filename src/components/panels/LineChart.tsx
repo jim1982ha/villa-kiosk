@@ -20,7 +20,7 @@ import { drawableWindow, type TimeWindow } from "@/utils/lineChart";
 import { chartGeometry, type ChartGeometry } from "@/utils/chartGeometry";
 import { emptyHistoryText, type HistoryStatus } from "@/utils/statisticsSeries";
 
-/** A step offline inside it: its stripes, the unavailable colour and nothing between. */
+/** A step offline inside it: the unavailable colour (chartUtils.outageLook). */
 import { fmtChartValue, fmtChartTick, fmtStepStamp, fmtOutage, keptWords, outageLook } from "./chartUtils";
 import { activeRange, valueExtent, type KeptChart, type ValueRange } from "@/utils/rangeFilter";
 import ChartRangeSlider, { RangeChip, rangeWords } from "./ChartRangeSlider";

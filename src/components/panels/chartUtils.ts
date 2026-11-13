@@ -6,7 +6,7 @@ import { wallClock } from "@/utils/villaClock";
 import type { HistoryGap, HistorySeries, StateHistoryPoint } from "@/types/ha.types";
 import { clockTime, dayShort, docDate, momentText, monthShort } from "@/utils/dateText";
 import { NOT_KEPT_COLOR, NOT_KEPT_WORDS, STATUS_COLOR } from "@/utils/stateColors";
-import { cellBackground, nextEdge } from "@/utils/timelineCells";
+import { nextEdge } from "@/utils/timelineCells";
 import { DAY_MS, HOUR_MS } from "@/utils/localDay";
 import { PERIOD_MS } from "@/utils/statisticsSeries";
 
@@ -103,12 +103,12 @@ export function chartAbout(shows: ChartShows, stepMs: number, from?: number, kep
   }
   // ⚠️ AS WIDE AS DRAWN (architecture review 25): it said "at its real length" over a band five minutes wide for a 0.46s
   // drop (trendInterval.widenGaps: every outage covers the five minutes it touched); the tooltip says the real length
-  if (stepMs <= finest) return `Every reading, in ${fmtDuration(finest)} steps. Striped: unavailable at least once in those ${fmtDuration(finest)}.`;
+  if (stepMs <= finest) return `Every reading, in ${fmtDuration(finest)} steps. Grey: unavailable at least once in those ${fmtDuration(finest)}.`;
   const finer = stepMs >= 7 * DAY_MS ? "day" : stepMs >= DAY_MS ? "hour" : null;
   // ⚠️ SHORT (owner, 2026-11-05: "make this tooltip description shorter"): what is drawn, what may not show, in a few words
   // ⚠️ EVERY OUTAGE WHILE THE DETAIL IS KEPT (owner, 2026-11-06): it said "Outages under 5min may not show", true while
   // only the five-minute figures told them (historySource.outagesInside reads the detail now); before it, the figures'
-  return `${cap(stepWords(stepMs))} averages. Striped: unavailable at least once that ${step}.${
+  return `${cap(stepWords(stepMs))} averages. Grey: unavailable at least once that ${step}.${
     !before ? "" : unkept ? ` Before ${before}: no longer kept.`
       : ` Before ${before}: ${finer ? `only whole-${finer} outages show` : "no outages show"}.`}`;
 }
@@ -137,15 +137,15 @@ export function cellSummary(spent: Record<string, number>, entered: Record<strin
 /** The words of a step of the figures offline inside it (HistoryGap.within), when only the averages tell it. */
 const DURING: Record<NonNullable<HistoryGap["within"]>, string> = { "5minute": `in those ${fmtDuration(PERIOD_MS["5minute"])}`, hour: "that hour", day: "that day", week: "that week" };
 
-/** How an outage is painted, on the chart and as its tooltip row's key (LineChart): a step of the figures offline
- *  inside it, and every outage, in the stripes of a state timeline's cell that saw more than one state, unavailable
- *  and clear; what is no longer kept its own colour. ⚠️ ONE LOOK FOR THE BAND AND ITS KEY (owner, 2026-11-05: "make sure the
- *  legend is correct for this second line"): the outage row was keyed by the line's green dot. */
+/** How an outage is painted, on the chart and as its tooltip row's key (LineChart): lost contact's plain light grey,
+ *  what is no longer kept the empty track. ⚠️ ONE LOOK FOR THE BAND AND ITS KEY (owner, 2026-11-05: "make sure the
+ *  legend is correct for this second line"): the outage row was keyed by the line's green dot. ⚠️ NO LONGER STRIPED
+ *  (owner, 2026-11-13: "the stripes come from the chart, not from the state"): an outage was drawn in the stripes of a
+ *  state timeline's cell that mixed several states; lost contact is a plain colour like the others. */
 export function outageLook(gap: Pick<HistoryGap, "within" | "notKept">): { background: string; opacity: number } {
-  // ⚠️ ONE LOOK AT EVERY STEP (owner, 2026-11-05: "is unavailable handled the same way here?"): the 24h chart's
-  // five minutes were a faint grey band where the week's hours were striped
-  if (gap.notKept) return { background: NOT_KEPT_COLOR, opacity: 0.5 };
-  return { background: cellBackground(["unavailable", ""], (s) => (s ? STATUS_COLOR.unavailable : "transparent")), opacity: 0.45 };
+  // ⚠️ ONE LOOK AT EVERY STEP (owner, 2026-11-05: "is unavailable handled the same way here?")
+  if (gap.notKept) return { background: NOT_KEPT_COLOR, opacity: 1 };
+  return { background: STATUS_COLOR.unavailable, opacity: 0.45 };
 }
 
 /** An outage in a chart's tooltip: "Unavailable · 05:21–05:24 (3min)", "Unavailable since 05:21" for one still

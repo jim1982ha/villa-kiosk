@@ -83,7 +83,7 @@ console.log("  a critical device that lost contact is red everywhere, not only o
   const { deviceLook, storeLookSource, mapLookSource } = await import("@/utils/deviceActivity");
   const { roomLook } = await import("@/babylon/summaryLook");
   const { panelHeader } = await import("@/components/panels/panelHeader");
-  const { lostPillTone } = await import("@/config/reading");
+  const { lostPillTone, criticalPillTone, lockPill } = await import("@/config/reading");
   const { markSurface, categorySurface } = await import("@/config/EntityCategories");
   const crit = villaDevices({ entityMap, deviceGroups: [], hidden: new Set(), dismissed: new Set(), mappedEntityIds: new Set(ids),
     entities, entityDeviceIds: { "lock.door": "dev-door", "sensor.door_battery": "dev-door" }, folding,
@@ -112,10 +112,20 @@ console.log("  a critical device that lost contact is red everywhere, not only o
   ck("a critical device that answers is not red (critical needs lost contact)", !back.critical && back.mark !== "critical", back);
   const { readFileSync } = await import("node:fs");
   const src = (f) => readFileSync(new URL(`../../src/${f}`, import.meta.url), "utf8");
-  ck("  ...the three lost pills of a window ask it, with the header's fact (pin the caller)",
-     ["components/panels/ReadingPill.tsx", "components/panels/UnavailableNotice.tsx", "components/panels/LockPanel.tsx"]
+  ck("  ...the two lost pills of a window ask it, with the header's fact (pin the caller)",
+     ["components/panels/ReadingPill.tsx", "components/panels/UnavailableNotice.tsx"]
        .every((f) => /lostPillTone\(/.test(src(f)) && /usePanelActions\(\)\.badge\?\.critical/.test(src(f)))
      && !/status-pill unavailable" title/.test(src("components/panels/UnavailableNotice.tsx")));
+  // owner, 2026-11-13: "a critical door unlocked" is red, an ordinary one amber; lost, red too (stateColors.criticalStatus)
+  ck("a critical lock's window: unlocked red, lost red; an ordinary one's unlocked amber; locked green for both",
+     win("lock.door").badge.onCriticalList && !win("sensor.th_humidity").badge.onCriticalList
+     && criticalPillTone(lockPill("lock.door", "unlocked").tone, true) === "danger"
+     && criticalPillTone(lockPill("lock.door", "unlocked").tone, false) === "warn"
+     && criticalPillTone(lockPill("lock.door", "unavailable").tone, true) === "danger"
+     && criticalPillTone(lockPill("lock.door", "locked").tone, true) === "usual");
+  ck("  ...the lock window's pill asks it, with the header's critical-list fact (pin the caller)",
+     /criticalPillTone\(/.test(src("components/panels/LockPanel.tsx"))
+     && /usePanelActions\(\)\.badge\?\.onCriticalList/.test(src("components/panels/LockPanel.tsx")));
   ck("nothing is red before the list is read", !deviceLook("lock.door", storeLookSource(entities, { entityMap, isHidden: () => false })).critical);
 }
 

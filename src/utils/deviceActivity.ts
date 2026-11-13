@@ -20,7 +20,7 @@ import type { EntityMapping, EntityType } from "@/types/scene.types";
 import type { DeviceSurfaceState } from "@/config/EntityCategories";
 import { conditionOf, windowStatusOf, type DeviceCondition } from "@/config/deviceCondition";
 import { deviceTypeOf } from "@/config/EntityMap";
-import { TRANSITIONAL_STATES, lockBolt, type StatusKey } from "@/utils/stateColors";
+import { criticalStatus, TRANSITIONAL_STATES, lockBolt, type StatusKey } from "@/utils/stateColors";
 import { devicePower } from "@/utils/devicePower";
 import type { SwitchPosition } from "@/utils/entityState";
 import { phantomEntity } from "@/utils/phantomEntity";
@@ -289,9 +289,9 @@ export function classifyDeviceActivity({ type, entity: s, condition }: DeviceRea
  * OFF — its real alert — never did; a media_player glowed on `on` but not on
  * `buffering`. Now the mesh asks classifyDeviceActivity, as the badge does.
  *
- *   * `tint` — a lock's whole-mesh colour: its window's status colour (green locked, red unlocked or jammed, teal on
- *     its way, grey out of contact);
- *   * `pulse` — a sensor's red pulse, while its window says red (a leak, an open door, a detection);
+ *   * `tint` — a lock's whole-mesh colour: its window's status colour (green locked, amber unlocked, red jammed or a
+ *     critical one unlocked, teal on its way, grey out of contact);
+ *   * `pulse` — a sensor's red pulse, while its window says red (a leak, smoke);
  *   * `glow` — an active switch/player's soft glow, in its window's status colour;
  *
  * ⚠️ THE WINDOW'S STATUS, NEVER A CALMER ONE (owner, 2026-11-04: "remove all notion of stays calm and always align it
@@ -315,8 +315,9 @@ export function meshLookFor(r: DeviceReading): MeshLook {
     case "light":
     case "cover":
       return { kind: "none" };
+    // a critical lock unlocked or lost: red, as its window's pill (stateColors.criticalStatus)
     case "lock":
-      return { kind: "tint", tone: kind === "unavailable" ? "unavailable" : status };
+      return { kind: "tint", tone: criticalStatus(kind === "unavailable" ? "unavailable" : status, r.critical && !r.hidden) };
     case "binary_sensor":
       return { kind: "pulse", on: kind !== "unavailable" && status === "alert", unavailable: kind === "unavailable" };
     case "switch":
@@ -477,6 +478,9 @@ export interface DeviceLook {
   /** A CRITICAL device that has lost contact (on the villa's critical list AND `unavailable`): red, never grey — its
    *  badge's mark, its room chip's number, its list row and its window's pill. */
   critical: boolean;
+  /** On the villa's critical list, whatever its contact: its window's "needs a look" is an alarm (an unlocked critical
+   *  door is red: stateColors.criticalStatus, owner 2026-11-13). */
+  onCriticalList: boolean;
   /** It has an open Cockpit fault (LookSource.config.hasFault) — its room chip's number is amber for it. */
   fault: boolean;
   /** Hidden in the villa's system: the map draws no badge for it (drawsBadge). */
@@ -540,6 +544,7 @@ export function deviceLook(entityId: string, source: LookSource): DeviceLook {
     alert: own === "alert",
     unavailable: own === "unavailable",
     critical: r.critical && own === "unavailable",
+    onCriticalList: r.critical && !r.hidden,
     fault: r.fault && !r.hidden,
     hidden: r.hidden,
     power: switchable ? devicePower(source.state(entityId), entityId).position : "none",
@@ -644,7 +649,7 @@ interface GroupLook {
  *   DRAWING A COUNT      nothing inside says anything, so: red if ANY member's
  *     kind alerts; else the neutral "on" ring if any member is active.
  */
-/** The corner pills that say "needs attention" (STATUS_COLOR's red): an alarm, a critical device silent. */
+/** The corner pills that say "needs attention" (STATUS_COLOR.alert): an alarm, a critical device silent. */
 const RED_PILLS: ReadonlySet<BadgeMark | LinkPill> = new Set<BadgeMark | LinkPill>(["alarm", "critical"]);
 
 export function groupLook(

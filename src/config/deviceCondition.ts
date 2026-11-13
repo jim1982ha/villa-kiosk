@@ -74,21 +74,29 @@ export function glowsRoom(entityId: string, deviceClass: string | undefined): bo
   return on === "inUse" || on === "wrong";
 }
 
+/** Whether its room's glow is an alarm (a leak, smoke: its "on" is WRONG), red, rather than a room in use (someone
+ *  there, a door open), purple — the status table's alert and active (owner, 2026-11-13: one colour code). */
+export function glowIsAlarm(entityId: string, deviceClass: string | undefined): boolean {
+  return binaryCondition(entityId, deviceClass, "on") === "wrong";
+}
+
 /** THE WINDOW'S PROJECTION: the state a binary sensor's window and history bar paint red (binaryLook), its class's own
- *  problem state, in use or wrong alike. ⚠️ THE ONE PLACE THE WINDOW DIFFERS FROM THE MAP (owner, 2026-10-26: "keep red
- *  there"): an open door or a detection is red in its window, calm on the map and in the Cockpit (conditionOf: in use).
- *  By class only, as the window always read it: a presence or moving sensor (no problem state) is never red there. */
-export function windowProblemState(deviceClass: string | undefined): string | undefined {
-  return alertStateFor(deviceClass);
+ *  problem state when that state is WRONG (a leak, smoke, a low battery, connectivity off): never a class in use (a door,
+ *  a detection, a "…_pir" with no class: inUseClass, as the map reads it). ⚠️ IN USE IS ACTIVE, NOT RED (owner, 2026-11-13: one colour code for every status, red is an
+ *  alarm): an open door, a detection were red in their window since 2026-10-26 ("keep red there") while calm on the map
+ *  and in the Cockpit; they are the purple of "on, doing something" now, there as on the map (conditionOf: in use). */
+export function windowProblemState(entityId: string, deviceClass: string | undefined): string | undefined {
+  return inUseClass(entityId, deviceClass) ? undefined : alertStateFor(deviceClass);
 }
 
 /** THE STATUS A DEVICE'S WINDOW SAYS, as its pill and history bar colour it: a binary sensor by its class's problem
- *  state (binaryLook), anything else by the status vocabulary (stateColors.statusKeyFor, by its domain).
+ *  state (binaryLook), anything else by the status vocabulary (stateColors.statusKeyFor, by its domain). A critical
+ *  device's "needs a look" and lost contact are an alarm (stateColors.criticalStatus), applied by who knows it critical.
  *  ⚠️ ITS 3D OBJECT PAINTS THIS, NEVER A CALMER READING (owner, 2026-11-04: "i don't want to have inconsistent colours
  *  for the 3D assets. It shall always be consistent with the device status"): an unlocked lock was red in its window
  *  and the teal "in use" glow on the map (deviceActivity.meshLookFor). */
 export function windowStatusOf(entity: Pick<HassEntity, "entity_id" | "state" | "attributes">): StatusKey {
   return entity.entity_id.startsWith("binary_sensor.")
-    ? binaryStatus(entity.state, windowProblemState(entity.attributes?.device_class as string | undefined))
+    ? binaryStatus(entity.state, windowProblemState(entity.entity_id, entity.attributes?.device_class as string | undefined))
     : statusKeyFor(entity.state, entity.entity_id);
 }

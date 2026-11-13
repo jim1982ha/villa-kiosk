@@ -29,7 +29,7 @@ import { binaryLook } from "./binaryLook";
 import { stateLabelFor } from "./BinarySensorClasses";
 import { deviceRowText, formatSensorParts } from "@/utils/entityValue";
 import { domainOf } from "@/utils/entityDomain";
-import { contactOf, isNoHistory, isUnavailable, NO_RECORD, NO_RECORD_WORDS, NOT_KEPT, NOT_KEPT_COLOR, NOT_KEPT_WORDS, NOT_IN_HA, paintState, statusKeyFor, STATUS_COLOR, STATUS_PILL_CLASS } from "@/utils/stateColors";
+import { contactOf, criticalStatus, isNoHistory, isUnavailable, NO_RECORD, NO_RECORD_WORDS, NOT_KEPT, NOT_KEPT_COLOR, NOT_KEPT_WORDS, NOT_IN_HA, paintState, statusKeyFor, STATUS_COLOR, STATUS_PILL_CLASS, type StatusKey } from "@/utils/stateColors";
 
 /** The stretch older than the villa's system keeps, as a history bar reads it (historySource.keptFrom). */
 export { NOT_KEPT, NOT_KEPT_WORDS, NO_RECORD, NO_RECORD_WORDS };
@@ -37,8 +37,8 @@ import { coverStateLabel } from "@/utils/panelRules";
 
 /** The colour a measurement's number (and its chart) takes at each level. */
 const LEVEL_COLOR: Record<AlertLevel, string> = {
-  normal: "var(--status-on)",
-  danger: "var(--status-danger)",
+  normal: STATUS_COLOR.usual,
+  danger: STATUS_COLOR.alert,
 };
 
 export interface Reading {
@@ -104,10 +104,10 @@ export function readingOf(
       kind, unavailable, contact, level,
       value: lost ? lostWord : noValue ? "UNKNOWN" : alarm ? words.toUpperCase() : words,
       unit: "",
-      // "off" is the pill vocabulary's quiet tone (03-panels .status-pill.off): nothing to say, nothing wrong
-      pill: lost ? "unavailable" : noValue ? "off" : alarm ? "danger" : look.tone(state),
+      // no value is the empty track's tone (stateColors STATUS_PILL_CLASS.noValue): nothing to say, nothing wrong
+      pill: lost ? STATUS_PILL_CLASS.unavailable : noValue ? STATUS_PILL_CLASS.noValue : alarm ? STATUS_PILL_CLASS.alert : look.tone(state),
       alarm: lost || alarm,
-      color: lost ? "var(--status-warning)" : "var(--text-primary)",
+      color: lost ? STATUS_COLOR.unavailable : "var(--text-primary)",
       seriesColor: LEVEL_COLOR[level],
       stateColor: look.color,
     };
@@ -118,9 +118,10 @@ export function readingOf(
     kind, unavailable, contact, level,
     value: lost ? lostWord : noValue ? "UNKNOWN" : parts.value || (entity?.state ?? "—"),
     unit: unavailable ? "" : parts.unit,
-    pill: lost ? "unavailable" : noValue ? "off" : null,
+    pill: lost ? STATUS_PILL_CLASS.unavailable : noValue ? STATUS_PILL_CLASS.noValue : null,
     alarm: lost || level === "danger",
-    color: lost ? "var(--status-warning)" : noValue || kind === "text" ? "var(--text-primary)" : LEVEL_COLOR[level],
+    // lost contact is its light grey, as everywhere (it was amber, a fault's colour, to 2026-11-13)
+    color: lost ? STATUS_COLOR.unavailable : noValue || kind === "text" ? "var(--text-primary)" : LEVEL_COLOR[level],
     seriesColor: LEVEL_COLOR[level],
     stateColor: null,
   };
@@ -179,7 +180,8 @@ interface StatePill {
 /** The tone of a state's pill — the same reading of the state that colours
  *  its history bar (stateColors.statusKeyFor, by the entity's domain). */
 const pillTone = (id: string, state: string | undefined): string =>
-  STATUS_PILL_CLASS[statusKeyFor(state ?? "", id)];
+  // no entity at all is lost contact (contactOf), never the empty track of a blank state
+  STATUS_PILL_CLASS[state === undefined ? "unavailable" : statusKeyFor(state, id)];
 
 /** Where a lock's bolt is (stateColors.lockBolt): the one reading a panel asks here, with its pill. */
 export { lockBolt } from "@/utils/stateColors";
@@ -204,17 +206,25 @@ export function lostPillTone(tone: string, critical: boolean): string {
   return critical && tone === STATUS_PILL_CLASS.unavailable ? STATUS_PILL_CLASS.alert : tone;
 }
 
+/** The tone of a window's pill once its device is known to be ON THE CRITICAL LIST (`critical`: the header's
+ *  badge.onCriticalList): its "needs a look" and its lost contact take the alarm's red (stateColors.criticalStatus,
+ *  owner 2026-11-13: "a critical door unlocked" is red, an ordinary one amber); every other tone stays. */
+export function criticalPillTone(tone: string, critical: boolean): string {
+  const key = (Object.keys(STATUS_PILL_CLASS) as StatusKey[]).find((k) => STATUS_PILL_CLASS[k] === tone);
+  return key ? STATUS_PILL_CLASS[criticalStatus(key, critical)] : tone;
+}
+
 /** The same rule for a lost device drawn as a colour, not a pill: the camera window's bar, where its camera could not
  *  be reached (architecture review P, 2026-10-27: a critical camera that lost contact was red in the Cockpit and on
  *  the map, grey in its own window). */
 export function lostColor(critical: boolean): string {
-  return critical ? STATUS_COLOR.alert : STATUS_COLOR.unavailable;
+  return STATUS_COLOR[criticalStatus("unavailable", critical)];
 }
 
 /** The lock window's pill: the state the lock actually reported, shouted
  *  ("UNLOCKING", "JAMMED"), "UNKNOWN" when there is no lock entity at all.
- *  A lock reporting "unknown" (no value, its device answering) takes the quiet
- *  tone, never the amber of a lost lock (statusKeyFor). */
+ *  A lock reporting "unknown" (no value, its device answering) takes the empty
+ *  track's tone, never the grey of a lost lock (statusKeyFor). */
 export function lockPill(id: string, state: string | undefined): StatePill {
   return { text: (state ?? "unknown").replace(/_/g, " ").toUpperCase(), tone: pillTone(id, state) };
 }
@@ -227,8 +237,8 @@ export function coverPill(id: string, state: string | undefined, position: numbe
 }
 
 /** A history bar's colours: the window's own, except that an unavailable
- *  stretch is ALWAYS the legend's offline colour and an unknown one its quiet
- *  idle colour (stateColors.paintState). */
+ *  stretch is ALWAYS the legend's offline colour and an unknown one the empty
+ *  track (stateColors.paintState), as a stretch no longer kept. */
 export function chartColours(colorFor: (state: string) => string): (state: string) => string {
   const paint = paintState(colorFor);
   return (state: string) => (isNoHistory(state) ? NOT_KEPT_COLOR : paint(state));

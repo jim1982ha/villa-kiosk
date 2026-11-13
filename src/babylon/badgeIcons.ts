@@ -456,7 +456,7 @@ function badgeImageDataUrl(
 
 
 /**
- * One pill: ringed in the badge's ground, then a mark (its colour, its white symbol — EntityCategories.markSurface),
+ * One pill: ringed in the badge's ground, then a mark (its colour, its symbol in its ink — EntityCategories.markSurface),
  * or "on" (filled in the badge's colour `hue`) or "off" (hollow: a ring of `hue` round the ground).
  */
 function drawPill(
@@ -483,8 +483,8 @@ function drawPill(
   ctx.fillStyle = pill === "on" ? hue : markSurface(pill).fill;
   ctx.fill();
   if (pill === "on") return;
-  const symbol = markSurface(pill).symbol;
-  ctx.fillStyle = "#ffffff";
+  const { symbol, ink } = markSurface(pill);
+  ctx.fillStyle = ink;
   ctx.textAlign = "center";
   ctx.textBaseline = "alphabetic";
   ctx.font = `700 ${Math.round(g.symbolPx)}px system-ui, -apple-system, "Segoe UI", sans-serif`;

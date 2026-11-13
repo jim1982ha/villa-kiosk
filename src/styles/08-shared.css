@@ -255,7 +255,7 @@ body:has(.camera-fullscreen) .vesta-notice.below-camera { display: none; }
 .cockpit-attention-danger { color: var(--status-danger); }
 .cockpit-attention-warn { color: var(--status-warning); }
 /* any other device offline: grey, "no contact" — the map badge's grey "?" (owner, 2026-10-22: badge proposal 2) */
-.cockpit-attention-lost { color: var(--status-lost); }
+.cockpit-attention-lost { color: var(--status-lost-ink); }
 /* The card a device window's warning opened the Cockpit for (owner, 2026-10-24): framed in a fault's amber, and lit
    a moment as it comes into view. */
 .fm-record-card.cockpit-focus { outline: 2px solid var(--status-warning); outline-offset: 2px; animation: cockpit-focus-flash 1.2s ease-out 2; }

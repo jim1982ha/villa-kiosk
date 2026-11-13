@@ -104,26 +104,14 @@ input[type="range"]::-moz-range-thumb {
   font-size: var(--text-xl); font-weight: 600; transition: all 0.2s;
   background: var(--bg-input); color: var(--text-secondary);
 }
-/* ON reuses the BADGE's own "active" language rather than a bespoke accent
-   gradient: a soft tint of the state colour, the state colour for the glyph
-   and label, and a 1.5px ring — the same triple categorySurface() hands the
-   map badges and the bottom-bar tiles. The gradient read as the app's primary
-   ACTION colour (the one solid accent a modal is allowed), which is a
-   different meaning from "this device is currently on", and it collided with
-   the bottom bar's own on/off green. Same vocabulary everywhere now, so the
-   panel's Close button stays the only solid accent on screen. */
-/* --device-* is categorySurface() for the open device's own category and
-   colour override, published on .panel-modal by BasePanel — the same call
-   that paints its header badge and its badge on the 3D map.
-   These were a literal --accent, so a device whose badge is BLUE got a green
-   On button: the comment above claimed the badge's language while the code
-   spoke the app's accent, which is a different meaning again (the one solid
-   action colour a modal is allowed). The fallbacks keep a bare
-   `.big-toggle.on` outside a device panel on the accent. */
-.big-toggle.on {
-  background: var(--device-fill, var(--accent-soft));
-  color: var(--device-ink, var(--accent));
-  box-shadow: inset 0 0 0 1.5px var(--device-ring, var(--accent));
+/* The power button (PowerToggle): a soft tint of its state's colour, the colour for the glyph and the label, and a
+   1.5px ring. ⚠️ THE STATE'S COLOUR, NOT THE CATEGORY'S (owner, 2026-11-13: "the big On button follows the state"):
+   purple when on, green when off, from utils/stateColors (PowerToggle puts powerStatus's colour in --state). It wore
+   the device's category colour when on (--device-*), a category colour being a device's identity, never a state. */
+.big-toggle.power {
+  background: color-mix(in srgb, var(--state) 18%, transparent);
+  color: var(--state);
+  box-shadow: inset 0 0 0 1.5px var(--state);
 }
 /* An emphasised ACTION in the big-toggle shape (LockPanel's "Lock door"),
    deliberately NOT .on — it carries no claim about the device's state, so it
@@ -189,22 +177,23 @@ button[aria-busy="true"] { animation: command-waiting 0.9s ease-in-out infinite;
    now. Centred, at the state pill's distances. Each window wrote its own (8 and 16px, 18 and 18, 12 and 20). The
    figures are `.value-large`, what is said beside them `.value-unit` (01-base.css). */
 .reading-large { text-align: center; margin: 8px 0 16px; }
-.status-pill.on { background: color-mix(in srgb, var(--status-on) 20%, transparent); color: var(--status-on); }
-.status-pill.off { background: var(--bg-input); color: var(--text-secondary); }
-.status-pill.danger { background: color-mix(in srgb, var(--status-danger) 22%, transparent); color: var(--status-danger); }
+/* ⚠️ ONE PILL PER MEANING (owner, 2026-11-13: one colour code for every status), the DOM side of utils/stateColors
+   STATUS_COLOR and its STATUS_PILL_CLASS: a tint of the meaning's colour, its words in it. */
+.status-pill.usual { background: color-mix(in srgb, var(--status-on) 20%, transparent); color: var(--status-on); }
+.status-pill.active { background: color-mix(in srgb, var(--status-active) 22%, transparent); color: var(--status-active); }
 /* Mid-transition (locking, opening, arming…). Named for the status meaning it
    paints rather than "pending", which on .big-toggle above means something
-   else entirely — a tap acknowledged but not yet confirmed by HA. This one is
-   a state HA has positively reported. */
+   else entirely — a tap acknowledged but not yet confirmed by the villa's system. This one is
+   a state the device has positively reported. */
 .status-pill.transitional { background: color-mix(in srgb, var(--status-pending) 20%, transparent); color: var(--status-pending); }
-.status-pill.shut { background: color-mix(in srgb, var(--cat-access-control) 20%, transparent); color: var(--cat-access-control); }
-/* Entity is unavailable/unknown to HA — a DISTINCT tone from both on/off and
-   danger. Danger ("UNLOCKED"/"OPEN") asserts a known, confirmed state; showing
-   that same tone when HA has actually LOST CONTACT with the device is a real
-   misrepresentation (a lock reporting "unavailable" is NOT confirmed unlocked
-   — its true state just isn't known), so this needs its own look. Grey, "no contact", as the badge's grey "?"
-   (owner, 2026-10-22: badge proposal 2 — amber is a fault's). */
-.status-pill.unavailable { background: color-mix(in srgb, var(--status-lost) 20%, transparent); color: var(--status-lost); }
+.status-pill.warn { background: color-mix(in srgb, var(--status-warning) 22%, transparent); color: var(--status-warning); }
+.status-pill.danger { background: color-mix(in srgb, var(--status-danger) 22%, transparent); color: var(--status-danger); }
+/* Lost contact — a DISTINCT tone from every state: a lock reporting "unavailable" is NOT confirmed unlocked, its true
+   state just isn't known. The light grey of no contact, its words in --status-lost-ink (the grey alone is too light for
+   words on the light theme). */
+.status-pill.unavailable { background: color-mix(in srgb, var(--status-lost) 30%, transparent); color: var(--status-lost-ink); }
+/* Nothing to show ("unknown"): the empty track. */
+.status-pill.novalue { background: var(--bg-input); color: var(--text-secondary); }
 
 /* --- Temperature control --- */
 .temp-stepper { display: flex; align-items: center; justify-content: center; gap: 24px; margin: 16px 0; }
@@ -810,7 +799,7 @@ button[aria-busy="true"] { animation: command-waiting 0.9s ease-in-out infinite;
 .chart-range-chip.loading { opacity: 0.6; }
 .chart-range-chip-kept { font-weight: 600; opacity: 0.8; }
 /* the ribbon: in the strip under the plot the chart already has, so it adds no height and shifts nothing */
-/* a step of the figures offline inside it (LineChart, HistoryGap.within): striped over the plot, under the tooltip */
+/* a step of the figures offline inside it (LineChart, HistoryGap.within): lost contact's grey over the plot, under the tooltip */
 .chart-within { position: absolute; opacity: 0.45; pointer-events: none; }
 /* an outage's tooltip row: the band it describes, as a swatch (LineChart outageKey); a border keeps the faint grey
    and the stripes readable on the tooltip's dark ground */
@@ -820,9 +809,10 @@ button[aria-busy="true"] { animation: command-waiting 0.9s ease-in-out infinite;
 .chart-range-ribbon i { position: absolute; top: 0; bottom: 0; background: var(--accent); }
 .chart-range-none { position: absolute; inset: 0 12px; display: flex; align-items: center; justify-content: center; text-align: center; font-size: var(--text-xs); color: var(--text-secondary); pointer-events: none; }
 .chart-range-chip-x { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; border-radius: 50%; background: var(--accent); color: var(--bg-modal); }
-/* What the range leaves out: fine diagonal stripes in the lost-contact grey, over the grid and the line. */
-.chart-range-hatch-bg { fill: var(--status-lost); opacity: 0.05; }
-.chart-range-hatch { stroke: var(--status-lost); stroke-width: 1.6; opacity: 0.3; }
+/* What the range leaves out: fine diagonal stripes in the text's grey, over the grid and the line — a filter, never a
+   state, so never lost contact's grey (owner, 2026-11-13: one meaning per colour). */
+.chart-range-hatch-bg { fill: var(--text-secondary); opacity: 0.05; }
+.chart-range-hatch { stroke: var(--text-secondary); stroke-width: 1.6; opacity: 0.3; }
 .chart-gridline { position: absolute; left: 0; right: 0; border-top: 1px solid var(--hairline); pointer-events: none; }
 
 /* ── Energy (EnergyPanel): the Weather window's layout, Home Assistant
