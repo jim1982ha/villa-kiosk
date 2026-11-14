@@ -1,3 +1,13 @@
+## 2.496.806
+
+- **A shared room chip now shows one room and a + button.** As soon as two or more rooms share a chip, it shows only
+  the busiest room, then a line such as "1 more" or "8 more" with the + button. Everything else works as in 2.496.805:
+  tap the line to see every room, and the + takes the colour of anything hidden that needs a look.
+- **The + and − are centred in their circle.** They are now drawn exactly in the middle instead of sitting off-centre.
+- **"All right" is green.** The number on a room chip, and the + and − buttons when nothing is wrong, are green instead
+  of purple, so with amber, grey and red they read like a traffic light. The Legend says "Green number". A device's
+  own usual state stays purple.
+
 ## 2.496.805
 
 - **A shared room chip shows two rooms and a + button.** When many rooms share one chip on the map, it now lists only

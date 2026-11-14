@@ -187,6 +187,50 @@ export function countBaseline(alpha: ArrayLike<number>, size: number): number {
   return size / 2 + inkNudge(alpha, size).dy;
 }
 
+/** A room chip's toggle pill: "+" opens the folded chip, "−" folds it. */
+interface ToggleBadgeSpec { mark: "+" | "\u2212"; fill: string; ink: string; drawnPx: number }
+
+/** The bar's thickness and the mark's span, as fractions of the pill. */
+const TOGGLE_BAR = 0.14, TOGGLE_SPAN = 0.5;
+
+/** `n` px rounded to the nearest whole number of the same parity as `size`,
+ *  so a bar of it centred in `size` px starts on a whole pixel. */
+function sameParity(n: number, size: number): number {
+  let r = Math.round(n);
+  if ((size - r) % 2 !== 0) r += n >= r ? 1 : -1;
+  return r < 1 ? r + 2 : r;
+}
+
+/**
+ * The toggle pill as a data URL: the circle and its mark DRAWN as bars from
+ * the circle's centre, not a glyph. A "+" from the font sat off-centre on the
+ * owner's screen (owner, 2026-11-14): a glyph's ink is wherever the font put
+ * it. Each bar's length and thickness share the pill's parity, so it lands on
+ * whole pixels exactly in the middle at every baked size. Cached per picture.
+ */
+export function toggleBadgeImage(s: ToggleBadgeSpec): string {
+  const px = bakeSizeFor(s.drawnPx);
+  const key = `toggle|${s.mark}|${s.fill}|${s.ink}|${px}`;
+  const hit = countCache.get(key);
+  if (hit) return hit;
+  const canvas = typeof document !== "undefined" ? document.createElement("canvas") : null;
+  const ctx = canvas?.getContext("2d");
+  if (!canvas || !ctx) return "";
+  canvas.width = canvas.height = px;
+  ctx.beginPath();
+  ctx.arc(px / 2, px / 2, px / 2, 0, Math.PI * 2);
+  ctx.fillStyle = s.fill;
+  ctx.fill();
+  ctx.fillStyle = s.ink;
+  const t = sameParity(px * TOGGLE_BAR, px), l = sameParity(px * TOGGLE_SPAN, px);
+  ctx.fillRect((px - l) / 2, (px - t) / 2, l, t);
+  if (s.mark === "+") ctx.fillRect((px - t) / 2, (px - l) / 2, t, l);
+  const url = canvas.toDataURL("image/png");
+  if (countCache.size > 256) countCache.clear();
+  countCache.set(key, url);
+  return url;
+}
+
 /** The count pill as a data URL: a filled circle and its number, baked at the
  *  drawn size and ink-centred (see above). Cached per picture. */
 export function countBadgeImage(s: CountBadgeSpec): string {

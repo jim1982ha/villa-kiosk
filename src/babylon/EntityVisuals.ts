@@ -139,7 +139,7 @@ import type { FrameRequests } from "./frameScheduler";
 import { badgeImage, PICTURE_SCALE } from "./badgeIcons";
 import { applyBadgeFrame, badgeRing, badgeBakePx, BADGE_INSET_CARD, BADGE_CORNER_FRACTION, NO_RING } from "./badgeLook";
 import { DashableRectangle } from "./dashableRectangle";
-import { badgeText, countBadgeImage } from "./badgeText";
+import { badgeText, countBadgeImage, toggleBadgeImage } from "./badgeText";
 import { badgeShadow } from "./badgeShadow";
 import { cameraFrame } from "./cameraFrame";
 import {
@@ -514,8 +514,6 @@ const CAMERA_LOCAL_FORWARD = new Vector3(0, 0, 1);
  *  (read as "just black" at a glance). Deliberately outside every category
  *  hue (green/orange/purple/gold/blue) so a chip reads as UI chrome — a
  *  navigation affordance, not a device — rather than any category's badge. */
-/** How much larger a chip's toggle mark ("+", "−") is drawn than a count's digits (renderChips). */
-const CHIP_TOGGLE_MARK_SCALE = 1.7;
 const CLUSTER_BG_COLOR = "#475569"; // until the first pass paints the idle badge's surface (renderChips)
 /** How far a room chip's count pill sits inside its line's top-right corner. */
 const CHIP_COUNT_INSET_PX = 3;
@@ -5218,7 +5216,7 @@ export class EntityVisuals {
       //
       // Each pill carries ITS room's HEALTH (colors.healthPill): red if a
       // member needs attention, amber for an open fault, grey for lost
-      // contact, purple otherwise — what that room's own chip would show.
+      // contact, green otherwise — what that room's own chip would show.
       // A baked picture, number ink-centred inside it — see
       // badgeText.countBadgeImage for why it is no longer a Rectangle and a
       // TextBlock.
@@ -5232,8 +5230,8 @@ export class EntityVisuals {
       // 2.496.263). Baked once for this device's best case, a zoom costs a
       // container re-scale and nothing else — glyphBakePx's rule.
       const csm = this.summaryMetrics();
-      // ── FOLDED: TWO ROOMS AND A `+` ROW (owner, 2026-11-14) ─────────────
-      // A chip of many rooms draws its two busiest and a "N more" row whose
+      // ── FOLDED: ONE ROOM AND A `+` ROW (owner, 2026-11-14) ──────────────
+      // A chip of several rooms draws its busiest and a "N more" row whose
       // pill is "+" in the worst colour among the rooms it hides; tapped, it
       // opens over its neighbours with every line and a "−" row
       // (summaryLook.roomChipModel's `slots` and `toggle`; the open layout is
@@ -5277,14 +5275,12 @@ export class EntityVisuals {
         row.count.left = `${-CHIP_COUNT_INSET_PX - (cols - 1 - col) * colPx}px`;
         row.zone.width = cols > 1 ? `${colPx}px` : "100%";
         row.zone.left = `${col * colPx}px`;
-        row.count.source = countBadgeImage({
-          text: pill.text,
-          ...healthPill(pill.health),
-          drawnPx: badgeBakePx(csm.countSize, this.iconUserScale, this.bestCssToGui()),
-          // A "+" or "−" is a fraction of a digit's ink at the same size: drawn
-          // larger, so the toggle reads as a button and not a speck.
-          fontOfSize: (csm.countFont / csm.countSize) * (line ? 1 : CHIP_TOGGLE_MARK_SCALE),
-        });
+        const drawnPx = badgeBakePx(csm.countSize, this.iconUserScale, this.bestCssToGui());
+        // A count is a number from the font; the toggle's "+" / "−" is DRAWN,
+        // exactly centred in its circle (badgeText.toggleBadgeImage).
+        row.count.source = line
+          ? countBadgeImage({ text: pill.text, ...healthPill(pill.health), drawnPx, fontOfSize: csm.countFont / csm.countSize })
+          : toggleBadgeImage({ mark: model.toggle!.mark, ...healthPill(pill.health), drawnPx });
         row.text.isVisible = row.count.isVisible = row.zone.isVisible = true;
       }
       for (let i = n; i < c.lines.length; i++) {

@@ -85,23 +85,23 @@ export interface RoomChip {
 export interface ChipLayout { cols: number; rows: number; halfW: number; halfH: number; dx: number; dy: number }
 
 /**
- * A merged chip of more lines than this plus one draws FOLDED: its first
- * FOLDED_LINES lines (orderLines: the busiest rooms), then a `+` row that opens
- * it (owner, 2026-11-14: a ten-line chip covered the map). Three lines show
- * all three: a "1 more" row would take the place of the line it hides.
+ * A merged chip draws FOLDED: its first FOLDED_LINES lines (orderLines: the
+ * busiest room), then a `+ N more` row that opens it, so it is never more
+ * than two lines tall (owner, 2026-11-14: "show maximum of 2 rooms (ie: 2
+ * lines)"; a ten-line chip covered the map).
  */
-export const FOLDED_LINES = 2;
+export const FOLDED_LINES = 1;
 
-/** Whether a chip of `lines` lines folds. */
+/** Whether a chip of `lines` lines folds: any chip of more than one room. */
 export function chipFolds(lines: number): boolean {
-  return lines > FOLDED_LINES + 1;
+  return lines > FOLDED_LINES;
 }
 
 /** What one ROW of a drawn chip holds: a line (its index in `lines`), or the
  *  row that opens or closes the chip. */
 export type ChipSlot = number | "toggle";
 
-/** The rows of a chip of `lines` lines, top to bottom: every line when it
+/** The rows of a chip of `lines` lines, top to bottom: its one line when it
  *  does not fold; folded, its first FOLDED_LINES and the toggle; opened, every
  *  line and the toggle. */
 export function chipSlots(lines: number, open: boolean): ChipSlot[] {

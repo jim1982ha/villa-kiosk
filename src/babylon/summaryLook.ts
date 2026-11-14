@@ -126,7 +126,7 @@ export interface RoomChipModel {
 export interface ChipToggle {
   label: string;
   /** What its pill shows: "+" opens, "−" closes. */
-  mark: string;
+  mark: "+" | "\u2212";
   /** Its pill's colour: folded, the WORST health among the lines it hides
    *  (red beats amber beats grey), so folding never hides trouble; open,
    *  "ok" — every line shows its own. */
@@ -176,7 +176,7 @@ export function roomChipModel(chip: RoomChip, walking: boolean, occluded: (id: s
     slots,
     toggle: slots.includes("toggle") ? {
       label: chipToggleLabel(chip.lines.length, open),
-      mark: open ? "\u2212" : "+",
+      mark: open ? "\u2212" as const : "+" as const,
       health: open ? "ok" : HEALTH_ORDER[Math.min(...chip.lines
         .filter((_, i) => !slots.includes(i)).map((l) => HEALTH_ORDER.indexOf(roomHealth(l))))],
     } : null,

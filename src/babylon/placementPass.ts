@@ -1842,8 +1842,8 @@ export class PlacementPass {
       // already reserves (charging it again merged pills that were clear).
       // The WIDEST line: every line of a merged chip shares its width, names
       // on the left and the pills in one right-hand column — per column.
-      // ── FOLDED: AT MOST THREE ROWS (owner, 2026-11-14) ────────────────────
-      // A chip of many rooms draws its two busiest and a `+ N more` row
+      // ── FOLDED: AT MOST TWO ROWS (owner, 2026-11-14) ──────────────────────
+      // A chip of several rooms draws its busiest and a `+ N more` row
       // (roomChips.chipSlots), and it is THAT box the merge and the placement
       // reserve, so other chips keep their room; opened, it draws over them
       // (`spread`, below). The widest of the rows it draws.

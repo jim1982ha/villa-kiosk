@@ -96,7 +96,7 @@ console.log("\n  a merged chip lists its rooms (owner, 2026-11-14: was \"Living 
   ck("  ...busiest room first, then by room (stable however the merge went)",
      model.lines.map((l) => `${l.label} (${l.count})`).join(", ") === "Master Bedroom (3), Den (2), Study (2), Hall (1), Master Bathroom (1)",
      model.lines.map((l) => `${l.label} (${l.count})`));
-  ck("  ...each pill its OWN room's health: red alert, amber fault, grey lost, purple all right",
+  ck("  ...each pill its OWN room's health: red alert, amber fault, grey lost, green all right",
      model.lines.map((l) => `${l.room}=${l.health}`).join() === "Master Bedroom=alert,Den=ok,Study=fault,Hall=ok,Master Bathroom=unavailable",
      model.lines.map((l) => [l.room, l.health]));
   ck("  ...each line's pill is the colour and number that room's chip shows standing alone",
@@ -152,7 +152,7 @@ console.log("\n  a merged chip is one line per room TALL, and the merge still se
   const grown = derive([at("k", "kitchen", 0), at("p", "pantry", 0), at("t", "attic", 1.75 * UNIT)]);
   ck("a second room on the same spot makes a TWO-line chip, which reaches it: all three merge",
      grown.length === 1 && grown[0].lines.length === 3, grown.map((c) => c.lines.map((l) => l.room)));
-  ck("  ...the chip is measured one line per room tall", grown[0].halfH === (3 * UNIT) / 2, grown[0].halfH);
+  ck("  ...the merged chip is measured FOLDED: its busiest room and the `+` row, two lines tall", grown[0].halfH === (2 * UNIT) / 2, grown[0].halfH);
   const pile = derive(Array.from({ length: 8 }, (_, i) => at(`r${i}`, `room${i}`, i * 0.9 * UNIT)));
   ck("  ...a column of eight rooms, each grown chip reaching the next, settles with nothing overlapping",
      clear(pile) && pile.reduce((n, c) => n + c.lines.length, 0) === 8, pile.map((c) => c.lines.length));
@@ -193,8 +193,8 @@ console.log("\n  a merged chip is one line per room TALL, and the merge still se
     ck("a room wholly off the screen keeps its chip there, unseen, not lined up along the edge", away.dx === 0 && away.dy === 0 && edges(chipBox(away)).r < 0);
     const many = Array.from({ length: 30 }, (_, i) => atPx(`d${i}`, `room ${String(i).padStart(2, "0")}`, cx0, 700));
     const [tall] = derive(many, cover);
-    ck("thirty rooms on one spot: one chip, drawn FOLDED: its two busiest rooms and a row that opens it",
-       tall.lines.length === 30 && tall.cols === 1 && tall.rows === 3 && tall.halfH === (3 * UNIT) / 2, [tall.cols, tall.rows]);
+    ck("thirty rooms on one spot: one chip, drawn FOLDED: its busiest room and a row that opens it",
+       tall.lines.length === 30 && tall.cols === 1 && tall.rows === 2 && tall.halfH === (2 * UNIT) / 2, [tall.cols, tall.rows]);
     const [wide] = derive(many, cover, tall.key);
     const w = drawnLayout(wide), wb = { cx: wide.x + w.dx, cy: wide.y - w.halfH + w.dy, hw: w.halfW, hh: w.halfH };
     ck("  ...opened, it shows all thirty and the row that folds it, in columns, taller than the map",
@@ -206,8 +206,8 @@ console.log("\n  a merged chip is one line per room TALL, and the merge still se
     ck("  ...each column fills top-down, a tap on any line names that line's room, the last row folds it",
        tapped.slice(0, 30).every((t, i) => t === i) && tapped[30] === "toggle", tapped);
     const fb = chipBox(tall);
-    ck("  ...folded, a tap on its two lines names them and on its third row opens it",
-       [0, 1, 2].map((r) => chipSlotAt(tall, fb.cx, fb.cy - fb.hh + (r + 0.5) * (2 * fb.hh / 3))).join() === "0,1,toggle");
+    ck("  ...folded, a tap on its line names that room and on its second row opens it",
+       [0, 1].map((r) => chipSlotAt(tall, fb.cx, fb.cy - fb.hh + (r + 0.5) * (2 * fb.hh / 2))).join() === "0,toggle");
     const back = derive([...many].reverse(), cover)[0];
     ck("  ...and it settles the same whatever order the rooms come in",
        JSON.stringify(back.lines.map((l) => l.room)) === JSON.stringify(tall.lines.map((l) => l.room)) && back.cols === tall.cols && back.dy === tall.dy);
@@ -223,7 +223,7 @@ console.log("\n  a merged chip is one line per room TALL, and the merge still se
          [shut.map(chipBox), opened.map(chipBox)]);
       ck("  ...only the opened chip is drawn open, taller than it was folded",
          opened.filter((ch) => ch.open).length === 1 && drawnLayout(opened.find((ch) => ch.open)).halfH > big.halfH);
-      ck("  ...and a key naming a chip of three rooms or fewer opens nothing",
+      ck("  ...and a key naming a chip of one room opens nothing",
          derive(crowd, cover, shut.find((ch) => ch.lines.length === 1).key).every((ch) => !ch.open));
     }
     const pile = derive(Array.from({ length: 12 }, (_, i) => atPx(`q${i}`, `room${i}`, cx0 + (i % 3) * 30, 250 - i * 20)), cover);
@@ -257,10 +257,14 @@ console.log("\n  a chip of many rooms is drawn folded, and folding never hides t
     return mergeOverlapping(cs, 2, (c) => c.ids.length, (keep, drop) => combineChips(keep, drop))[0];
   };
   const rowsOf = (chip) => roomChipModel(chip, false, () => false).slots;
-  ck("three rooms draw all three lines, no `+` row", rowsOf(merged(3)).join() === "0,1,2" && !roomChipModel(merged(3), false, () => false).toggle);
+  const lone = bucketRoomChips([M("a", "r", 0, "off")], () => true, (k) => k)[0];
+  ck("a chip of one room draws its one line, no `+` row", rowsOf(lone).join() === "0" && !roomChipModel(lone, false, () => false).toggle);
+  ck("two rooms draw the busiest, then the `+` row", rowsOf(merged(2)).join() === "0,toggle"
+     && roomChipModel(merged(2), false, () => false).lines[0].room === "R0");
   const ten = merged(10);
-  ck("ten rooms draw the two busiest, then the `+` row", rowsOf(ten).join() === "0,1,toggle"
-     && roomChipModel(ten, false, () => false).lines.slice(0, 2).map((l) => l.room).join() === "R0,R1");
+  ck("ten rooms draw the busiest, then the `+` row", rowsOf(ten).join() === "0,toggle");
+  ck("  ...a hidden second room's trouble shows on the `+` of a two-room chip",
+     healthPill(roomChipModel(merged(2, { 1: "alert" }), false, () => false).toggle.health).fill === healthPill("alert").fill);
   const pillOf = (chip) => healthPill(roomChipModel(chip, false, () => false).toggle.health).fill;
   const lineFill = (h) => healthPill(h).fill;
   ck("  ...all its hidden rooms all right: the `+` pill is the all-right colour", pillOf(ten) === lineFill("ok"));

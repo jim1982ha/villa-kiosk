@@ -50,7 +50,7 @@ const CHIP_RINGS: { label: string; frame: "active" | "rest"; note: string }[] = 
   { label: "No border", frame: "rest", note: "Everything in the room is off or resting" },
 ];
 const CHIP_COUNTS: { label: string; health: RoomHealth; note: string }[] = [
-  { label: "Purple number", health: "ok", note: "All right, every device is reporting and nothing needs attention" },
+  { label: "Green number", health: "ok", note: "All right, every device is reporting and nothing needs attention" },
   { label: "Grey number", health: "unavailable", note: "No contact with a device in the room" },
   { label: "Amber number", health: "fault", note: "A device in the room has an open fault, shown before grey" },
   { label: "Red number", health: "alert", note: "Act now: an alarm, or a critical device gone silent, shown first" },
