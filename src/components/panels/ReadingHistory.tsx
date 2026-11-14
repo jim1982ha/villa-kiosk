@@ -11,6 +11,7 @@ import { useConfig } from "@/config/ConfigContext";
 import { labelOf } from "@/config/EntityMap";
 import { historyOf, readingOf } from "@/config/reading";
 import { domainOf } from "@/utils/entityDomain";
+import { useTrendColor } from "./trendHue";
 
 export default function ReadingHistory({ entityId, mappingType }: {
   entityId: string;
@@ -22,8 +23,9 @@ export default function ReadingHistory({ entityId, mappingType }: {
   const entity = entities[entityId];
   const r = readingOf(entityId, entity, mappingType ?? domainOf(entityId));
   const unit = entity?.attributes.unit_of_measurement ?? "";
+  const trend = useTrendColor();
   return historyOf(r) === "states" ? <LastDayTimeline entityId={entityId} colorFor={r.stateColor ?? undefined} />
     : historyOf(r) === "words" ? <LastDayTimeline entityId={entityId} palette />
     : <NumericHistory name={labelOf(entityId, config.entityMap, entities)}
-      series={[{ id: entityId, label: "Reading", unit, color: r.seriesColor }]} />;
+      series={[{ id: entityId, label: "Reading", unit, color: trend(r.seriesColor) }]} />;
 }

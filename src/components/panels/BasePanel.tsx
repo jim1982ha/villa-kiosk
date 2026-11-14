@@ -14,7 +14,7 @@
 import Window, { WindowHeader } from "@/components/common/Window";
 import { useState, type ReactNode } from "react";
 import { linkedSwitchProps, usePanelActions } from "./PanelActionsContext";
-import { linkedStateWords } from "./panelHeader";
+import { TrendHue } from "./trendHue";
 import { badgeImage } from "@/babylon/badgeIcons";
 import { EditButton, FaultsButton, OpenTicketButton, useDeviceWarning } from "./DeviceWindowPieces";
 import DeviceReadings from "./DeviceReadings";
@@ -123,6 +123,9 @@ export default function BasePanel({ title, entityId, icon, className, headerActi
   // editor — no fixed stylesheet could enumerate it. Absent (a group panel,
   // or a profile that can't see the badge) the CSS falls back to the accent.
   const deviceTint = badge && categorySurface(badge.category, "active", badge.color);
+  // The family's colour for this device's value and trend (trendHue): its badge's hue — the category's, or the one
+  // picked for this badge. Others has no family colour of its own: its trend keeps the usual purple.
+  const trendHue = badge && (badge.category !== "others" || badge.color) ? deviceTint!.ink : null;
 
   const headerIcon = badge
     ? canRecolor
@@ -173,32 +176,10 @@ export default function BasePanel({ title, entityId, icon, className, headerActi
         )}
       </WindowHeader>
       <div className="modal-body">
+        <TrendHue.Provider value={trendHue}>
         {/* one range for the window's bands: the device's and its linked sensor's (HistoryRangeShare) */}
         <HistoryRangeShare device={entityId}
-          follow={[linkedSensor?.entityId, motion?.entityId].filter((id): id is string => !!id)}>
-        {/* The device's linked entity, if one is configured (Advanced
-            Settings). Rendered HERE, in the shared chrome, so every panel
-            type gets it identically the moment that field is set — this is
-            what replaced the old camera-only long-press toggle. Reuses the
-            same switch as the group modal's per-device rows rather than a
-            second bespoke control. */}
-        {linked && (
-          <div className="panel-linked-row">
-            <button
-              className={`summary-entity-toggle${linked.isOn ? " on" : ""}`}
-              {...linkedSwitchProps(linked)}
-              data-tip={linked.isOn ? "Turn off" : "Turn on"}
-            >
-              <span className="knob" />
-            </button>
-            <div style={{ minWidth: 0 }}>
-              <div className="panel-linked-label" data-tip={linked.label}>{linked.label}</div>
-              <div className="fine-print">
-                {linkedStateWords(linked)} · linked entity
-              </div>
-            </div>
-          </div>
-        )}
+          follow={[linked?.entityId, linkedSensor?.entityId, motion?.entityId].filter((id): id is string => !!id)}>
         {(missing || offline) && <UnavailableNotice entityId={entityId} />}
         {!missing && children}
         {/* The "last N hours" history section — rendered HERE, in the shared
@@ -221,6 +202,20 @@ export default function BasePanel({ title, entityId, icon, className, headerActi
         {/* A linked SENSOR has nothing to switch: its band, under the device's own, at its width and over its range
             (owner, 2026-10-21) — LinkedSensorRow */}
         {linkedSensor && <LinkedSensorRow entityId={linkedSensor.entityId} label={linkedSensor.label} role="linked entity" />}
+        {/* The device's linked entity that can be SWITCHED (Advanced Settings), in every panel type: the same row, the
+            same place, as a linked sensor and a camera's motion sensor (owner, 2026-11-14: it sat above the reading),
+            its switch before its name, its band over the window's range. The same switch as the group window's rows. */}
+        {linked && (
+          <LinkedSensorRow entityId={linked.entityId} label={linked.label} role="linked entity" control={(
+            <button
+              className={`summary-entity-toggle${linked.isOn ? " on" : ""}`}
+              {...linkedSwitchProps(linked)}
+              data-tip={linked.isOn ? "Turn off" : "Turn on"}
+            >
+              <span className="knob" />
+            </button>
+          )} />
+        )}
         {/* a camera's motion sensor: the same band, the same place (owner, 2026-10-21: "apply consistently the same
             layout for motion sensor linked to camera") — it was a dot and "Clear · motion sensor" at the top */}
         {motion && <LinkedSensorRow entityId={motion.entityId} label={motion.label} role="motion sensor" />}
@@ -230,6 +225,7 @@ export default function BasePanel({ title, entityId, icon, className, headerActi
             its own to be found in. */}
         {deviceReadings !== false && <DeviceReadings />}
         </HistoryRangeShare>
+        </TrendHue.Provider>
       </div>
       {/* The shared footer (ModalFooter): the left group is always there,
           empty or not, so Close sits right as in every dialog. */}

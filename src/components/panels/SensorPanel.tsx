@@ -12,6 +12,7 @@ import ReadingPill from "./ReadingPill";
 import type { PanelProps } from "@/types/panel.types";
 import { readingOf } from "@/config/reading";
 import { useStatusRule } from "./PanelActionsContext";
+import { TrendText } from "./trendHue";
 import { binarySensorClassInfo } from "@/config/BinarySensorClasses";
 import { effectiveSensorClass, SENSOR_CLASS_ICON } from "@/config/SensorClasses";
 
@@ -43,7 +44,7 @@ export default function SensorPanel({ entity, mapping, onClose }: PanelProps) {
         {/* ⚠️ THE SAME RULE THE BADGE USES (utils/entityValue, inside
             config/reading): a 6570.989 W sensor reads "6.6 kW" here as on
             the badge in the villa behind it. */}
-        <span className="value-large" style={{ color: r.color }}>{r.value}</span>{" "}
+        <TrendText className="value-large" color={r.color}>{r.value}</TrendText>{" "}
         {r.unit && <span className="value-unit">{r.unit}</span>}
       </div>
       ))}

@@ -1,3 +1,20 @@
+## 2.496.811
+
+- **The villa's "Empty" button is no longer purple.** Under the floor buttons on the left, the house icon of an empty
+  villa is now drawn in the same colour as the other buttons there, in light and dark themes. "In" (someone there)
+  stays green and an unknown presence stays grey.
+
+## 2.496.810
+
+- **A device's reading and history are in its family's colour.** In a device's window, the big value, its history
+  chart (line, shading and the numbers beside it, in the larger chart too) and its history bar now use the colour of
+  the device's family, the same colour as its icon and its button in the top bar: blue for energy, green for network,
+  orange for comfort, and so on. They were purple. Red, amber and grey keep their meaning, and devices in Others keep
+  purple.
+- **The linked device sits under the history.** In every device window, a linked device that can be switched (such as
+  an access point's LED) now sits below the history, where a camera shows its motion sensor: its switch and name,
+  then its own history bar over the same period. It used to sit above the reading.
+
 ## 2.496.809
 
 - **An open room chip no longer covers anything.** When you tap a chip's +N pill, the full list now gets its own room on
