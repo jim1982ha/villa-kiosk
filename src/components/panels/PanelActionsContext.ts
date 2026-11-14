@@ -63,6 +63,8 @@ export interface PanelActions {
    *  which is why the two live and die together. Undefined = no linked entity
    *  configured, or read-only profile: the switch is then not rendered. */
   linked?: {
+    /** The linked entity: its band under the window's history (LinkedSensorRow). */
+    entityId: string;
     /** Resolved display name of the linked entity, for the switch's label. */
     label: string;
     /** Live state — drives both the switch position and the header ring. */

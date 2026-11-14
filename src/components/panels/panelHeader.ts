@@ -36,7 +36,7 @@ interface PanelHeader {
   };
   /** The linked switch (EntityMapping.linkedEntityId), when it has one, it can be switched and
    *  this profile may control it. */
-  linked: LinkedState & { label: string } | null;
+  linked: LinkedState & { entityId: string; label: string } | null;
   /** The linked entity when it is a binary_sensor: a reading, never a switch — drawn as its band (LinkedSensorRow),
    *  whatever the profile (owner, 2026-10-21). */
   linkedSensor: { entityId: string; label: string } | null;
@@ -112,7 +112,7 @@ export function panelHeader({ panel, entities, config, canControl, linkedSwitch 
       statusRule: look.statusRule,
     },
     linked: linkedId && !linkedIsSensor && canControl && linkedSwitch
-      ? { label: labelOf(linkedId, config.entityMap, entities), ...linkedSwitch }
+      ? { entityId: linkedId, label: labelOf(linkedId, config.entityMap, entities), ...linkedSwitch }
       : null,
     // a camera's motion sensor is its motion band (below), never a second band beside it
     linkedSensor: linkedId && linkedIsSensor && linkedId !== motionId

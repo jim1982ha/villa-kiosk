@@ -843,21 +843,15 @@
 }
 .summary-entity-toggle.on .knob { transform: translateX(20px); }
 
-/* Linked-entity switch at the top of every device panel (BasePanel) — set
-   apart from the panel's own controls by a card background + rule, since it
-   acts on a DIFFERENT entity than the rest of the panel and shouldn't read as
-   one of that device's own controls. */
-.panel-linked-row {
-  display: flex; align-items: center; gap: 4px;
-  padding: 10px 12px; margin-bottom: 14px;
-  border-radius: var(--card-radius); background: var(--bg-card); border: var(--card-border);
-}
 .panel-linked-label {
   font-size: var(--text-base); font-weight: 600;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-/* A linked SENSOR's band (LinkedSensorRow), under the device's own: its name above it */
+/* A linked entity's band (LinkedSensorRow), under the device's own: its name above it, a switchable one's switch
+   before its name (owner, 2026-11-14: the switch row sat above the reading) */
 .panel-linked-history .panel-linked-label { margin-bottom: 6px; }
+.panel-linked-head { display: flex; align-items: center; gap: 4px; margin-bottom: 6px; min-width: 0; }
+.panel-linked-head .panel-linked-label { margin-bottom: 0; min-width: 0; }
 
 @media (max-width: 720px) {
   /* THE BAR HUGS ITS TILES. It is a floating surface like every other one in

@@ -20,6 +20,7 @@ import { useHistoryRange, useDeviceBand, HistoryHeader, useKeptFrom } from "./hi
 import { aggregationWords, chartAbout } from "./chartUtils";
 import { HOUR_MS } from "@/utils/localDay";
 import { historyStateColor, isNoHistory, paletteColorFor } from "@/utils/stateColors";
+import { useTrendColor } from "./trendHue";
 
 export default function LastDayTimeline({
   entityId, colorFor, palette = false, words,
@@ -50,7 +51,10 @@ export default function LastDayTimeline({
   const { entities } = useHA();
   // the "no longer kept" stretch is not one of the device's states: never in its palette (historySource.keptFrom)
   const held = data.map((p) => p.state).filter((s) => !isNoHistory(s));
-  const paint = colorFor ?? (palette ? paletteColorFor(held) : historyStateColor(entityId));
+  const trend = useTrendColor();
+  const base = colorFor ?? (palette ? paletteColorFor(held) : historyStateColor(entityId));
+  // the device's usual state in its family's colour, in its own window (trendHue)
+  const paint = (s: string) => trend(base(s));
   return (
     <div className="field">
       <HistoryHeader title={range.title} note={lastReportNote(lastSeen)} picker={picker} step={aggregationWords(range.grainMs, null)}
