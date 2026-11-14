@@ -1,3 +1,9 @@
+## 0.12.515
+
+- Nothing changes in the VESTA Agent itself. Its copy of the villa's visit package now matches the villa's: it names
+  the script VESTA tells the villa with and the "VESTA reminder after" setting, so the Presence Guard no longer asks
+  for them.
+
 ## 0.12.514
 
 - **A step Telegram did not deliver stays in the alert's story.** When Telegram refuses a chat (someone who never
