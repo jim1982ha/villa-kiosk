@@ -11,6 +11,8 @@ import { readingOf, stateWords } from "@/config/reading";
 import { historyStateColor } from "@/utils/stateColors";
 import StateTimeline from "./StateTimeline";
 import { useFollowerBand, useSharedRange } from "./historyRange";
+import { AlignedToChart, useChartFrame } from "./chartFrame";
+import { HOUR_MS } from "@/utils/localDay";
 
 /** The band's height (px): thinner than the device's own band above it, thick enough to read. */
 export const LINKED_BAND_PX = 28;
@@ -36,20 +38,25 @@ export default function LinkedSensorRow({ entityId, label, role, control }: {
   // silent, and stayed on today when the device's band had moved
   const { data, status, end } = useFollowerBand(entityId);
   const reading = control ? null : readingOf(entityId, entity, "binary_sensor");
+  // ⚠️ UNDER THE WINDOW'S CHART, EXACTLY (owner, 2026-11-14): its bar over the plot's own columns and time (chartFrame)
+  const frame = useChartFrame();
+  const span = frame?.window;
   const name = <div className="panel-linked-label" data-tip={`${label} (${role})`}>{label} <span className="muted">({role})</span></div>;
   return (
     <div className="field panel-linked-history">
       {control ? <div className="panel-linked-head">{control}{name}</div> : name}
+      <AlignedToChart frame={frame}>
       <StateTimeline
         data={data}
         status={status}
-        hours={range.hours}
+        hours={span ? (span.to - span.from) / HOUR_MS : range.hours}
         grainMs={range.grainMs}
-        end={end}
+        end={span ? span.to : end}
         height={LINKED_BAND_PX}
         colorFor={reading?.stateColor ?? historyStateColor(entityId)}
         labelFor={stateWords(entityId, entity?.attributes.device_class as string | undefined)}
       />
+      </AlignedToChart>
     </div>
   );
 }

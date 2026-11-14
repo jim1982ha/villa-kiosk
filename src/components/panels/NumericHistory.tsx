@@ -92,11 +92,12 @@ export default function NumericHistory({ series, named = false, name }: {
     drawsUnkept(series.map((s) => history[s.id])));
   const header = (title: string) => <HistoryHeader title={title} picker={picker} step={step} about={about} />;
   /** A one-line chart, small (110px) or at the window's height, with its filter. */
-  const oneLine = (s: NumericSeries, label: string) => {
+  // `framed`: the window's one chart, whose plot its linked bands line up with (chartFrame) — the small one only
+  const oneLine = (s: NumericSeries, label: string, framed = false) => {
     const f = filtered(s);
     return (height: number | undefined, onExpand?: () => void) => (
       <LineChart stepMs={range.grainMs} label={label} height={height ?? 110} status={status} window={f.window}
-        lines={f.lines} filter={f.filter} onExpand={onExpand} />
+        lines={f.lines} filter={f.filter} onExpand={onExpand} frame={framed && height === undefined} />
     );
   };
 
@@ -105,7 +106,7 @@ export default function NumericHistory({ series, named = false, name }: {
     return (
       <div className="field">
         {header(range.title)}
-        <ExpandableChart title={name ?? series[0].label} head={header(range.title)} chart={oneLine(series[0], "History")} />
+        <ExpandableChart title={name ?? series[0].label} head={header(range.title)} chart={oneLine(series[0], "History", true)} />
       </div>
     );
   }
@@ -117,7 +118,7 @@ export default function NumericHistory({ series, named = false, name }: {
         <ExpandableChart title={name ?? `${a.label} and ${b.label}`} head={header(range.title)} chart={(height, onExpand) => (
           <>
             <LineChart stepMs={range.grainMs} label={`${a.label} and ${b.label} history`} height={height ?? 120}
-              window={history[a.id]?.window} status={status}
+              window={history[a.id]?.window} status={status} frame={height === undefined}
               lines={[line(a, { scale: "own" }), line(b, { dashed: true, scale: "own" })]} onExpand={onExpand} />
             <div className="fine-print chart-key under">
               <span><span style={{ color: a.color }}>●</span> {a.label}</span>
