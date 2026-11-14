@@ -26,7 +26,7 @@ export const isNoHistory = (state: string): boolean => state === NOT_KEPT || sta
  *   usual         green        alive, in its usual state: off, closed, locked, clear, disarmed, docked, idle
  *   active        red          on, doing something, nothing wrong: on, open, unlocked, motion seen, occupied, playing,
  *                              armed
- *   transitional  teal         moving, only while it moves: opening, closing, locking, arming, returning
+ *   transitional  blue         in between: moving (opening, closing, locking, arming, returning), or a cover partly open
  *   warn          amber        needs a look: a late maintenance, a state marked as a warning
  *   alert         purple       an alarm: a leak, smoke, jammed, a fault word, a critical device offline
  * ⚠️ SWAPPED (owner, 2026-11-15): usual was purple, active green, alarm red; a lock was its own exception (locked green,
