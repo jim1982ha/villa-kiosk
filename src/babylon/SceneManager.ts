@@ -427,6 +427,18 @@ export class SceneManager {
     const handleTap = (x: number, y: number) => {
       tapDebug(`TAP client(${x.toFixed(0)},${y.toFixed(0)})`);
       const hit = resolveHit(this.hitPickers(true), x, y);
+      // A folded chip's `+` row opens it over its neighbours; the open chip's
+      // `−` row folds it (owner, 2026-11-14).
+      if (hit.kind === "room" && hit.toggle) {
+        this.visuals.setOpenChip(this.visuals.openChip() === hit.key ? null : hit.key);
+        return;
+      }
+      // While a chip is open, a tap anywhere off it only folds it: what it was
+      // drawn over is the next tap's.
+      if (this.visuals.openChip() && !(hit.kind === "room" && hit.raised)) {
+        this.visuals.setOpenChip(null);
+        return;
+      }
       // A device — a card's cell or a badge — opens as that device.
       if (hit.kind === "device") { opts.onEntityPicked(hit.entityId, x, y); return; }
       // A group card at a point naming no device opens its device list: you
@@ -449,6 +461,8 @@ export class SceneManager {
     const handleLongPress = (x: number, y: number) => {
       tapDebug(`LONGPRESS client(${x.toFixed(0)},${y.toFixed(0)})`);
       const hit = resolveHit(this.hitPickers(true), x, y);
+      // Off the open chip, a press-and-hold folds it too, then does its job.
+      if (this.visuals.openChip() && !(hit.kind === "room" && hit.raised)) this.visuals.setOpenChip(null);
       // A device means on a cell what it means on a lone badge — press-and-
       // hold opens its details. A cell IS that device's badge while the card
       // draws, and two identical icons (two lights, say) are exactly when

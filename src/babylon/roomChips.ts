@@ -70,6 +70,55 @@ export interface RoomChip {
    * than the visible map.
    */
   cols: number; rows: number;
+  /**
+   * The chip OPENED (its `+` row tapped): every line and the row that closes
+   * it, drawn over its neighbours — or null, folded. Its own layout, in the
+   * same fields' terms; the merge, the placement and placementCheck keep
+   * reading the FOLDED box above (chipBox), so opening one chip moves nothing
+   * else on the map (owner, 2026-11-14). Render set only.
+   */
+  open: ChipLayout | null;
+}
+
+/** How a chip is laid out on screen: `cols` columns of up to `rows` rows, its
+ *  half-extents and its placement offset (see RoomChip). */
+export interface ChipLayout { cols: number; rows: number; halfW: number; halfH: number; dx: number; dy: number }
+
+/**
+ * A merged chip of more lines than this plus one draws FOLDED: its first
+ * FOLDED_LINES lines (orderLines: the busiest rooms), then a `+` row that opens
+ * it (owner, 2026-11-14: a ten-line chip covered the map). Three lines show
+ * all three: a "1 more" row would take the place of the line it hides.
+ */
+export const FOLDED_LINES = 2;
+
+/** Whether a chip of `lines` lines folds. */
+export function chipFolds(lines: number): boolean {
+  return lines > FOLDED_LINES + 1;
+}
+
+/** What one ROW of a drawn chip holds: a line (its index in `lines`), or the
+ *  row that opens or closes the chip. */
+export type ChipSlot = number | "toggle";
+
+/** The rows of a chip of `lines` lines, top to bottom: every line when it
+ *  does not fold; folded, its first FOLDED_LINES and the toggle; opened, every
+ *  line and the toggle. */
+export function chipSlots(lines: number, open: boolean): ChipSlot[] {
+  if (!chipFolds(lines)) return Array.from({ length: lines }, (_, i) => i);
+  return [...Array.from({ length: open ? lines : FOLDED_LINES }, (_, i) => i), "toggle"];
+}
+
+/** What the toggle row says: how many rooms the folded chip hides, or that
+ *  the open one folds back. One spelling, read by the measure and the model. */
+export function chipToggleLabel(lines: number, open: boolean): string {
+  return open ? "Show less" : `${lines - FOLDED_LINES} more`;
+}
+
+/** The layout a chip is DRAWN with: the opened one when it is open, else the
+ *  folded one the placement measured. */
+export function drawnLayout(c: RoomChip): ChipLayout {
+  return c.open ?? { cols: c.cols, rows: c.rows, halfW: c.halfW, halfH: c.halfH, dx: c.dx, dy: c.dy };
 }
 
 /** A chip's DRAWN box, true perspective: entirely above its anchor (renderChips
@@ -79,24 +128,26 @@ export function chipBox(c: RoomChip): { cx: number; cy: number; hw: number; hh: 
   return { cx: c.x + c.dx, cy: c.y - c.halfH + c.dy, hw: c.halfW, hh: c.halfH };
 }
 
-/** Where line `i` of a chip laid out `rows` lines per column sits: columns
+/** Where row `i` of a chip laid out `rows` rows per column sits: columns
  *  fill top-down, left to right (chipPlace.chipGrid). renderChips places each
- *  line's name, pill and tap zone in this cell. */
+ *  row's name, pill and tap zone in this cell (chipSlots says what row i is). */
 export function chipLineCell(i: number, rows: number): { col: number; row: number } {
   return { col: Math.floor(i / rows), row: i % rows };
 }
 
-/** The line of a drawn chip under a screen point (true perspective), or -1 off
- *  the chip or on the empty end of its last column — the room a tap there
- *  names, as the tap zones renderChips lays out in the same cells answer it. */
-export function chipLineAt(c: RoomChip, x: number, y: number): number {
-  const b = chipBox(c);
-  const left = b.cx - b.hw, top = b.cy - b.hh;
-  if (!(x >= left && x < left + 2 * b.hw && y >= top && y < top + 2 * b.hh)) return -1;
-  const col = Math.floor((x - left) / ((2 * b.hw) / c.cols));
-  const row = Math.floor((y - top) / ((2 * b.hh) / c.rows));
-  const i = col * c.rows + row;
-  return i < c.lines.length ? i : -1;
+/** The row of a drawn chip under a screen point (true perspective): a line's
+ *  index, "toggle" on the row that opens or closes it, or null off the chip or
+ *  on the empty end of its last column — what a tap there names, as the tap
+ *  zones renderChips lays out in the same cells answer it. Reads the DRAWN
+ *  layout: the open one while the chip is open. */
+export function chipSlotAt(c: RoomChip, x: number, y: number): ChipSlot | null {
+  const d = drawnLayout(c);
+  const cx = c.x + d.dx, cy = c.y - d.halfH + d.dy;
+  const left = cx - d.halfW, top = cy - d.halfH;
+  if (!(x >= left && x < left + 2 * d.halfW && y >= top && y < top + 2 * d.halfH)) return null;
+  const col = Math.floor((x - left) / ((2 * d.halfW) / d.cols));
+  const row = Math.floor((y - top) / ((2 * d.halfH) / d.rows));
+  return chipSlots(c.lines.length, !!c.open)[col * d.rows + row] ?? null;
 }
 
 /**
@@ -179,7 +230,7 @@ export function bucketRoomChips(
       lines: [{ key, room, label: room, ids: g.ids.slice(), ringRed: look.ringRed, fault: look.fault, unavailable: look.unavailable }],
       centre: g.sum.scale(1 / g.ids.length), rooms: 1, roomNames: [room],
       ringRed: look.ringRed, ringOn: look.ringOn, unavailable: look.unavailable, fault: look.fault, anyOn: look.anyOn,
-      x: 0, y: 0, halfW: 0, halfH: 0, dx: 0, dy: 0, cols: 1, rows: 1,
+      x: 0, y: 0, halfW: 0, halfH: 0, dx: 0, dy: 0, cols: 1, rows: 1, open: null,
     });
   }
   return chips;

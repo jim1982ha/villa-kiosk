@@ -128,18 +128,18 @@ console.log("\n  a merged chip is one line per room TALL, and the merge still se
   const sy = (y) => Vector3.Project(new Vector3(0, y, 6), Matrix.IdentityReadOnly, scene.getTransformMatrix(), vp).y;
   const pxPerM = (sy(1.2) - sy(1.3)) * 10;          // screen y grows downward
   const UNIT = 40;                                  // summary.size: one line
-  const begin = (members, cover) => {
+  const begin = (members, cover, open = null) => {
     const pass = new PlacementPass();
     pass.begin({
       metrics: { minGapPx: 2, cardIconFraction: 0.8, countPillFraction: 0.4, countFontFraction: 0.6 },
       summary: { size: UNIT, font: 16, countSize: 16, countFont: 10 }, perCardCap: MAX_GRID_CHIPS,
       rooms: {}, focus: new RoomFocus(), exempt: new Set(), scale: 1, cardBudget: 10_000, cellCap: 6,
-      chips: { members, view: { tm: scene.getTransformMatrix(), vp }, text: { charPx: 7, padPx: 20 }, budget: 400, cover },
+      chips: { members, view: { tm: scene.getTransformMatrix(), vp }, text: { charPx: 7, padPx: 20 }, budget: 400, cover, open },
     });
     for (const m of members) { pass.roomDisplay.set(m.room, m.room); pass.chipRoom(m.room, "solver"); }
     return pass;
   };
-  const derive = (members, cover) => begin(members, cover).deriveChips();
+  const derive = (members, cover, open) => begin(members, cover, open).deriveChips();
   const at = (id, room, up) => ({ id, room, pos: { x: 0, y: 1.2 + up / pxPerM, z: 6 } });
   // A chip is drawn ENTIRELY ABOVE its anchor. "attic" stands 1.75 lines above
   // "kitchen": clear of a one-line kitchen chip, but inside the top line of a
@@ -161,7 +161,7 @@ console.log("\n  a merged chip is one line per room TALL, and the merge still se
      JSON.stringify(again.map((c) => c.lines.map((l) => l.room))) === JSON.stringify(pile.map((c) => c.lines.map((l) => l.room))));
   console.log("\n  every room chip is drawn on the visible map, clear of the HUD and of every card (owner, 2026-11-14):");
   {
-    const { chipBox, chipLineAt } = await import("@/babylon/roomChips");
+    const { chipBox, chipSlotAt, drawnLayout } = await import("@/babylon/roomChips");
     const { drawnCardBox } = await import("@/babylon/placementPass");
     // A room anchored at a screen point: the camera looks down +z from (0, 1.6, 0).
     const cx0 = vp.width / 2, cy0 = vp.height / 2;
@@ -193,18 +193,39 @@ console.log("\n  a merged chip is one line per room TALL, and the merge still se
     ck("a room wholly off the screen keeps its chip there, unseen, not lined up along the edge", away.dx === 0 && away.dy === 0 && edges(chipBox(away)).r < 0);
     const many = Array.from({ length: 30 }, (_, i) => atPx(`d${i}`, `room ${String(i).padStart(2, "0")}`, cx0, 700));
     const [tall] = derive(many, cover);
-    ck("thirty rooms on one spot: one chip, taller than the map, laid out in columns",
-       tall.lines.length === 30 && tall.cols >= 2 && tall.rows * tall.cols >= 30, [tall.cols, tall.rows]);
-    ck("  ...that fits the visible map, top bar to bottom bar", onMap(tall) && 2 * tall.halfH <= BOTTOM - TOP, edges(chipBox(tall)));
-    const b = chipBox(tall), colW = (2 * b.hw) / tall.cols, rowH = (2 * b.hh) / tall.rows;
-    const tapped = tall.lines.map((_, i) => chipLineAt(tall,
-      b.cx - b.hw + (Math.floor(i / tall.rows) + 0.5) * colW, b.cy - b.hh + ((i % tall.rows) + 0.5) * rowH));
-    ck("  ...each column fills top-down, and a tap on any line, in any column, names that line's room",
-       tapped.every((t, i) => t === i) && chipLineAt(tall, b.cx + b.hw - colW / 2, b.cy - b.hh + rowH / 2) === tall.rows * (tall.cols - 1),
-       tapped);
+    ck("thirty rooms on one spot: one chip, drawn FOLDED: its two busiest rooms and a row that opens it",
+       tall.lines.length === 30 && tall.cols === 1 && tall.rows === 3 && tall.halfH === (3 * UNIT) / 2, [tall.cols, tall.rows]);
+    const [wide] = derive(many, cover, tall.key);
+    const w = drawnLayout(wide), wb = { cx: wide.x + w.dx, cy: wide.y - w.halfH + w.dy, hw: w.halfW, hh: w.halfH };
+    ck("  ...opened, it shows all thirty and the row that folds it, in columns, taller than the map",
+       wide.open && w.cols >= 2 && w.rows * w.cols >= 31, [w.cols, w.rows]);
+    ck("  ...that fits the visible map, top bar to bottom bar", (() => { const e = edges(wb); return e.t >= TOP && e.b <= BOTTOM && e.l >= 0 && e.r <= vp.width; })(), edges(wb));
+    const colW = (2 * wb.hw) / w.cols, rowH = (2 * wb.hh) / w.rows;
+    const tapped = Array.from({ length: 31 }, (_, i) => chipSlotAt(wide,
+      wb.cx - wb.hw + (Math.floor(i / w.rows) + 0.5) * colW, wb.cy - wb.hh + ((i % w.rows) + 0.5) * rowH));
+    ck("  ...each column fills top-down, a tap on any line names that line's room, the last row folds it",
+       tapped.slice(0, 30).every((t, i) => t === i) && tapped[30] === "toggle", tapped);
+    const fb = chipBox(tall);
+    ck("  ...folded, a tap on its two lines names them and on its third row opens it",
+       [0, 1, 2].map((r) => chipSlotAt(tall, fb.cx, fb.cy - fb.hh + (r + 0.5) * (2 * fb.hh / 3))).join() === "0,1,toggle");
     const back = derive([...many].reverse(), cover)[0];
     ck("  ...and it settles the same whatever order the rooms come in",
        JSON.stringify(back.lines.map((l) => l.room)) === JSON.stringify(tall.lines.map((l) => l.room)) && back.cols === tall.cols && back.dy === tall.dy);
+    {
+      // Rooms crowded into one chip beside a room with a chip of its own:
+      // opening the big one moves nothing else, and nothing merges into it.
+      const crowd = [...Array.from({ length: 6 }, (_, i) => atPx(`m${i}`, `crowd${i}`, cx0, 500)), atPx("solo", "solo", cx0 + 300, 500)];
+      const shut = derive(crowd, cover);
+      const big = shut.find((ch) => ch.lines.length === 6);
+      const opened = derive(crowd, cover, big.key);
+      ck("opening a folded chip leaves every chip's place, and what merged into what, as it was",
+         opened.length === shut.length && opened.every((ch, i) => JSON.stringify(chipBox(ch)) === JSON.stringify(chipBox(shut[i])) && ch.lines.length === shut[i].lines.length),
+         [shut.map(chipBox), opened.map(chipBox)]);
+      ck("  ...only the opened chip is drawn open, taller than it was folded",
+         opened.filter((ch) => ch.open).length === 1 && drawnLayout(opened.find((ch) => ch.open)).halfH > big.halfH);
+      ck("  ...and a key naming a chip of three rooms or fewer opens nothing",
+         derive(crowd, cover, shut.find((ch) => ch.lines.length === 1).key).every((ch) => !ch.open));
+    }
     const pile = derive(Array.from({ length: 12 }, (_, i) => atPx(`q${i}`, `room${i}`, cx0 + (i % 3) * 30, 250 - i * 20)), cover);
     ck("a chain of rooms reaching above the top bar settles on the map with no two chips overlapping",
        pile.every(onMap) && pile.every((c, i) => pile.every((o, j) => j <= i || apart(chipBox(c), chipBox(o)))), pile.map((c) => [c.lines.length, edges(chipBox(c))]));
@@ -222,6 +243,36 @@ console.log("\n  a merged chip is one line per room TALL, and the merge still se
        apart(chipBox(kept), cardBox) && onMap(kept) && Math.hypot(kept.dx, kept.dy) < 4 * (kept.halfW + kept.halfH),
        [chipBox(kept), cardBox]);
   }
+}
+
+console.log("\n  a chip of many rooms is drawn folded, and folding never hides trouble (owner, 2026-11-14):");
+{
+  // n rooms crowded into one chip: room i has (n - i) devices, so the busiest
+  // come first; `kinds` puts a state on one room's devices.
+  const merged = (n, kinds = {}) => {
+    const ms = [];
+    for (let i = 0; i < n; i++) for (let d = 0; d < n - i; d++) ms.push(M(`r${i}d${d}`, `r${i}`, i, d === 0 ? kinds[i] : "off"));
+    const cs = bucketRoomChips(ms, () => true, (k) => k.toUpperCase());
+    cs.forEach((c) => { c.x = 0; c.y = 0; c.halfW = 10; c.halfH = 5; });
+    return mergeOverlapping(cs, 2, (c) => c.ids.length, (keep, drop) => combineChips(keep, drop))[0];
+  };
+  const rowsOf = (chip) => roomChipModel(chip, false, () => false).slots;
+  ck("three rooms draw all three lines, no `+` row", rowsOf(merged(3)).join() === "0,1,2" && !roomChipModel(merged(3), false, () => false).toggle);
+  const ten = merged(10);
+  ck("ten rooms draw the two busiest, then the `+` row", rowsOf(ten).join() === "0,1,toggle"
+     && roomChipModel(ten, false, () => false).lines.slice(0, 2).map((l) => l.room).join() === "R0,R1");
+  const pillOf = (chip) => healthPill(roomChipModel(chip, false, () => false).toggle.health).fill;
+  const lineFill = (h) => healthPill(h).fill;
+  ck("  ...all its hidden rooms all right: the `+` pill is the all-right colour", pillOf(ten) === lineFill("ok"));
+  ck("  ...a hidden room needing attention: the `+` pill is red", pillOf(merged(10, { 7: "alert" })) === lineFill("alert"));
+  ck("  ...a hidden fault: amber", pillOf(merged(10, { 5: "fault" })) === lineFill("fault"));
+  ck("  ...a hidden lost device: grey", pillOf(merged(10, { 9: "unavailable" })) === lineFill("unavailable"));
+  ck("  ...red beats amber beats grey", pillOf(merged(10, { 4: "fault", 6: "alert", 8: "unavailable" })) === lineFill("alert")
+     && pillOf(merged(10, { 4: "unavailable", 6: "fault" })) === lineFill("fault"));
+  ck("  ...trouble on a SHOWN line stays on that line, not on the `+` pill", pillOf(merged(10, { 0: "alert" })) === lineFill("ok"));
+  const open = merged(10, { 7: "alert" });
+  open.open = { cols: 1, rows: 11, halfW: 10, halfH: 5, dx: 0, dy: 0 };
+  ck("opened, it draws every line, then the row that folds it", rowsOf(open).join() === "0,1,2,3,4,5,6,7,8,9,toggle");
 }
 
 done("✅ a room chip says who is in it, merged or not");

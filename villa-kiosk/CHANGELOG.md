@@ -1,3 +1,12 @@
+## 2.496.805
+
+- **A shared room chip shows two rooms and a + button.** When many rooms share one chip on the map, it now lists only
+  the two busiest rooms, then a line such as "7 more" with a + button. Tap that line to see every room, drawn over the
+  map around it; tap "Show less", anywhere else on the map, or move the camera to fold it again. If one of the hidden
+  rooms needs attention, has a problem or has lost contact with a device, the + button takes that room's colour (red
+  first, then amber, then grey), so nothing is hidden by folding. Tapping a room's line still goes to that room. A
+  chip of three rooms or fewer is unchanged.
+
 ## 2.496.804
 
 - **A chosen device now looks chosen.** In Advanced Settings, Villa presence (and every field linking one device, such
