@@ -34,7 +34,7 @@ import { contactOf, isUnavailable, NOT_IN_HA } from "@/utils/deviceHealth";
 
 /** The stretch older than the villa's system keeps, as a history bar reads it (historySource.keptFrom). */
 export { NOT_KEPT, NOT_KEPT_WORDS, NO_RECORD, NO_RECORD_WORDS };
-import { coverStateLabel } from "@/utils/panelRules";
+import { coverState, coverStateLabel } from "@/utils/panelRules";
 
 /** The colour a measurement's number (and its chart) takes at each level. */
 const LEVEL_COLOR: Record<AlertLevel, string> = {
@@ -239,7 +239,8 @@ export function controlPill(id: string, entity: HassEntity | undefined, power: "
  *  `position` is the slider's (it follows a drag), undefined when the cover
  *  reports none; any other state as the villa's system sent it. */
 export function coverPill(id: string, state: string | undefined, position: number | undefined, rule: StatusRule = PLAIN_STATUS): StatePill {
-  return { text: coverStateLabel(state, position), tone: pillTone(id, state, rule) };
+  // part of the way open: the moving colour, as its history bar (panelRules.PARTIALLY_OPEN)
+  return { text: coverStateLabel(state, position), tone: pillTone(id, coverState(state, position), rule) };
 }
 
 /** A history bar's colours: the window's own, except that an unavailable

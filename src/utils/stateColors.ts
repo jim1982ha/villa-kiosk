@@ -78,7 +78,7 @@ export type StatusKey = keyof typeof STATUS_COLOR;
 export const STATUS_HEX: Record<StatusKey, string> = {
   usual: "#34845A",        // --status-usual
   active: "#B24232",       // --status-active
-  transitional: "#1F7F8C", // --status-pending
+  transitional: "#2B67C0", // --status-pending
   warn: "#B8801F",         // --status-warning
   alert: "#6E57B8",        // --status-alarm
   unavailable: "#9A9F98",  // --status-lost
@@ -206,7 +206,8 @@ const DOMAIN_STATES: Record<string, Record<string, StatusKey>> = {
   // "open" — the one state whose meaning genuinely inverts between two domains, and the reason this table has to be
   // domain-aware at all.
   lock: { locked: "usual", unlocked: "active", open: "active" },
-  cover: { open: "active", closed: "usual" },
+  // part of the way open (panelRules.PARTIALLY_OPEN): the moving colour (owner, 2026-11-15)
+  cover: { open: "active", closed: "usual", partially_open: "transitional" },
   valve: { open: "active", closed: "usual" },
   alarm_control_panel: {
     disarmed: "usual",

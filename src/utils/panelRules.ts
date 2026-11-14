@@ -41,6 +41,17 @@ export function nearestLevel<L extends { value: number }>(levels: readonly L[], 
 
 /** A cover's state in words: "Open", "Partially open (40%)", "Closed", or
  *  HA's own word for anything else (opening, closing…). */
+/** A cover open part of the way (owner, 2026-11-15: its own state, "Partially open", in the moving colour): what its
+ *  history bar, its pill and the legend call it. Not a state of the villa's system — it says "open" with a
+ *  current_position between 0 and 100. */
+export const PARTIALLY_OPEN = "partially_open";
+
+/** A cover's state as its window reads it: "open" with a position strictly between 0 and 100 is PARTIALLY_OPEN; a cover
+ *  that reports no position is open or closed, as it says. */
+export function coverState(state: string | undefined, position: unknown): string | undefined {
+  return state === "open" && typeof position === "number" && position > 0 && position < 100 ? PARTIALLY_OPEN : state;
+}
+
 export function coverStateLabel(state: string | undefined, position: number | undefined): string {
   if (state === "open") return typeof position === "number" && position < 100 ? `Partially open (${position}%)` : "Open";
   if (state === "closed") return "Closed";

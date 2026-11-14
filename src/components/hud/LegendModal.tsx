@@ -59,6 +59,8 @@ const STATUS_ITEMS: { label: string; swatch: string; note: string }[] = [
   { label: "Usual", swatch: STATUS_COLOR.usual, note: "Alive, in its usual state: off, closed, locked, no motion, no leak, disarmed" },
   { label: "On / active", swatch: STATUS_COLOR.active, note: "Doing something, nothing wrong: on, open, unlocked, motion seen, occupied, playing, armed" },
   { label: "Moving", swatch: STATUS_COLOR.transitional, note: "Only while it moves: opening, closing, locking, arming" },
+  // owner, 2026-11-15: a cover part of the way open, in the moving colour (panelRules.PARTIALLY_OPEN)
+  { label: "Partially open", swatch: STATUS_COLOR.transitional, note: "A curtain, blind or shutter open part of the way" },
   { label: "Needs a look", swatch: STATUS_COLOR.warn, note: "A late maintenance, a state marked as a warning" },
   { label: "Alarm", swatch: STATUS_COLOR.alert, note: "Act now: a leak or smoke, a jammed lock, a fault, a critical door unlocked or offline" },
   { label: "Unavailable", swatch: STATUS_COLOR.unavailable, note: "No contact with the device" },
