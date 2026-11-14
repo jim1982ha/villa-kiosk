@@ -24,7 +24,7 @@ import type { BadgeMark, DeviceLook, LinkPill } from "@/utils/deviceActivity";
 import { groupLook } from "@/utils/deviceActivity";
 import type { DeviceSurfaceState } from "@/config/EntityCategories";
 import { formatCountBadge } from "@/utils/countBadge";
-import { chipSlots, chipToggleLabel, type ChipSlot, type RoomChip } from "./roomChips";
+import { chipFolds, chipSlots, chipToggleLabel, type RoomChip } from "./roomChips";
 
 /** Which of the three summary surfaces a card or a chip wears — "alert" (red:
  *  needs attention), "active" (the neutral "a member is on" ring) or "rest".
@@ -114,19 +114,18 @@ export interface RoomChipModel {
   /** One line per room, top to bottom (roomChips.orderLines), each with its
    *  own name, count and health. One line for an unmerged chip. */
   lines: RoomChipLine[];
-  /** The rows drawn, top to bottom (roomChips.chipSlots): a line's index, or
-   *  the toggle. Every line when the chip does not fold. */
-  slots: ChipSlot[];
-  /** The row that opens a folded chip or closes an open one; null when it
-   *  does not fold. */
+  /** The lines drawn, top to bottom (roomChips.chipSlots): the first one
+   *  folded, every one open or when it does not fold. */
+  slots: number[];
+  /** The pill on the bottom border that opens a folded chip or folds an open
+   *  one; null when it does not fold. */
   toggle: ChipToggle | null;
 }
 
-/** A folded chip's `+` row, or an open one's `−` row. */
+/** A folded chip's `+N` pill, or an open one's `−`. */
 export interface ChipToggle {
+  /** "+N" (the rooms it hides) or "−" (roomChips.chipToggleLabel). */
   label: string;
-  /** What its pill shows: "+" opens, "−" closes. */
-  mark: "+" | "\u2212";
   /** Its pill's colour: folded, the WORST health among the lines it hides
    *  (red beats amber beats grey), so folding never hides trouble; open,
    *  "ok" — every line shows its own. */
@@ -174,9 +173,8 @@ export function roomChipModel(chip: RoomChip, walking: boolean, occluded: (id: s
       count: formatCountBadge(l.ids.length), health: roomHealth(l),
     })),
     slots,
-    toggle: slots.includes("toggle") ? {
+    toggle: chipFolds(chip.lines.length) ? {
       label: chipToggleLabel(chip.lines.length, open),
-      mark: open ? "\u2212" as const : "+" as const,
       health: open ? "ok" : HEALTH_ORDER[Math.min(...chip.lines
         .filter((_, i) => !slots.includes(i)).map((l) => HEALTH_ORDER.indexOf(roomHealth(l))))],
     } : null,

@@ -149,8 +149,11 @@ export default function LegendModal({ onClose, listable, onListCategory }: {
         <p className="muted body-text" style={{ marginTop: 4 }}>
           A room's name with its number of devices. The number's colour says
           whether the room is all right; the border, whether something is on.
-          Rooms too close together share one chip, one line per room, each
-          with its own number; tap a line to go to that room.
+          Rooms too close together share one chip: it shows the busiest room,
+          with a small "+3" on its bottom edge for the other rooms. Tap the +3
+          to see every room, each with its own number, and the "−" to fold it
+          again. The +3 takes the colour of anything wrong in the rooms it
+          hides. Tap a room's line to go to that room.
         </p>
         <div className="legend-grid">
           {CHIP_RINGS.map((r) => (
