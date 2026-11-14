@@ -1,3 +1,14 @@
+## 2.496.815
+
+- **New status colours.** A device's usual state (off, closed, locked, no motion, disarmed) is now green; on or doing
+  something (on, open, unlocked, motion seen, playing, armed) is red; an alarm (a leak, smoke, a jammed lock, a critical
+  device gone silent) is purple. Amber (an open fault), grey (no contact) and the empty track are unchanged. It applies
+  everywhere a state shows: the pills, the history bars and their keys, the buttons ("Turn off" and "Lock door" green,
+  "Turn on" and "Unlock door…" red), the 3D objects and room glows, the badges' marks, the room chips' numbers and +N
+  pills, the Cockpit and the Legend.
+- **Locks follow the same colours as every device.** Locked is green and unlocked red, for every lock. A critical door
+  left unlocked is still an alarm (purple), as before.
+
 ## 2.496.814
 
 - **The last devices leave the Others family.** A TV or media server is now in comfort, a voice assistant in network,
