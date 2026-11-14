@@ -51,8 +51,10 @@ const STATUS_HEX: Record<StatusKey, string> = {
   noValue: "#D8D3C7",
 };
 
-/** A room's health as the status table's meaning (summaryLook.roomHealth): a fault is "needs a look", all right the usual. */
-const HEALTH_STATUS = { alert: "alert", fault: "warn", unavailable: "unavailable", ok: "usual" } as const satisfies Record<string, StatusKey>;
+/** A room's health as the status table's colour (summaryLook.roomHealth): a fault is "needs a look", all right the
+ *  table's green. ⚠️ GREEN, NOT THE USUAL PURPLE (owner, 2026-11-14): beside amber, grey and red the count reads as a
+ *  traffic light, and purple there did not read as "all right". Only this pill: a device's usual state stays purple. */
+const HEALTH_STATUS = { alert: "alert", fault: "warn", unavailable: "unavailable", ok: "active" } as const satisfies Record<string, StatusKey>;
 /** The ink on each pill: white on the dark fills, dark on the light ones. */
 const DARK_INK = "#17191A";
 
@@ -69,7 +71,7 @@ const DARK_INK = "#17191A";
  *
  *  Static light-theme values, like every colour in this file: the map chip's
  *  pill is a baked picture. Dark ink on the amber: white on it is 3.4:1, too
- *  faint for a digit this small; dark is 5.2:1. Dark on the light grey too (white on it is 2.6:1).
+ *  faint for a digit this small; dark is 5.2:1. Dark on the light grey too (white on it is 2.6:1). White on the green is 4.6:1.
  *
  *  ⚠️ THE TABLE'S COLOURS (architecture review item 6, 2026-11-13): it typed its own four hexes beside STATUS_HEX. */
 export function healthPill(health: "alert" | "fault" | "unavailable" | "ok"): { fill: string; ink: string } {

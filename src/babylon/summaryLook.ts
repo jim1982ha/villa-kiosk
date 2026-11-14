@@ -24,7 +24,7 @@ import type { BadgeMark, DeviceLook, LinkPill } from "@/utils/deviceActivity";
 import { groupLook } from "@/utils/deviceActivity";
 import type { DeviceSurfaceState } from "@/config/EntityCategories";
 import { formatCountBadge } from "@/utils/countBadge";
-import type { RoomChip } from "./roomChips";
+import { chipSlots, chipToggleLabel, type ChipSlot, type RoomChip } from "./roomChips";
 
 /** Which of the three summary surfaces a card or a chip wears — "alert" (red:
  *  needs attention), "active" (the neutral "a member is on" ring) or "rest".
@@ -114,7 +114,26 @@ export interface RoomChipModel {
   /** One line per room, top to bottom (roomChips.orderLines), each with its
    *  own name, count and health. One line for an unmerged chip. */
   lines: RoomChipLine[];
+  /** The rows drawn, top to bottom (roomChips.chipSlots): a line's index, or
+   *  the toggle. Every line when the chip does not fold. */
+  slots: ChipSlot[];
+  /** The row that opens a folded chip or closes an open one; null when it
+   *  does not fold. */
+  toggle: ChipToggle | null;
 }
+
+/** A folded chip's `+` row, or an open one's `−` row. */
+export interface ChipToggle {
+  label: string;
+  /** What its pill shows: "+" opens, "−" closes. */
+  mark: "+" | "\u2212";
+  /** Its pill's colour: folded, the WORST health among the lines it hides
+   *  (red beats amber beats grey), so folding never hides trouble; open,
+   *  "ok" — every line shows its own. */
+  health: RoomHealth;
+}
+
+const HEALTH_ORDER: readonly RoomHealth[] = ["alert", "fault", "unavailable", "ok"];
 
 /** A room's health, worst first: "alert" — something needs attention (a
  *  leak, a jammed lock, a critical device silent; a device in use never is); "fault" — a device has an
@@ -142,6 +161,8 @@ function roomFrame(ring: { anyOn: boolean }): SummaryFrame {
 /** A room chip, from the chip the placement derived (bucketRoomChips, whose
  *  ring is groupLook's count rule, and combineChips). */
 export function roomChipModel(chip: RoomChip, walking: boolean, occluded: (id: string) => boolean): RoomChipModel {
+  const open = !!chip.open;
+  const slots = chipSlots(chip.lines.length, open);
   return {
     hidden: walking && chip.ids.length > 0 && chip.ids.every(occluded),
     entityIds: chip.ids,
@@ -152,6 +173,13 @@ export function roomChipModel(chip: RoomChip, walking: boolean, occluded: (id: s
       key: l.key, room: l.room, label: l.label, entityIds: l.ids,
       count: formatCountBadge(l.ids.length), health: roomHealth(l),
     })),
+    slots,
+    toggle: slots.includes("toggle") ? {
+      label: chipToggleLabel(chip.lines.length, open),
+      mark: open ? "\u2212" as const : "+" as const,
+      health: open ? "ok" : HEALTH_ORDER[Math.min(...chip.lines
+        .filter((_, i) => !slots.includes(i)).map((l) => HEALTH_ORDER.indexOf(roomHealth(l))))],
+    } : null,
   };
 }
 
