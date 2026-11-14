@@ -427,8 +427,8 @@ export class SceneManager {
     const handleTap = (x: number, y: number) => {
       tapDebug(`TAP client(${x.toFixed(0)},${y.toFixed(0)})`);
       const hit = resolveHit(this.hitPickers(true), x, y);
-      // A folded chip's `+` row opens it over its neighbours; the open chip's
-      // `−` row folds it (owner, 2026-11-14).
+      // A folded chip's `+N` pill opens it over its neighbours; the open
+      // chip's "−" pill folds it (owner, 2026-11-14).
       if (hit.kind === "room" && hit.toggle) {
         this.visuals.setOpenChip(this.visuals.openChip() === hit.key ? null : hit.key);
         return;

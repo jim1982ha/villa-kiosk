@@ -24,7 +24,7 @@ import type { BadgeMark, DeviceLook, LinkPill } from "@/utils/deviceActivity";
 import { groupLook } from "@/utils/deviceActivity";
 import type { DeviceSurfaceState } from "@/config/EntityCategories";
 import { formatCountBadge } from "@/utils/countBadge";
-import { chipSlots, chipToggleLabel, type ChipSlot, type RoomChip } from "./roomChips";
+import { chipFolds, chipSlots, chipToggleLabel, type RoomChip } from "./roomChips";
 
 /** Which of the three summary surfaces a card or a chip wears — "alert" (red:
  *  needs attention), "active" (the neutral "a member is on" ring) or "rest".
@@ -108,25 +108,21 @@ export interface RoomChipModel {
   /** The room a tap names, and every room a merged chip swallowed. */
   displayName: string;
   roomNames: string[];
-  /** The border: "active" when something in any of its rooms is on, else
-   *  "rest" — NEVER "alert" (see roomHealth). A merged chip has ONE border. */
-  frame: SummaryFrame;
   /** One line per room, top to bottom (roomChips.orderLines), each with its
    *  own name, count and health. One line for an unmerged chip. */
   lines: RoomChipLine[];
-  /** The rows drawn, top to bottom (roomChips.chipSlots): a line's index, or
-   *  the toggle. Every line when the chip does not fold. */
-  slots: ChipSlot[];
-  /** The row that opens a folded chip or closes an open one; null when it
-   *  does not fold. */
+  /** The lines drawn, top to bottom (roomChips.chipSlots): the first one
+   *  folded, every one open or when it does not fold. */
+  slots: number[];
+  /** The pill on the bottom border that opens a folded chip or folds an open
+   *  one; null when it does not fold. */
   toggle: ChipToggle | null;
 }
 
-/** A folded chip's `+` row, or an open one's `−` row. */
+/** A folded chip's `+N` pill, or an open one's `−`. */
 export interface ChipToggle {
+  /** "+N" (the rooms it hides) or "−" (roomChips.chipToggleLabel). */
   label: string;
-  /** What its pill shows: "+" opens, "−" closes. */
-  mark: "+" | "\u2212";
   /** Its pill's colour: folded, the WORST health among the lines it hides
    *  (red beats amber beats grey), so folding never hides trouble; open,
    *  "ok" — every line shows its own. */
@@ -153,10 +149,10 @@ export function roomHealth(ring: { ringRed: boolean; fault: boolean; unavailable
   return ring.ringRed ? "alert" : ring.fault ? "fault" : ring.unavailable ? "unavailable" : "ok";
 }
 
-/** A room chip's border: on, or resting — "needs attention" is roomHealth's. */
-function roomFrame(ring: { anyOn: boolean }): SummaryFrame {
-  return ring.anyOn ? "active" : "rest";
-}
+/* ⚠️ A ROOM CHIP HAS NO "SOMETHING IS ON" BORDER (owner, 2026-11-14): it
+   was a thick light border no device badge has, and the owner chose to drop
+   the "on" signal from room chips rather than move it. Every room chip, and
+   every row of the "Which room?" list, rests; its health is the count's. */
 
 /** A room chip, from the chip the placement derived (bucketRoomChips, whose
  *  ring is groupLook's count rule, and combineChips). */
@@ -168,27 +164,24 @@ export function roomChipModel(chip: RoomChip, walking: boolean, occluded: (id: s
     entityIds: chip.ids,
     displayName: chip.room,
     roomNames: chip.roomNames,
-    frame: roomFrame(chip),
     lines: chip.lines.map((l) => ({
       key: l.key, room: l.room, label: l.label, entityIds: l.ids,
       count: formatCountBadge(l.ids.length), health: roomHealth(l),
     })),
     slots,
-    toggle: slots.includes("toggle") ? {
+    toggle: chipFolds(chip.lines.length) ? {
       label: chipToggleLabel(chip.lines.length, open),
-      mark: open ? "\u2212" as const : "+" as const,
       health: open ? "ok" : HEALTH_ORDER[Math.min(...chip.lines
         .filter((_, i) => !slots.includes(i)).map((l) => HEALTH_ORDER.indexOf(roomHealth(l))))],
     } : null,
   };
 }
 
-/** What ONE room's chip would wear — its frame and its pill's colour — from
- *  that room's members' looks (undefined: not yet reported, rings nothing).
- *  The same groupLook count rule bucketRoomChips applies, so a row in the
- *  merged chip's "Which room?" list carries exactly the border and pill the
- *  room's own chip shows on the map when it stands alone. */
-export function roomLook(looks: readonly (DeviceLook | undefined)[]): { frame: SummaryFrame; health: RoomHealth } {
-  const ring = groupLook(looks, { showingDevices: false });
-  return { frame: roomFrame(ring), health: roomHealth(ring) };
+/** What ONE room's chip would wear — its pill's colour — from that room's
+ *  members' looks (undefined: not yet reported, rings nothing). The same
+ *  groupLook count rule bucketRoomChips applies, so a row in the merged
+ *  chip's "Which room?" list carries exactly the pill the room's own chip
+ *  shows on the map when it stands alone. */
+export function roomLook(looks: readonly (DeviceLook | undefined)[]): { health: RoomHealth } {
+  return { health: roomHealth(groupLook(looks, { showingDevices: false })) };
 }

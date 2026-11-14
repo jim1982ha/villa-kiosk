@@ -121,7 +121,7 @@ import { OcclusionSweep, owesLayout } from "./occlusionSweep";
 import { BadgeFrame, drawnThisPass } from "./badgeFrame";
 import { LayoutGate } from "./layoutGate";
 import { WalkerView, walkExemptRooms } from "./walkerView";
-import { chipLineCell, drawnLayout, type ChipSlot, type RoomChip } from "./roomChips";
+import { chipLineCell, chipTabZone, drawnLayout, type RoomChip } from "./roomChips";
 import { groupCardModel, roomChipModel, type SummaryFrame } from "./summaryLook";
 import { rungAt, referenceDepthAt, iconZoomAt, cssExtent } from "./badgeScale";
 import { solveRoomZoom } from "./roomZoomSolver";
@@ -139,7 +139,7 @@ import type { FrameRequests } from "./frameScheduler";
 import { badgeImage, PICTURE_SCALE } from "./badgeIcons";
 import { applyBadgeFrame, badgeRing, badgeBakePx, BADGE_INSET_CARD, BADGE_CORNER_FRACTION, NO_RING } from "./badgeLook";
 import { DashableRectangle } from "./dashableRectangle";
-import { badgeText, countBadgeImage, toggleBadgeImage } from "./badgeText";
+import { badgeText, countBadgeImage, tabBadgeImage } from "./badgeText";
 import { badgeShadow } from "./badgeShadow";
 import { cameraFrame } from "./cameraFrame";
 import {
@@ -645,9 +645,15 @@ interface ClusterControls {
   /** What each live line stands for, in line order — the room a tap on that
    *  line names. */
   lineRooms: { room: string; entityIds: string[] }[];
-  /** What each drawn row is, in row order (summaryLook.roomChipModel's
-   *  `slots`): a line's index into lineRooms, or the toggle row. */
-  slots: ChipSlot[];
+  /** The line each drawn row shows, in row order (summaryLook.roomChipModel's
+   *  `slots`): an index into lineRooms. */
+  slots: number[];
+  /** A folded chip's `+N` pill (an open one's "−") on its bottom border, and
+   *  the larger invisible box a tap on it lands in (roomChips.chipTabZone).
+   *  Their own controls on the layer, not the chip's children: the pill hangs
+   *  outside the chip's box, which clips its children. */
+  tab: Image;
+  tabZone: Rectangle;
   node: TransformNode;
   entityIds: string[];
   /** The raw room name to show a person. The Map key is a roomKey(), which is
@@ -892,7 +898,7 @@ export class EntityVisuals {
   /** Room-cluster chips, keyed by roomKey(). Built lazily the first time a
    *  room clusters; disposed with everything else in rebuildLabels. */
   private clusters = new Map<string, ClusterControls>();
-  /** The chip opened by its `+` row (a roomKey), or null — see setOpenChip. */
+  /** The chip opened by its `+N` pill (a roomKey), or null — see setOpenChip. */
   private openChipKey: string | null = null;
   /** The camera's view-projection when it was opened: any move folds it. */
   private openChipView: number[] | null = null;
@@ -5173,11 +5179,6 @@ export class EntityVisuals {
     if (!layer) return; // no GUI layer yet — nothing to attach chips to
     const scale = this.effectiveScale();
     const chipRest = categorySurface("others", "off");
-    const chipFrames: Record<SummaryFrame, typeof chipRest> = {
-      alert: categorySurface("others", "alert"),
-      active: categorySurface("others", "active"),
-      rest: chipRest,
-    };
     for (const chip of chips) {
       // ── WHAT THE CHIP SHOWS IS summaryLook.roomChipModel's ───────────────
       // A chip whose every device is behind a wall is behind that wall too.
@@ -5192,7 +5193,7 @@ export class EntityVisuals {
       const model = roomChipModel(chip, this.firstPerson, (id) => this.occlusion.occluded.has(id));
       if (model.hidden) {
         const stale = this.clusters.get(chip.key);
-        if (stale) stale.container.isVisible = false;
+        if (stale) stale.container.isVisible = stale.tab.isVisible = stale.tabZone.isVisible = false;
         continue;
       }
       const c = this.ensureCluster(chip.key, layer);
@@ -5201,11 +5202,11 @@ export class EntityVisuals {
       c.roomNames = model.roomNames;
       c.lineRooms = model.lines.map((l) => ({ room: l.room, entityIds: l.entityIds }));
       c.node.position.copyFrom(chip.centre);
-      // The chip's ring: the neutral "on" ring when a member is on, none
-      // otherwise. Never red: whether the room is all right is the COUNT's
-      // job (summaryLook.roomHealth) — one place for it, not a red border
-      // beside a green number (owner, 2026-10-04).
-      const frame = badgeRing(chipFrames[model.frame], this.metrics.cardHeightPx, this.metrics);
+      // The chip's frame: always the resting one. No "something is on"
+      // border (owner, 2026-11-14: no device badge has one) and never red:
+      // whether the room is all right is the COUNT's job
+      // (summaryLook.roomHealth, owner, 2026-10-04).
+      const frame = badgeRing(chipRest, this.metrics.cardHeightPx, this.metrics);
       applyBadgeFrame(c.container, frame, this.summaryMetrics().size);
       // ── ONE LINE PER ROOM (2.496.801) ───────────────────────────────────
       // A merged chip lists its rooms, each line that room's own name and
@@ -5230,12 +5231,12 @@ export class EntityVisuals {
       // 2.496.263). Baked once for this device's best case, a zoom costs a
       // container re-scale and nothing else — glyphBakePx's rule.
       const csm = this.summaryMetrics();
-      // ── FOLDED: ONE ROOM AND A `+` ROW (owner, 2026-11-14) ──────────────
-      // A chip of several rooms draws its busiest and a "N more" row whose
-      // pill is "+" in the worst colour among the rooms it hides; tapped, it
-      // opens over its neighbours with every line and a "−" row
-      // (summaryLook.roomChipModel's `slots` and `toggle`; the open layout is
-      // placementPass's `spread`).
+      // ── FOLDED: ONE LINE AND A `+N` PILL (owner, 2026-11-14) ────────────
+      // A chip of several rooms draws its busiest room's line, like a chip of
+      // one room, and a `+N` pill on its bottom border, in the worst colour
+      // among the rooms it hides; tapped, it opens over its neighbours with
+      // every line and the pill reading "−" (summaryLook.roomChipModel's
+      // `slots` and `toggle`; the open layout is placementPass's `spread`).
       c.slots = model.slots;
       const n = model.slots.length;
       // ── IN COLUMNS WHEN TALLER THAN THE MAP (2.496.803) ─────────────────
@@ -5255,12 +5256,10 @@ export class EntityVisuals {
         c.container.adaptWidthToChildren = true;
       }
       for (let i = 0; i < n; i++) {
-        const slot = model.slots[i];
-        const line = slot === "toggle" ? null : model.lines[slot];
-        const pill = line ? { text: line.count, health: line.health } : { text: model.toggle!.mark, health: model.toggle!.health };
+        const line = model.lines[model.slots[i]];
         const row = this.ensureChipLine(c, i);
         const { col, row: r } = chipLineCell(i, rows);
-        row.text.text = line ? line.label : model.toggle!.label;
+        row.text.text = line.label;
         row.text.color = chipRest.ink;
         // Centred on its own line: (r - (rows-1)/2) units from the chip's
         // centre, plus the optical nudge badgeText gives every string.
@@ -5275,12 +5274,12 @@ export class EntityVisuals {
         row.count.left = `${-CHIP_COUNT_INSET_PX - (cols - 1 - col) * colPx}px`;
         row.zone.width = cols > 1 ? `${colPx}px` : "100%";
         row.zone.left = `${col * colPx}px`;
-        const drawnPx = badgeBakePx(csm.countSize, this.iconUserScale, this.bestCssToGui());
-        // A count is a number from the font; the toggle's "+" / "−" is DRAWN,
-        // exactly centred in its circle (badgeText.toggleBadgeImage).
-        row.count.source = line
-          ? countBadgeImage({ text: pill.text, ...healthPill(pill.health), drawnPx, fontOfSize: csm.countFont / csm.countSize })
-          : toggleBadgeImage({ mark: model.toggle!.mark, ...healthPill(pill.health), drawnPx });
+        row.count.source = countBadgeImage({
+          text: line.count,
+          ...healthPill(line.health),
+          drawnPx: badgeBakePx(csm.countSize, this.iconUserScale, this.bestCssToGui()),
+          fontOfSize: csm.countFont / csm.countSize,
+        });
         row.text.isVisible = row.count.isVisible = row.zone.isVisible = true;
       }
       for (let i = n; i < c.lines.length; i++) {
@@ -5301,13 +5300,40 @@ export class EntityVisuals {
       // as far as keeps it on the visible map and off every badge and card
       // (chipPlace.placeChip, 2.496.803): 0, 0 for a chip that fits where it
       // stands.
+      // A folded chip's lines sit above its pill's overhang (lay.overhang).
       c.container.linkOffsetXInPixels = lay.dx;
-      c.container.linkOffsetYInPixels = -((rows * csm.size) / 2) * scale + lay.dy;
+      c.container.linkOffsetYInPixels = -((rows * csm.size) / 2) * scale - lay.overhang + lay.dy;
       // An open chip draws over every badge, card and chip — and pickClusterAt
       // asks it first, so what it paints over cannot take its taps. Folded, a
       // chip paints behind them (ensureCluster: 2.430.0).
       c.container.zIndex = chip.open ? 2 : -1;
       c.container.isVisible = true;
+      // ── THE `+N` PILL, CENTRED ON THE BOTTOM BORDER ──────────────────────
+      // Half over the chip, half below it, the height of a count pill; its
+      // text exactly centred (badgeText.tabBadgeImage). Its tap zone is
+      // larger than the pill (chipTabZone), so a finger finds it.
+      const zone = chipTabZone(chip);
+      if (model.toggle && zone) {
+        const img = tabBadgeImage({
+          label: model.toggle.label, ...healthPill(model.toggle.health),
+          drawnPx: badgeBakePx(csm.countSize, this.iconUserScale, this.bestCssToGui()),
+          fontOfSize: csm.countFont / csm.countSize,
+        });
+        c.tab.source = img.url;
+        c.tab.height = `${csm.countSize}px`;
+        c.tab.width = `${(csm.countSize * img.w) / img.h}px`;
+        c.tab.scaleX = c.tab.scaleY = scale;
+        c.tab.linkOffsetXInPixels = lay.dx;
+        c.tab.linkOffsetYInPixels = -lay.overhang + lay.dy;
+        c.tab.zIndex = chip.open ? 3 : -1;
+        c.tabZone.width = `${2 * zone.hw}px`;
+        c.tabZone.height = `${2 * zone.hh}px`;
+        c.tabZone.linkOffsetXInPixels = zone.cx - chip.x;
+        c.tabZone.linkOffsetYInPixels = zone.cy - chip.y;
+        c.tab.isVisible = c.tabZone.isVisible = true;
+      } else {
+        c.tab.isVisible = c.tabZone.isVisible = false;
+      }
     }
     // Chips with no visible member (floor switch, category filter) — and rooms
     // that were merged INTO another chip this frame — must not leave a stale
@@ -5321,7 +5347,7 @@ export class EntityVisuals {
       this.openChipKey = null; this.openChipView = null;
     }
     for (const [key, c] of this.clusters) {
-      if (!livingRooms.has(key)) c.container.isVisible = false;
+      if (!livingRooms.has(key)) c.container.isVisible = c.tab.isVisible = c.tabZone.isVisible = false;
     }
   }
 
@@ -5371,8 +5397,24 @@ export class EntityVisuals {
     container.linkWithMesh(node);
     container.linkOffsetYInPixels = -sm.size / 2;
 
+    // The `+N` pill and its tap zone (ClusterControls.tab): on the layer,
+    // linked to the same node, never pointer blockers.
+    const tab = new Image(`clusterTab_${key}`);
+    tab.stretch = Image.STRETCH_FILL;
+    tab.isPointerBlocker = false;
+    tab.isVisible = false;
+    layer.addControl(tab);
+    tab.linkWithMesh(node);
+    const tabZone = new Rectangle(`clusterTabZone_${key}`);
+    tabZone.thickness = 0;
+    tabZone.background = "";
+    tabZone.isPointerBlocker = false;
+    tabZone.isVisible = false;
+    layer.addControl(tabZone);
+    tabZone.linkWithMesh(node);
+
     const c: ClusterControls = {
-      key, container, lines: [], lineRooms: [], slots: [], node,
+      key, container, lines: [], lineRooms: [], slots: [], tab, tabZone, node,
       entityIds: [], displayName: key, roomNames: [],
     };
     this.clusters.set(key, c);
@@ -5469,17 +5511,16 @@ export class EntityVisuals {
       // displayName, never the Map key: this string is shown in the room
       // sheet and matched against teleport points, both of which want the
       // room as HA spells it.
-      if (c.container.contains(px, py)) {
-        // The row under the point: one room of a merged chip, or the row that
-        // opens or closes it. Its zones tile the chip, so a point inside the
-        // chip is inside one of them.
+      // The `+N` pill's tap zone first: it reaches over the chip's line.
+      const toggle = c.tabZone.isVisible && c.tabZone.contains(px, py);
+      if (toggle || c.container.contains(px, py)) {
+        // The line under the point: one room of a merged chip. Its zones tile
+        // the chip, so a point inside the chip is inside one of them.
         let line: { room: string; entityIds: string[] } | null = null;
-        let toggle = false;
-        for (let i = 0; i < c.slots.length; i++) {
+        for (let i = 0; !toggle && i < c.slots.length; i++) {
           if (!c.lines[i]?.zone.contains(px, py)) continue;
           const slot = c.slots[i];
-          if (slot === "toggle") toggle = true;
-          else line = { room: c.lineRooms[slot].room, entityIds: [...c.lineRooms[slot].entityIds] };
+          line = { room: c.lineRooms[slot].room, entityIds: [...c.lineRooms[slot].entityIds] };
           break;
         }
         return {
@@ -5496,7 +5537,7 @@ export class EntityVisuals {
     return null;
   }
 
-  /** The roomKey of the chip a person opened with its `+` row, or null. */
+  /** The roomKey of the chip a person opened with its `+N` pill, or null. */
   openChip(): string | null { return this.openChipKey; }
 
   /**

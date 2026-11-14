@@ -39,7 +39,7 @@ import {
   type PlacementItem, type DeferralBucket, type PlacementScratch, type PlacementStats,
 } from "./badgePlacement";
 import { channelEnabled } from "@/utils/tapDebug";
-import { bucketRoomChips, chipBox, chipFolds, chipSlots, chipToggleLabel, combineChips, type ChipMember, type RoomChip } from "./roomChips";
+import { bucketRoomChips, chipBox, chipFolds, chipSlots, combineChips, type ChipMember, type RoomChip } from "./roomChips";
 import { chipGrid, mapArea, placeChip, type PlaceBox, type ScreenRect } from "./chipPlace";
 import { drawnThisPass } from "./badgeFrame";
 import { RoomFocus } from "./roomFocus";
@@ -483,7 +483,7 @@ export interface ChipFrame {
   /** What the HUD lays over the map (its bars and rail), render px on the
    *  canvas: a chip is drawn clear of them (chipPlace.mapArea). Absent: none. */
   cover?: readonly ScreenRect[];
-  /** The roomKey of the chip a person opened (its `+` row), drawn with every
+  /** The roomKey of the chip a person opened (its `+N` pill), drawn with every
    *  line; null or absent: every chip folded. */
   open?: string | null;
 }
@@ -1842,47 +1842,50 @@ export class PlacementPass {
       // already reserves (charging it again merged pills that were clear).
       // The WIDEST line: every line of a merged chip shares its width, names
       // on the left and the pills in one right-hand column — per column.
-      // ── FOLDED: AT MOST TWO ROWS (owner, 2026-11-14) ──────────────────────
-      // A chip of several rooms draws its busiest and a `+ N more` row
-      // (roomChips.chipSlots), and it is THAT box the merge and the placement
-      // reserve, so other chips keep their room; opened, it draws over them
-      // (`spread`, below). The widest of the rows it draws.
+      // ── FOLDED: ONE LINE AND A `+N` PILL (owner, 2026-11-14) ─────────────
+      // A chip of several rooms draws its busiest room's line, like a chip of
+      // one room, and a `+N` pill straddling its bottom border
+      // (roomChips.chipSlots, chipTabZone). THAT box, the pill's overhang
+      // below the line included, is what the merge and the placement reserve,
+      // so other chips keep their room; opened, it draws over them (`spread`,
+      // below).
       const { widest, rows } = rowsOf(ch, false);
+      const overhang = chipFolds(ch.lines.length) ? (f.summary.countSize / 2) * scale : 0;
       // ── NEVER TALLER THAN THE MAP (2.496.803) ────────────────────────────
-      // One badge unit per row, as renderChips draws it — in as many columns
+      // One badge unit per line, as renderChips draws it — in as many columns
       // as the visible map's height needs (owner's screenshot: an eleven-line
       // chip ran off the top, under the top bar). Each column fills top-down.
-      const grid = chipGrid(rows, unit, area ? area.bottom - area.top : 0);
+      const grid = chipGrid(rows, unit, area ? area.bottom - area.top - overhang : 0);
       ch.cols = grid.cols; ch.rows = grid.rows;
       ch.halfW = ((grid.cols * widest) / 2) * scale;
-      ch.halfH = ((grid.rows * f.summary.size) / 2) * scale;
+      ch.halfH = ((grid.rows * f.summary.size) / 2) * scale + overhang / 2;
+      ch.overhang = overhang;
       ch.dx = 0; ch.dy = 0;
       ch.open = null;
     };
-    /** The rows a chip draws, folded or open, and the widest of them. */
+    /** The lines a chip draws, folded or open, and the widest of them. */
     const rowsOf = (ch: RoomChip, open: boolean) => {
       const slots = chipSlots(ch.lines.length, open);
       let widest = 0;
-      for (const s of slots) {
-        const label = s === "toggle" ? chipToggleLabel(ch.lines.length, open) : ch.lines[s].label;
-        widest = Math.max(widest, chipWidthPx(label, c.text));
-      }
+      for (const i of slots) widest = Math.max(widest, chipWidthPx(ch.lines[i].label, c.text));
       return { widest, rows: slots.length };
     };
     // ── THE OPENED CHIP: EVERY LINE, OVER ITS NEIGHBOURS ──────────────────
     // Grown upward from its folded box's bottom edge, as a merged chip grows,
     // in columns past the map's height, kept on the visible map and off the
     // HUD's rail — but off nothing else: it is drawn above every badge, card
-    // and chip while open, and nothing moves for it. Its own layout (RoomChip.open); the folded box
-    // stays what everything else reads.
+    // and chip while open, and nothing moves for it. Its pill ("−") hangs
+    // below it where the folded one's did. Its own layout (RoomChip.open);
+    // the folded box stays what everything else reads.
     const spread = (ch: RoomChip) => {
       const { widest, rows } = rowsOf(ch, true);
-      const grid = chipGrid(rows, unit, area ? area.bottom - area.top : 0);
-      const hw = ((grid.cols * widest) / 2) * scale, hh = ((grid.rows * f.summary.size) / 2) * scale;
+      const overhang = ch.overhang;
+      const grid = chipGrid(rows, unit, area ? area.bottom - area.top - overhang : 0);
+      const hw = ((grid.cols * widest) / 2) * scale, hh = ((grid.rows * f.summary.size) / 2) * scale + overhang / 2;
       const folded = chipBox(ch);
       const at = { cx: folded.cx, cy: folded.cy + folded.hh - hh, hw, hh };
       const to = area ? placeChip(at, area, [], gap) : at;
-      ch.open = { cols: grid.cols, rows: grid.rows, halfW: hw, halfH: hh, dx: to.cx - ch.x, dy: to.cy - (ch.y - hh) };
+      ch.open = { cols: grid.cols, rows: grid.rows, halfW: hw, halfH: hh, dx: to.cx - ch.x, dy: to.cy - (ch.y - hh), overhang };
     };
     // ── KEPT ON THE VISIBLE MAP, OFF EVERY BADGE AND CARD (2.496.803) ─────
     // Owner's screenshots: chips cut off by the top bar, the left rail and the

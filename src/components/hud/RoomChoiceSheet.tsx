@@ -39,26 +39,17 @@
 
 import { MapPin } from "lucide-react";
 import BasePanel from "@/components/panels/BasePanel";
-import { categorySurface } from "@/config/EntityCategories";
 import type { roomLook } from "@/babylon/summaryLook";
 import { healthPill } from "@/babylon/colors";
 import { countOf } from "@/utils/countOf";
 
-/** One room a merged chip stands for. `frame` and `health` are what that
- *  room's own chip wears on the map (summaryLook.roomLook): the row repeats
- *  its border — the "on" ring = something is on — and its count's colour —
- *  red / amber / grey / green, the room's health — so choosing a room does not mean
- *  losing what the chip was telling you. */
+/** One room a merged chip stands for. `health` is what that room's own chip
+ *  wears on the map (summaryLook.roomLook): the row repeats its count's
+ *  colour — red / amber / grey / green, the room's health — so choosing a
+ *  room does not mean losing what the chip was telling you. */
 export interface RoomChoice extends ReturnType<typeof roomLook> {
   room: string;
   count: number;
-}
-
-/** The chip's ring colours (EntityVisuals.renderChips draws the same
- *  categorySurface("others", …)); a resting room shows no border. */
-function rowBorder(frame: RoomChoice["frame"]): string | undefined {
-  if (frame === "rest") return undefined;
-  return categorySurface("others", frame).ring ?? undefined;
 }
 
 export default function RoomChoiceSheet({
@@ -80,7 +71,6 @@ export default function RoomChoiceSheet({
             key={c.room}
             type="button"
             className="room-choice-row"
-            style={{ borderColor: rowBorder(c.frame) }}
             onClick={() => onPick(c.room)}
             // The count is the point of the row: it is what tells you which
             // of two similarly-named rooms is the one you were looking at.
