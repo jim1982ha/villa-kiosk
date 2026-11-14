@@ -431,13 +431,13 @@
   display: flex; flex-direction: column; gap: 8px; pointer-events: none;
 }
 .hud-left-col > * { pointer-events: auto; }
-/* The presence tile (PresenceTile): the rail's width, its icon and one short word in the map's colour for the state
-   (--tone: green someone there, purple empty, grey lost contact — utils/stateColors STATUS_COLOR; owner, 2026-11-13:
-   empty is the villa's usual state, purple, no longer the text's grey). */
+/* The presence tile (PresenceTile): the rail's width, its icon and one short word; the icon in the map's colour for
+   the state (--tone: green someone there, grey lost contact — utils/stateColors STATUS_COLOR), and EMPTY in the rail's
+   own icon colour, as every other rail button (owner, 2026-11-14: its purple read as a signal). */
 .hud-left-col .hud-presence-btn {
   width: 100%; height: auto; min-height: 44px; padding: 4px 0;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
-  color: var(--tone);
+  color: var(--tone, var(--text-primary));
 }
 .hud-presence-word { font-size: var(--text-2xs); font-weight: 700; line-height: 1; color: var(--text-primary); }
 

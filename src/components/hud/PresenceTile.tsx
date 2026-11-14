@@ -61,7 +61,9 @@ export function PresenceButton({ presence: p, when, onClick }: { presence: Prese
   const said = p.state === "empty" && when ? `Empty since ${when}` : p.label;
   return (
     <button type="button" className="icon-btn hud-presence-btn" data-presence={p.state}
-      style={{ "--tone": STATUS_COLOR[p.tone] } as React.CSSProperties}
+      // empty: the rail's own icon colour, as the walk button above it (owner, 2026-11-14: purple read as a signal);
+      // occupied and an unknown presence keep their state's colour
+      style={p.state === "empty" ? undefined : { "--tone": STATUS_COLOR[p.tone] } as React.CSSProperties}
       data-tip={`${said}, tap to see why`} aria-label={`${said}. Tap to see why.`} onClick={onClick}>
       <Icon size={18} aria-hidden />
       <span className="hud-presence-word">{SHORT[p.state]}</span>
