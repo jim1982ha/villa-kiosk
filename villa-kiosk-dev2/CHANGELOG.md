@@ -1,3 +1,10 @@
+## 2.496.819
+
+- **Furniture is lit point by point, without light patches.** Chairs, stools, rails, cabinets and other small
+  furniture can now carry their light on every point of their shape instead of taking it from the light image, so the
+  dark and light patches on them go away when the villa's model is baked that way. They darken at night like the
+  walls, and a lit lamp brightens them as it does the walls. Older models look exactly as before.
+
 ## 2.496.818
 
 - **One blue entry in the Legend.** "Moving" and "Partially open" are now one entry, "In between": a device moving
