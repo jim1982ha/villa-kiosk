@@ -1,3 +1,15 @@
+## 2.496.812
+
+- **A linked device's bar lines up with the chart above it.** In a device window with a chart and a linked device (a
+  pump and its relay, for example), the linked device's bar now starts and ends exactly under the chart's plot, past the
+  numbers and the slider on its left, over the same period. The same moment is at the same place in both, on every
+  screen size and for every period (1h to 1y), so you can see at a glance that the relay was on while the pump ran.
+  While a value filter is set, the chart shows only the hours it keeps, so the bar under it no longer matches it hour
+  for hour; clear the filter to compare.
+- **The chart's filter takes the device's colour.** The slider beside a chart, its knobs, the small button under it,
+  the filter pill above the chart ("≥ 0 W · 10 of 167 hours") and the marks of the hours it keeps now use the device
+  family's colour, like the chart's line. The period buttons and the window's other buttons stay green.
+
 ## 2.496.811
 
 - **The villa's "Empty" button is no longer purple.** Under the floor buttons on the left, the house icon of an empty
