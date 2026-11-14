@@ -43,12 +43,7 @@ const BADGE_ITEMS: { label: string; state: DeviceSurfaceState; mark?: BadgeMark;
   { label: "Teal \"…\"", state: "off", mark: "moving", note: "Moving, locking, opening, closing" },
 ];
 
-/** A room chip: its border says whether something is on; its number's colour
- *  is the room's health (summaryLook.roomHealth → colors.healthPill). */
-const CHIP_RINGS: { label: string; frame: "active" | "rest"; note: string }[] = [
-  { label: "Light border", frame: "active", note: "Something in the room is on" },
-  { label: "No border", frame: "rest", note: "Everything in the room is off or resting" },
-];
+/** A room chip: its number's colour is the room's health (summaryLook.roomHealth → colors.healthPill). */
 const CHIP_COUNTS: { label: string; health: RoomHealth; note: string }[] = [
   { label: "Green number", health: "ok", note: "All right, every device is reporting and nothing needs attention" },
   { label: "Grey number", health: "unavailable", note: "No contact with a device in the room" },
@@ -143,12 +138,11 @@ export default function LegendModal({ onClose, listable, onListCategory }: {
           </div>
         </div>
 
-        {/* Drawn from the same owners as the chip: categorySurface("others", …)
-            for the border, healthPill for the number. */}
+        {/* Drawn from the same owner as the chip's number: healthPill. */}
         <div className="section-title">Room chips (zoomed out)</div>
         <p className="muted body-text" style={{ marginTop: 4 }}>
           A room's name with its number of devices. The number's colour says
-          whether the room is all right; the border, whether something is on.
+          whether the room is all right.
           Rooms too close together share one chip: it shows the busiest room,
           with a small "+3" on its bottom edge for the other rooms. Tap the +3
           to see every room, each with its own number, and the "−" to fold it
@@ -156,18 +150,6 @@ export default function LegendModal({ onClose, listable, onListCategory }: {
           hides. Tap a room's line to go to that room.
         </p>
         <div className="legend-grid">
-          {CHIP_RINGS.map((r) => (
-            <div className="legend-row" key={r.label}>
-              <span className="legend-swatch" style={{
-                background: categorySurface("others", "off").fill,
-                border: `1.5px solid ${r.frame === "rest" ? "var(--hairline)" : categorySurface("others", r.frame).ring}`,
-              }} />
-              <span>
-                <strong>{r.label}</strong>
-                <span className="fine-print legend-note">{r.note}</span>
-              </span>
-            </div>
-          ))}
           {CHIP_COUNTS.map((n) => (
             <div className="legend-row" key={n.label}>
               <span className="legend-swatch legend-swatch-round legend-count" style={{

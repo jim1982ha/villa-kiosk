@@ -104,11 +104,6 @@ console.log("\n  a merged chip lists its rooms (owner, 2026-11-14: was \"Living 
   ck("  ...four pill colours, not one", new Set(model.lines.map((l) => healthPill(l.health).fill)).size === 4);
   ck("  ...a tap on a line names that room and only its devices",
      model.lines.find((l) => l.room === "Study").entityIds.join() === "c1,c2");
-  ck("  ...and the border is the MERGED one: no member is on, so it rests", model.frame === "rest");
-  const lit = bucketRoomChips([M("x", "a", 0, "off"), M("y", "b", 1, "on")], () => true, (k) => k);
-  lit.forEach((c, i) => { c.x = i; c.y = 0; c.halfW = 10; c.halfH = 5; });
-  const [one] = mergeOverlapping(lit, 2, (c) => c.ids.length, (keep, drop) => combineChips(keep, drop));
-  ck("  ...one room on lights the merged chip's single border", roomChipModel(one, false, () => false).frame === "active");
 }
 
 console.log("\n  a merged chip is one line per room TALL, and the merge still settles (placementPass.deriveChips, real camera):");

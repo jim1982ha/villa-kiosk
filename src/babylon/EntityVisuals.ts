@@ -5179,11 +5179,6 @@ export class EntityVisuals {
     if (!layer) return; // no GUI layer yet — nothing to attach chips to
     const scale = this.effectiveScale();
     const chipRest = categorySurface("others", "off");
-    const chipFrames: Record<SummaryFrame, typeof chipRest> = {
-      alert: categorySurface("others", "alert"),
-      active: categorySurface("others", "active"),
-      rest: chipRest,
-    };
     for (const chip of chips) {
       // ── WHAT THE CHIP SHOWS IS summaryLook.roomChipModel's ───────────────
       // A chip whose every device is behind a wall is behind that wall too.
@@ -5207,11 +5202,11 @@ export class EntityVisuals {
       c.roomNames = model.roomNames;
       c.lineRooms = model.lines.map((l) => ({ room: l.room, entityIds: l.entityIds }));
       c.node.position.copyFrom(chip.centre);
-      // The chip's ring: the neutral "on" ring when a member is on, none
-      // otherwise. Never red: whether the room is all right is the COUNT's
-      // job (summaryLook.roomHealth) — one place for it, not a red border
-      // beside a green number (owner, 2026-10-04).
-      const frame = badgeRing(chipFrames[model.frame], this.metrics.cardHeightPx, this.metrics);
+      // The chip's frame: always the resting one. No "something is on"
+      // border (owner, 2026-11-14: no device badge has one) and never red:
+      // whether the room is all right is the COUNT's job
+      // (summaryLook.roomHealth, owner, 2026-10-04).
+      const frame = badgeRing(chipRest, this.metrics.cardHeightPx, this.metrics);
       applyBadgeFrame(c.container, frame, this.summaryMetrics().size);
       // ── ONE LINE PER ROOM (2.496.801) ───────────────────────────────────
       // A merged chip lists its rooms, each line that room's own name and

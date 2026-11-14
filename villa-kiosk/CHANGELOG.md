@@ -1,3 +1,9 @@
+## 2.496.808
+
+- **Room chips no longer have a light border.** A room chip drew a thick light border when something in the room was
+  on; device badges have no such border, so room chips now never draw it, whatever is on. The number's colour still
+  says whether the room is all right. The "Which room?" list and the Legend no longer show or describe that border.
+
 ## 2.496.807
 
 - **A shared room chip is one line again, with a small +N on its edge.** When rooms share a chip, it shows only the
