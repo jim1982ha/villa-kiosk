@@ -57,8 +57,7 @@ export default function LastDayTimeline({
   // the "no longer kept" stretch is not one of the device's states: never in its palette (historySource.keptFrom)
   const held = data.map((p) => p.state).filter((s) => !isNoHistory(s));
   const hue = useTrendColor();
-  // its states by the status table, through its device's rule as its pill (a critical door unlocked is the alarm's);
-  // its lost contact keeps the band's own grey
+  // its states by the status table, through its device's rule as its pill; its lost contact keeps the band's own grey
   const rule = useStatusRule();
   const byTable = (s: string) => { const k = statusKeyFor(s, entityId); return STATUS_COLOR[k === "unavailable" ? k : rule(k)]; };
   const base = colorFor ?? (palette ? paletteColorFor(held) : byTable);

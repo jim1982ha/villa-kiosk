@@ -109,14 +109,12 @@ export const PLAIN_STATUS: StatusRule = (key) => key;
 
 const HIDDEN_STATUS: StatusRule = (key) => (key === "alert" || key === "warn" ? "usual" : key);
 const CRITICAL_STATUS: StatusRule = (key) => criticalStatus(key, true);
-/** ⚠️ A CRITICAL DOOR LEFT UNLOCKED STAYS AN ALARM (owner, 2026-11-13: "a critical door unlocked … is red", the Cockpit's
- *  card, the villa's health, the Recap's "Doors locked"). Since 2026-11-15 a lock unlocked is in use (active), like
- *  every device, so a critical lock's rule takes that to the alarm too. */
-const CRITICAL_LOCK_STATUS: StatusRule = (key) => (key === "active" ? "alert" : criticalStatus(key, true));
 
-/** The rule of a device with these facts (hidden wins: it is no device anywhere). `lock`: the device is a lock. */
-export function statusRule(facts: { critical: boolean; hidden: boolean; lock?: boolean }): StatusRule {
-  return facts.hidden ? HIDDEN_STATUS : facts.critical ? (facts.lock ? CRITICAL_LOCK_STATUS : CRITICAL_STATUS) : PLAIN_STATUS;
+/** The rule of a device with these facts (hidden wins: it is no device anywhere). The COLOUR of every state it shows;
+ *  a critical door left unlocked is red like any unlocked door here, its alarm raised apart
+ *  (deviceActivity.ownReadingOf `status`, owner 2026-11-15). */
+export function statusRule(facts: { critical: boolean; hidden: boolean }): StatusRule {
+  return facts.hidden ? HIDDEN_STATUS : facts.critical ? CRITICAL_STATUS : PLAIN_STATUS;
 }
 
 /** The colour of a button that MOVES a device to `target` (its state as the villa's system names it: "unlocked",

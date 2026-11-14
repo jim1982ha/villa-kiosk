@@ -224,9 +224,9 @@ ck("no .ts/.tsx outside the table names a status or category token as a colour: 
 // an action wears the state it leads to (owner, 2026-11-13: "Unlock door" in the unlocked colour)
 {
   const { actionColor, statusRule, STATUS_COLOR: C } = await import("@/utils/stateColors");
-  ck("a button that moves a device is the colour of where it leads: unlock the active colour (a critical door's the alarm's), lock and close the usual colour, open the active one (owner, 2026-11-15)",
+  ck("a button that moves a device is the colour of where it leads: unlock the active colour (a critical door's too), lock and close the usual colour, open the active one (owner, 2026-11-15)",
      actionColor("lock.example_door", "unlocked") === C.active
-     && actionColor("lock.example_door", "unlocked", statusRule({ critical: true, hidden: false, lock: true })) === C.alert
+     && actionColor("lock.example_door", "unlocked", statusRule({ critical: true, hidden: false })) === C.active
      && actionColor("lock.example_door", "locked") === C.usual && actionColor("cover.example_blind", "open") === C.active
      && actionColor("cover.example_blind", "closed") === C.usual);
 }
