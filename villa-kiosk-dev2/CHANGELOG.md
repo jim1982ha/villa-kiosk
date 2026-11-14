@@ -1,3 +1,9 @@
+## 2.496.811
+
+- **The villa's "Empty" button is no longer purple.** Under the floor buttons on the left, the house icon of an empty
+  villa is now drawn in the same colour as the other buttons there, in light and dark themes. "In" (someone there)
+  stays green and an unknown presence stays grey.
+
 ## 2.496.810
 
 - **A device's reading and history are in its family's colour.** In a device's window, the big value, its history
