@@ -124,12 +124,12 @@ console.log("  a critical device that lost contact is red everywhere, not only o
   ck("  ...the window has that one fact, no second one for \"critical and lost\"",
      !("critical" in win("lock.door").badge));
   // owner, 2026-11-13: "a critical door unlocked" is red, an ordinary one amber; lost, red too (stateColors.criticalStatus)
-  ck("a critical lock's window: unlocked red, lost red; an ordinary one's unlocked amber; locked usual for both",
+  ck("a critical lock's window: unlocked red, lost red; an ordinary one's unlocked amber; locked green for both (owner, 2026-11-14)",
      lockPill("lock.door", "unlocked", win("lock.door").badge.statusRule).tone === "danger"
      && lockPill("sensor.th_humidity", "unlocked", win("sensor.th_humidity").badge.statusRule).tone !== "danger"
      && lockPill("lock.door", "unlocked", PLAIN).tone === "warn"
      && lockPill("lock.door", "unavailable", RED).tone === "danger"
-     && lockPill("lock.door", "locked", RED).tone === "usual");
+     && lockPill("lock.door", "locked", RED).tone === "active" && lockPill("lock.door", "locked", PLAIN).tone === "active");
   ck("nothing is red before the list is read", !deviceLook("lock.door", storeLookSource(entities, { ...config, isCritical: () => false })).critical);
 }
 

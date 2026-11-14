@@ -19,11 +19,12 @@ import { lastReportNote } from "@/ha/historySource";
 import { useHistoryRange, useDeviceBand, HistoryHeader, useKeptFrom } from "./historyRange";
 import { aggregationWords, chartAbout } from "./chartUtils";
 import { HOUR_MS } from "@/utils/localDay";
-import { historyStateColor, isNoHistory, paletteColorFor } from "@/utils/stateColors";
+import { STATUS_COLOR, isNoHistory, paletteColorFor, statusKeyFor } from "@/utils/stateColors";
+import { useStatusRule } from "./PanelActionsContext";
 import { useTrendColor } from "./trendHue";
 
 export default function LastDayTimeline({
-  entityId, colorFor, palette = false, words,
+  entityId, colorFor, palette = false, words, trend = false,
 }: {
   entityId: string;
   /** Optional — the entity's own domain rules are used by default, which is
@@ -41,6 +42,10 @@ export default function LastDayTimeline({
   /** How a state is said, when the entity's own words are not the ones (the villa's presence: "Empty"/"Occupied",
    *  never its sensor's "Detected"/"Clear"). */
   words?: (state: string) => string;
+  /** A sensor's reading in words (an access point's "Connected"): its usual state in the window's family colour, as
+   *  its numbers would be (trendHue). Never a device's on/off band: its "Off" is the status table's, as its pill and
+   *  its button say it (owner, 2026-11-14: a fan's "Off" band was orange beside a purple "Turn off"). */
+  trend?: boolean;
 }) {
   const { range, picker } = useHistoryRange();
   const kept = useKeptFrom();
@@ -51,10 +56,14 @@ export default function LastDayTimeline({
   const { entities } = useHA();
   // the "no longer kept" stretch is not one of the device's states: never in its palette (historySource.keptFrom)
   const held = data.map((p) => p.state).filter((s) => !isNoHistory(s));
-  const trend = useTrendColor();
-  const base = colorFor ?? (palette ? paletteColorFor(held) : historyStateColor(entityId));
-  // the device's usual state in its family's colour, in its own window (trendHue)
-  const paint = (s: string) => trend(base(s));
+  const hue = useTrendColor();
+  // its states by the status table; a critical device's "needs a look" (a critical lock unlocked) in its alarm's red, as
+  // its pill (its device's rule, owner 2026-11-14); its lost contact keeps the band's own grey
+  const rule = useStatusRule();
+  const byTable = (s: string) => { const k = statusKeyFor(s, entityId); return STATUS_COLOR[k === "warn" ? rule(k) : k]; };
+  const base = colorFor ?? (palette ? paletteColorFor(held) : byTable);
+  // a sensor's reading in words: its usual state in the window's family colour (trendHue); a device's band: the table's
+  const paint = trend ? (s: string) => hue(base(s)) : base;
   return (
     <div className="field">
       <HistoryHeader title={range.title} note={lastReportNote(lastSeen)} picker={picker} step={aggregationWords(range.grainMs, null)}

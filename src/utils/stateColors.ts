@@ -23,8 +23,9 @@ export const isNoHistory = (state: string): boolean => state === NOT_KEPT || sta
  * colour code for every status"). The same table paints the state pill, the history bar, the On button, the 3D
  * object, the map, the Cockpit, the presence tile, the camera's bar and the "Map colours & keys" legend.
  *
- *   usual         purple       alive, in its usual state: off, closed, locked, clear, disarmed, docked, idle
- *   active        green        on, doing something, nothing wrong: on, open, motion seen, occupied, playing, armed
+ *   usual         purple       alive, in its usual state: off, closed, clear, disarmed, docked, idle
+ *   active        green        on, doing something, nothing wrong: on, open, motion seen, occupied, playing, armed;
+ *                              and a lock LOCKED, secured (owner, 2026-11-14)
  *   transitional  teal         moving, only while it moves: opening, closing, locking, arming, returning
  *   warn          amber        needs a look: a lock unlocked, a late maintenance, a state marked as a warning
  *   alert         red          an alarm: a leak, smoke, jammed, a fault word, a critical door unlocked or offline
@@ -178,10 +179,12 @@ const UNIVERSAL_STATES: Record<string, StatusKey> = {
 
 /** Where a domain reads a state differently from the universal table. */
 const DOMAIN_STATES: Record<string, Record<string, StatusKey>> = {
-  // Locked is the usual, secure state; an unlocked door needs a look (a critical one is an alarm: criticalStatus).
-  // `open` here is the latch being held open, NOT a cover's "open" — the one state whose meaning genuinely inverts
-  // between two domains, and the reason this table has to be domain-aware at all.
-  lock: { locked: "usual", unlocked: "warn", open: "warn" },
+  // ⚠️ LOCKED IS THE GREEN, SECURED (owner, 2026-11-14: "reuse the colours of the Unlock button consistently for lock
+  // states"): it was the usual purple, and in its window the family's magenta; an unlocked door needs a look (a
+  // critical one is an alarm: criticalStatus, the "Unlock door…" button's red). `open` here is the latch being held
+  // open, NOT a cover's "open" — the one state whose meaning genuinely inverts between two domains, and the reason
+  // this table has to be domain-aware at all.
+  lock: { locked: "active", unlocked: "warn", open: "warn" },
   cover: { open: "active", closed: "usual" },
   valve: { open: "active", closed: "usual" },
   alarm_control_panel: {

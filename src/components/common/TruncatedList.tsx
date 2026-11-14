@@ -85,8 +85,11 @@ export function ShowAll<T>({ list, noun, plural = `${noun}s` }: { list: Truncate
     <>
       {/* more than a page: where the reader stands and the arrows (the count alone would repeat the button's) */}
       {list.paged && list.paged.lastPage > 0 && <Pager paged={{ ...list.paged, go: list.go }} />}
-      {/* the one "this opens more" (common/FoldedList FoldToggle; owner, 2026-11-06: it was an outlined button) */}
-      <FoldToggle className="mt" open={list.expanded} onToggle={list.toggle}>
+      {/* the one "this opens more" (common/FoldedList FoldToggle; owner, 2026-11-06: it was an outlined button).
+          ⚠️ NO MARGIN ABOVE IT (owner, 2026-11-14: a gap of a row and a half under the last row): it is a row of the
+          list's own height (--touch-min), so the list's rhythm carries on to it; a 16px margin (.mt) on top of that
+          was the gap, in every list this control ends. */}
+      <FoldToggle open={list.expanded} onToggle={list.toggle}>
         {list.expanded
           ? "Show fewer"
           : `Show all, ${list.hidden} more ${list.hidden === 1 ? noun : plural}`}

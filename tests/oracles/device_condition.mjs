@@ -46,7 +46,7 @@ const TABLE = [
   ["binary_sensor", "binary_sensor.plug", "plug", "on", "rest", "active"],
   ["binary_sensor", "binary_sensor.leak", "moisture", "unavailable", "lost", "unavailable"],
   ["binary_sensor", "binary_sensor.leak", "moisture", "unknown", "noValue", "noValue"],
-  ["lock", "lock.front", undefined, "locked", "rest", "usual"],
+  ["lock", "lock.front", undefined, "locked", "rest", "active"],
   ["lock", "lock.front", undefined, "unlocked", "inUse", "warn"],
   ["lock", "lock.front", undefined, "open", "inUse", "warn"],
   ["lock", "lock.front", undefined, "jammed", "wrong", "alert"],

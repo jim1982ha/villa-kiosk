@@ -1,6 +1,6 @@
 // src/components/hud/SummaryBar.tsx
 // A bottom dashboard strip of live "summary / scene / quick-action" tiles —
-// the row of Locks / Weather / Lights / AC / Energy / Scene cards. Everything is
+// the row of Weather / AC / Lights / Energy / Locks / Scene cards (the top bar's family order, summaryTiles). Everything is
 // AUTO-DERIVED from whatever HA entities exist (no per-villa config needed to
 // get value out of the box): scene.* become one-tap scene buttons, all
 // light.* collapse into a single "Lights — N on" toggle, climate.* into an

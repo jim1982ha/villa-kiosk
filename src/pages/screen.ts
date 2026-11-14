@@ -15,6 +15,7 @@ import type { ActivePanel } from "@/types/panel.types";
 import type { Category } from "@/types/scene.types";
 import type { CockpitTab } from "@/components/cockpit/CockpitModal";
 import type { SettingsTab } from "@/components/settings/SettingsModal";
+import type { MessagesFilter } from "@/messages/messagesModel";
 import type { Doors } from "@/auth/doors";
 import { NO_PANEL, panelNavReducer, reopenOf, type ListRef, type PanelNav } from "./panelNav";
 import { NO_SURFACES, SURFACE_LABEL, mayOpen, surfacesReducer, type Surface, type Surfaces } from "./surfaces";
@@ -41,6 +42,9 @@ export interface Screen {
    *  null otherwise. Kept while the Cockpit hands a device over and is reopened by Back; cleared when the Cockpit is
    *  closed or opened anew. */
   faultsFocus: string[] | null;
+  /** Where the Inbox opens when the opening says so: Issues from the top bar's Cockpit button (owner, 2026-11-14: it
+   *  reopened on Reports); null: the Inbox's own choice (messagesModel.openingFilter). Cleared when the Cockpit closes. */
+  inboxStart: MessagesFilter | null;
   /** A guest's problem report: the device it is about, "" for none (the
    *  Messages' "Report a problem"); null when no report is open. */
   guestReportFor: string | null;
@@ -54,13 +58,13 @@ export interface Screen {
 
 export const START: Screen = {
   nav: NO_PANEL, windows: NO_SURFACES, list: null,
-  cockpitTab: "messages", settingsTab: "general", faultFor: null, ticketFor: null, faultsFocus: null, guestReportFor: null,
+  cockpitTab: "messages", settingsTab: "general", faultFor: null, ticketFor: null, faultsFocus: null, inboxStart: null, guestReportFor: null,
   editorFocus: null, panelReturn: null,
 };
 
 export type ScreenAction =
   /** Open a window (the Cockpit on `tab`, when given; Settings on `settingsTab`, General when not). */
-  | { type: "openWindow"; window: Surface; tab?: CockpitTab; settingsTab?: SettingsTab }
+  | { type: "openWindow"; window: Surface; tab?: CockpitTab; settingsTab?: SettingsTab; inbox?: MessagesFilter }
   | { type: "settingsTab"; tab: SettingsTab }
   | { type: "closeWindow"; window: Surface }
   | { type: "cockpitTab"; tab: CockpitTab }
@@ -114,6 +118,7 @@ export function screenReducer(s: Screen, a: ScreenAction, doors: Doors): Screen 
       return { ...s, windows: win(s.windows, a.window, true), cockpitTab: a.tab ?? s.cockpitTab,
         settingsTab: a.window === "settings" ? a.settingsTab ?? "general" : s.settingsTab,
         faultsFocus: a.window === "cockpit" ? null : s.faultsFocus,
+        inboxStart: a.window === "cockpit" ? a.inbox ?? null : s.inboxStart,
         editorFocus: a.window === "configEditor" ? null : s.editorFocus };
     }
     case "closeWindow":
@@ -121,6 +126,7 @@ export function screenReducer(s: Screen, a: ScreenAction, doors: Doors): Screen 
         faultFor: a.window === "cockpit" ? null : s.faultFor,
         ticketFor: a.window === "cockpit" ? null : s.ticketFor,
         faultsFocus: a.window === "cockpit" ? null : s.faultsFocus,
+        inboxStart: a.window === "cockpit" ? null : s.inboxStart,
         editorFocus: a.window === "configEditor" ? null : s.editorFocus };
     case "cockpitTab": return { ...s, cockpitTab: a.tab };
     case "settingsTab": return { ...s, settingsTab: a.tab };

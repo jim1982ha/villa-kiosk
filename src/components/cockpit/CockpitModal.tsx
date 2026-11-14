@@ -9,6 +9,7 @@
 //
 // Every section here is read-only reporting on its own face; a device opens its own window (onOpenEntity).
 
+import type { MessagesFilter } from "@/messages/messagesModel";
 import Window, { WindowHeader } from "@/components/common/Window";
 import { useEffect, useMemo } from "react";
 import { Inbox, RefreshCw } from "lucide-react";
@@ -53,6 +54,8 @@ interface CockpitModalProps {
   onReportProblem: () => void;
   /** The devices whose open issue Messages opens (a device window's warning). */
   focusFaults?: readonly string[];
+  /** Where the Inbox opens, when the opening says (screen.inboxStart: Issues from the top bar). */
+  inboxStart?: MessagesFilter;
   /** Inbox › Open issues on these devices' faults (a readiness check's "faults", screen.openFaults). */
   onOpenFaults: (ids: string[]) => void;
 }
@@ -67,7 +70,7 @@ const MESSAGES_TAB: ModalTab<CockpitTab> = { id: "messages", label: "Inbox", ico
 
 export default function CockpitModal({
   onClose, onOpenEntity, doors, tab, onTab, reportFaultFor, onFaultFormOpened, onRaiseTicket,
-  editTicket, onEditTicket, onTicketEditOpened, onReportProblem, focusFaults, onOpenFaults,
+  editTicket, onEditTicket, onTicketEditOpened, onReportProblem, focusFaults, onOpenFaults, inboxStart,
 }: CockpitModalProps) {
   // A profile without the Facility door sees the Cockpit's view alone, no strip.
   const tabs: ModalTab<CockpitTab>[] = doors.facility ? [MESSAGES_TAB, ...FACILITY_TABS] : [MESSAGES_TAB];
@@ -131,7 +134,7 @@ export default function CockpitModal({
             onTab={onTab} onOpenFaults={onOpenFaults} />
         ) : (
           <MessagesTab onOpenEntity={onOpenEntity} doors={doors} onRaiseTicket={onRaiseTicket}
-            onEditTicket={onEditTicket} onReportProblem={onReportProblem} focusFaults={focusFaults} />
+            onEditTicket={onEditTicket} onReportProblem={onReportProblem} focusFaults={focusFaults} start={inboxStart} />
         )}
       </div>
 

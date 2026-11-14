@@ -69,7 +69,7 @@ function AnnouncementCard({ item, canManage, ...shown }: CardShown & { item: Exc
   return <NoteDetail announcement={item.announcement} canOpenPage={canManage} {...shown} />;
 }
 
-export default function MessagesTab({ onOpenEntity, doors, onRaiseTicket, onEditTicket, onReportProblem, focusFaults }: {
+export default function MessagesTab({ onOpenEntity, doors, onRaiseTicket, onEditTicket, onReportProblem, focusFaults, start }: {
   onOpenEntity: (entityId: string) => void;
   /** What this profile may do (auth/doors): `facility` takes faults on and opens tickets, `reportFault` reports a
    *  problem. */
@@ -82,6 +82,9 @@ export default function MessagesTab({ onOpenEntity, doors, onRaiseTicket, onEdit
   onReportProblem: () => void;
   /** The devices whose issue opens (a device window's warning, screen "openFaults"). */
   focusFaults?: readonly string[];
+  /** Where it opens, when the opening says so (the top bar's Cockpit: Issues, owner 2026-11-14). It stays there until
+   *  another is chosen: what is unread no longer moves it. Absent: its own choice (openingFilter). */
+  start?: MessagesFilter;
 }) {
   const { devices } = useVillaModel();
   const canManage = doors.facility;
@@ -91,10 +94,10 @@ export default function MessagesTab({ onOpenEntity, doors, onRaiseTicket, onEdit
   const { kept, unread, unreadReports } = useAnnouncements();
   // something unread: opened on Notifications (ticket 18 of "One inbox"); a warning first
   const opening = { warning: !!focusFaults?.length };
-  const [filter, setFilter] = useState<MessagesFilter>(() => openingFilter(unread, opening, unreadReports));
+  const [filter, setFilter] = useState<MessagesFilter>(() => start ?? openingFilter(unread, opening, unreadReports));
   // ⚠️ UNTIL ONE IS CHOSEN, IT FOLLOWS WHAT IS UNREAD (architecture review, 2026-10-30): VESTA's feed may be read a moment
   // after the Cockpit opened (a reload), and the Inbox stayed on Issues over unread notifications
-  const [chosen, setChosen] = useState(false);
+  const [chosen, setChosen] = useState(!!start);
   const pickFilter = (f: MessagesFilter) => { setChosen(true); setFilter(f); };
   useEffect(() => {
     if (!chosen) setFilter((f) => followingFilter(f, unread, opening, unreadReports));

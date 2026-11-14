@@ -287,6 +287,12 @@ function legacyDefaultCategory(type: EntityType): Category {
 
 // device_class sets that redirect a generic domain to a specific category.
 const COMFORT_SENSOR_DC = new Set(["temperature", "humidity"]);
+/** A binary sensor that watches over the villa's SAFETY — a leak, smoke, gas, carbon monoxide, a safety alarm, a
+ *  tamper — is security, with the access control family's shield (owner, 2026-11-14: "no Others family for now"; a
+ *  leak and a smoke detector were Others; a camera's sound detection is a detection, as its motion). By its class
+ *  first; its id words only when it declares none. */
+const SAFETY_BINARY_DC = new Set(["moisture", "smoke", "gas", "carbon_monoxide", "safety", "tamper", "sound"]);
+const SAFETY_BINARY_ID = /(?:^|[._])(?:leak\w*|water_?leak|flood\w*|moisture|smoke|gas|co|carbon_monoxide|tamper\w*)(?:[._]|$)/i;
 
 /**
  * What a generic `switch.*` / `input_boolean.*` is actually FOR, inferred from
@@ -313,9 +319,13 @@ const COMFORT_SENSOR_DC = new Set(["temperature", "humidity"]);
 export const SWITCH_PURPOSE_HINTS: ReadonlyArray<readonly [RegExp, Category, string]> = [
   [/(?:^|[._])(?:motion|presence|occupan\w*|detect\w*)(?:[._]|$)/i, "access_control", "activity"],
   [/(?:^|[._])(?:lock|unlock|door|gate)(?:[._]|$)/i, "access_control", "lock"],
-  [/(?:^|[._])(?:pump|filtr\w*|filter|jet|jacuzzi|spa|pool)(?:[._]|$)/i, "energy", "droplets"],
+  // a siren's or an alarm's switch is security (owner, 2026-11-14: no Others family); its glyph a switch's own
+  [/(?:^|[._])(?:siren|alarm)(?:[._]|$)/i, "access_control", "power"],
+  [/(?:^|[._])(?:pump|filtr\w*|filter|jet|jacuzzi|spa|pool|bore|submersible)(?:[._]|$)/i, "energy", "droplets"],
   [/(?:^|[._])(?:heat\w*|boiler\w*|water_?heater|thermo\w*)(?:[._]|$)/i, "comfort", "thermometer"],
   [/(?:^|[._])(?:camera|cctv)(?:[._]|$)/i, "access_control", "cctv"],
+  // the network's own switches (a router's rule, a VPN, the internet) are the network's (owner, 2026-11-14)
+  [/(?:^|[._])(?:unifi|network|vpn|internet|wifi|router)(?:[._]|$)/i, "network", "wifi"],
   [/(?:^|[._])(?:speaker|music|audio|sonos)(?:[._]|$)/i, "others", "music"],
   [/(?:^|[._])(?:plug|socket|outlet)(?:[._]|$)/i, "energy", "plug"],
   [/(?:^|[._])(?:light|lamp|led|spot)(?:[._]|$)/i, "light", "lightbulb"],
@@ -351,6 +361,9 @@ function categoryForEntity(entityId: string, type: EntityType, deviceClass?: str
     if (isMotionSensor(id, dc || undefined) || isOpeningSensor(id, dc || undefined)) {
       return "access_control";
     }
+    // a weather station's rain state reports "moisture" too: it is the weather's (comfort), never a leak
+    if (/(?:^|[._])(?:rain\w*|weather\w*)(?:[._]|$)/.test(id)) return "comfort";
+    if (SAFETY_BINARY_DC.has(dc) || (!dc && SAFETY_BINARY_ID.test(id))) return "access_control";
   }
 
   // `switch`/`input_boolean` is HA's generic RELAY domain — a pool pump, a lamp

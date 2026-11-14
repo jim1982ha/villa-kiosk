@@ -32,7 +32,7 @@ const TABLE = [
   ["humidifier", "off", "usual"], ["humidifier", "on", "active"],
   ["cover", "closed", "usual"], ["cover", "open", "active"], ["cover", "opening", "transitional"], ["cover", "closing", "transitional"],
   ["valve", "closed", "usual"], ["valve", "open", "active"],
-  ["lock", "locked", "usual"], ["lock", "unlocked", "warn"], ["lock", "open", "warn"], ["lock", "locking", "transitional"],
+  ["lock", "locked", "active"], ["lock", "unlocked", "warn"], ["lock", "open", "warn"], ["lock", "locking", "transitional"],
   ["lock", "unlocking", "transitional"], ["lock", "jammed", "alert"],
   ["alarm_control_panel", "disarmed", "usual"], ["alarm_control_panel", "armed_away", "active"],
   ["alarm_control_panel", "arming", "transitional"], ["alarm_control_panel", "triggered", "alert"],
@@ -211,10 +211,10 @@ ck("no .ts/.tsx outside the table names a status or category token as a colour: 
 // an action wears the state it leads to (owner, 2026-11-13: "Unlock door" in the unlocked colour)
 {
   const { actionColor, statusRule, STATUS_COLOR: C } = await import("@/utils/stateColors");
-  ck("a button that moves a device is the colour of where it leads: unlock amber (red for a critical door), lock and close the usual colour, open the active one",
+  ck("a button that moves a device is the colour of where it leads: unlock amber (red for a critical door), lock green (locked, owner 2026-11-14), close the usual colour, open the active one",
      actionColor("lock.example_door", "unlocked") === C.warn
      && actionColor("lock.example_door", "unlocked", statusRule({ critical: true, hidden: false })) === C.alert
-     && actionColor("lock.example_door", "locked") === C.usual && actionColor("cover.example_blind", "open") === C.active
+     && actionColor("lock.example_door", "locked") === C.active && actionColor("cover.example_blind", "open") === C.active
      && actionColor("cover.example_blind", "closed") === C.usual);
 }
 done("✅ one colour per meaning, on every surface, for every device");

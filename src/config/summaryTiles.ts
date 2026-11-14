@@ -14,6 +14,7 @@ import type { WeatherStation } from "./weatherStation";
 import { onOffSummary } from "@/utils/entityState";
 import type { HassEntity } from "@/types/ha.types";
 import type { Category, EntityMapping } from "@/types/scene.types";
+import { CATEGORY_ORDER } from "./EntityCategories";
 
 type IconType = ComponentType<{ size?: number | string }>;
 
@@ -201,5 +202,9 @@ export function deriveTiles(
     });
   }
 
-  return tiles;
+  // ⚠️ IN THE TOP BAR'S FAMILY ORDER (owner, 2026-11-14): comfort, light, network, energy, access control, others —
+  // the same CATEGORY_ORDER, so a new tile lands in its family's place; within a family, in the order built above
+  // (Weather before AC). A family not in the order goes last. Scenes stay after them all (SummaryBar).
+  const rank = (c: Category) => { const i = CATEGORY_ORDER.indexOf(c); return i < 0 ? CATEGORY_ORDER.length : i; };
+  return tiles.map((t, i) => ({ t, i })).sort((a, b) => rank(a.t.category) - rank(b.t.category) || a.i - b.i).map((x) => x.t);
 }

@@ -25,7 +25,7 @@ export default function ReadingHistory({ entityId, mappingType }: {
   const unit = entity?.attributes.unit_of_measurement ?? "";
   const trend = useTrendColor();
   return historyOf(r) === "states" ? <LastDayTimeline entityId={entityId} colorFor={r.stateColor ?? undefined} />
-    : historyOf(r) === "words" ? <LastDayTimeline entityId={entityId} palette />
+    : historyOf(r) === "words" ? <LastDayTimeline entityId={entityId} palette trend />
     : <NumericHistory name={labelOf(entityId, config.entityMap, entities)}
       series={[{ id: entityId, label: "Reading", unit, color: trend(r.seriesColor) }]} />;
 }

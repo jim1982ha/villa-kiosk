@@ -55,8 +55,8 @@ const CHIP_COUNTS: { label: string; health: RoomHealth; note: string }[] = [
  *  STATUS_COLOR, read here so the legend cannot describe another colour). ⚠️ ONE MEANING PER COLOUR (owner,
  *  2026-11-13): purple is "the device is alive, and reporting the usual state", green "on", never a judgement. */
 const STATUS_ITEMS: { label: string; swatch: string; note: string }[] = [
-  { label: "Usual", swatch: STATUS_COLOR.usual, note: "Alive, in its usual state: off, closed, locked, no motion, no leak, disarmed" },
-  { label: "On / active", swatch: STATUS_COLOR.active, note: "Doing something, nothing wrong: on, open, motion seen, occupied, playing, armed" },
+  { label: "Usual", swatch: STATUS_COLOR.usual, note: "Alive, in its usual state: off, closed, no motion, no leak, disarmed" },
+  { label: "On / active", swatch: STATUS_COLOR.active, note: "Doing something, nothing wrong: on, open, motion seen, occupied, playing, armed; a lock locked" },
   { label: "Moving", swatch: STATUS_COLOR.transitional, note: "Only while it moves: opening, closing, locking, arming" },
   { label: "Needs a look", swatch: STATUS_COLOR.warn, note: "A door unlocked, a late maintenance, a state marked as a warning" },
   { label: "Alarm", swatch: STATUS_COLOR.alert, note: "Act now: a leak or smoke, a jammed lock, a fault, a critical door unlocked or offline" },
