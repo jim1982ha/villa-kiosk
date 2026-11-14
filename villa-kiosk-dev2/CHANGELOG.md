@@ -1,3 +1,9 @@
+## 2.496.818
+
+- **One blue entry in the Legend.** "Moving" and "Partially open" are now one entry, "In between": a device moving
+  (opening, closing, locking, arming), or a curtain, blind or shutter partly open. A curtain's history still names its
+  state "Partially open".
+
 ## 2.496.817
 
 - **Curtains, blinds and shutters show "Partially open".** A cover open part of the way now has its own state, in the
