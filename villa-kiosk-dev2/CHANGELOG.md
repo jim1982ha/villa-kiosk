@@ -1,3 +1,12 @@
+## 2.496.816
+
+- **A critical door left unlocked is red like any unlocked door, and still raises its alarm.** Its window's pill, its
+  history bar and its 3D colour are now the same red as every unlocked door. Its alarm is unchanged: it still opens its
+  card in the Cockpit's Open issues, warns in the villa's health, fails "Doors locked" in the Recap and shows the alarm
+  mark on its badge, all in the alarm purple.
+- **The alarm purple is one colour everywhere.** Overdue and never-recorded maintenance, the Cockpit's alarm cards, the
+  Recap's failed checks, the map and the badges all take it from the same single definition.
+
 ## 2.496.815
 
 - **New status colours.** A device's usual state (off, closed, locked, no motion, disarmed) is now green; on or doing
