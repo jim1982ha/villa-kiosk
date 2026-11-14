@@ -12,7 +12,8 @@
 #                               large attributes), from the next restart on.
 #   sensor.vesta_visit_words    the English words the villa writes a visit with while VESTA is away (VESTA writes its
 #                               own, in each chat's language). Written by the VESTA Agent's
-#                               `python -m vesta_shared.message_format`: never edit the block by hand.
+#                               `python -m vesta_shared.message_format`: never edit the block by hand. It also names
+#                               the script below and the "VESTA reminder after" setting, for the blueprint.
 #   script.vesta_visit_tell     how the VESTA Agent tells the villa what it did: it holds the visit, its number, the
 #                               cards it shows in each chat, the step it has told, an answer, a reminder sent.
 #
@@ -88,6 +89,10 @@ template:
           moment: >-
             {{ "%H:%M" }}
         # END VISIT WORDS
+          # the package's own wiring, read by the CRITICAL Presence Guard (owner, 2026-11-14: no blueprint field for what
+          # is always the same): the script the VESTA Agent tells the villa with, and the "VESTA reminder after" setting
+          tell_script: script.vesta_visit_tell
+          reminder_after: input_number.vesta_reask_minutes
 
 script:
   vesta_visit_tell:
