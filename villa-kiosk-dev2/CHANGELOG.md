@@ -1,3 +1,12 @@
+## 2.496.807
+
+- **A shared room chip is one line again, with a small +N on its edge.** When rooms share a chip, it shows only the
+  busiest room, as a single line like any room's chip, and a small pill on its bottom edge says how many other rooms
+  it holds, for example "+1" or "+7". Tap the pill to see every room; it then reads "−", tap it to fold the chip again
+  (or tap anywhere else on the map, or move the camera). The pill takes the colour of anything wrong in the rooms it
+  hides: red first, then amber, then grey, and green when all is well. The "N more" line is gone, so chips take less
+  room on the map. The Legend describes the pill.
+
 ## 2.496.806
 
 - **A shared room chip now shows one room and a + button.** As soon as two or more rooms share a chip, it shows only
