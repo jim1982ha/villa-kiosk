@@ -15,6 +15,7 @@ import Window, { WindowHeader } from "@/components/common/Window";
 import { useState, type ReactNode } from "react";
 import { linkedSwitchProps, usePanelActions } from "./PanelActionsContext";
 import { TrendHue } from "./trendHue";
+import { ChartFrameShare } from "./chartFrame";
 import { badgeImage } from "@/babylon/badgeIcons";
 import { EditButton, FaultsButton, OpenTicketButton, useDeviceWarning } from "./DeviceWindowPieces";
 import DeviceReadings from "./DeviceReadings";
@@ -177,6 +178,7 @@ export default function BasePanel({ title, entityId, icon, className, headerActi
       </WindowHeader>
       <div className="modal-body">
         <TrendHue.Provider value={trendHue}>
+        <ChartFrameShare>
         {/* one range for the window's bands: the device's and its linked sensor's (HistoryRangeShare) */}
         <HistoryRangeShare device={entityId}
           follow={[linked?.entityId, linkedSensor?.entityId, motion?.entityId].filter((id): id is string => !!id)}>
@@ -225,6 +227,7 @@ export default function BasePanel({ title, entityId, icon, className, headerActi
             its own to be found in. */}
         {deviceReadings !== false && <DeviceReadings />}
         </HistoryRangeShare>
+        </ChartFrameShare>
         </TrendHue.Provider>
       </div>
       {/* The shared footer (ModalFooter): the left group is always there,

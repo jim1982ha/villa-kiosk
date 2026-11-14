@@ -12,7 +12,7 @@
 // Weather), three "no data" wordings. 2.496.118 found the chart checks had
 // quietly stopped looking at three of six charts — the symptom.
 
-import { useId, type ReactNode } from "react";
+import { useContext, useEffect, useId, type CSSProperties, type ReactNode } from "react";
 import { Maximize2 } from "lucide-react";
 import IconButton from "@/components/common/IconButton";
 import type { HistoryPoint, HistoryGap } from "@/types/ha.types";
@@ -29,6 +29,8 @@ import { useChartPointer } from "./useChartPointer";
 import ChartTip from "./ChartTip";
 import YAxis, { ChartUnitLine, FitMark, useChartFit, type AxisTick } from "./ChartAxis";
 import EmptyLine from "@/components/common/EmptyLine";
+import { useChartFrameSetter } from "./chartFrame";
+import { TrendHue } from "./trendHue";
 
 interface LineSpec {
   pts: readonly HistoryPoint[];
@@ -103,7 +105,7 @@ const keyOf = (l: LineSpec): ReactNode => (l.cls
 /** An outage row's key: a swatch of the band it describes (outageLook), never its line's dot. */
 const outageKey = (gap: HistoryGap): ReactNode => <i className="key-outage" style={{ background: outageLook(gap).background }} aria-hidden />;
 
-export default function LineChart({ lines, window, height = 150, status, label, stepMs, filter, onExpand }: {
+export default function LineChart({ lines, window, height = 150, status, label, stepMs, filter, onExpand, frame }: {
   lines: readonly LineSpec[];
   /** The span that was asked for — the x-axis. Omitted: the readings' own span. */
   window?: TimeWindow;
@@ -123,6 +125,8 @@ export default function LineChart({ lines, window, height = 150, status, label, 
   /** The chart, larger, in a window of its own (owner, 2026-10-29: "a graceful icon at the top right of the mini-chart …
    *  on the same line as the Y-axis unit"): its button at the right of the unit line; none in the larger one. */
   onExpand?: () => void;
+  /** This is the device window's chart: the bands under it line up with its plot (chartFrame). The small one only. */
+  frame?: boolean;
 }) {
   const H = height, BOT = height - 12;
   const plot = { left: 0, right: W, top: TOP, bottom: BOT };
@@ -142,6 +146,29 @@ export default function LineChart({ lines, window, height = 150, status, label, 
     ...(i === 0 && on ? { holds: slid!.base.map((p) => p.v), limits: on } : {}) })), plot, 0.08, fit) : null;
   const { frac, touchAction, handlers } = useChartPointer<SVGSVGElement>();
   const hatch = `range-hatch-${useId().replace(/[^\w-]/g, "")}`;
+  // ── THE BANDS UNDER IT LINE UP WITH ITS PLOT (owner, 2026-11-14) ──────
+  // Its columns beside the plot and the time the plot spans, for the window's linked bands (chartFrame); a closed-up
+  // chart (a range keeping some steps) spans no plain time, and says so.
+  const publish = useChartFrameSetter();
+  const twoScales = lines.some((l, i) => i > 0 && (l.scale ?? "shared") !== "shared");
+  const from = g && !kept ? g.window.from : null, to = g && !kept ? g.window.to : null;
+  const hasSlider = !!slid;
+  useEffect(() => {
+    if (!frame || !publish) return;
+    publish({ slider: hasSlider, right: twoScales, window: from !== null && to !== null ? { from, to } : null });
+    return () => publish(null);
+  }, [frame, publish, hasSlider, twoScales, from, to]);
+  // ── ITS FILTER IN THE FAMILY'S COLOUR (owner, 2026-11-14) ─────────────
+  // The slider, the axis' fit mark and the range chip wear the window's family hue (trendHue) as its line does;
+  // no hue (Others, a group's window): the app's accent, as before.
+  const hue = useContext(TrendHue);
+  // The range chip's words: the hue deepened toward the text's colour, on a light tint of it: 5:1 or better for every
+  // family in both themes (the bare hue on a 16% tint fell to 2.6:1 for the light family's gold).
+  const tint = hue ? {
+    "--chart-accent": hue,
+    "--chart-accent-soft": `color-mix(in srgb, ${hue} 10%, transparent)`,
+    "--chart-accent-ink": `color-mix(in srgb, ${hue} 65%, var(--text-primary))`,
+  } as CSSProperties : undefined;
   if (!g) return <><ChartEmpty status={status} height={height} /><TimeAxis g={null} /></>;
 
   const leftAxis: readonly AxisTick[] = g.series[0].ticks;
@@ -155,7 +182,7 @@ export default function LineChart({ lines, window, height = 150, status, label, 
   const ax = g.series[0];
   const unit = lines[0].unit ?? "";
   return (
-    <>
+    <div className="chart-tinted" style={tint}>
       <ChartUnitLine slider={!!slid} left={{ unit: unit.trim(), cls: lines[0].cls?.split(" ")[0], color: lines[0].color }}
         right={right ? { unit: right.unit?.trim() || right.label, cls: right.cls?.split(" ")[0], color: right.color } : null}
         action={onExpand && (
@@ -248,6 +275,6 @@ export default function LineChart({ lines, window, height = 150, status, label, 
           cls={right.cls?.split(" ")[0]} color={right.color} />}
       </div>
       <TimeAxis g={dated} right={!!right} slider={!!slid} />
-    </>
+    </div>
   );
 }

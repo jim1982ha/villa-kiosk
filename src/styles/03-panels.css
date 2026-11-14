@@ -763,6 +763,12 @@ button[aria-busy="true"] { animation: command-waiting 0.9s ease-in-out infinite;
 .weather-axis.under-yaxis { position: relative; margin-left: calc(2.6em + 6px); }
 .weather-axis.under-yaxis.right { margin-right: calc(2.6em + 6px); }
 .chart-with-axis.has-unit { margin-top: 1.6em; }
+/* A line chart's own box (LineChart): no box of its own, only the family hue its filter controls wear
+   (--chart-accent, the window's trendHue; absent: the accent). */
+.chart-tinted { display: contents; }
+/* A band under the window's chart, lined up with its plot (chartFrame.AlignedToChart): the chart's own columns, empty */
+.chart-aligned > .chart-gutter { cursor: default; pointer-events: none; align-self: stretch; }
+.chart-aligned-band { flex: 1 1 auto; min-width: 0; }
 
 /* The range filter of a device's trend chart (ChartRangeSlider, LineChart; owner, 2026-10-26): VESTA's range look
    standing up, slim, beside the left axis and exactly the plot's height: a 4px pill track, the kept part in the
@@ -771,9 +777,9 @@ button[aria-busy="true"] { animation: command-waiting 0.9s ease-in-out infinite;
 .chart-range { position: relative; flex: 0 0 var(--chart-range-w); touch-action: none; cursor: ns-resize; -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none; }
 .chart-range-track, .chart-range-kept { position: absolute; left: calc(50% - 2px); width: 4px; border-radius: 999px; pointer-events: none; }
 .chart-range-track { background: var(--bg-input); }
-.chart-range-kept { background: var(--accent); }
-.chart-range-thumb { position: absolute; left: calc(50% - 10px); width: 20px; height: 20px; margin-top: -10px; box-sizing: border-box; border-radius: 50%; background: var(--accent); border: 2px solid var(--bg-modal); box-shadow: var(--elev-1); touch-action: none; }
-.chart-range-thumb:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.chart-range-kept { background: var(--chart-accent, var(--accent)); }
+.chart-range-thumb { position: absolute; left: calc(50% - 10px); width: 20px; height: 20px; margin-top: -10px; box-sizing: border-box; border-radius: 50%; background: var(--chart-accent, var(--accent)); border: 2px solid var(--bg-modal); box-shadow: var(--elev-1); touch-action: none; }
+.chart-range-thumb:focus-visible { outline: 2px solid var(--chart-accent, var(--accent)); outline-offset: 2px; }
 .weather-axis.under-yaxis.beside-range { margin-left: calc(2.6em + 12px + var(--chart-range-w)); }
 /* The line above every line chart (ChartAxis.ChartUnitLine; owner, 2026-10-26): one height filtered or not, in the
    chart's columns: the unit over the axis numbers (past the slider's column), the range's chip at the right, a right
@@ -788,9 +794,9 @@ button[aria-busy="true"] { animation: command-waiting 0.9s ease-in-out infinite;
    numbers, or under the slider. Out of the row's flow: the row keeps its height and its labels start under the plot. */
 .chart-fit-corner { position: absolute; top: 50%; transform: translateY(-50%); right: calc(100% + 6px); width: 2.6em; display: flex; justify-content: center; }
 .weather-axis.under-yaxis.beside-range .chart-fit-corner { right: calc(100% + 12px + 2.6em); width: var(--chart-range-w); }
-.chart-fit-mark { display: inline-flex; align-items: center; justify-content: center; height: 20px; min-width: 22px; padding: 0 2px; border: none; border-radius: 6px; background: var(--bg-input); color: var(--accent); cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.chart-fit-mark { display: inline-flex; align-items: center; justify-content: center; height: 20px; min-width: 22px; padding: 0 2px; border: none; border-radius: 6px; background: var(--bg-input); color: var(--chart-accent, var(--accent)); cursor: pointer; -webkit-tap-highlight-color: transparent; }
 .chart-fit-zero { font-size: 9.5px; font-weight: 700; margin-left: -2px; line-height: 1; }
-.chart-range-chip { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 4px; height: 20px; padding: 0 2px 0 7px; border: none; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-size: inherit; font-weight: 700; font-variant-numeric: tabular-nums; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.chart-range-chip { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 4px; height: 20px; padding: 0 2px 0 7px; border: none; border-radius: 999px; background: var(--chart-accent-soft, var(--accent-soft)); color: var(--chart-accent-ink, var(--accent)); font-size: inherit; font-weight: 700; font-variant-numeric: tabular-nums; cursor: pointer; -webkit-tap-highlight-color: transparent; }
 .chart-range-chip.loading { opacity: 0.6; }
 .chart-range-chip-kept { font-weight: 600; opacity: 0.8; }
 /* the ribbon: in the strip under the plot the chart already has, so it adds no height and shifts nothing */
@@ -801,9 +807,9 @@ button[aria-busy="true"] { animation: command-waiting 0.9s ease-in-out infinite;
 .key-outage { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px;
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text-secondary) 60%, transparent); }
 .chart-range-ribbon { position: absolute; left: 0; right: 0; height: 4px; border-radius: 999px; background: var(--bg-input); overflow: hidden; pointer-events: none; }
-.chart-range-ribbon i { position: absolute; top: 0; bottom: 0; background: var(--accent); }
+.chart-range-ribbon i { position: absolute; top: 0; bottom: 0; background: var(--chart-accent, var(--accent)); }
 .chart-range-none { position: absolute; inset: 0 12px; display: flex; align-items: center; justify-content: center; text-align: center; font-size: var(--text-xs); color: var(--text-secondary); pointer-events: none; }
-.chart-range-chip-x { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; border-radius: 50%; background: var(--accent); color: var(--bg-modal); }
+.chart-range-chip-x { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; border-radius: 50%; background: var(--chart-accent, var(--accent)); color: var(--bg-modal); }
 /* What the range leaves out: fine diagonal stripes in the text's grey, over the grid and the line — a filter, never a
    state, so never lost contact's grey (owner, 2026-11-13: one meaning per colour). */
 .chart-range-hatch-bg { fill: var(--text-secondary); opacity: 0.05; }
