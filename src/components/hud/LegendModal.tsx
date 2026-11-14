@@ -34,9 +34,9 @@ const BADGE_ITEMS: { label: string; state: DeviceSurfaceState; mark?: BadgeMark;
   { label: "On", state: "active", note: "Tinted in the device's colour, on, or working" },
   { label: "Bottom-right pill", state: "off", linkPill: "on",
     note: "The device linked to it, filled when on, hollow when off, or its own problem with the same marks" },
-  { label: "Red \"?\"", state: "unavailable", mark: "critical", note: "A critical device has gone silent, act now" },
+  { label: "Purple \"?\"", state: "unavailable", mark: "critical", note: "A critical device has gone silent, act now" },
   { label: "Top-right dot", state: "active", mark: "active", note: "In use, motion seen, a door open, a lock unlocked" },
-  { label: "Red \"!\"", state: "active", mark: "alarm", note: "Alarm, a leak, smoke, a low battery, a jammed lock" },
+  { label: "Purple \"!\"", state: "active", mark: "alarm", note: "Alarm, a leak, smoke, a low battery, a jammed lock" },
   { label: "Amber \"!\"", state: "off", mark: "fault", note: "An open fault, check soon" },
   { label: "Grey \"?\"", state: "unavailable", mark: "lost", note: "No contact, the square is faded" },
   { label: "Grey \"z\"", state: "off", mark: "asleep", note: "Asleep by design, its last report is shown" },
@@ -48,17 +48,18 @@ const CHIP_COUNTS: { label: string; health: RoomHealth; note: string }[] = [
   { label: "Green number", health: "ok", note: "All right, every device is reporting and nothing needs attention" },
   { label: "Grey number", health: "unavailable", note: "No contact with a device in the room" },
   { label: "Amber number", health: "fault", note: "A device in the room has an open fault, shown before grey" },
-  { label: "Red number", health: "alert", note: "Act now: an alarm, or a critical device gone silent, shown first" },
+  { label: "Purple number", health: "alert", note: "Act now: an alarm, or a critical device gone silent, shown first" },
 ];
 
 /** The seven status colours, as every pill, history bar, On button and 3D object paints them (utils/stateColors
  *  STATUS_COLOR, read here so the legend cannot describe another colour). ⚠️ ONE MEANING PER COLOUR (owner,
- *  2026-11-13): purple is "the device is alive, and reporting the usual state", green "on", never a judgement. */
+ *  2026-11-13; swapped 2026-11-15): green is "the device is alive, and reporting the usual state", red "on, doing
+ *  something", purple the alarm. */
 const STATUS_ITEMS: { label: string; swatch: string; note: string }[] = [
-  { label: "Usual", swatch: STATUS_COLOR.usual, note: "Alive, in its usual state: off, closed, no motion, no leak, disarmed" },
-  { label: "On / active", swatch: STATUS_COLOR.active, note: "Doing something, nothing wrong: on, open, motion seen, occupied, playing, armed; a lock locked" },
+  { label: "Usual", swatch: STATUS_COLOR.usual, note: "Alive, in its usual state: off, closed, locked, no motion, no leak, disarmed" },
+  { label: "On / active", swatch: STATUS_COLOR.active, note: "Doing something, nothing wrong: on, open, unlocked, motion seen, occupied, playing, armed" },
   { label: "Moving", swatch: STATUS_COLOR.transitional, note: "Only while it moves: opening, closing, locking, arming" },
-  { label: "Needs a look", swatch: STATUS_COLOR.warn, note: "A door unlocked, a late maintenance, a state marked as a warning" },
+  { label: "Needs a look", swatch: STATUS_COLOR.warn, note: "A late maintenance, a state marked as a warning" },
   { label: "Alarm", swatch: STATUS_COLOR.alert, note: "Act now: a leak or smoke, a jammed lock, a fault, a critical door unlocked or offline" },
   { label: "Unavailable", swatch: STATUS_COLOR.unavailable, note: "No contact with the device" },
   { label: "No value", swatch: STATUS_COLOR.noValue, note: "The device answers with no value to give right now" },

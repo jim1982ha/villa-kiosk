@@ -23,12 +23,14 @@ export const isNoHistory = (state: string): boolean => state === NOT_KEPT || sta
  * colour code for every status"). The same table paints the state pill, the history bar, the On button, the 3D
  * object, the map, the Cockpit, the presence tile, the camera's bar and the "Map colours & keys" legend.
  *
- *   usual         purple       alive, in its usual state: off, closed, clear, disarmed, docked, idle
- *   active        green        on, doing something, nothing wrong: on, open, motion seen, occupied, playing, armed;
- *                              and a lock LOCKED, secured (owner, 2026-11-14)
+ *   usual         green        alive, in its usual state: off, closed, locked, clear, disarmed, docked, idle
+ *   active        red          on, doing something, nothing wrong: on, open, unlocked, motion seen, occupied, playing,
+ *                              armed
  *   transitional  teal         moving, only while it moves: opening, closing, locking, arming, returning
- *   warn          amber        needs a look: a lock unlocked, a late maintenance, a state marked as a warning
- *   alert         red          an alarm: a leak, smoke, jammed, a fault word, a critical door unlocked or offline
+ *   warn          amber        needs a look: a late maintenance, a state marked as a warning
+ *   alert         purple       an alarm: a leak, smoke, jammed, a fault word, a critical device offline
+ * ⚠️ SWAPPED (owner, 2026-11-15): usual was purple, active green, alarm red; a lock was its own exception (locked green,
+ *  unlocked amber or red) and follows the table now like every device.
  *   unavailable   light grey   lost contact ("unavailable"), a plain colour, never striped
  *   noValue       empty track  nothing to show: "unknown", blank, "none", and history no longer kept
  *
@@ -53,7 +55,7 @@ export const STATUS_COLOR = {
    *  contact" for the second or two it spent motoring. See TRANSITIONAL_STATES. */
   transitional: "var(--status-pending)",
   warn: "var(--status-warning)",
-  alert: "var(--status-danger)",
+  alert: "var(--status-alarm)",
   /** The villa's system has lost contact ("unavailable"), never "unknown", a device answering with no value
    *  (contactOf "no-value": noValue). ⚠️ GREY, NO LONGER AMBER (owner, 2026-10-22: badge proposal 2), and LIGHT and
    *  PLAIN since 2026-11-13: the stripes it was drawn in were the chart's, not the state's. */
@@ -89,10 +91,14 @@ export const PLAIN_STATUS: StatusRule = (key) => key;
 
 const HIDDEN_STATUS: StatusRule = (key) => (key === "alert" || key === "warn" ? "usual" : key);
 const CRITICAL_STATUS: StatusRule = (key) => criticalStatus(key, true);
+/** ⚠️ A CRITICAL DOOR LEFT UNLOCKED STAYS AN ALARM (owner, 2026-11-13: "a critical door unlocked … is red", the Cockpit's
+ *  card, the villa's health, the Recap's "Doors locked"). Since 2026-11-15 a lock unlocked is in use (active), like
+ *  every device, so a critical lock's rule takes that to the alarm too. */
+const CRITICAL_LOCK_STATUS: StatusRule = (key) => (key === "active" ? "alert" : criticalStatus(key, true));
 
-/** The rule of a device with these facts (hidden wins: it is no device anywhere). */
-export function statusRule(facts: { critical: boolean; hidden: boolean }): StatusRule {
-  return facts.hidden ? HIDDEN_STATUS : facts.critical ? CRITICAL_STATUS : PLAIN_STATUS;
+/** The rule of a device with these facts (hidden wins: it is no device anywhere). `lock`: the device is a lock. */
+export function statusRule(facts: { critical: boolean; hidden: boolean; lock?: boolean }): StatusRule {
+  return facts.hidden ? HIDDEN_STATUS : facts.critical ? (facts.lock ? CRITICAL_LOCK_STATUS : CRITICAL_STATUS) : PLAIN_STATUS;
 }
 
 /** The colour of a button that MOVES a device to `target` (its state as the villa's system names it: "unlocked",
@@ -179,12 +185,11 @@ const UNIVERSAL_STATES: Record<string, StatusKey> = {
 
 /** Where a domain reads a state differently from the universal table. */
 const DOMAIN_STATES: Record<string, Record<string, StatusKey>> = {
-  // ⚠️ LOCKED IS THE GREEN, SECURED (owner, 2026-11-14: "reuse the colours of the Unlock button consistently for lock
-  // states"): it was the usual purple, and in its window the family's magenta; an unlocked door needs a look (a
-  // critical one is an alarm: criticalStatus, the "Unlock door…" button's red). `open` here is the latch being held
-  // open, NOT a cover's "open" — the one state whose meaning genuinely inverts between two domains, and the reason
-  // this table has to be domain-aware at all.
-  lock: { locked: "active", unlocked: "warn", open: "warn" },
+  // A lock follows the table like every device (owner, 2026-11-15): locked its usual state, unlocked in use (active),
+  // critical or not; jammed the alarm (UNIVERSAL_STATES). `open` here is the latch being held open, NOT a cover's
+  // "open" — the one state whose meaning genuinely inverts between two domains, and the reason this table has to be
+  // domain-aware at all.
+  lock: { locked: "usual", unlocked: "active", open: "active" },
   cover: { open: "active", closed: "usual" },
   valve: { open: "active", closed: "usual" },
   alarm_control_panel: {

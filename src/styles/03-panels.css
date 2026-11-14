@@ -182,7 +182,7 @@ button[aria-busy="true"] { animation: command-waiting 0.9s ease-in-out infinite;
    a state the device has positively reported. */
 .status-pill.transitional { background: color-mix(in srgb, var(--status-pending) 20%, transparent); color: var(--status-pending); }
 .status-pill.warn { background: color-mix(in srgb, var(--status-warning) 22%, transparent); color: var(--status-warning); }
-.status-pill.danger { background: color-mix(in srgb, var(--status-danger) 22%, transparent); color: var(--status-danger); }
+.status-pill.danger { background: color-mix(in srgb, var(--status-alarm) 22%, transparent); color: var(--status-alarm); }
 /* Lost contact — a DISTINCT tone from every state: a lock reporting "unavailable" is NOT confirmed unlocked, its true
    state just isn't known. The light grey of no contact, its words in --status-lost-ink (the grey alone is too light for
    words on the light theme). */
@@ -318,7 +318,7 @@ button[aria-busy="true"] { animation: command-waiting 0.9s ease-in-out infinite;
   .camera-device-controls .media-btn { flex: 0 1 var(--media-btn); min-width: 0; height: auto; aspect-ratio: 1; }
 }
 /* A siren sounding: the alarm red, not the switch's green (CameraDeviceButtons) */
-.camera-controls .camera-siren-btn.on.alarm { background: var(--status-danger); }
+.camera-controls .camera-siren-btn.on.alarm { background: var(--status-alarm); }
 /* The spinner layer, and the live stream's frame (.camera-hls-wrap): both centred over the whole view, untappable. */
 .camera-loading, .camera-hls-wrap { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; }
 /* Status strip (online/offline/motion — see CameraPanel's statusHistory).

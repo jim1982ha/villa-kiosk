@@ -8,11 +8,11 @@
 import { Color3 } from "@babylonjs/core/Maths/math.color";
 import type { StatusKey } from "@/utils/stateColors";
 
-// Matches --status-danger (light theme value — see colors.ts's file comment
-// on why these are static, not a live theme read).
-export const ALERT_RED = new Color3(0.7, 0.26, 0.2);
-// Same colour as ALERT_RED, for the badge ring's Babylon GUI hex string API.
-export const ALERT_RED_HEX = "#B24232";
+// THE ALARM, as --status-alarm (light theme value — see colors.ts's file comment on why these are static, not a live
+// theme read). ⚠️ PURPLE SINCE 2026-11-15 (owner: usual green, active red, alarm purple); the name is kept for its
+// readers.
+export const ALERT_RED_HEX = "#6E57B8";
+export const ALERT_RED = Color3.FromHexString(ALERT_RED_HEX);
 
 // "The villa's system has lost contact with this device — its state isn't known." Distinct
 // from ALERT_RED (a confirmed, actionable alarm) on purpose: tinting an
@@ -32,9 +32,11 @@ export const LOST_GREY = Color3.FromHexString(LOST_GREY_HEX);
 // A Babylon GUI control can't consume a CSS custom property, so this is a
 // static match to the light-theme value rather than a live read.
 export const AVAILABLE_GREEN_HEX = "#34845A";
-// --status-usual (light theme): alive in its usual state (owner, 2026-11-13) — a room whose devices all report that is
-// "all right" in this colour (healthPill "ok"), as their windows say it.
-export const USUAL_HEX = "#6E57B8";
+// --status-usual (light theme): alive in its usual state — green since 2026-11-15 (owner) — a room whose devices all
+// report that is "all right" in this colour (healthPill "ok"), as their windows say it.
+export const USUAL_HEX = "#34845A";
+// --status-active (light theme): on, doing something — red since 2026-11-15 (owner).
+const ACTIVE_HEX = "#B24232";
 // --status-warning (light theme): a FAULT, check soon.
 const FAULT_AMBER_HEX = "#B8801F";
 
@@ -42,19 +44,19 @@ const FAULT_AMBER_HEX = "#B8801F";
  *  picture (the room chip's pill) and a 3D object (STATUS_COLOR3) are painted from. */
 const STATUS_HEX: Record<StatusKey, string> = {
   usual: USUAL_HEX,                 // --status-usual
-  active: AVAILABLE_GREEN_HEX,      // --status-active
+  active: ACTIVE_HEX,               // --status-active
   transitional: "#1F7F8C",          // --status-pending
   warn: FAULT_AMBER_HEX,            // --status-warning
-  alert: ALERT_RED_HEX,             // --status-danger
+  alert: ALERT_RED_HEX,             // --status-alarm
   unavailable: LOST_GREY_HEX,       // --status-lost
   // nothing to show: a mesh has no empty track, so the quiet --status-off a resting object takes
   noValue: "#D8D3C7",
 };
 
 /** A room's health as the status table's colour (summaryLook.roomHealth): a fault is "needs a look", all right the
- *  table's green. ⚠️ GREEN, NOT THE USUAL PURPLE (owner, 2026-11-14): beside amber, grey and red the count reads as a
- *  traffic light, and purple there did not read as "all right". Only this pill: a device's usual state stays purple. */
-const HEALTH_STATUS = { alert: "alert", fault: "warn", unavailable: "unavailable", ok: "active" } as const satisfies Record<string, StatusKey>;
+ *  usual green (owner, 2026-11-14: green for "all right"; since 2026-11-15 that IS the usual's colour), an alarm the
+ *  alarm's purple. */
+const HEALTH_STATUS = { alert: "alert", fault: "warn", unavailable: "unavailable", ok: "usual" } as const satisfies Record<string, StatusKey>;
 /** The ink on each pill: white on the dark fills, dark on the light ones. */
 const DARK_INK = "#17191A";
 

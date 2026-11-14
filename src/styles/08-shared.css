@@ -252,7 +252,7 @@ body:has(.camera-fullscreen) .vesta-notice.below-camera { display: none; }
    card and the Recap's row share, owner 2026-10-18): red only for an alarm or a critical device offline; a fault,
    any other offline device and a late task are a warning, amber. The five per-kind rules this replaces still
    painted every fault red after that decision (architecture review, 2026-10-19). */
-.cockpit-attention-danger { color: var(--status-danger); }
+.cockpit-attention-danger { color: var(--status-alarm); }
 .cockpit-attention-warn { color: var(--status-warning); }
 /* any other device offline: grey, "no contact" — the map badge's grey "?" (owner, 2026-10-22: badge proposal 2) */
 .cockpit-attention-lost { color: var(--status-lost-ink); }
@@ -436,7 +436,7 @@ body:has(.camera-fullscreen) .vesta-notice.below-camera { display: none; }
 /* ⚠️ THE ONE LINE THAT SAYS SOMETHING WENT WRONG (common/ProblemLine; owner, 2026-11-10: one definition). It was red
    at three sizes, amber in two places and a paragraph with its own margins in a fourth. Red: it did not happen.
    Amber (.warn): it happened, with a reservation. Where it stands is its place's business, never its look. */
-.problem-line { font-size: var(--text-base); line-height: 1.4; color: var(--status-danger); min-width: 0; overflow-wrap: anywhere; }
+.problem-line { font-size: var(--text-base); line-height: 1.4; color: var(--status-alarm); min-width: 0; overflow-wrap: anywhere; }
 .problem-line.warn { color: var(--status-warning); }
 
 @media (max-width: 640px) {
@@ -506,7 +506,7 @@ body:has(.camera-fullscreen) .vesta-notice.below-camera { display: none; }
    Recap check, the spending cap — the frame of any card whose state is a warning or a danger. It was written four
    times in 07-facility.css under four vocabularies. `--tone` is the status colour; a card's icon or bar may use it. */
 .tone-warn { --tone: var(--status-warning); --tone-fill: 6%; --tone-edge: 25%; }
-.tone-danger { --tone: var(--status-danger); --tone-fill: 7%; --tone-edge: 28%; }
+.tone-danger { --tone: var(--status-alarm); --tone-fill: 7%; --tone-edge: 28%; }
 .tone-warn, .tone-danger {
   background: color-mix(in srgb, var(--tone) var(--tone-fill), var(--bg-card));
   border-color: color-mix(in srgb, var(--tone) var(--tone-edge), var(--hairline));

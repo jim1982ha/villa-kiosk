@@ -124,12 +124,12 @@ console.log("  a critical device that lost contact is red everywhere, not only o
   ck("  ...the window has that one fact, no second one for \"critical and lost\"",
      !("critical" in win("lock.door").badge));
   // owner, 2026-11-13: "a critical door unlocked" is red, an ordinary one amber; lost, red too (stateColors.criticalStatus)
-  ck("a critical lock's window: unlocked red, lost red; an ordinary one's unlocked amber; locked green for both (owner, 2026-11-14)",
+  ck("a critical lock's window: unlocked and lost the alarm; an ordinary one's unlocked in use; locked usual for both (owner, 2026-11-15)",
      lockPill("lock.door", "unlocked", win("lock.door").badge.statusRule).tone === "danger"
      && lockPill("sensor.th_humidity", "unlocked", win("sensor.th_humidity").badge.statusRule).tone !== "danger"
-     && lockPill("lock.door", "unlocked", PLAIN).tone === "warn"
+     && lockPill("lock.door", "unlocked", PLAIN).tone === "active"
      && lockPill("lock.door", "unavailable", RED).tone === "danger"
-     && lockPill("lock.door", "locked", RED).tone === "active" && lockPill("lock.door", "locked", PLAIN).tone === "active");
+     && lockPill("lock.door", "locked", RED).tone === "usual" && lockPill("lock.door", "locked", PLAIN).tone === "usual");
   ck("nothing is red before the list is read", !deviceLook("lock.door", storeLookSource(entities, { ...config, isCritical: () => false })).critical);
 }
 
@@ -158,9 +158,9 @@ console.log("  a critical door UNLOCKED is red on every surface, an ordinary one
      front.mark === "alarm" && back.mark === "active", { front: front.mark, back: back.mark });
   ck("  ...its room's number red; the ordinary door's room quiet",
      roomLook([front]).health === "alert" && roomLook([back]).health === "ok", [roomLook([front]).health, roomLook([back]).health]);
-  ck("  ...its 3D object red, the ordinary one amber, as their windows' pills",
-     meshLookFor(FRONT, src).tone === "alert" && meshLookFor(BACK, src).tone === "warn"
-     && lockPill(FRONT, "unlocked", front.statusRule).tone === "danger" && lockPill(BACK, "unlocked", back.statusRule).tone === "warn");
+  ck("  ...its 3D object the alarm's, the ordinary one in use, as their windows' pills",
+     meshLookFor(FRONT, src).tone === "alert" && meshLookFor(BACK, src).tone === "active"
+     && lockPill(FRONT, "unlocked", front.statusRule).tone === "danger" && lockPill(BACK, "unlocked", back.statusRule).tone === "active");
   const view = attentionFor({ devices, attentionItems: attentionOf({ devices, entities: ents, entityMap: map, resolvedRooms: {},
     fmData: EMPTY_FM_DATA }).attentionItems }, () => true);
   const cards = view.attentionGroups.map((g) => `${g.title}: ${g.items.map((i) => `${i.kind} ${i.detail}`).join()}`);

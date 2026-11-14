@@ -70,7 +70,8 @@ const FALLBACK_CATEGORY_COLOR: Record<Category, string> = {
   comfort: "#B4643C", light: "#C08A2E", network: "#2F6B4F",
   energy: "#2E6E8F", access_control: "#A8457F", others: "#6E7B72",
 };
-const FALLBACK_DANGER = "#B24232";
+/** The alarm's colour (--status-alarm): purple since 2026-11-15 (owner). */
+const FALLBACK_ALARM = "#6E57B8";
 const FALLBACK_WARNING = "#B8801F";
 const FALLBACK_LOST = "#9A9F98";
 /** A corner mark's symbol: white, dark on the light grey of lost contact. */
@@ -188,7 +189,7 @@ export function categorySurface(category: Category, state: DeviceSurfaceState, o
       return { fill: tintOver(hue, TINT_ALPHA, base), glyph: hue, ink: hue, ring: hue };
     }
     case "alert": {
-      const danger = cssVar("--status-danger") || FALLBACK_DANGER;
+      const danger = cssVar("--status-alarm") || FALLBACK_ALARM;
       return { fill: tintOver(danger, TINT_ALPHA, base), glyph: danger, ink: danger, ring: danger };
     }
     case "unavailable": {
@@ -244,8 +245,8 @@ export function categorySurface(category: Category, state: DeviceSurfaceState, o
  *  severities). Resolved to literal colours, like categorySurface, for the canvas bake. */
 export function markSurface(mark: Exclude<BadgeMark, "active">): { fill: string; symbol: string; ink: string } {
   switch (mark) {
-    case "critical": return { fill: cssVar("--status-danger") || FALLBACK_DANGER, symbol: "?", ink: WHITE_INK };
-    case "alarm": return { fill: cssVar("--status-danger") || FALLBACK_DANGER, symbol: "!", ink: WHITE_INK };
+    case "critical": return { fill: cssVar("--status-alarm") || FALLBACK_ALARM, symbol: "?", ink: WHITE_INK };
+    case "alarm": return { fill: cssVar("--status-alarm") || FALLBACK_ALARM, symbol: "!", ink: WHITE_INK };
     case "fault": return { fill: cssVar("--status-warning") || FALLBACK_WARNING, symbol: "!", ink: WHITE_INK };
     // ⚠️ DARK ON THE LIGHT GREY (owner, 2026-11-13: lost contact is a light grey): white on it is under 2:1
     case "lost": return { fill: cssVar("--status-lost") || FALLBACK_LOST, symbol: "?", ink: DARK_INK };

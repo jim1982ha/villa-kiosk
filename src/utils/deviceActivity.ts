@@ -569,7 +569,7 @@ function ownReadingOf(entityId: string, source: LookSource, linkedId?: string, o
   const critical = ofCritical || source.config.isCritical(entityId);
 
   const hidden = source.config.isHidden(entityId);
-  const rule = statusRule({ critical, hidden });
+  const rule = statusRule({ critical, hidden, lock: source.typeOf(entityId) === "lock" });
   const partLost = condition !== "lost"
     && lostParts(entityId, source.config.partsOf, (id) => source.state(id)).some((p) => p !== linkedId);
   return {

@@ -232,13 +232,15 @@
   --text-on-accent: #FFFDF9;
 
   /* ⚠️ THE SEVEN MEANINGS (owner, 2026-11-13: one colour code for every status, utils/stateColors STATUS_COLOR): usual
-     purple, active green (--status-on), moving teal (--status-pending), needs a look amber, alarm red, lost contact a
-     light grey, nothing to show the empty track (--bg-input). Purple is its own: never --cat-access-control's, a
-     category colour being a device's identity, never a state; Access control is a raspberry pink since 2.496.801
-     (owner, 2026-11-14: its purple read as the status purple). */
+     green (the hue of --status-on), active red, moving teal (--status-pending), needs a look amber, alarm purple
+     (--status-alarm), lost contact a light grey, nothing to show the empty track (--bg-input). ⚠️ SWAPPED (owner,
+     2026-11-15): usual was purple, active green and alarm red. --status-danger stays the app's red for what is not a
+     device's state (a delete, an error, the connection lost). Purple is never --cat-access-control's, a category
+     colour being a device's identity, never a state (owner, 2026-11-14: its purple read as the status purple). */
   --status-on: #34845A;
-  --status-usual: #6E57B8;
-  --status-active: #34845A;
+  --status-usual: #34845A;
+  --status-active: #B24232;
+  --status-alarm: #6E57B8;
   --status-off: #D8D3C7;
   /* "Moving between two rest states" — see utils/stateColors STATUS_COLOR.
      Cyan is the one hue left free by the rest of the system: it is not any of
@@ -313,8 +315,9 @@
   --text-on-accent: #0B1710;
 
   --status-on: #4FC07E;
-  --status-usual: #A48BE0;
-  --status-active: #4FC07E;
+  --status-usual: #4FC07E;
+  --status-active: #E2685A;
+  --status-alarm: #A48BE0;
   --status-off: #333833;
   --status-pending: #48C2CE;
   --status-warning: #E0A93A;
@@ -366,8 +369,9 @@
   --text-on-accent: #0A0C0A;
 
   --status-on: #3E8F62;
-  --status-usual: #8C76C8;
-  --status-active: #3E8F62;
+  --status-usual: #3E8F62;
+  --status-active: #A4483C;
+  --status-alarm: #8C76C8;
   --status-off: #23261F;
   --status-pending: #2E7681;
   --status-warning: #A87C2A;
@@ -701,7 +705,7 @@ button {
 /* Unavailable-devices button (HUD category row): quiet at zero, red the
    instant something's offline — same colour language as the map badge ring
    and the status pill's "Unavailable" state, so it reads as the same signal. */
-.icon-btn.has-alert { color: var(--status-danger); border-color: var(--status-danger); }
+.icon-btn.has-alert { color: var(--status-alarm); border-color: var(--status-alarm); }
 /* a warning (a late task, an ordinary device offline, a fault): amber, its count too — red is an alarm or a critical
    device offline only (attention.healthClass) */
 .icon-btn.has-warn { color: var(--status-warning); border-color: var(--status-warning); }
@@ -716,7 +720,7 @@ button {
 .icon-btn-count {
   position: absolute; top: 1px; right: 1px; min-width: 16px; height: 16px;
   padding: 0 3px; border-radius: var(--radius-pill);
-  background: var(--status-danger); color: #fff;
+  background: var(--status-alarm); color: #fff;
   font-size: var(--text-2xs); font-weight: 700; line-height: 16px; text-align: center;
   box-shadow: 0 0 0 1.5px var(--bg-overlay);
 }
