@@ -124,12 +124,12 @@ console.log("  a critical device that lost contact is red everywhere, not only o
   ck("  ...the window has that one fact, no second one for \"critical and lost\"",
      !("critical" in win("lock.door").badge));
   // owner, 2026-11-13: "a critical door unlocked" is red, an ordinary one amber; lost, red too (stateColors.criticalStatus)
-  ck("a critical lock's window: unlocked red, lost red; an ordinary one's unlocked amber; locked usual for both",
-     lockPill("lock.door", "unlocked", win("lock.door").badge.statusRule).tone === "danger"
+  ck("a critical lock's window: unlocked red as every unlocked door, lost the alarm; locked usual for both (owner, 2026-11-15)",
+     lockPill("lock.door", "unlocked", win("lock.door").badge.statusRule).tone === "active"
      && lockPill("sensor.th_humidity", "unlocked", win("sensor.th_humidity").badge.statusRule).tone !== "danger"
-     && lockPill("lock.door", "unlocked", PLAIN).tone === "warn"
+     && lockPill("lock.door", "unlocked", PLAIN).tone === "active"
      && lockPill("lock.door", "unavailable", RED).tone === "danger"
-     && lockPill("lock.door", "locked", RED).tone === "usual");
+     && lockPill("lock.door", "locked", RED).tone === "usual" && lockPill("lock.door", "locked", PLAIN).tone === "usual");
   ck("nothing is red before the list is read", !deviceLook("lock.door", storeLookSource(entities, { ...config, isCritical: () => false })).critical);
 }
 
@@ -158,9 +158,13 @@ console.log("  a critical door UNLOCKED is red on every surface, an ordinary one
      front.mark === "alarm" && back.mark === "active", { front: front.mark, back: back.mark });
   ck("  ...its room's number red; the ordinary door's room quiet",
      roomLook([front]).health === "alert" && roomLook([back]).health === "ok", [roomLook([front]).health, roomLook([back]).health]);
-  ck("  ...its 3D object red, the ordinary one amber, as their windows' pills",
-     meshLookFor(FRONT, src).tone === "alert" && meshLookFor(BACK, src).tone === "warn"
-     && lockPill(FRONT, "unlocked", front.statusRule).tone === "danger" && lockPill(BACK, "unlocked", back.statusRule).tone === "warn");
+  // owner, 2026-11-15: a critical door left unlocked is RED as any unlocked door (its pill, its bar, its 3D object, its
+  // "Unlock door…") — and its alarm is raised exactly as before (its "!", its room, the Cockpit, the health, the Recap)
+  ck("  ...its STATE colour the red of any unlocked door, on its window's pill and its 3D object, as the ordinary one",
+     meshLookFor(FRONT, src).tone === "active" && meshLookFor(BACK, src).tone === "active"
+     && lockPill(FRONT, "unlocked", front.statusRule).tone === "active" && lockPill(BACK, "unlocked", back.statusRule).tone === "active");
+  ck("  ...and its ALARM still raised: its own status the alarm, the ordinary door's not",
+     front.alert === true && front.status === "alert" && back.alert === false, { front: [front.alert, front.status], back: [back.alert, back.status] });
   const view = attentionFor({ devices, attentionItems: attentionOf({ devices, entities: ents, entityMap: map, resolvedRooms: {},
     fmData: EMPTY_FM_DATA }).attentionItems }, () => true);
   const cards = view.attentionGroups.map((g) => `${g.title}: ${g.items.map((i) => `${i.kind} ${i.detail}`).join()}`);
@@ -213,8 +217,8 @@ console.log("  a hidden device is quiet in 3D too (architecture review item 6, 2
   const map = { [LEAK]: { entityId: LEAK, type: "binary_sensor" }, [LOCK]: { entityId: LOCK, type: "lock" }, [PLUG]: { entityId: PLUG, type: "switch" } };
   const cfg = (hidden) => ({ entityMap: map, isCritical: () => true, isHidden: () => hidden, hasFault: () => false, partsOf: () => [] });
   const shown = storeLookSource(ents, cfg(false)), hid = storeLookSource(ents, cfg(true));
-  ck("shown: the leak pulses red, the critical lock unlocked is red, the plug glows",
-     meshLookFor(LEAK, shown).on && meshLookFor(LEAK, shown).tone === "alert" && meshLookFor(LOCK, shown).tone === "alert"
+  ck("shown: the leak pulses in the alarm's colour, the critical lock unlocked is an unlocked door's red, the plug glows",
+     meshLookFor(LEAK, shown).on && meshLookFor(LEAK, shown).tone === "alert" && meshLookFor(LOCK, shown).tone === "active"
      && meshLookFor(PLUG, shown).on);
   ck("hidden: no pulse, no glow, the lock its rest tint; its look never red or amber",
      !meshLookFor(LEAK, hid).on && meshLookFor(LOCK, hid).tone === "usual" && !meshLookFor(PLUG, hid).on

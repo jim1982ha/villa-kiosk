@@ -36,7 +36,7 @@
    its time. The name wraps to TWO LINES AT MOST, then "…" (a ticket's title can be a sentence); the icons, the chip and
    the time never shrink and stay on its first line (each a first line's height, the row aligned to its top). Its words
    mixed with the text colour, so they read on the light theme's pale tint and the dark one's alike (4.5:1). */
-.strip-danger { --strip: var(--status-danger); }
+.strip-danger { --strip: var(--status-alarm); }
 .strip-warn { --strip: var(--status-warning); }
 .strip-ok { --strip: var(--accent); }
 .strip-neutral { --strip: var(--status-lost); }
@@ -207,7 +207,7 @@
 .fm-stat .l { font-size: var(--text-xs); color: var(--text-dim); overflow-wrap: break-word; }
 .fm-stat.good .n { color: var(--status-on); }
 .fm-stat.warn .n { color: var(--status-warning); }
-.fm-stat.bad  .n { color: var(--status-danger); }
+.fm-stat.bad  .n { color: var(--status-alarm); }
 
 /* Rows: severity is carried by the badge pill (below) and, for a row that
    actually needs attention right now, a faint full-card tint — not a
@@ -390,7 +390,7 @@
 .fm-check-icon { flex: 0 0 auto; display: flex; }
 .fm-check-icon.pass { color: var(--status-on); }
 .fm-check-icon.warn { color: var(--status-warning); }
-.fm-check-icon.fail { color: var(--status-danger); }
+.fm-check-icon.fail { color: var(--status-alarm); }
 
 /* Same treatment as .fm-row above: a coloured icon (matching .fm-check-icon
    so the headline and the checks below it read as one system) plus a quiet

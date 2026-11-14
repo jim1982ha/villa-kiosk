@@ -306,5 +306,27 @@ console.log("\n  a chip of many rooms is drawn folded, and folding never hides t
   ck("opened, it draws every line, and the pill to fold it", rowsOf(open).join() === "0,1,2,3,4,5,6,7,8,9" && !!roomChipModel(open, false, () => false).toggle);
 }
 
+console.log("\n  an open chip stays open until a person moves the camera (owner's clip, 2026-11-14: it folded by itself):");
+{
+  const { NullEngine } = await import("@babylonjs/core/Engines/nullEngine.js");
+  const { Scene } = await import("@babylonjs/core/scene.js");
+  const { ArcRotateCamera } = await import("@babylonjs/core/Cameras/arcRotateCamera.js");
+  const { Vector3 } = await import("@babylonjs/core/Maths/math.vector.js");
+  const { cameraPose, poseMoved } = await import("@/babylon/cameraPose");
+  const engine = new NullEngine({ renderWidth: 2186, renderHeight: 1440, textureSize: 64, deterministicLockstep: false, lockstepMaxSteps: 1 });
+  const scene = new Scene(engine);
+  const cam = new ArcRotateCamera("c", -Math.PI / 2, 0.6, 34, Vector3.Zero(), scene);
+  scene.activeCamera = cam; scene.render();
+  const opened = cameraPose(cam);
+  // a tap is motion to the resolution valve: the render size dips and comes back
+  engine.setHardwareScalingLevel(1.37); engine.resize(); scene.render();
+  engine.setHardwareScalingLevel(1); engine.resize(); scene.render();
+  ck("the render resolution dipping and coming back is no camera move: it stays open", !poseMoved(opened, cameraPose(cam)));
+  cam.alpha += 0.05; scene.render();
+  ck("  ...a turn of the camera is: it folds", poseMoved(opened, cameraPose(cam)));
+  cam.alpha -= 0.05; cam.radius *= 0.9; scene.render();
+  ck("  ...and so is a zoom", poseMoved(opened, cameraPose(cam)));
+}
+
 done("✅ a room chip says who is in it, merged or not");
 

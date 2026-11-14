@@ -109,6 +109,9 @@ interface Props {
    *  device in that category, the same group-modal every SummaryBar tile
    *  already opens. A plain tap keeps toggling that category's visibility. */
   onOpenCategory: (category: Category) => void;
+  /** The families with at least one device (villaVisibility.occupiedCategories): only these have a button, in order,
+   *  no gaps (owner, 2026-11-14). Null or absent while the villa loads: every family, so the bar never flashes empty. */
+  families?: ReadonlySet<Category> | null;
   /** Asks the Dashboard to open the villa's presence window (why it counts as empty or occupied). */
   onOpenPresence: () => void;
 }
@@ -133,7 +136,7 @@ export default function HUD({
   doors, onOpenSettings, onMove,
   viewMode, onToggleViewMode,
   hasOverviewDefault, onApplyOverviewDefault, onSaveOverviewDefault,
-  onOpenCockpit, onAskVesta, onOpenCategory, onOpenPresence,
+  onOpenCockpit, onAskVesta, onOpenCategory, onOpenPresence, families,
 }: Props) {
   const { connection, haConfig } = useHA();
   const { config, update } = useConfig();
@@ -299,9 +302,9 @@ export default function HUD({
   // The category buttons' colours are composited from the theme's tokens
   // (common/categoryChip): re-render when the theme changes.
   useResolvedTheme();
-  const visibleCategories = role
+  const visibleCategories = (role
     ? CATEGORY_ORDER.filter((c) => isCategoryAllowed(role, c))
-    : CATEGORY_ORDER;
+    : CATEGORY_ORDER).filter((c) => !families || families.has(c));
 
   // The category pill still scrolls horizontally when its (variable) button
   // count exceeds the width its grid track got — it just no longer announces
@@ -345,14 +348,6 @@ export default function HUD({
    *  button and then pressing the dial's own button, which nobody on a phone finds. The hold still opens the dial. */
   const accountRows = (close: () => void) => (
     <>
-      <button
-        role="menuitem"
-        className="hud-menu-item"
-        onClick={() => { close(); onOpenTeleport(); }}
-      >
-        <LayoutGrid size={18} />
-        <span>Rooms</span>
-      </button>
       {doors.settings && (
         <button
           role="menuitem"
@@ -363,6 +358,15 @@ export default function HUD({
           <span>Settings</span>
         </button>
       )}
+      {/* after Settings (owner, 2026-11-14: Settings, Rooms, Logout) */}
+      <button
+        role="menuitem"
+        className="hud-menu-item"
+        onClick={() => { close(); onOpenTeleport(); }}
+      >
+        <LayoutGrid size={18} />
+        <span>Rooms</span>
+      </button>
       {role && (
         <button
           role="menuitem"

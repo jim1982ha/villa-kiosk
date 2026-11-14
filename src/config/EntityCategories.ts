@@ -15,6 +15,7 @@ import { Armchair, Lightbulb, Wifi, Zap, ShieldCheck, Puzzle } from "lucide-reac
 import type { Category, EntityType } from "@/types/scene.types";
 import { isMotionSensor, isOpeningSensor } from "./BinarySensorClasses";
 import type { BadgeMark } from "@/utils/deviceActivity";
+import { STATUS_HEX } from "@/utils/stateColors";
 
 /** Fixed display order for the HUD filter buttons and Config Editor dropdown. */
 export const CATEGORY_ORDER: Category[] = [
@@ -70,13 +71,14 @@ const FALLBACK_CATEGORY_COLOR: Record<Category, string> = {
   comfort: "#B4643C", light: "#C08A2E", network: "#2F6B4F",
   energy: "#2E6E8F", access_control: "#A8457F", others: "#6E7B72",
 };
-const FALLBACK_DANGER = "#B24232";
-const FALLBACK_WARNING = "#B8801F";
-const FALLBACK_LOST = "#9A9F98";
+// the table's light-theme mirror, before the stylesheet paints (stateColors.STATUS_HEX: one copy, owner 2026-11-15)
+const FALLBACK_ALARM = STATUS_HEX.alert;
+const FALLBACK_WARNING = STATUS_HEX.warn;
+const FALLBACK_LOST = STATUS_HEX.unavailable;
 /** A corner mark's symbol: white, dark on the light grey of lost contact. */
 const WHITE_INK = "#ffffff";
 const DARK_INK = "#17191A";
-const FALLBACK_PENDING = "#1F7F8C";
+const FALLBACK_PENDING = STATUS_HEX.transitional;
 const FALLBACK_NEUTRAL_GLYPH = "#5A5F5B";
 const FALLBACK_HAIRLINE = "rgba(23, 25, 26, 0.10)";
 // --bg-modal's light-theme value: the app's one OPAQUE floating surface (see
@@ -188,7 +190,7 @@ export function categorySurface(category: Category, state: DeviceSurfaceState, o
       return { fill: tintOver(hue, TINT_ALPHA, base), glyph: hue, ink: hue, ring: hue };
     }
     case "alert": {
-      const danger = cssVar("--status-danger") || FALLBACK_DANGER;
+      const danger = cssVar("--status-alarm") || FALLBACK_ALARM;
       return { fill: tintOver(danger, TINT_ALPHA, base), glyph: danger, ink: danger, ring: danger };
     }
     case "unavailable": {
@@ -244,8 +246,8 @@ export function categorySurface(category: Category, state: DeviceSurfaceState, o
  *  severities). Resolved to literal colours, like categorySurface, for the canvas bake. */
 export function markSurface(mark: Exclude<BadgeMark, "active">): { fill: string; symbol: string; ink: string } {
   switch (mark) {
-    case "critical": return { fill: cssVar("--status-danger") || FALLBACK_DANGER, symbol: "?", ink: WHITE_INK };
-    case "alarm": return { fill: cssVar("--status-danger") || FALLBACK_DANGER, symbol: "!", ink: WHITE_INK };
+    case "critical": return { fill: cssVar("--status-alarm") || FALLBACK_ALARM, symbol: "?", ink: WHITE_INK };
+    case "alarm": return { fill: cssVar("--status-alarm") || FALLBACK_ALARM, symbol: "!", ink: WHITE_INK };
     case "fault": return { fill: cssVar("--status-warning") || FALLBACK_WARNING, symbol: "!", ink: WHITE_INK };
     // ⚠️ DARK ON THE LIGHT GREY (owner, 2026-11-13: lost contact is a light grey): white on it is under 2:1
     case "lost": return { fill: cssVar("--status-lost") || FALLBACK_LOST, symbol: "?", ink: DARK_INK };
@@ -271,6 +273,9 @@ const DEFAULT_CATEGORY_BY_TYPE: Partial<Record<EntityType, Category>> = {
   cover: "comfort",
   fan: "comfort",
   sensor: "energy",
+  // owner, 2026-11-14 (no Others family): a TV or a media server is the room's comfort, a voice assistant the network's
+  media_player: "comfort",
+  assist_satellite: "network",
 };
 
 /** The PREVIOUS type defaults. Used only to recognise an auto-assigned (i.e.
@@ -287,6 +292,12 @@ function legacyDefaultCategory(type: EntityType): Category {
 
 // device_class sets that redirect a generic domain to a specific category.
 const COMFORT_SENSOR_DC = new Set(["temperature", "humidity"]);
+/** A binary sensor that watches over the villa's SAFETY — a leak, smoke, gas, carbon monoxide, a safety alarm, a
+ *  tamper — is security, with the access control family's shield (owner, 2026-11-14: "no Others family for now"; a
+ *  leak and a smoke detector were Others; a camera's sound detection is a detection, as its motion). By its class
+ *  first; its id words only when it declares none. */
+const SAFETY_BINARY_DC = new Set(["moisture", "smoke", "gas", "carbon_monoxide", "safety", "tamper", "sound"]);
+const SAFETY_BINARY_ID = /(?:^|[._])(?:leak\w*|water_?leak|flood\w*|moisture|smoke|gas|co|carbon_monoxide|tamper\w*)(?:[._]|$)/i;
 
 /**
  * What a generic `switch.*` / `input_boolean.*` is actually FOR, inferred from
@@ -310,12 +321,20 @@ const COMFORT_SENSOR_DC = new Set(["temperature", "humidity"]);
  * pool/energy and a plain "outdoor_light" (no system keyword) still reads as
  * light.
  */
+/** A pump, a filter, a jacuzzi's jet, a pool, a bore's submersible: water equipment, energy. One pattern for a switch's
+ *  purpose and a problem sensor's device. */
+const PUMP_ID = /(?:^|[._])(?:pump|filtr\w*|filter|jet|jacuzzi|spa|pool|bore|submersible)(?:[._]|$)/i;
+
 export const SWITCH_PURPOSE_HINTS: ReadonlyArray<readonly [RegExp, Category, string]> = [
   [/(?:^|[._])(?:motion|presence|occupan\w*|detect\w*)(?:[._]|$)/i, "access_control", "activity"],
   [/(?:^|[._])(?:lock|unlock|door|gate)(?:[._]|$)/i, "access_control", "lock"],
-  [/(?:^|[._])(?:pump|filtr\w*|filter|jet|jacuzzi|spa|pool)(?:[._]|$)/i, "energy", "droplets"],
+  // a siren's or an alarm's switch is security (owner, 2026-11-14: no Others family); its glyph a switch's own
+  [/(?:^|[._])(?:siren|alarm)(?:[._]|$)/i, "access_control", "power"],
+  [PUMP_ID, "energy", "droplets"],
   [/(?:^|[._])(?:heat\w*|boiler\w*|water_?heater|thermo\w*)(?:[._]|$)/i, "comfort", "thermometer"],
   [/(?:^|[._])(?:camera|cctv)(?:[._]|$)/i, "access_control", "cctv"],
+  // the network's own switches (a router's rule, a VPN, the internet) are the network's (owner, 2026-11-14)
+  [/(?:^|[._])(?:unifi|network|vpn|internet|wifi|router)(?:[._]|$)/i, "network", "wifi"],
   [/(?:^|[._])(?:speaker|music|audio|sonos)(?:[._]|$)/i, "others", "music"],
   [/(?:^|[._])(?:plug|socket|outlet)(?:[._]|$)/i, "energy", "plug"],
   [/(?:^|[._])(?:light|lamp|led|spot)(?:[._]|$)/i, "light", "lightbulb"],
@@ -350,6 +369,17 @@ function categoryForEntity(entityId: string, type: EntityType, deviceClass?: str
     // words only when the sensor declares no class.
     if (isMotionSensor(id, dc || undefined) || isOpeningSensor(id, dc || undefined)) {
       return "access_control";
+    }
+    // a weather station's rain state reports "moisture" too: it is the weather's (comfort), never a leak
+    if (/(?:^|[._])(?:rain\w*|weather\w*)(?:[._]|$)/.test(id)) return "comfort";
+    if (SAFETY_BINARY_DC.has(dc) || (!dc && SAFETY_BINARY_ID.test(id))) return "access_control";
+    // the villa's presence ("empty", "vacant", "occupied"): security, with its motion sensors (owner, 2026-11-14)
+    if (/(?:^|[._])(?:empty|vacant|occupied|presence)(?:[._]|$)/.test(id)) return "access_control";
+    // a device's own "problem" sensor belongs where its device does (owner, 2026-11-14): a pump's overcurrent is
+    // energy's, a recorder's disk or recording error the network's. One with no such word stays with its type default.
+    if (dc === "problem") {
+      if (PUMP_ID.test(id)) return "energy";
+      if (/(?:^|[._])(?:nvr|disk\w*|hdd|recording\w*|ip_conflict)(?:[._]|$)/.test(id)) return "network";
     }
   }
 

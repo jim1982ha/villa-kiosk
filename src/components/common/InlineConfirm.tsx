@@ -25,7 +25,11 @@ export default function InlineConfirm({ question, confirmLabel, onConfirm, onCan
   return (
     <div className={`btn-row end${flush ? "" : " below"}`}>
       {question !== undefined && <span className="body-text btn-row-says">{question}</span>}
-      <Answers onCancel={onCancel} answer={{ label: confirmLabel, danger: true, onPress: onConfirm }} />
+      {/* ⚠️ THE TWO ANSWERS STAY TOGETHER (owner, 2026-11-15: "Confirm unlock" fell to the next line under Cancel): the
+          question wraps above them on a narrow screen, never one answer away from the other */}
+      <span className="btn-pair">
+        <Answers onCancel={onCancel} answer={{ label: confirmLabel, danger: true, onPress: onConfirm }} />
+      </span>
     </div>
   );
 }

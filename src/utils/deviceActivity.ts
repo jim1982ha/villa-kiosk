@@ -83,9 +83,11 @@ export interface DeviceReading {
   partLost: boolean;
   /** Its device's rule for every status it shows (stateColors.statusRule: critical and hidden applied). */
   rule: StatusRule;
-  /** THE status of this device, its rule applied: what its window's pill says (deviceCondition.windowStatusOf), lost
-   *  contact and no value first. Its badge's mark, its 3D object, its room's number and the Cockpit's alarms project
-   *  this one value: a critical door unlocked is "alert" here, so it is red on all of them. */
+  /** The COLOUR of its state, its rule applied: what its window's pill says (deviceCondition.windowStatusOf), lost
+   *  contact and no value first — its pill, history bar, buttons and 3D object paint it. */
+  colour: StatusKey;
+  /** Its status as the ALERTS read it: `colour`, except a critical door left unlocked, the alarm (owner, 2026-11-15:
+   *  red like any unlocked door, its alarm unchanged). Its badge's "!", its room's number and the Cockpit's alarms. */
   status: StatusKey;
   /** The status of its lost parts, its rule applied: "alert" for a critical device's (its red "?"), "unavailable"
    *  else (the grey "?"); null when no part is lost. */
@@ -333,8 +335,8 @@ type MeshLook =
 export function meshLookFor(entityId: string, source: LookSource): MeshLook {
   const r = deviceReadingOf(entityId, source);
   const kind = badgeKindFor(r);
-  // the device's ONE status (its rule applied: a critical lock unlocked or lost red, as its window's pill and its badge)
-  const status = r.status;
+  // what its window's pill says (a critical door unlocked red, its alarm raised elsewhere: DeviceReading.colour)
+  const status = r.colour;
   // ⚠️ HIDDEN MEANS HIDDEN (architecture review item 6, 2026-11-14): its object read the raw state, so a hidden leak
   // sensor pulsed red and a hidden lock unlocked glowed amber while no list, badge or card named it. Its object shows no
   // status at all now: no pulse, no glow, no outline, a lock its rest tint. Lights and covers show what they physically
@@ -570,6 +572,13 @@ function ownReadingOf(entityId: string, source: LookSource, linkedId?: string, o
 
   const hidden = source.config.isHidden(entityId);
   const rule = statusRule({ critical, hidden });
+  // contact first, whatever the state says (a lost lock is no "unlocked"), then what its window's pill says
+  const colour = rule(condition === "lost" ? "unavailable" : condition === "noValue" ? "noValue" : windowStatusOf(entity));
+  // ⚠️ A CRITICAL DOOR LEFT UNLOCKED: ITS COLOUR IS AN UNLOCKED DOOR'S, ITS ALARM STILL RAISED (owner, 2026-11-15).
+  // Unlocked is in use (active, red) on every lock — its pill, its history bar, its button, its 3D tint (`colour`);
+  // on the critical list it is still the alarm (owner, 2026-11-13) for what raises one — the Cockpit's card, the
+  // villa's health, the Recap's "Doors locked", the badge's "!" (`status`).
+  const status: StatusKey = critical && !hidden && source.typeOf(entityId) === "lock" && colour === "active" ? "alert" : colour;
   const partLost = condition !== "lost"
     && lostParts(entityId, source.config.partsOf, (id) => source.state(id)).some((p) => p !== linkedId);
   return {
@@ -585,8 +594,8 @@ function ownReadingOf(entityId: string, source: LookSource, linkedId?: string, o
     asleep: shownAsleep(own),
     partLost,
     rule,
-    // contact first, whatever the state says (a lost lock is no "unlocked"), then what its window's pill says
-    status: rule(condition === "lost" ? "unavailable" : condition === "noValue" ? "noValue" : windowStatusOf(entity)),
+    colour,
+    status,
     partStatus: partLost ? rule("unavailable") : null,
   };
 }

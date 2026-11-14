@@ -32,7 +32,8 @@ const TABLE = [
   ["humidifier", "off", "usual"], ["humidifier", "on", "active"],
   ["cover", "closed", "usual"], ["cover", "open", "active"], ["cover", "opening", "transitional"], ["cover", "closing", "transitional"],
   ["valve", "closed", "usual"], ["valve", "open", "active"],
-  ["lock", "locked", "usual"], ["lock", "unlocked", "warn"], ["lock", "open", "warn"], ["lock", "locking", "transitional"],
+  ["cover", "partially_open", "transitional"],
+  ["lock", "locked", "usual"], ["lock", "unlocked", "active"], ["lock", "open", "active"], ["lock", "locking", "transitional"],
   ["lock", "unlocking", "transitional"], ["lock", "jammed", "alert"],
   ["alarm_control_panel", "disarmed", "usual"], ["alarm_control_panel", "armed_away", "active"],
   ["alarm_control_panel", "arming", "transitional"], ["alarm_control_panel", "triggered", "alert"],
@@ -45,8 +46,20 @@ const TABLE = [
 ];
 const bad = TABLE.filter(([d, s, want]) => statusKeyFor(s, d) !== want).map(([d, s, want]) => ({ d, s, want, got: statusKeyFor(s, d) }));
 ck("each domain's states read the meaning the rule gives them", bad.length === 0, bad);
-ck("  ...the same by a full entity id as by its domain (a lock's \"open\" is not a cover's)",
-   statusKeyFor("open", "lock.<room>_door") === "warn" && statusKeyFor("open", "cover.<room>_blind") === "active");
+{
+  // owner, 2026-11-15: a cover part of the way open is its own state, in the moving colour; fully open active, closed usual
+  const { coverState } = await import("@/utils/panelRules");
+  const { coverPill } = await import("@/config/reading");
+  ck("a cover open at 47% is partially open, in the moving colour; at 100% open; closed closed; one with no position as it says",
+     coverState("open", 47) === "partially_open" && coverState("open", 100) === "open" && coverState("closed", 0) === "closed"
+     && coverState("open", undefined) === "open"
+     && coverPill("cover.<room>_curtain", "open", 47).tone === STATUS_PILL_CLASS.transitional
+     && coverPill("cover.<room>_curtain", "open", 100).tone === STATUS_PILL_CLASS.active
+     && coverPill("cover.<room>_curtain", "closed", 0).tone === STATUS_PILL_CLASS.usual);
+}
+ck("  ...the same by a full entity id as by its domain (a lock's \"open\", its latch held, is in use as a cover's open)",
+   statusKeyFor("open", "lock.<room>_door") === "active" && statusKeyFor("open", "cover.<room>_blind") === "active"
+   && statusKeyFor("locked", "lock.<room>_door") === "usual");
 
 // [device class, state, meaning]: a problem class's problem state red and its other state green; a class in use
 // (motion, occupancy, a door) on purple and off green, never red
@@ -112,6 +125,16 @@ for (const [name, b] of Object.entries(THEMES)) {
   if (vals.some((v) => !v) || new Set(vals).size !== 7 || cats.includes(own("status-usual"))) themeBad.push({ name, vals, cats });
 }
 ck("every theme gives the seven meanings seven colours, its purple none of its category colours", themeBad.length === 0, themeBad);
+{
+  // owner, 2026-11-15: every colour of a meaning defined ONE time — the light theme's tokens, and the one mirror the 3D
+  // colours, the baked pills and the badge marks read (stateColors.STATUS_HEX), the same values
+  const { STATUS_HEX } = await import("@/utils/stateColors");
+  const TOKEN = { usual: "status-usual", active: "status-active", transitional: "status-pending", warn: "status-warning",
+    alert: "status-alarm", unavailable: "status-lost", noValue: "status-off" };
+  const off = Object.entries(TOKEN).filter(([k, t]) => val(BASE, t)?.toLowerCase() !== STATUS_HEX[k].toLowerCase())
+    .map(([k, t]) => ({ k, token: val(BASE, t), mirror: STATUS_HEX[k] }));
+  ck("the table's one hex mirror equals the light theme's tokens, meaning by meaning", off.length === 0, off);
+}
 
 // ...and no category colour LOOKS like the usual purple either: a hue at least 30° away (owner, 2026-11-14: the Access
 // control family's #6B5AA6 read as the purple of a room all right; it is a raspberry pink since 2.496.801)
@@ -127,9 +150,11 @@ const lookAlike = [];
 for (const [name, b] of Object.entries(THEMES)) {
   const own = (t) => val(b, t) ?? val(BASE, t);
   for (const m of BASE.matchAll(/--(cat-[\w-]+):/g))
-    if (apart(own(m[1]), own("status-usual")) < 30) lookAlike.push({ name, cat: m[1], colour: own(m[1]), usual: own("status-usual") });
+    if (apart(own(m[1]), own("status-alarm")) < 30) lookAlike.push({ name, cat: m[1], colour: own(m[1]), alarm: own("status-alarm") });
 }
-ck("no category colour is within 30° of the usual purple's hue, in any theme", lookAlike.length === 0, lookAlike);
+// the alarm's purple (owner, 2026-11-14: Access control's purple read as the status purple; the purple is the alarm's
+// since 2026-11-15)
+ck("no category colour is within 30° of the alarm purple's hue, in any theme", lookAlike.length === 0, lookAlike);
 
 console.log("\n  the villa's presence, the On button, a critical device:");
 const st = { sensorId: "sensor.<villa>_stage", order: [["home", "Someone home"], ["quiet", "Waiting for indoor quiet"],
@@ -211,9 +236,9 @@ ck("no .ts/.tsx outside the table names a status or category token as a colour: 
 // an action wears the state it leads to (owner, 2026-11-13: "Unlock door" in the unlocked colour)
 {
   const { actionColor, statusRule, STATUS_COLOR: C } = await import("@/utils/stateColors");
-  ck("a button that moves a device is the colour of where it leads: unlock amber (red for a critical door), lock and close the usual colour, open the active one",
-     actionColor("lock.example_door", "unlocked") === C.warn
-     && actionColor("lock.example_door", "unlocked", statusRule({ critical: true, hidden: false })) === C.alert
+  ck("a button that moves a device is the colour of where it leads: unlock the active colour (a critical door's too), lock and close the usual colour, open the active one (owner, 2026-11-15)",
+     actionColor("lock.example_door", "unlocked") === C.active
+     && actionColor("lock.example_door", "unlocked", statusRule({ critical: true, hidden: false })) === C.active
      && actionColor("lock.example_door", "locked") === C.usual && actionColor("cover.example_blind", "open") === C.active
      && actionColor("cover.example_blind", "closed") === C.usual);
 }

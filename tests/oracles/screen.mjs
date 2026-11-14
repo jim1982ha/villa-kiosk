@@ -115,4 +115,17 @@ console.log("\n  Settings' tabs (ticket 16 of \"One inbox\"): the profile button
   ck("  ...the profile button opens it on General, wherever it was left", again.settingsTab === "general", again.settingsTab);
   ck("  ...a tab chosen in the strip is kept", run(OWNER, { type: "openWindow", window: "settings" }, { type: "settingsTab", tab: "messages" }).settingsTab === "messages");
 }
+console.log("\n  the top bar's Cockpit opens on Inbox › Issues (owner, 2026-11-14: it reopened on Reports)");
+{
+  const top = { type: "openWindow", window: "cockpit", tab: "messages", inbox: "issues" };
+  const left = run(OWNER, top, { type: "cockpitTab", tab: "tickets" }, { type: "closeWindow", window: "cockpit" });
+  const again = screenReducer(left, top, OWNER);
+  ck("reopened from the top bar after leaving it on another tab: the Inbox, starting on Issues",
+     again.windows.cockpit && again.cockpitTab === "messages" && again.inboxStart === "issues");
+  ck("  ...closing it forgets where the Inbox started", left.inboxStart === null);
+  const warn = run(OWNER, { type: "openDevice", panel: P("lock.a") }, { type: "openFaults", ids: ["lock.a"] });
+  ck("  ...a device window's warning opens it its own way (its issue), not the top bar's",
+     warn.windows.cockpit && warn.inboxStart === null && warn.faultsFocus?.[0] === "lock.a");
+}
+
 done("✅ every move between windows, panels and lists, by value");

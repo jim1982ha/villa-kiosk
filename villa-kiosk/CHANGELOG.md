@@ -1,3 +1,63 @@
+## 2.496.817
+
+- **Curtains, blinds and shutters show "Partially open".** A cover open part of the way now has its own state, in the
+  blue of a moving device: in its window's pill ("Partially open (47%)"), in its history bar and its key, and in the
+  Legend. Fully open stays red and closed green.
+- **The colour of a moving device is now a clear blue.** "Unlocking", "Locking", a curtain moving, the presence's
+  "Waiting for indoor quiet" and now "Partially open" were a teal close to the green of "Locked"; they are now plainly
+  blue, in light and dark themes.
+- **"Confirm" sits beside "Cancel".** When a door asks "Unlock …?", or any device asks before switching, the red
+  button now says just "Confirm" and stays on the same line as "Cancel", on a phone too.
+
+## 2.496.816
+
+- **A critical door left unlocked is red like any unlocked door, and still raises its alarm.** Its window's pill, its
+  history bar and its 3D colour are now the same red as every unlocked door. Its alarm is unchanged: it still opens its
+  card in the Cockpit's Open issues, warns in the villa's health, fails "Doors locked" in the Recap and shows the alarm
+  mark on its badge, all in the alarm purple.
+- **The alarm purple is one colour everywhere.** Overdue and never-recorded maintenance, the Cockpit's alarm cards, the
+  Recap's failed checks, the map and the badges all take it from the same single definition.
+
+## 2.496.815
+
+- **New status colours.** A device's usual state (off, closed, locked, no motion, disarmed) is now green; on or doing
+  something (on, open, unlocked, motion seen, playing, armed) is red; an alarm (a leak, smoke, a jammed lock, a critical
+  device gone silent) is purple. Amber (an open fault), grey (no contact) and the empty track are unchanged. It applies
+  everywhere a state shows: the pills, the history bars and their keys, the buttons ("Turn off" and "Lock door" green,
+  "Turn on" and "Unlock door…" red), the 3D objects and room glows, the badges' marks, the room chips' numbers and +N
+  pills, the Cockpit and the Legend.
+- **Locks follow the same colours as every device.** Locked is green and unlocked red, for every lock. A critical door
+  left unlocked is still an alarm (purple), as before.
+
+## 2.496.814
+
+- **The last devices leave the Others family.** A TV or media server is now in comfort, a voice assistant in network,
+  the villa's "empty" presence in security, a pump's warning sensors (overcurrent and the like) in energy, and a video
+  recorder's disk or recording errors in network. A family you picked by hand for a device still wins.
+
+## 2.496.813
+
+- **An open room chip stays open.** A shared chip opened with its +N pill could fold back by itself less than a second
+  later, with the mouse still. It now stays open until you tap its "−", tap elsewhere on the map, move the camera or
+  change floor.
+- **One colour per state in every device window.** The state pill, the history bar, its legend and the button now
+  always agree. A lock locked is green and unlocked amber, or red for a critical lock, like its "Unlock door…" button
+  ("Lock door" is green). A fan's, light's or switch's "Off" is purple again in its history bar (2.496.810 had made it
+  the family's colour), matching its "Turn off" button. An air conditioner's chosen mode is in that mode's colour, as
+  in its history bar.
+- **"Show all" sits right under the list.** In "Also on this device" and every list ending in "Show all" or "Show
+  fewer", the empty space above that line is gone.
+- **The Cockpit button opens on Inbox, Issues.** Opened from the top bar it always starts on Issues; links that open a
+  ticket or a device's issue still go straight there.
+- **Leak and smoke sensors are security devices.** Water leak, smoke, gas and carbon monoxide sensors, a siren's
+  switch and a camera's sound detection now belong to the security family (the shield); a bore's or pump's switch to
+  energy, a network switch to network.
+- **A family with nothing in it has no button.** In the top bar, a family's button shows only while at least one device
+  belongs to it; it comes back by itself when one does. Its list closes if its last device leaves.
+- **The bottom bar follows the top bar's order.** Its tiles now go comfort (Weather, then AC), lights, energy, then
+  locks, with Scenes always last.
+- **Settings comes before Rooms** in the menu under your profile letter: Settings, Rooms, Log out.
+
 ## 2.496.812
 
 - **A linked device's bar lines up with the chart above it.** In a device window with a chart and a linked device (a

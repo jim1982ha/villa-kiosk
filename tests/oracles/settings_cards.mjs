@@ -442,7 +442,7 @@ console.log("\n  Device telemetry: a log list, its columns time, kind, device, w
   const row = draw(h(TelemetryRow, { e: { kind: "freeze", at: "2026-11-06T03:52:43Z", ua: "Mozilla/5.0 (Macintosh)", role: "owner", v: "2.496.718", ms: 1240 } }));
   const order = [...row.matchAll(/<span class="(?:muted )?(telemetry-[a-z]+)"/g)].map((m) => m[1]);
   ck("an event's time first, then its kind, its device, its words", JSON.stringify(order) === JSON.stringify(["telemetry-time", "telemetry-kind", "telemetry-meta", "telemetry-summary"]), order);
-  ck("  ...a row, not a card, its kind in its colour (freeze red)", !/fm-record/.test(row) && /class="telemetry-kind" style="color:var\(--status-danger\)">freeze/.test(row), row);
+  ck("  ...a row, not a card, its kind in its colour (freeze in the alarm colour)", !/fm-record/.test(row) && /class="telemetry-kind" style="color:var\(--status-alarm\)">freeze/.test(row), row);
   const css = readFileSync(new URL("../../src/styles/08-shared.css", import.meta.url), "utf8");
   const rule = (sel) => css.match(new RegExp(`\\n${sel.replace(/[.>]/g, "\\$&")} \\{([^}]*)\\}`))?.[1] ?? "";
   ck("  ...the time and the kind columns of one width, so the rows align (the kind as wide as the page's longest)",

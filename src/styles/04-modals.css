@@ -605,7 +605,7 @@
 .panel-reading-value.active { color: var(--status-active); }
 .panel-reading-value.transitional { color: var(--status-pending); }
 .panel-reading-value.warn { color: var(--status-warning); }
-.panel-reading-value.danger { color: var(--status-danger); font-weight: 600; }
+.panel-reading-value.danger { color: var(--status-alarm); font-weight: 600; }
 .panel-reading-value.unavailable { color: var(--status-lost-ink); }
 
 /* Villa presence (PresenceTile's panel): the state in its colour, then rows that open what they name. */

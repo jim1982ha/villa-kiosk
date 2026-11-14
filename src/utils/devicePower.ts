@@ -97,7 +97,8 @@ export function switchAsk(action: { domain: string; service: string } | null, po
   if (!action) return null;
   const name = policy.label?.trim() || "this device";
   if (action.domain === "lock" && (action.service === "unlock" || action.service === "open")) {
-    return { question: `Unlock ${name}?`, confirmLabel: "Confirm unlock" };
+    // the question says what; the answer is "Confirm", in red (owner, 2026-11-15)
+    return { question: `Unlock ${name}?`, confirmLabel: "Confirm" };
   }
   if (!policy.requireConfirm) return null;
   const verb = action.service === "lock" ? "Lock"

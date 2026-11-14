@@ -58,7 +58,7 @@ console.log("\n  asking first (2.496.259 — one tap in a room list unlocked a d
 const sw = (id, state, policy) => deviceSwitch(e(id, state), id, policy);
 ck("throwing a LOCKED lock is an unlock: it asks, by name, whoever owns the switch",
    sw("lock.f", "locked", { label: "Front door" }).ask?.question === "Unlock Front door?"
-   && sw("lock.f", "locked", { label: "Front door" }).ask?.confirmLabel === "Confirm unlock");
+   && sw("lock.f", "locked", { label: "Front door" }).ask?.confirmLabel === "Confirm");
 ck("  ...locking an unlocked one does not (securing a door is never the risk)",
    sw("lock.f", "unlocked", { label: "Front door" }).ask === null);
 ck("  ...and a lock nobody can read offers nothing to ask about", sw("lock.f", "unavailable").ask === null);

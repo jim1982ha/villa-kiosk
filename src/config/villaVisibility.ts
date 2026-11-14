@@ -9,7 +9,7 @@ import type { EntityMapping } from "@/types/scene.types";
 import type { HassEntity } from "@/types/ha.types";
 import type { Role } from "@/auth/roles";
 import { isMappingAllowed, listedDevices } from "@/auth/permissions";
-import { effectiveCategory, subjectOf } from "./EntityCategories";
+import { CATEGORY_ORDER, effectiveCategory, subjectOf } from "./EntityCategories";
 import { roomKey } from "./roomKey";
 import type { Category } from "@/types/scene.types";
 
@@ -111,6 +111,16 @@ export function categoryMembers(role: Role | null, category: Category, ctx: List
   return listMembers(role, ctx, (id, mapping) =>
     effectiveCategory(subjectOf(id, mapping, ctx.entities[id])) === category
     && (!ctx.suppressed.has(id) || ctx.mapped.has(id)));
+}
+
+/**
+ * The families with at least one device a profile's list shows (categoryMembers, picked families included), in the
+ * top bar's order — the family buttons it draws (owner, 2026-11-14: a family with nothing in it has no button). Null
+ * until the villa's states have arrived: nothing is hidden while loading, so the bar never flashes empty.
+ */
+export function occupiedCategories(role: Role | null, ctx: ListSource, loaded: boolean): ReadonlySet<Category> | null {
+  if (!loaded) return null;
+  return new Set(CATEGORY_ORDER.filter((c) => categoryMembers(role, c, ctx).length > 0));
 }
 
 /** The devices of one room a profile's list shows, as the Rooms window opens it: the ones on the map there, which is

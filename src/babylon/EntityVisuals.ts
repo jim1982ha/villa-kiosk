@@ -122,6 +122,7 @@ import { BadgeFrame, drawnThisPass } from "./badgeFrame";
 import { LayoutGate } from "./layoutGate";
 import { WalkerView, walkExemptRooms } from "./walkerView";
 import { chipLineCell, chipTabZone, drawnLayout, type RoomChip } from "./roomChips";
+import { cameraPose, poseMoved } from "./cameraPose";
 import { groupCardModel, roomChipModel, type SummaryFrame } from "./summaryLook";
 import { rungAt, referenceDepthAt, iconZoomAt, cssExtent } from "./badgeScale";
 import { solveRoomZoom } from "./roomZoomSolver";
@@ -902,7 +903,7 @@ export class EntityVisuals {
   private openChipKey: string | null = null;
   /** The roomKey of the chip DRAWN open this pass (renderChips), or null. */
   private openClusterKey: string | null = null;
-  /** The camera's view-projection when it was opened: any move folds it. */
+  /** The camera's POSE when it was opened (cameraPose): a move, a zoom or a turn folds it. */
   private openChipView: number[] | null = null;
   /** The rooms the user asked to SEE (tapped a chip, picked from the radial
    *  menu) — exempt from grouping — and how long that lasts: roomFocus.ts. */
@@ -3441,7 +3442,9 @@ export class EntityVisuals {
     // 16 float comparisons instead of a full relayout.
     if (!this.gate.open(tm.m, vp.width, vp.height)) return;     // nothing that moves a badge changed (layoutGate.ts)
     // The camera moved, zoomed or turned since a chip was opened: it folds.
-    if (this.openChipView && this.openChipView.some((v, i) => Math.abs(v - tm.m[i]) > 1e-6)) {
+    // Its POSE, never the view-projection (cameraPose: the resolution valve moved that, and a chip opened by one click
+    // folded by itself, owner's clip 2026-11-14).
+    if (this.openChipView && poseMoved(this.openChipView, cameraPose(this.scene.activeCamera))) {
       this.openChipKey = null; this.openChipView = null;
     }
 
@@ -5557,7 +5560,7 @@ export class EntityVisuals {
   setOpenChip(key: string | null): void {
     if (key === this.openChipKey) return;
     this.openChipKey = key;
-    this.openChipView = key ? Array.from(this.scene.getTransformMatrix().m) : null;
+    this.openChipView = key ? cameraPose(this.scene.activeCamera) : null;
     this.markLayoutDirty();
   }
 

@@ -60,7 +60,7 @@ import type { ActivePanel } from "@/types/panel.types";
 import type { TeleportPoint } from "@/types/scene.types";
 import { VillaModelProvider, useVillaModelValue, useVillaSets, useDeviceIdentity } from "@/config/VillaModel";
 import { deviceOf } from "@/config/deviceGroups";
-import { categoryMembers, roomMembers, type ListSource } from "@/config/villaVisibility";
+import { categoryMembers, occupiedCategories, roomMembers, type ListSource } from "@/config/villaVisibility";
 import AskDialog from "@/components/common/AskDialog";
 import { readSceneMirror } from "./sceneMirror";
 
@@ -436,6 +436,13 @@ export default function Dashboard() {
     suppressed: suppressedEntityIds, mapped: mappedEntityIds,
     isHidden, deviceOf: (id) => deviceOf(identity.folding, id),
   }), [config.entityMap, entities, suppressedEntityIds, mappedEntityIds, dismissedIds, isHidden, identity.folding]);
+  // the families with something in them: only those have a top bar button (owner, 2026-11-14); null while loading
+  const statesIn = Object.keys(entities).length > 0;
+  const families = useMemo(() => occupiedCategories(role, listSource, statesIn), [role, listSource, statesIn]);
+  // a family's list open when its last device leaves it closes (its button is gone)
+  useEffect(() => {
+    if (categoryGroup && families && !families.has(categoryGroup)) go({ type: "closeList" });
+  }, [categoryGroup, families, go]);
   const categoryGroupEntityIds = useMemo(
     () => (categoryGroup ? categoryMembers(role, categoryGroup, listSource) : []),
     [categoryGroup, role, listSource]);
@@ -788,9 +795,11 @@ export default function Dashboard() {
         hasOverviewDefault={hasOverviewDefault}
         onApplyOverviewDefault={applyOverviewDefault}
         onSaveOverviewDefault={saveOverviewDefault}
-        onOpenCockpit={() => go({ type: "openWindow", window: "cockpit", tab: "messages" })}
+        // the top bar's Cockpit: always Inbox › Issues (owner, 2026-11-14), never the sub-tab its unread would pick
+        onOpenCockpit={() => go({ type: "openWindow", window: "cockpit", tab: "messages", inbox: "issues" })}
         onAskVesta={() => openSurface("vesta")}
         onOpenCategory={(category) => go({ type: "openList", list: { kind: "category", category } })}
+        families={families}
         onOpenPresence={() => openSurface("presence")}
       />
 
@@ -917,6 +926,7 @@ export default function Dashboard() {
           onTicketEditOpened={() => go({ type: "ticketEditOpened" })}
           onReportProblem={() => go({ type: "reportProblem" })}
           focusFaults={screen.faultsFocus ?? undefined}
+          inboxStart={screen.inboxStart ?? undefined}
           onOpenFaults={(ids) => go({ type: "openFaults", ids })}
         />
       )}

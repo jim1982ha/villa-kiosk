@@ -268,8 +268,8 @@ ck("  ...on the robot, apart from its count of open issues", holds((b) => propTe
 ck("  ...on a phone, on the gear and on the menu's Cockpit row",
    holds((b) => /Menu/.test(propText(b, "aria-label") ?? "")) && holds((b) => propText(b, "role") === '"menuitem"'
      && /onOpenCockpit\(\)/.test(propText(b, "onClick") ?? "")));
-ck("Messages opens where the model says, and marks nothing itself (the Cockpit's opening does: readAtOpening)",
-   /useState<MessagesFilter>\(\(\) => openingFilter\(unread, opening, unreadReports\)\)/.test(tab) && !/shown\(/.test(tab)
+ck("Messages opens where its opening says (the top bar: Issues), else where the model says, and marks nothing itself (the Cockpit's opening does: readAtOpening)",
+   /useState<MessagesFilter>\(\(\) => start \?\? openingFilter\(unread, opening, unreadReports\)\)/.test(tab) && !/shown\(/.test(tab)
    // ...and until a filter is chosen it follows what is unread (VESTA's feed read after the Cockpit opened)
    && /if \(!chosen\) setFilter\(\(f\) => followingFilter\(f, unread, opening, unreadReports\)\);/.test(tab)
    && /onChange=\{pickFilter\}/.test(tab));

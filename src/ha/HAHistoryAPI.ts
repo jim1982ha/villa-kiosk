@@ -11,6 +11,7 @@ import { ingressApiBase } from "./ingress";
 import { backendFetch } from "@/auth/sessionLost";
 import { heldWindow, opensAsleep } from "./unavailableByDesign";
 import type { HistoryGap } from "@/types/ha.types";
+import { coverState } from "@/utils/panelRules";
 
 /** Anything that can read the recorder's statistics — the HA websocket. */
 type StatisticsPort = Pick<HistoryPort, "getStatisticsDuringPeriod">;
@@ -60,6 +61,26 @@ export function villaKeptFrom(now: number): Promise<number | undefined> {
  *  by the state it was already in at `from` — per entity; an entity with nothing recorded is absent. The one REST
  *  read of the villa's history: a panel's chart, and the entity store's last report of a device asleep by design. */
 export async function recordedStates(ids: readonly string[], from: number, to: number): Promise<Record<string, StateRow[]>> {
+  // ⚠️ A COVER'S POSITION IS ITS STATE HERE (owner, 2026-11-15: "Partially open" its own colour): its rows are read
+  // with their attributes and EVERY change (a curtain moved from 100% to 47% stays "open" to the villa's system, an
+  // attribute change only), each named by panelRules.coverState. Every other entity as before.
+  const covers = ids.filter((id) => id.startsWith("cover."));
+  const others = ids.filter((id) => !id.startsWith("cover."));
+  const none: Record<string, StateRow[]> = {};
+  const [plain, withPosition] = await Promise.all([
+    others.length ? readHistory(others, from, to, "&minimal_response&no_attributes") : none,
+    covers.length ? readHistory(covers, from, to, "&significant_changes_only=0") : none,
+  ]);
+  const named: Record<string, StateRow[]> = {};
+  for (const [id, rows] of Object.entries(withPosition)) {
+    named[id] = rows.map((r: StateRow) => ({ state: coverState(r.state ?? undefined, (r as { attributes?: { current_position?: unknown } }).attributes?.current_position) ?? r.state,
+      last_changed: r.last_changed }));
+  }
+  return { ...plain, ...named };
+}
+
+/** One REST read of the villa's history for `ids`, with the query's own `extra` options, per entity. */
+async function readHistory(ids: readonly string[], from: number, to: number, extra: string): Promise<Record<string, StateRow[]>> {
   // The add-on's Supervisor proxy injects the token server-side, so this
   // goes token-less (the session cookie carries the authorization).
   //
@@ -69,7 +90,7 @@ export async function recordedStates(ids: readonly string[], from: number, to: n
   const url =
     `${ingressApiBase()}/history/period/${encodeURIComponent(new Date(from).toISOString())}` +
     `?filter_entity_id=${encodeURIComponent(ids.join(","))}` +
-    `&end_time=${encodeURIComponent(new Date(to).toISOString())}&minimal_response&no_attributes`;
+    `&end_time=${encodeURIComponent(new Date(to).toISOString())}${extra}`;
   // backendFetch: a 401 here is the session gone, reported as such (it
   // read as "History request failed" until 2.496.263).
   const res = await backendFetch(url);
