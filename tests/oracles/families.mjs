@@ -22,6 +22,14 @@ ck("a siren's switch is security; a pump's (a bore's) energy; a network's (a VPN
    fam("switch.<room>_siren_switch", "switch") === "access_control" && fam("switch.<room>_bore_relay", "switch") === "energy"
    && fam("switch.<room>_vpn", "switch") === "network");
 
+ck("the owner's families (2026-11-14): a pump's problem sensor energy, a recorder's disk error the network, the villa's presence security, a TV comfort, a voice assistant the network",
+   fam("binary_sensor.<room>_pump_overcurrent", "binary_sensor", "problem") === "energy"
+   && fam("binary_sensor.<nvr>_disk_error", "binary_sensor", "problem") === "network"
+   && fam("binary_sensor.<home>_empty", "binary_sensor") === "access_control"
+   && fam("media_player.<room>_tv", "media_player") === "comfort" && fam("assist_satellite.<room>", "assist_satellite") === "network");
+ck("  ...a problem sensor naming no device of its own stays where its type goes (Others)",
+   fam("binary_sensor.<room>_status", "binary_sensor", "problem") === "others");
+
 console.log("\n  the top bar draws a family's button only while something is in it:");
 {
   const ctx = (map) => ({ entityMap: map, entities: Object.fromEntries(Object.keys(map).map((id) => [id, { entity_id: id, state: "off", attributes: {} }])),

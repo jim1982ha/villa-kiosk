@@ -271,6 +271,9 @@ const DEFAULT_CATEGORY_BY_TYPE: Partial<Record<EntityType, Category>> = {
   cover: "comfort",
   fan: "comfort",
   sensor: "energy",
+  // owner, 2026-11-14 (no Others family): a TV or a media server is the room's comfort, a voice assistant the network's
+  media_player: "comfort",
+  assist_satellite: "network",
 };
 
 /** The PREVIOUS type defaults. Used only to recognise an auto-assigned (i.e.
@@ -316,12 +319,16 @@ const SAFETY_BINARY_ID = /(?:^|[._])(?:leak\w*|water_?leak|flood\w*|moisture|smo
  * pool/energy and a plain "outdoor_light" (no system keyword) still reads as
  * light.
  */
+/** A pump, a filter, a jacuzzi's jet, a pool, a bore's submersible: water equipment, energy. One pattern for a switch's
+ *  purpose and a problem sensor's device. */
+const PUMP_ID = /(?:^|[._])(?:pump|filtr\w*|filter|jet|jacuzzi|spa|pool|bore|submersible)(?:[._]|$)/i;
+
 export const SWITCH_PURPOSE_HINTS: ReadonlyArray<readonly [RegExp, Category, string]> = [
   [/(?:^|[._])(?:motion|presence|occupan\w*|detect\w*)(?:[._]|$)/i, "access_control", "activity"],
   [/(?:^|[._])(?:lock|unlock|door|gate)(?:[._]|$)/i, "access_control", "lock"],
   // a siren's or an alarm's switch is security (owner, 2026-11-14: no Others family); its glyph a switch's own
   [/(?:^|[._])(?:siren|alarm)(?:[._]|$)/i, "access_control", "power"],
-  [/(?:^|[._])(?:pump|filtr\w*|filter|jet|jacuzzi|spa|pool|bore|submersible)(?:[._]|$)/i, "energy", "droplets"],
+  [PUMP_ID, "energy", "droplets"],
   [/(?:^|[._])(?:heat\w*|boiler\w*|water_?heater|thermo\w*)(?:[._]|$)/i, "comfort", "thermometer"],
   [/(?:^|[._])(?:camera|cctv)(?:[._]|$)/i, "access_control", "cctv"],
   // the network's own switches (a router's rule, a VPN, the internet) are the network's (owner, 2026-11-14)
@@ -364,6 +371,14 @@ function categoryForEntity(entityId: string, type: EntityType, deviceClass?: str
     // a weather station's rain state reports "moisture" too: it is the weather's (comfort), never a leak
     if (/(?:^|[._])(?:rain\w*|weather\w*)(?:[._]|$)/.test(id)) return "comfort";
     if (SAFETY_BINARY_DC.has(dc) || (!dc && SAFETY_BINARY_ID.test(id))) return "access_control";
+    // the villa's presence ("empty", "vacant", "occupied"): security, with its motion sensors (owner, 2026-11-14)
+    if (/(?:^|[._])(?:empty|vacant|occupied|presence)(?:[._]|$)/.test(id)) return "access_control";
+    // a device's own "problem" sensor belongs where its device does (owner, 2026-11-14): a pump's overcurrent is
+    // energy's, a recorder's disk or recording error the network's. One with no such word stays with its type default.
+    if (dc === "problem") {
+      if (PUMP_ID.test(id)) return "energy";
+      if (/(?:^|[._])(?:nvr|disk\w*|hdd|recording\w*|ip_conflict)(?:[._]|$)/.test(id)) return "network";
+    }
   }
 
   // `switch`/`input_boolean` is HA's generic RELAY domain — a pool pump, a lamp

@@ -1,3 +1,9 @@
+## 2.496.814
+
+- **The last devices leave the Others family.** A TV or media server is now in comfort, a voice assistant in network,
+  the villa's "empty" presence in security, a pump's warning sensors (overcurrent and the like) in energy, and a video
+  recorder's disk or recording errors in network. A family you picked by hand for a device still wins.
+
 ## 2.496.813
 
 - **An open room chip stays open.** A shared chip opened with its +N pill could fold back by itself less than a second
