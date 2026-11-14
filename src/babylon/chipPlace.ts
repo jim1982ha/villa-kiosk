@@ -95,12 +95,13 @@ function clampInto(a: ScreenRect, cx: number, cy: number, hw: number, hh: number
  * those touching an obstacle from above, below, left or right (and, once more,
  * beside whatever that spot lands on), each kept inside the map, within
  * CHIP_REACH; ties go top-most, then left-most, so the answer does not depend
- * on the order obstacles arrive in. No clear spot within reach: the clamped one
- * (placementCheck counts what is left).
+ * on the order obstacles arrive in. No clear spot within reach: the clamped one,
+ * `clear` false (placementCheck counts what is left). `reachSizes` widens the
+ * reach for an opened chip (placementPass's `spread`).
  */
 export function placeChip(
-  box: PlaceBox, area: MapArea, obstacles: readonly PlaceBox[], gap: number,
-): { cx: number; cy: number } {
+  box: PlaceBox, area: MapArea, obstacles: readonly PlaceBox[], gap: number, reachSizes = CHIP_REACH,
+): { cx: number; cy: number; clear: boolean } {
   const { hw, hh } = box;
   const all = area.blocks.length ? [...area.blocks, ...obstacles] : obstacles;
   const start = clampInto(area, box.cx, box.cy, hw, hh);
@@ -110,8 +111,8 @@ export function placeChip(
     }
     return null;
   };
-  if (!hitAt(start.cx, start.cy)) return start;
-  const reach = CHIP_REACH * (2 * hw + 2 * hh);
+  if (!hitAt(start.cx, start.cy)) return { ...start, clear: true };
+  const reach = reachSizes * (2 * hw + 2 * hh);
   const beside = (o: PlaceBox, from: { cx: number; cy: number }) => {
     const dx = hw + o.hw + gap + PLACE_SLACK, dy = hh + o.hh + gap + PLACE_SLACK;
     return [
@@ -134,5 +135,5 @@ export function placeChip(
     if (d > reach * reach || d > bestD || hitAt(c.cx, c.cy)) continue;
     if (d < bestD || !best || c.cy < best.cy || (c.cy === best.cy && c.cx < best.cx)) { best = c; bestD = d; }
   }
-  return best ?? start;
+  return best ? { ...best, clear: true } : { ...start, clear: false };
 }

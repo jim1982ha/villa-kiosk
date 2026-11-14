@@ -1,3 +1,13 @@
+## 2.496.809
+
+- **An open room chip no longer covers anything.** When you tap a chip's +N pill, the full list now gets its own room on
+  the map: the chips and device badges around it move aside, or join its list when there is no room for them, instead
+  of being covered. If the list does not fit, it moves a little further or spreads into columns. Folding it puts
+  everything back as it was.
+- **Room chips are exactly as wide as the space kept for them.** Chips were drawn a few pixels wider than the space
+  set aside, so two chips side by side could touch. Their width is now measured from the text itself, so neighbouring
+  chips, their +N pills and device badges always keep a gap.
+
 ## 2.496.808
 
 - **Room chips no longer have a light border.** A room chip drew a thick light border when something in the room was

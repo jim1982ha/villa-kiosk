@@ -136,6 +136,13 @@ export function chipTabZone(c: RoomChip): { cx: number; cy: number; hw: number; 
   return { cx: c.x + d.dx, cy: (top + bottom) / 2, hw: Math.max(1.6 * d.overhang, 0.75 * unit), hh: (bottom - top) / 2 };
 }
 
+/** The box a chip is drawn in NOW, true perspective: its open box while it is
+ *  open (what other chips, badges and cards keep off), else chipBox. */
+export function drawnBox(c: RoomChip): { cx: number; cy: number; hw: number; hh: number } {
+  const d = drawnLayout(c);
+  return { cx: c.x + d.dx, cy: c.y - d.halfH + d.dy, hw: d.halfW, hh: d.halfH };
+}
+
 /** A chip's DRAWN box, true perspective: entirely above its anchor (renderChips
  *  lifts it by half its own height), moved by its placement. The ONE box the
  *  merge, the placement and placementCheck's counters read. */

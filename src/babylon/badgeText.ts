@@ -187,6 +187,28 @@ export function countBaseline(alpha: ArrayLike<number>, size: number): number {
   return size / 2 + inkNudge(alpha, size).dy;
 }
 
+let measureCtx: CanvasRenderingContext2D | null | undefined;
+const widthCache = new Map<string, number>();
+
+/** How wide `text` is drawn at `fontPx` and `weight` in the GUI's font, px —
+ *  the canvas measure Babylon's TextBlock lays itself out with; NaN where no
+ *  canvas exists. Cached per string. */
+export function guiTextWidth(text: string, fontPx: number, weight: string): number {
+  const key = `${weight}|${fontPx}|${text}`;
+  const hit = widthCache.get(key);
+  if (hit !== undefined) return hit;
+  if (measureCtx === undefined) measureCtx = typeof document !== "undefined" ? document.createElement("canvas").getContext("2d") : null;
+  if (!measureCtx) return NaN;
+  measureCtx.font = `${weight} ${fontPx}px ${GUI_FONT_FAMILY}`;
+  const w = measureCtx.measureText(text).width;
+  // Not kept before the web font has loaded: measured in the fallback font.
+  if (!document.fonts || document.fonts.status === "loaded") {
+    if (widthCache.size > 2048) widthCache.clear();
+    widthCache.set(key, w);
+  }
+  return w;
+}
+
 /** A folded room chip's pill on its bottom border: "+N" opens it, "−" folds it. */
 interface TabBadgeSpec {
   /** roomChips.chipToggleLabel: "+N" or "−". */

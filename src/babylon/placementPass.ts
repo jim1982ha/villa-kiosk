@@ -39,7 +39,7 @@ import {
   type PlacementItem, type DeferralBucket, type PlacementScratch, type PlacementStats,
 } from "./badgePlacement";
 import { channelEnabled } from "@/utils/tapDebug";
-import { bucketRoomChips, chipBox, chipFolds, chipSlots, combineChips, type ChipMember, type RoomChip } from "./roomChips";
+import { bucketRoomChips, chipBox, chipFolds, chipSlots, combineChips, drawnBox, type ChipMember, type RoomChip } from "./roomChips";
 import { chipGrid, mapArea, placeChip, type PlaceBox, type ScreenRect } from "./chipPlace";
 import { drawnThisPass } from "./badgeFrame";
 import { RoomFocus } from "./roomFocus";
@@ -1675,7 +1675,7 @@ export class PlacementPass {
     // is actually rendered.
     let chips = this.deriveChips(false);
     if (!CHIP_COLLISION || !clearance || clearance.pxPerWorld <= 0) {
-      return this.deriveChips(true, this.chipObstacles(shown, boxes, pending));
+      return this.settleOpen(this.deriveChips(true, this.chipObstacles(shown, boxes, pending)), shown, boxes, pending);
     }
     const scale = this.f.scale;
     const gapPx = this.f.metrics.minGapPx * scale;
@@ -1733,7 +1733,7 @@ export class PlacementPass {
     // Only now, and only for the render: the escalation above is settled, so
     // merging can no longer change which badges are drawn — which is the
     // property its own docstring has always claimed.
-    const rendered = this.deriveChips(true, this.chipObstacles(shown, boxes, pending));
+    const rendered = this.settleOpen(this.deriveChips(true, this.chipObstacles(shown, boxes, pending)), shown, boxes, pending);
     if (focus.size === 0) return rendered;
 
     // ── A FOCUSED ROOM'S DEVICES OUTRANK ANOTHER ROOM'S LABEL (2.431.0) ─────
@@ -1799,6 +1799,51 @@ export class PlacementPass {
       }
       return true;
     });
+  }
+
+  /**
+   * NOTHING UNDER AN OPEN CHIP (owner, 2026-11-14): when an opened chip found
+   * no clear spot (deriveChips's `spread`: more columns, a longer move), a
+   * drawn badge or card it still covers sends its OWN room to a chip — the
+   * same one-way escalation as settleChips's loop, so it ends — and that chip
+   * makes way for the open one or joins it. Render set only, and only while a
+   * chip is open: a folded map is the loop's answer alone.
+   */
+  private settleOpen(
+    rendered: RoomChip[], shown: ShownLabel[],
+    boxes: readonly { halfW: number; halfH: number; cy: number }[], pending: PendingEntityGroup[],
+  ): RoomChip[] {
+    const focus = this.f.exempt;
+    const gap = this.f.metrics.minGapPx * this.f.scale;
+    const view = this.f.chips.view;
+    for (let round = 0; view && round <= this.roomDisplay.size; round++) {
+      const open = rendered.find((ch) => ch.open);
+      if (!open) break;
+      const ob = drawnBox(open);
+      const under = (b: PlaceBox) => Math.abs(b.cx - ob.cx) < b.hw + ob.hw + gap && Math.abs(b.cy - ob.cy) < b.hh + ob.hh + gap;
+      let escalated = false;
+      for (let i = 0; i < shown.length; i++) {
+        const s2 = shown[i];
+        if (!drawnThisPass(s2, this)) continue;
+        const rk = roomKey(roomOfEntity(this.f.rooms, s2.id));
+        if (focus.has(rk)) continue;
+        if (!under({ cx: s2.x, cy: s2.y + boxes[i].cy, hw: boxes[i].halfW, hh: boxes[i].halfH })) continue;
+        this.chipRoom(rk, "chip-v-open");
+        escalated = true;
+      }
+      const p = new Vector3();
+      for (const g of pending) {
+        if (g.focused || g.roomKeys.some((k) => this.roomClustered.get(k))) continue;
+        const box = drawnCardBox(this.f, g, view.tm, view.vp, p);
+        if (!box || !under(box)) continue;
+        for (const k of g.roomKeys) this.chipRoom(k, "chip-v-open");
+        escalated = true;
+      }
+      if (!escalated) break;
+      this.dropEscalatedGroups(pending, shown);
+      rendered = this.deriveChips(true, this.chipObstacles(shown, boxes, pending));
+    }
+    return rendered;
   }
 
   /**
@@ -1870,22 +1915,33 @@ export class PlacementPass {
       for (const i of slots) widest = Math.max(widest, chipWidthPx(ch.lines[i].label, c.text));
       return { widest, rows: slots.length };
     };
-    // ── THE OPENED CHIP: EVERY LINE, OVER ITS NEIGHBOURS ──────────────────
-    // Grown upward from its folded box's bottom edge, as a merged chip grows,
-    // in columns past the map's height, kept on the visible map and off the
-    // HUD's rail — but off nothing else: it is drawn above every badge, card
-    // and chip while open, and nothing moves for it. Its pill ("−") hangs
-    // below it where the folded one's did. Its own layout (RoomChip.open);
-    // the folded box stays what everything else reads.
+    // ── THE OPENED CHIP: EVERY LINE, AND REAL ROOM FOR IT (owner, 2026-11-14)
+    // No badge, folded or open, may hide another: the open chip is measured at
+    // its full size and PLACED like any chip, off every drawn badge and card
+    // (and the HUD's rail), grown upward from its folded box's bottom edge.
+    // When that spot is taken it tries, in order, more columns (shorter) and
+    // then a longer move, and takes the first clear one; only when none is
+    // clear does it keep the nearest, and settleChips sends what it still
+    // covers into chips. Its pill ("−") hangs below it where the folded one's
+    // did. Its own layout (RoomChip.open); the folded box stays chipBox.
     const spread = (ch: RoomChip) => {
       const { widest, rows } = rowsOf(ch, true);
       const overhang = ch.overhang;
-      const grid = chipGrid(rows, unit, area ? area.bottom - area.top - overhang : 0);
-      const hw = ((grid.cols * widest) / 2) * scale, hh = ((grid.rows * f.summary.size) / 2) * scale + overhang / 2;
+      const base = chipGrid(rows, unit, area ? area.bottom - area.top - overhang : 0);
       const folded = chipBox(ch);
-      const at = { cx: folded.cx, cy: folded.cy + folded.hh - hh, hw, hh };
-      const to = area ? placeChip(at, area, [], gap) : at;
-      ch.open = { cols: grid.cols, rows: grid.rows, halfW: hw, halfH: hh, dx: to.cx - ch.x, dy: to.cy - (ch.y - hh), overhang };
+      let first: NonNullable<RoomChip["open"]> | null = null;
+      for (const reach of [2, 4, 8]) {
+        for (let cols = base.cols; cols <= Math.min(rows, base.cols + 3); cols++) {
+          const rowsPer = Math.ceil(rows / cols);
+          const hw = ((cols * widest) / 2) * scale, hh = ((rowsPer * f.summary.size) / 2) * scale + overhang / 2;
+          const at = { cx: folded.cx, cy: folded.cy + folded.hh - hh, hw, hh };
+          const to = area ? placeChip(at, area, obstacles, gap, reach) : { ...at, clear: true };
+          const lay = { cols, rows: rowsPer, halfW: hw, halfH: hh, dx: to.cx - ch.x, dy: to.cy - (ch.y - hh), overhang };
+          first ??= lay;
+          if (to.clear) { ch.open = lay; return; }
+        }
+      }
+      ch.open = first;
     };
     // ── KEPT ON THE VISIBLE MAP, OFF EVERY BADGE AND CARD (2.496.803) ─────
     // Owner's screenshots: chips cut off by the top bar, the left rail and the
@@ -1897,7 +1953,7 @@ export class PlacementPass {
     // why a camera-dependent obstacle set there made rooms flicker — so where a
     // chip is drawn can never change which badges are drawn. The badges and
     // cards it keeps off are that settled answer, fixed for this call.
-    const place = (ch: RoomChip) => {
+    const place = (ch: RoomChip, blocks: readonly PlaceBox[] = obstacles) => {
       if (!area || !c.view) return;
       const at = { cx: ch.x, cy: ch.y - ch.halfH, hw: ch.halfW, hh: ch.halfH };
       // A chip wholly off the screen (its room is outside the view) stays
@@ -1906,7 +1962,7 @@ export class PlacementPass {
       const v = c.view.vp;
       if (at.cx + at.hw <= v.x || at.cx - at.hw >= v.x + v.width
           || at.cy + at.hh <= v.y || at.cy - at.hh >= v.y + v.height) return;
-      const to = placeChip(at, area, obstacles, gap);
+      const to = placeChip(at, area, blocks, gap);
       ch.dx = to.cx - at.cx; ch.dy = to.cy - at.cy;
     };
     for (const ch of chips) measure(ch);
@@ -1953,9 +2009,39 @@ export class PlacementPass {
           Object.assign(keep, boxOf(keep.ch));
         },
       ).map((b) => b.ch) : front;
-      const opened = c.open ? merged.find((ch) => ch.key === c.open && chipFolds(ch.lines.length)) : undefined;
-      if (opened) spread(opened);
-      return [...merged, ...chips.filter((ch) => behind.has(ch))];
+      // The chip a person opened: the merged chip holding that room (a room
+      // that joins it does not change which chip is open).
+      const opened = c.open ? merged.find((ch) => ch.keys.includes(c.open!) && chipFolds(ch.lines.length)) : undefined;
+      if (!opened) return [...merged, ...chips.filter((ch) => behind.has(ch))];
+      // ── EVERY OTHER CHIP MAKES WAY FOR THE OPEN ONE ─────────────────────
+      // Placed again with the open box as one more obstacle; those that still
+      // touch each other merge, as ever; one that cannot get clear of the open
+      // box within its reach JOINS it (its rooms are listed there), and the
+      // open chip is measured and placed again. Every round removes a chip,
+      // so it ends; nothing here depends on anything but this pass's inputs,
+      // so an open chip stands still until it is folded.
+      let rest = merged.filter((ch) => ch !== opened);
+      const touches = (a: PlaceBox, b: PlaceBox) =>
+        Math.abs(a.cx - b.cx) < a.hw + b.hw + gap && Math.abs(a.cy - b.cy) < a.hh + b.hh + gap;
+      for (let round = 0; round <= merged.length; round++) {
+        spread(opened);
+        const ob = drawnBox(opened);
+        const blocks = [...obstacles, ob];
+        for (const ch of rest) place(ch, blocks);
+        rest = rest.length > 1 ? mergeOverlapping(rest.map(boxOf), gap, (b) => b.ch.ids.length, (keep, drop) => {
+          combineChips(keep.ch, drop.ch);
+          measure(keep.ch);
+          place(keep.ch, blocks);
+          Object.assign(keep, boxOf(keep.ch));
+        }).map((b) => b.ch) : rest;
+        const hit = rest.filter((ch) => touches(chipBox(ch), ob));
+        if (hit.length === 0) break;
+        for (const ch of hit) combineChips(opened, ch);
+        measure(opened);
+        place(opened);
+        rest = rest.filter((ch) => !hit.includes(ch));
+      }
+      return [opened, ...rest, ...chips.filter((ch) => behind.has(ch))];
     }
     return chips;
   }
