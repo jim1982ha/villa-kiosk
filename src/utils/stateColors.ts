@@ -67,6 +67,24 @@ export const STATUS_COLOR = {
 
 export type StatusKey = keyof typeof STATUS_COLOR;
 
+/**
+ * THE table's colours as the LIGHT theme's hexes — the ONE mirror of the status tokens (01-base.css, which define every
+ * theme), for what cannot read a CSS variable (a baked canvas picture, a 3D material) or reads before the stylesheet
+ * has painted (EntityCategories' fallbacks). ⚠️ NO SECOND COPY (owner, 2026-11-15: "the alarm colour must be defined
+ * ONE time centrally"): the 3D colours, the room chip's pills and the badge marks all read it; tests/oracles/
+ * colour_rules.mjs holds each value equal to its token. `noValue`: a mesh has no empty track, so the quiet
+ * --status-off a resting object takes.
+ */
+export const STATUS_HEX: Record<StatusKey, string> = {
+  usual: "#34845A",        // --status-usual
+  active: "#B24232",       // --status-active
+  transitional: "#1F7F8C", // --status-pending
+  warn: "#B8801F",         // --status-warning
+  alert: "#6E57B8",        // --status-alarm
+  unavailable: "#9A9F98",  // --status-lost
+  noValue: "#D8D3C7",      // --status-off
+};
+
 /** A stretch older than what the villa's system keeps (NOT_KEPT, NO_RECORD): nothing to show, the empty track — its
  *  words say which ("No longer kept"). ⚠️ NO LONGER ITS OWN BLUE HAZE (owner, 2026-11-13: "nothing to show is the empty
  *  track"); its own colour since 2026-10-20 sat beside the grey of lost contact. */

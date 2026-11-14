@@ -15,6 +15,7 @@ import { Armchair, Lightbulb, Wifi, Zap, ShieldCheck, Puzzle } from "lucide-reac
 import type { Category, EntityType } from "@/types/scene.types";
 import { isMotionSensor, isOpeningSensor } from "./BinarySensorClasses";
 import type { BadgeMark } from "@/utils/deviceActivity";
+import { STATUS_HEX } from "@/utils/stateColors";
 
 /** Fixed display order for the HUD filter buttons and Config Editor dropdown. */
 export const CATEGORY_ORDER: Category[] = [
@@ -70,14 +71,14 @@ const FALLBACK_CATEGORY_COLOR: Record<Category, string> = {
   comfort: "#B4643C", light: "#C08A2E", network: "#2F6B4F",
   energy: "#2E6E8F", access_control: "#A8457F", others: "#6E7B72",
 };
-/** The alarm's colour (--status-alarm): purple since 2026-11-15 (owner). */
-const FALLBACK_ALARM = "#6E57B8";
-const FALLBACK_WARNING = "#B8801F";
-const FALLBACK_LOST = "#9A9F98";
+// the table's light-theme mirror, before the stylesheet paints (stateColors.STATUS_HEX: one copy, owner 2026-11-15)
+const FALLBACK_ALARM = STATUS_HEX.alert;
+const FALLBACK_WARNING = STATUS_HEX.warn;
+const FALLBACK_LOST = STATUS_HEX.unavailable;
 /** A corner mark's symbol: white, dark on the light grey of lost contact. */
 const WHITE_INK = "#ffffff";
 const DARK_INK = "#17191A";
-const FALLBACK_PENDING = "#1F7F8C";
+const FALLBACK_PENDING = STATUS_HEX.transitional;
 const FALLBACK_NEUTRAL_GLYPH = "#5A5F5B";
 const FALLBACK_HAIRLINE = "rgba(23, 25, 26, 0.10)";
 // --bg-modal's light-theme value: the app's one OPAQUE floating surface (see

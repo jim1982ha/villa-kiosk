@@ -113,6 +113,16 @@ for (const [name, b] of Object.entries(THEMES)) {
   if (vals.some((v) => !v) || new Set(vals).size !== 7 || cats.includes(own("status-usual"))) themeBad.push({ name, vals, cats });
 }
 ck("every theme gives the seven meanings seven colours, its purple none of its category colours", themeBad.length === 0, themeBad);
+{
+  // owner, 2026-11-15: every colour of a meaning defined ONE time — the light theme's tokens, and the one mirror the 3D
+  // colours, the baked pills and the badge marks read (stateColors.STATUS_HEX), the same values
+  const { STATUS_HEX } = await import("@/utils/stateColors");
+  const TOKEN = { usual: "status-usual", active: "status-active", transitional: "status-pending", warn: "status-warning",
+    alert: "status-alarm", unavailable: "status-lost", noValue: "status-off" };
+  const off = Object.entries(TOKEN).filter(([k, t]) => val(BASE, t)?.toLowerCase() !== STATUS_HEX[k].toLowerCase())
+    .map(([k, t]) => ({ k, token: val(BASE, t), mirror: STATUS_HEX[k] }));
+  ck("the table's one hex mirror equals the light theme's tokens, meaning by meaning", off.length === 0, off);
+}
 
 // ...and no category colour LOOKS like the usual purple either: a hue at least 30° away (owner, 2026-11-14: the Access
 // control family's #6B5AA6 read as the purple of a room all right; it is a raspberry pink since 2.496.801)

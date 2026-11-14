@@ -1,57 +1,18 @@
 // src/babylon/colors.ts
-// Single shared "active/alert" red. Room presence glow (RoomHighlight), a
-// running climate device's mesh outline (EntityVisuals.applyClimateOutline)
-// and the 2D badge's alert ring were each carrying their own independently
-// hand-picked red — close but not identical — even though they're meant to
-// read as the same signal ("this is actively alerting"). Import this instead
-// of hardcoding a new Color3 wherever that signal shows up.
+// The status table's colours where a CSS variable cannot reach: a 3D material (STATUS_COLOR3) and a baked picture
+// (the room chip's pill, healthPill). Room glows, outlines, pulses and badge rings each carried their own hand-picked
+// red once; every one of them reads this, which reads the table's one mirror (stateColors.STATUS_HEX).
 import { Color3 } from "@babylonjs/core/Maths/math.color";
-import type { StatusKey } from "@/utils/stateColors";
+import { STATUS_HEX, type StatusKey } from "@/utils/stateColors";
 
-// THE ALARM, as --status-alarm (light theme value — see colors.ts's file comment on why these are static, not a live
-// theme read). ⚠️ PURPLE SINCE 2026-11-15 (owner: usual green, active red, alarm purple); the name is kept for its
-// readers.
-export const ALERT_RED_HEX = "#6E57B8";
-export const ALERT_RED = Color3.FromHexString(ALERT_RED_HEX);
+// ⚠️ NO HEX OF ITS OWN (owner, 2026-11-15: every colour of a meaning defined ONE time): the 3D colours and the baked
+// pills read the status table's one light-theme mirror (stateColors.STATUS_HEX). The alarm's own ALERT_RED and its
+// hex, a red until 2026-11-15, are gone: an alarm is STATUS_COLOR3.alert.
 
-// "The villa's system has lost contact with this device — its state isn't known." Distinct
-// from ALERT_RED (a confirmed, actionable alarm) on purpose: tinting an
-// unavailable lock/sensor mesh red would falsely assert a specific confirmed
-// state (e.g. "unlocked") that was never actually observed — see
-// EntityVisuals.applyToMesh's lock/binary_sensor cases, the bug this fixed
-// (a lock that had lost contact rendered as a confident red "unlocked").
-// ⚠️ GREY, NO LONGER AMBER (owner, 2026-10-22: badge proposal 2): amber is a fault — check soon — and grey "no
-// contact", on every surface. Matches --status-lost (light theme) across the 2D panels for the same signal.
-// ⚠️ LIGHTER (owner, 2026-11-13: lost contact is a plain light grey, far from the dark empty track of "nothing to show").
-const LOST_GREY_HEX = "#9A9F98";
-export const LOST_GREY = Color3.FromHexString(LOST_GREY_HEX);
-
-// Same green as --status-on across the 2D panels ("this is reporting fine" /
-// "available") — for the one place on the Babylon GUI side that needs it
-// (the room-cluster chip's count pill, see EntityVisuals.updateClusters).
-// A Babylon GUI control can't consume a CSS custom property, so this is a
-// static match to the light-theme value rather than a live read.
-export const AVAILABLE_GREEN_HEX = "#34845A";
-// --status-usual (light theme): alive in its usual state — green since 2026-11-15 (owner) — a room whose devices all
-// report that is "all right" in this colour (healthPill "ok"), as their windows say it.
-export const USUAL_HEX = "#34845A";
-// --status-active (light theme): on, doing something — red since 2026-11-15 (owner).
-const ACTIVE_HEX = "#B24232";
-// --status-warning (light theme): a FAULT, check soon.
-const FAULT_AMBER_HEX = "#B8801F";
-
-/** The status vocabulary's colours (utils/stateColors.STATUS_COLOR) as light-theme hexes, one per meaning: what a baked
- *  picture (the room chip's pill) and a 3D object (STATUS_COLOR3) are painted from. */
-const STATUS_HEX: Record<StatusKey, string> = {
-  usual: USUAL_HEX,                 // --status-usual
-  active: ACTIVE_HEX,               // --status-active
-  transitional: "#1F7F8C",          // --status-pending
-  warn: FAULT_AMBER_HEX,            // --status-warning
-  alert: ALERT_RED_HEX,             // --status-alarm
-  unavailable: LOST_GREY_HEX,       // --status-lost
-  // nothing to show: a mesh has no empty track, so the quiet --status-off a resting object takes
-  noValue: "#D8D3C7",
-};
+// "The villa's system has lost contact with this device — its state isn't known": distinct from the alarm (a
+// confirmed, actionable state) on purpose — tinting an unavailable lock/sensor mesh as an alarm would assert a state
+// never observed (EntityVisuals.applyToMesh). Grey, a fault's amber being "check soon" (owner, 2026-10-22).
+export const LOST_GREY = Color3.FromHexString(STATUS_HEX.unavailable);
 
 /** A room's health as the status table's colour (summaryLook.roomHealth): a fault is "needs a look", all right the
  *  usual green (owner, 2026-11-14: green for "all right"; since 2026-11-15 that IS the usual's colour), an alarm the
@@ -60,7 +21,7 @@ const HEALTH_STATUS = { alert: "alert", fault: "warn", unavailable: "unavailable
 /** The ink on each pill: white on the dark fills, dark on the light ones. */
 const DARK_INK = "#17191A";
 
-/** A room's count pill, by the room's HEALTH (summaryLook.roomHealth): red —
+/** A room's count pill, by the room's HEALTH (summaryLook.roomHealth): the alarm's purple —
  *  something needs attention; amber — a device has an open fault; grey —
  *  contact with a device is lost; green — all right. ONE answer for the map
  *  chip (EntityVisuals.renderChips), the "Which room?" list (RoomChoiceSheet)
@@ -85,9 +46,5 @@ export function healthPill(health: "alert" | "fault" | "unavailable" | "ok"): { 
  *  colour here: a mesh shows the status its device's window shows, in that window's colour (owner, 2026-11-04: "always
  *  consistent with the device status"). It had its own: a locked lock a brighter green than its pill, an unlocked one
  *  a teal glow beside a red "Unlocked". The same keys as STATUS_COLOR, one value each (tests/oracles/colour_rules.mjs). */
-export const STATUS_COLOR3: Record<StatusKey, Color3> = {
-  ...(Object.fromEntries(Object.entries(STATUS_HEX).map(([k, hex]) => [k, Color3.FromHexString(hex)])) as Record<StatusKey, Color3>),
-  // the alarm's red as every 3D red already is (ALERT_RED, a hair from its hex)
-  alert: ALERT_RED,
-  unavailable: LOST_GREY,
-};
+export const STATUS_COLOR3: Record<StatusKey, Color3> =
+  Object.fromEntries(Object.entries(STATUS_HEX).map(([k, hex]) => [k, Color3.FromHexString(hex)])) as Record<StatusKey, Color3>;
