@@ -12,6 +12,7 @@ import { KhronosTextureContainer2 } from "@babylonjs/core/Misc/khronosTextureCon
 import { Tools } from "@babylonjs/core/Misc/tools";
 import { VertexBuffer } from "@babylonjs/core/Buffers/buffer";
 import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
+import type { Mesh } from "@babylonjs/core/Meshes/mesh";
 import type { Scene } from "@babylonjs/core/scene";
 // Bundle the Draco decoder from @babylonjs/core so a Draco-compressed GLB loads
 // WITHOUT hitting Babylon's default CDN — required for the offline HA-Ingress
@@ -32,7 +33,7 @@ import mscTranscoderJsUrl from "@/assets/ktx2/msc_basis_transcoder.js?url";
 import mscTranscoderWasmUrl from "@/assets/ktx2/msc_basis_transcoder.wasm?url";
 import { devLog } from "@/utils/devLog";
 import { tapDebug } from "@/utils/tapDebug";
-import { isCeilingMesh, isStructureMesh, looksLikePane, structureRole } from "./meshRoles";
+import { isCeilingMesh, isStructureMesh, looksLikePane, structureRole, vertexLitNightTint } from "./meshRoles";
 // Babylon prototype patches this module depends on — see babylonSideEffects.
 import { attachLampGlow } from "./lampGlow";
 import { flavourOf, lightingModeFor, type LightingMode } from "./lightingMode";
@@ -240,6 +241,12 @@ const BAKED_LIGHTMAP_PREFIX = "BAKED_Lightmap";
  * lamp. Raise it toward 1 for a brighter ceiling; the ONE knob for this.
  */
 const CEILING_TONE = 0.45;
+/** A PBR material's texture slots: a vertex-lit mesh has no second UV set, so
+ *  any of these sampling it (coordinatesIndex 1) is dropped from its material. */
+const UV2_TEXTURE_SLOTS = [
+  "albedoTexture", "ambientTexture", "bumpTexture", "metallicTexture", "reflectivityTexture",
+  "microSurfaceTexture", "emissiveTexture", "opacityTexture", "lightmapTexture",
+] as const;
 // Meshes whose materials receive the lightmap: the pipeline's structure
 // groups (it forks any material shared with entities to a private _ST copy,
 // so wiring these never leaks the lightmap onto UV2-less entity meshes).
@@ -725,6 +732,15 @@ export async function loadModelInto(
        *  The MESHES, not a count: `objects:` has to name them too, and a count
        *  beside a list is two sources for one fact. */
       const ambientCeil: AbstractMesh[] = [];
+      /** Structure meshes that carry their baked light PER VERTEX, not in the
+       *  lightmap: small furniture, whose lightmap islands were too small to
+       *  hold light and came out as dark and light shards. The pipeline gives
+       *  them no TEXCOORD_1 and a COLOR_0 instead (RGB = the day light, the
+       *  fourth channel = the night light as a luminance). They stay
+       *  STRUCTURE (the uniform fill below lights them, every other light is
+       *  kept off them), so a pixel is albedo x vertex light, the same model
+       *  as albedo x lightmap. A GLB without them has none. */
+      const vertexLit: AbstractMesh[] = [];
       for (const m of result.meshes) {
         // ⚠️ `|| isCeilingMesh` — a name-matched ceiling is not pipeline
         // structure, and skipping it here is what made eleven of them render
@@ -739,9 +755,25 @@ export async function loadModelInto(
         // is the one thing that would be wrong for them.
         structureMeshes.push(m);
         const mat = m.material as LightmapMat | null;
+        // The vertex-lit test: no bake UVs to sample a lightmap at, and a
+        // colour per vertex instead. ⚠️ Babylon's glTF loader marks a VEC4
+        // COLOR_0 as vertex ALPHA, which sends the mesh to alpha blending; the
+        // fourth channel here is the night light, never a transparency.
+        const isVertexLit = !isCeilingMesh(m)
+          && !m.isVerticesDataPresent(VertexBuffer.UV2Kind)
+          && m.isVerticesDataPresent(VertexBuffer.ColorKind);
+        if (isVertexLit) m.hasVertexAlpha = false;
         // Panes keep the runtime glass treatment above — a lightmap multiply
-        // would just darken what you see through them.
-        if (mat?.name && glassMats.has(mat.name)) continue;
+        // would just darken what you see through them. A pane's baked light
+        // would darken it the same way, so a vertex-lit one drops it too.
+        if (mat?.name && glassMats.has(mat.name)) {
+          if (isVertexLit) m.useVertexColors = false;
+          continue;
+        }
+        if (isVertexLit) {
+          vertexLit.push(m);
+          continue;
+        }
         // ⚠️ CEILINGS ARE DECIDED BEFORE THE UV2 GATE, and the order is the fix
         // (2.450.0). A ceiling exported as its own SweetHome object is not one of
         // the objects the pipeline BAKES, so it carries no BakeUV — and with the
@@ -844,6 +876,70 @@ export async function loadModelInto(
         const copy = src.clone(`${src.name}__${isCeiling ? "ceiling" : "noLightmap"}`);
         if (copy) m.material = copy;
       }
+      // ── VERTEX-LIT: their own material, without the lightmap ─────────────
+      // A vertex-lit mesh often wears the same SweetHome material as a wall
+      // about to be lightmapped, or as a device. That material is COPIED,
+      // once per distinct material (a copy costs a shader compile); one worn
+      // by vertex-lit meshes alone is changed in place, at no cost.
+      const vlitSet = new Set(vertexLit);
+      const wornElsewhere = new Set<unknown>();
+      for (const m of result.meshes) if (!vlitSet.has(m) && m.material) wornElsewhere.add(m.material);
+      const vlitMats = new Map<Material, Material>();
+      let vlitCopied = 0;
+      /** Each vertex-lit mesh's two lights, for the day/night swap below. */
+      const vlitColours: { mesh: AbstractMesh; day: Float32Array; night: Float32Array }[] = [];
+      for (const m of vertexLit) {
+        const src = m.material;
+        if (src) {
+          let own = vlitMats.get(src);
+          if (!own) {
+            own = wornElsewhere.has(src) ? src.clone(`${src.name}__vertexLit`) ?? src : src;
+            if (own !== src) vlitCopied++;
+            vlitMats.set(src, own);
+            const vm = own as unknown as Record<string, unknown> & LightmapMat & { alpha?: number; transparencyMode?: number | null };
+            // No texture may sample a UV set the mesh does not have: the
+            // pipeline pins its bake UVs with an occlusion texture on
+            // TEXCOORD_1 (Babylon's ambientTexture), and on a mesh without
+            // them it would read UV set 1 as nothing at all.
+            vm.ambientTexture = null;
+            for (const slot of UV2_TEXTURE_SLOTS) {
+              const tex = vm[slot] as { coordinatesIndex?: number } | null | undefined;
+              if (tex && tex.coordinatesIndex === 1) vm[slot] = null;
+            }
+            vm.lightmapTexture = null;
+            // As the other structure paths: the bake holds all the ambient
+            // light, and the thin-slab reason for drawing both faces.
+            vm.environmentIntensity = 0;
+            vm.specularIntensity = 0;
+            vm.backFaceCulling = false;
+            // A lit bulb brightens the furniture near it as it does the walls
+            // (lampGlow.ts); not through anything see-through, which would
+            // turn milky, as bulbSet leaves those out too.
+            const seeThrough = (vm.alpha ?? 1) < 1 || vm.transparencyMode === Material.MATERIAL_ALPHABLEND;
+            if (!seeThrough) attachLampGlow(own, { vertexLit: true });
+          }
+          m.material = own;
+        }
+        m.useVertexColors = true;
+        // The day light goes into the colour buffer now, the night light is
+        // kept beside it. A COLOR_0 of three channels carries no night light:
+        // that mesh keeps its day light at night.
+        const mesh = m as Mesh;
+        const size = mesh.getVertexBuffer?.(VertexBuffer.ColorKind)?.getSize() ?? 0;
+        const raw = mesh.getVerticesData(VertexBuffer.ColorKind, false, true);
+        if (size !== 4 || !raw) continue;
+        const [tr, tg, tb] = vertexLitNightTint(m);
+        const day = new Float32Array(raw.length);
+        const night = new Float32Array(raw.length);
+        for (let i = 0; i + 3 < raw.length; i += 4) {
+          day[i] = raw[i]; day[i + 1] = raw[i + 1]; day[i + 2] = raw[i + 2]; day[i + 3] = 1;
+          const a = raw[i + 3];
+          night[i] = tr * a; night[i + 1] = tg * a; night[i + 2] = tb * a; night[i + 3] = 1;
+        }
+        m.setVerticesData(VertexBuffer.ColorKind, day, true, 4);
+        vlitColours.push({ mesh: m, day, night });
+      }
+      gl.glVertexLit = vertexLit.length;
       // The two intensities the lightmapped branch zeroes below, zeroed here
       // too. Without them an exempt surface is albedo PLUS the scene's IBL
       // gradient and a specular lobe — brighter and shinier than the colour
@@ -940,10 +1036,20 @@ export async function loadModelInto(
       const lmNightTex = lightmapNightMat?.albedoTexture as LightmapTex;
       if (lmNightTex) {
         lmNightTex.coordinatesIndex = 1;
+        // The vertex-lit meshes swap at the same instant, and only when the
+        // side changes: a colour buffer upload per frame would be wasted.
+        let vlitNight = false;
         nightBlend = (t: number) => {
-          const tex = t >= 0.5 ? lmNightTex : lmDayTex;
+          const isNight = t >= 0.5;
+          const tex = isNight ? lmNightTex : lmDayTex;
           for (const sm of lmMats) {
             if (sm.lightmapTexture !== tex) sm.lightmapTexture = tex;
+          }
+          if (isNight !== vlitNight) {
+            vlitNight = isNight;
+            for (const v of vlitColours) {
+              v.mesh.updateVerticesData(VertexBuffer.ColorKind, isNight ? v.night : v.day);
+            }
           }
         };
       }
@@ -993,7 +1099,9 @@ export async function loadModelInto(
       tapDebug(
         `ceiling lighting: ${ceilings.length} exempt (own colour x ${CEILING_TONE}, `
         + `double-sided), ${missingUv2} structure mesh(es) skipped for no TEXCOORD_1, `
-        + `${lmMats.size} material(s) lightmapped across ${structureMeshes.length} mesh(es)`
+        + `${lmMats.size} material(s) lightmapped across ${structureMeshes.length} mesh(es), `
+        + `${vertexLit.length} vertex-lit mesh(es) (${vlitMats.size} material(s), ${vlitCopied} copied, `
+        + `${vlitColours.length} with a night light)`
         + (lmNightTex ? ", night lightmap present (hard swap at twilight)" : "")
         + ` — objects: ${[...stems].map(([n, c]) => `${n} x${c}`).join(", ") || "none"}`
         + (ambientCeil.length
