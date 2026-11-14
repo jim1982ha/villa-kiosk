@@ -202,7 +202,7 @@ console.log("\n  the walker's own room is never grouped (owner, 2026-10-08: insi
   const ev = readFileSync(new URL("../../src/babylon/EntityVisuals.ts", import.meta.url), "utf8");
   ck("the frame's exempt rooms include the walker's (walkExempt), the focus apart", /exempt: this\.walkExempt\(shown\),/.test(ev));
   const pp = readFileSync(new URL("../../src/babylon/placementPass.ts", import.meta.url), "utf8");
-  ck("the solver and every grouping step read the exempt rooms", /placementItems\(shown, boxes, clearance, frame\.rooms, frame\.exempt,/.test(pp) && (pp.match(/const focus = this\.f\.exempt;/g) || []).length === 3);
+  ck("the solver and every grouping step read the exempt rooms", /placementItems\(shown, boxes, clearance, frame\.rooms, frame\.exempt,/.test(pp) && (pp.match(/const focus = this\.f\.exempt;/g) || []).length === 4);
   // ⚠️ THE WALKER'S ROOM IS THE BANNER'S (architecture review 10): one answer, by the feet (walkerView.ts); the badge
   // layer worked out a second one by the eye on 2026-10-08, which storeys.ts says can differ at a staircase.
   const { WalkerView, walkExemptRooms } = await import("@/babylon/walkerView");

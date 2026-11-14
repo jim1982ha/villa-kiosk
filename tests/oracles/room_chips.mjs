@@ -158,7 +158,7 @@ console.log("\n  a merged chip is one line per room TALL, and the merge still se
      JSON.stringify(again.map((c) => c.lines.map((l) => l.room))) === JSON.stringify(pile.map((c) => c.lines.map((l) => l.room))));
   console.log("\n  every room chip is drawn on the visible map, clear of the HUD and of every card (owner, 2026-11-14):");
   {
-    const { chipBox, chipSlotAt, chipTabZone, drawnLayout } = await import("@/babylon/roomChips");
+    const { chipBox, chipSlotAt, chipTabZone, drawnBox, drawnLayout } = await import("@/babylon/roomChips");
     const { drawnCardBox } = await import("@/babylon/placementPass");
     // A room anchored at a screen point: the camera looks down +z from (0, 1.6, 0).
     const cx0 = vp.width / 2, cy0 = vp.height / 2;
@@ -212,19 +212,34 @@ console.log("\n  a merged chip is one line per room TALL, and the merge still se
     ck("  ...and it settles the same whatever order the rooms come in",
        JSON.stringify(back.lines.map((l) => l.room)) === JSON.stringify(tall.lines.map((l) => l.room)) && back.cols === tall.cols && back.dy === tall.dy);
     {
-      // Rooms crowded into one chip beside a room with a chip of its own:
-      // opening the big one moves nothing else, and nothing merges into it.
-      const crowd = [...Array.from({ length: 6 }, (_, i) => atPx(`m${i}`, `crowd${i}`, cx0, 500)), atPx("solo", "solo", cx0 + 300, 500)];
+      // Six rooms crowded into one chip, with rooms of their own all around
+      // it: above (where the open list grows), left and right.
+      const crowd = [...Array.from({ length: 6 }, (_, i) => atPx(`m${i}`, `crowd${i}`, cx0, 500)),
+        atPx("n", "north", cx0 + 10, 440), atPx("w", "west", cx0 - 170, 470), atPx("e", "east", cx0 + 170, 420)];
       const shut = derive(crowd, cover);
-      const big = shut.find((ch) => ch.lines.length === 6);
-      const opened = derive(crowd, cover, big.key);
-      ck("opening a folded chip leaves every chip's place, and what merged into what, as it was",
-         opened.length === shut.length && opened.every((ch, i) => JSON.stringify(chipBox(ch)) === JSON.stringify(chipBox(shut[i])) && ch.lines.length === shut[i].lines.length),
-         [shut.map(chipBox), opened.map(chipBox)]);
-      ck("  ...only the opened chip is drawn open, taller than it was folded",
-         opened.filter((ch) => ch.open).length === 1 && drawnLayout(opened.find((ch) => ch.open)).halfH > big.halfH);
+      const big = shut.find((ch) => ch.lines.length >= 6);
+      ck("the premise: the crowd folds into one chip, its neighbours keep their own", !!big && shut.length >= 3, shut.map((c) => c.lines.length));
+      const opened = derive(crowd, cover, "crowd0");
+      const open = opened.find((ch) => ch.open);
+      const allApart = (cs) => cs.every((c, i) => cs.every((o, j) => j <= i || apart(drawnBox(c), drawnBox(o))));
+      ck("opening it gives it its full size: every room listed, taller than folded",
+         !!open && open.keys.includes("crowd0") && open.lines.length >= 6 && drawnLayout(open).halfH > big.halfH);
+      ck("  ...and NOTHING overlaps: the open chip, the chips around it, on the visible map",
+         allApart(opened) && opened.every((ch) => { const e = edges(drawnBox(ch)); return e.t >= TOP && e.b <= BOTTOM && e.l >= 0 && e.r <= vp.width; }),
+         opened.map((c) => [c.lines.map((l) => l.room).join("+"), edges(drawnBox(c))]));
+      ck("  ...every room is still on the map, in one chip or another",
+         opened.reduce((n, c) => n + c.lines.length, 0) === shut.reduce((n, c) => n + c.lines.length, 0));
+      ck("  ...it stands still while open: the same inputs give the same map",
+         JSON.stringify(derive(crowd, cover, "crowd0").map(drawnBox)) === JSON.stringify(opened.map(drawnBox)));
+      ck("  ...folded again, the map is the folded one", JSON.stringify(derive(crowd, cover).map(chipBox)) === JSON.stringify(shut.map(chipBox)));
       ck("  ...and a key naming a chip of one room opens nothing",
-         derive(crowd, cover, shut.find((ch) => ch.lines.length === 1).key).every((ch) => !ch.open));
+         derive(crowd, cover, "west").every((ch) => !ch.open));
+      // A lone crowd far from anything: a hundred rooms on one spot, opened,
+      // takes columns rather than covering anything or leaving the map.
+      const hundred = Array.from({ length: 60 }, (_, i) => atPx(`h${i}`, `hall ${String(i).padStart(2, "0")}`, cx0, 600));
+      const [wide] = derive(hundred, cover, "hall 00");
+      ck("  ...sixty rooms opened fit the visible map in columns",
+         wide.open && drawnLayout(wide).cols >= 2 && (() => { const e = edges(drawnBox(wide)); return e.t >= TOP && e.b <= BOTTOM; })());
     }
     const pile = derive(Array.from({ length: 12 }, (_, i) => atPx(`q${i}`, `room${i}`, cx0 + (i % 3) * 30, 250 - i * 20)), cover);
     ck("a chain of rooms reaching above the top bar settles on the map with no two chips overlapping",
@@ -242,6 +257,18 @@ console.log("\n  a merged chip is one line per room TALL, and the merge still se
     ck("the settled chip is moved off the card, still on the map, near its room",
        apart(chipBox(kept), cardBox) && onMap(kept) && Math.hypot(kept.dx, kept.dy) < 4 * (kept.halfW + kept.halfH),
        [chipBox(kept), cardBox]);
+    {
+      // Three rooms at the study's spot, opened: the open list keeps off the
+      // hall's card just above them, as a folded chip does.
+      const trio = [study, atPx("s2", "studio", cx0, 400), atPx("s3", "snug", cx0, 400)];
+      const card2 = { ...card, wy: study.pos.y + 60 / pxPerM };
+      const p2 = begin(trio, cover, "study");
+      const box2 = drawnCardBox(p2.f, card2, scene.getTransformMatrix(), vp);
+      const out = p2.settleChips([], [], [card2], null);
+      const o2 = out.find((ch) => ch.open);
+      ck("an open chip is placed clear of a group card, never over it",
+         !!o2 && apart(drawnBox(o2), box2), [o2 && drawnBox(o2), box2]);
+    }
   }
 }
 

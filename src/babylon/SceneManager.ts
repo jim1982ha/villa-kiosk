@@ -430,7 +430,7 @@ export class SceneManager {
       // A folded chip's `+N` pill opens it over its neighbours; the open
       // chip's "−" pill folds it (owner, 2026-11-14).
       if (hit.kind === "room" && hit.toggle) {
-        this.visuals.setOpenChip(this.visuals.openChip() === hit.key ? null : hit.key);
+        this.visuals.setOpenChip(hit.raised ? null : hit.key);
         return;
       }
       // While a chip is open, a tap anywhere off it only folds it: what it was

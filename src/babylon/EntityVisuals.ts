@@ -139,7 +139,7 @@ import type { FrameRequests } from "./frameScheduler";
 import { badgeImage, PICTURE_SCALE } from "./badgeIcons";
 import { applyBadgeFrame, badgeRing, badgeBakePx, BADGE_INSET_CARD, BADGE_CORNER_FRACTION, NO_RING } from "./badgeLook";
 import { DashableRectangle } from "./dashableRectangle";
-import { badgeText, countBadgeImage, tabBadgeImage } from "./badgeText";
+import { badgeText, countBadgeImage, guiTextWidth, tabBadgeImage } from "./badgeText";
 import { badgeShadow } from "./badgeShadow";
 import { cameraFrame } from "./cameraFrame";
 import {
@@ -900,6 +900,8 @@ export class EntityVisuals {
   private clusters = new Map<string, ClusterControls>();
   /** The chip opened by its `+N` pill (a roomKey), or null — see setOpenChip. */
   private openChipKey: string | null = null;
+  /** The roomKey of the chip DRAWN open this pass (renderChips), or null. */
+  private openClusterKey: string | null = null;
   /** The camera's view-projection when it was opened: any move folds it. */
   private openChipView: number[] | null = null;
   /** The rooms the user asked to SEE (tapped a chip, picked from the radial
@@ -2800,6 +2802,12 @@ export class EntityVisuals {
       // measures a string at a size nobody draws it at.
       charPx: sm.font * VALUE_CHAR_ADVANCE,
       padPx: m.chipTextPadPx * 2 + sm.countSize,
+      // The real width, as the chip's line text (weight 600) draws it; the
+      // estimate where no canvas can say. Rounded UP: a reserve never short.
+      textPx: (t) => {
+        const w = guiTextWidth(t, sm.font, "600");
+        return Number.isFinite(w) ? Math.ceil(w) + 1 : t.length * sm.font * VALUE_CHAR_ADVANCE;
+      },
     };
   }
 
@@ -5234,27 +5242,25 @@ export class EntityVisuals {
       // ── FOLDED: ONE LINE AND A `+N` PILL (owner, 2026-11-14) ────────────
       // A chip of several rooms draws its busiest room's line, like a chip of
       // one room, and a `+N` pill on its bottom border, in the worst colour
-      // among the rooms it hides; tapped, it opens over its neighbours with
+      // among the rooms it hides; tapped, it opens, placed clear of every other badge, with
       // every line and the pill reading "−" (summaryLook.roomChipModel's
       // `slots` and `toggle`; the open layout is placementPass's `spread`).
       c.slots = model.slots;
       const n = model.slots.length;
       // ── IN COLUMNS WHEN TALLER THAN THE MAP (2.496.803) ─────────────────
       // placementPass lays the rows out `cols` × `rows` (chipPlace.chipGrid),
-      // each column filling top-down. One column adapts its width to the
-      // widest row, as it always has; several are each the width placement
-      // measured a row with (halfW is cols of them), set outright because
-      // adaptWidthToChildren reads a child's width, never its offset.
+      // each column filling top-down, each the width placement measured its
+      // widest line with (halfW is cols of them).
       const lay = drawnLayout(chip);
       const { cols, rows } = lay;
       const colPx = (lay.halfW * 2) / (cols * scale);
       c.container.height = `${rows * csm.size}px`;
-      if (cols > 1) {
-        c.container.adaptWidthToChildren = false;
-        c.container.width = `${cols * colPx}px`;
-      } else {
-        c.container.adaptWidthToChildren = true;
-      }
+      // EXACTLY the width placement reserved, one column or several: a chip
+      // drawn wider than its reserve touched its neighbour (owner,
+      // 2026-11-14: no badge may hide another). The reserve measures each line
+      // as it is drawn (chipTextMetrics.textPx), so nothing is cut.
+      c.container.adaptWidthToChildren = false;
+      c.container.width = `${cols * colPx}px`;
       for (let i = 0; i < n; i++) {
         const line = model.lines[model.slots[i]];
         const row = this.ensureChipLine(c, i);
@@ -5303,9 +5309,9 @@ export class EntityVisuals {
       // A folded chip's lines sit above its pill's overhang (lay.overhang).
       c.container.linkOffsetXInPixels = lay.dx;
       c.container.linkOffsetYInPixels = -((rows * csm.size) / 2) * scale - lay.overhang + lay.dy;
-      // An open chip draws over every badge, card and chip — and pickClusterAt
-      // asks it first, so what it paints over cannot take its taps. Folded, a
-      // chip paints behind them (ensureCluster: 2.430.0).
+      // An open chip is placed clear of everything (placementPass), and paints
+      // and answers taps first in case a pixel of slack is shared. Folded, a
+      // chip paints behind badges and cards (ensureCluster: 2.430.0).
       c.container.zIndex = chip.open ? 2 : -1;
       c.container.isVisible = true;
       // ── THE `+N` PILL, CENTRED ON THE BOTTOM BORDER ──────────────────────
@@ -5343,7 +5349,10 @@ export class EntityVisuals {
     const livingRooms = new Set(chips.map((c) => c.key));
     // The opened chip is gone (merged away, off this floor, hidden): it is
     // folded, so it does not spring open again when its room comes back.
-    if (this.openChipKey && !chips.some((ch) => ch.key === this.openChipKey && ch.open)) {
+    // The chip drawn open holds the opened room; its own key can differ when
+    // another room joined it to make way (placementPass.deriveChips).
+    this.openClusterKey = chips.find((ch) => ch.open)?.key ?? null;
+    if (this.openChipKey && !this.openClusterKey) {
       this.openChipKey = null; this.openChipView = null;
     }
     for (const [key, c] of this.clusters) {
@@ -5503,8 +5512,8 @@ export class EntityVisuals {
     const at = this.guiPoint(clientX, clientY);
     if (!at) return null;
     const { px, py } = at;
-    // The OPEN chip first: it is drawn over every other chip (renderChips).
-    const open = this.openChipKey ? this.clusters.get(this.openChipKey) : undefined;
+    // The OPEN chip first: what a tap on it means outranks every other tier.
+    const open = this.openClusterKey ? this.clusters.get(this.openClusterKey) : undefined;
     const order = open ? [open, ...[...this.clusters.values()].filter((c) => c !== open)] : this.clusters.values();
     for (const c of order) {
       if (!c.container.isVisible) continue;
@@ -5541,7 +5550,7 @@ export class EntityVisuals {
   openChip(): string | null { return this.openChipKey; }
 
   /**
-   * Open the chip `key` (its every line, over its neighbours), or fold it
+   * Open the chip holding room `key` (its every line, given room on the map), or fold it
    * with null. One chip open at a time: opening another folds the first. It
    * folds again when the camera moves (cullLabels) or the floor changes.
    */

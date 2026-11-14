@@ -57,9 +57,18 @@ export interface ChipTextMetrics {
    *  (`chipTextPadPx * 2 + countSize`) — not a bare text margin. This term is
    *  why the count must never ALSO be concatenated into the measured string. */
   padPx: number;
+  /**
+   * The text's REAL width at the chip's font, where a canvas can measure it
+   * (badgeText.guiTextWidth) — the same answer Babylon GUI lays the chip out
+   * with. The per-character estimate ran 4-7 px short of every drawn chip, and
+   * an open chip reserved by it touched the chip beside it (owner,
+   * 2026-11-14: no badge may hide another). Absent (Node, a replayed report):
+   * the estimate.
+   */
+  textPx?: (text: string) => number;
 }
 export function chipWidthPx(text: string, m: ChipTextMetrics): number {
-  return text.length * m.charPx + m.padPx;
+  return (m.textPx ? m.textPx(text) : text.length * m.charPx) + m.padPx;
 }
 
 /**
