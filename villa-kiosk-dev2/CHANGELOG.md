@@ -1,3 +1,14 @@
+## 2.496.817
+
+- **Curtains, blinds and shutters show "Partially open".** A cover open part of the way now has its own state, in the
+  blue of a moving device: in its window's pill ("Partially open (47%)"), in its history bar and its key, and in the
+  Legend. Fully open stays red and closed green.
+- **The colour of a moving device is now a clear blue.** "Unlocking", "Locking", a curtain moving, the presence's
+  "Waiting for indoor quiet" and now "Partially open" were a teal close to the green of "Locked"; they are now plainly
+  blue, in light and dark themes.
+- **"Confirm" sits beside "Cancel".** When a door asks "Unlock …?", or any device asks before switching, the red
+  button now says just "Confirm" and stays on the same line as "Cancel", on a phone too.
+
 ## 2.496.816
 
 - **A critical door left unlocked is red like any unlocked door, and still raises its alarm.** Its window's pill, its
