@@ -253,7 +253,12 @@ const ACCUMULATE = `
 ${GLOW_TERM.map(([name, expr]) => `    float ${name} = ${expr};`).join("\n")}
     lgSum += lgC.rgb * lgW;
   }
-  vec3 lgAdd = surfaceAlbedo * ${f(LAMP_GLOW_GAIN)} * min(lgSum, vec3(${f(GLOW_CAP_TOTAL)}));
+#if defined(LAMPGLOW_VERTEXLIT) && defined(VERTEXCOLOR)
+  vec3 lgAlbedo = surfaceAlbedo / max(vColor.rgb, vec3(0.0001));
+#else
+  vec3 lgAlbedo = surfaceAlbedo;
+#endif
+  vec3 lgAdd = lgAlbedo * ${f(LAMP_GLOW_GAIN)} * min(lgSum, vec3(${f(GLOW_CAP_TOTAL)}));
 `;
 
 /** LIGHTMAPPED structure: appended after the lightmap multiply (the anchor),
@@ -281,10 +286,12 @@ export const LAMP_GLOW_PLAIN_GLSL = `
 
 class LampGlowPlugin extends MaterialPluginBase {
   private readonly state: LampGlowState;
+  private readonly vertexLit: boolean;
 
-  constructor(material: Material, state: LampGlowState) {
-    super(material, "LampGlow", 200, { LAMPGLOW: false });
+  constructor(material: Material, state: LampGlowState, vertexLit: boolean) {
+    super(material, "LampGlow", 200, { LAMPGLOW: false, LAMPGLOW_VERTEXLIT: false });
     this.state = state;
+    this.vertexLit = vertexLit;
     this._enable(true);
   }
 
@@ -294,7 +301,10 @@ class LampGlowPlugin extends MaterialPluginBase {
   // stays out of the shader and the structure renders exactly as before.
   override isCompatible(shaderLanguage: number): boolean { return shaderLanguage === 0; }
 
-  override prepareDefines(defines: MaterialDefines): void { defines.LAMPGLOW = true; }
+  override prepareDefines(defines: MaterialDefines): void {
+    defines.LAMPGLOW = true;
+    defines.LAMPGLOW_VERTEXLIT = this.vertexLit;
+  }
 
   override getUniforms() {
     return {
@@ -326,10 +336,17 @@ uniform float lampGlowCount;
 const glowing = new WeakSet<Material>();
 
 /** Give a material the lamp glow — a lightmapped one takes it after its
- *  lightmap, any other before its final colour. Idempotent. */
-export function attachLampGlow(material: Material): void {
+ *  lightmap, any other before its final colour. Idempotent.
+ *
+ *  `vertexLit`: the material's meshes carry their BAKED light in their vertex
+ *  colours (ModelLoader). The shader has already multiplied the albedo by that
+ *  light, so without this a bulb's light would be scaled by it too, and at
+ *  night, when it is the dim night light, a chair under a lit lamp would stay
+ *  dark while the wall behind it brightens. The vertex colour is divided back
+ *  out of the glow, so it is albedo times the bulb, as on a lightmapped wall. */
+export function attachLampGlow(material: Material, opts: { vertexLit?: boolean } = {}): void {
   if (glowing.has(material)) return;
-  new LampGlowPlugin(material, lampGlowFor(material.getScene()));
+  new LampGlowPlugin(material, lampGlowFor(material.getScene()), opts.vertexLit === true);
   glowing.add(material);
 }
 

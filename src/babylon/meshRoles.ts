@@ -39,6 +39,9 @@ const LEVEL_KEY = "vk_level";
 const EXTERIOR_KEY = "vk_exterior";
 /** How the bake LIT this ceiling — see StructureRole.ceilingLight. */
 const CEILING_LIGHT_KEY = "vk_ceiling_light";
+/** Colour of a vertex-lit mesh's NIGHT light, which COLOR_0's fourth channel
+ *  carries as a luminance only — see vertexLitNightTint. */
+const VLIT_NIGHT_TINT_KEY = "vk_vlit_night_tint";
 
 /** LEGACY fallback only — the pre-2.13.0 pipeline's naming convention. Used
  *  exclusively when a mesh carries no `vk_role`, so a GLB built before the
@@ -312,6 +315,22 @@ export function looksLikePane(size: readonly [number, number, number], modelHeig
   const [thin, mid, big] = [...size].sort((a, b) => a - b);
   const min = 0.4 * unitsPerMetre;
   return big > min && mid > min && thin < mid * 0.2;
+}
+
+/**
+ * The colour a vertex-lit mesh's night light is drawn in. Small furniture can
+ * carry its baked light PER VERTEX instead of in the lightmap (COLOR_0: RGB is
+ * the day light, the fourth channel the night light as a LUMINANCE, not an
+ * alpha); the pipeline stamps the night light's colour beside it, so the night
+ * colour is this tint times that luminance. A mesh without the stamp gets
+ * white: the night light keeps its brightness, merely without its colour.
+ */
+export function vertexLitNightTint(mesh: AbstractMesh): [number, number, number] {
+  const raw = gltfExtras(mesh)?.[VLIT_NIGHT_TINT_KEY];
+  if (Array.isArray(raw) && raw.length >= 3 && raw.slice(0, 3).every((v) => typeof v === "number" && Number.isFinite(v))) {
+    return [raw[0], raw[1], raw[2]];
+  }
+  return [1, 1, 1];
 }
 
 /** Convenience: is this mesh part of the villa's structure at all? */
