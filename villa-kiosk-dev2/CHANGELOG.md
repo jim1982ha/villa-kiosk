@@ -1,3 +1,26 @@
+## 2.496.813
+
+- **An open room chip stays open.** A shared chip opened with its +N pill could fold back by itself less than a second
+  later, with the mouse still. It now stays open until you tap its "−", tap elsewhere on the map, move the camera or
+  change floor.
+- **One colour per state in every device window.** The state pill, the history bar, its legend and the button now
+  always agree. A lock locked is green and unlocked amber, or red for a critical lock, like its "Unlock door…" button
+  ("Lock door" is green). A fan's, light's or switch's "Off" is purple again in its history bar (2.496.810 had made it
+  the family's colour), matching its "Turn off" button. An air conditioner's chosen mode is in that mode's colour, as
+  in its history bar.
+- **"Show all" sits right under the list.** In "Also on this device" and every list ending in "Show all" or "Show
+  fewer", the empty space above that line is gone.
+- **The Cockpit button opens on Inbox, Issues.** Opened from the top bar it always starts on Issues; links that open a
+  ticket or a device's issue still go straight there.
+- **Leak and smoke sensors are security devices.** Water leak, smoke, gas and carbon monoxide sensors, a siren's
+  switch and a camera's sound detection now belong to the security family (the shield); a bore's or pump's switch to
+  energy, a network switch to network.
+- **A family with nothing in it has no button.** In the top bar, a family's button shows only while at least one device
+  belongs to it; it comes back by itself when one does. Its list closes if its last device leaves.
+- **The bottom bar follows the top bar's order.** Its tiles now go comfort (Weather, then AC), lights, energy, then
+  locks, with Scenes always last.
+- **Settings comes before Rooms** in the menu under your profile letter: Settings, Rooms, Log out.
+
 ## 2.496.812
 
 - **A linked device's bar lines up with the chart above it.** In a device window with a chart and a linked device (a
