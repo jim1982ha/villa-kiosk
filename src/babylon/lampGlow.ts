@@ -60,6 +60,7 @@ import type { MaterialDefines } from "@babylonjs/core/Materials/materialDefines"
 import type { UniformBuffer } from "@babylonjs/core/Materials/uniformBuffer";
 import type { Scene } from "@babylonjs/core/scene";
 import { POOL_ALPHA_STOPS } from "./LightPools";
+import { BULB_REACH_M } from "./lightPlacement";
 
 const f = (v: number) => v.toFixed(4);
 
@@ -73,10 +74,9 @@ const ABOVE_FLOOR_TO = 0.15;
 /** The distance at which the falloff equals the pool's own brightness right
  *  under its bulb — a ceiling light over a floor. */
 const GLOW_AT_M = 2.3;
-/** How far a bulb's light reaches before it has faded out — this light's and
- *  the bulb's PointLight's (bulbSet.ts), one number. An early 8 m lit straight
- *  through walls into the next rooms. */
-export const BULB_REACH_M = 4;
+/** How far a bulb's light reaches (lightPlacement.ts, where it is defined so
+ *  the floor patch can read it without an import cycle). */
+export { BULB_REACH_M };
 /** The most one bulb may give a surface, and all of them together, as
  *  multiples of its pool's centre. Without a cap the inverse square runs away
  *  next to the bulb: the villa render showed the wall and ceiling within half

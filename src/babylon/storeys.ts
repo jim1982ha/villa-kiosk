@@ -296,6 +296,36 @@ export class Storeys<R extends StoreyRoomIn = StoreyRoomIn> {
     return null;
   }
 
+  /**
+   * The stairwell whose FLIGHT a surface at `y` is part of: a stairwell
+   * containing (x, z), on the storey that surface stands in (its storey's
+   * floor below it, the storey above's floor above it), the surface standing
+   * clear of that floor: a tread or a landing, not the floor at the foot of
+   * the flight or under it. Of two, the higher storey's.
+   *
+   * ⚠️ NOT roomStandingOn, AND THE PLAN IS WHY. A plan draws the rooms built
+   * under a flight (a store, a bathroom) as outlines OVERLAPPING the
+   * staircase's, on the same storey, and a staircase's own measured floor can
+   * be the slab at its foot. "The room whose floor is nearest the tread" was
+   * then a tie between the staircase and the room under it, and the first
+   * listed won: step lights took the room under the flight, laid their pools
+   * there and lit that room's floor instead of the steps (owner, 2026-11-16).
+   * A surface inside a stairwell's outline and above its storey's floor is the
+   * flight, whatever else the plan draws there.
+   */
+  flightAt(x: number, y: number, z: number): R | null {
+    let best: R | null = null, bestFloor = -Infinity;
+    for (const r of this.rooms) {
+      if (!isStairwell(r.name) || !pointInPolygon(x, z, r.pts)) continue;
+      const s = this.of.get(r);
+      if (s === undefined) continue;
+      const floor = this.floor.get(s)!;
+      if (y <= floor + FLOOR_SLACK_M || this.aboveCeiling(r, y)) continue;
+      if (floor > bestFloor) { best = r; bestFloor = floor; }
+    }
+    return best;
+  }
+
   /** The ground floor's rooms: the lowest storey's, stairwells excluded —
    *  a stair room is on storey 1 in the plan but its floor is a tread, which
    *  the old "lowest floor + 0.30 m" rule excluded by height. */

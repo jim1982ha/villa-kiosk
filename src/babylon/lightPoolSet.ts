@@ -137,8 +137,13 @@ export class LightPoolSet {
     // Owned HERE: a reshape against a stale memo is the whole defect.
     this.probe.clearMemo();
     const recovered = this.retryPending();
-    const n = { clipped: 0, whole: 0, bounded: 0, nofloor: 0, corrected: 0, nearFixture: 0, lowered: 0, crushed: 0 };
+    const n = { clipped: 0, whole: 0, bounded: 0, nofloor: 0, corrected: 0, nearFixture: 0, lowered: 0, crushed: 0, flight: 0, spread: 0 };
     for (const pools of this.pools.values()) for (const pool of pools) this.reshapeOne(pool, n);
+    // A patch alone in its room spreads as far as its lamp's light reaches
+    // (lightPlacement), up to where the nearest other patch in that room
+    // begins. Static: every pool counts, lit or not, so a patch never
+    // changes size when a neighbour is switched.
+    for (const [pool, spread] of this.spreads()) if (spread > LIGHT_POOL_RADIUS) this.reshapeOne(pool, n, spread);
     this.probe.save();
     this.version++;
     // A pool created just now has never been shown a state — the state pass
@@ -147,7 +152,7 @@ export class LightPoolSet {
     if (recovered) this.resync();
     this.log(
       `light pools: clipped=${n.clipped} whole=${n.whole} bounded=${n.bounded} nofloor=${n.nofloor}`
-      + ` corrected=${n.corrected} nearFixture=${n.nearFixture} lowered=${n.lowered} crushed=${n.crushed}`
+      + ` corrected=${n.corrected} nearFixture=${n.nearFixture} lowered=${n.lowered} crushed=${n.crushed} flight=${n.flight} spread=${n.spread}`
       + ` bucketAbove=${this.probe.stats.probeAbove}`
       + ` recovered=${recovered} stillNoFloor=${[...this.pending.values()].reduce((k, s) => k + s.length, 0)}`
       + ` rooms=${rooms.length} storeys=${new Set(rooms.map((r) => Math.round(r.floorY))).size}`,
@@ -254,9 +259,28 @@ export class LightPoolSet {
     return created;
   }
 
-  private reshapeOne(pool: LightPool, n: Record<string, number>): void {
+  /** Each pool's free floor: the distance to the nearest other pool placed
+   *  in the same room, less that pool's own reach (Infinity: alone). */
+  private spreads(): Map<LightPool, number> {
+    const out = new Map<LightPool, number>();
+    const all = [...this.placements];
+    for (const [pool, at] of all) {
+      if (!at.room || at.floorless) continue;
+      let nearest = Infinity;
+      for (const [other, ot] of all) {
+        if (other === pool || ot.room !== at.room) continue;
+        const d = Math.hypot(other.mesh.position.x - pool.mesh.position.x, other.mesh.position.z - pool.mesh.position.z);
+        nearest = Math.min(nearest, d);
+      }
+      out.set(pool, nearest - LIGHT_POOL_RADIUS);
+    }
+    return out;
+  }
+
+  private reshapeOne(pool: LightPool, n: Record<string, number>, spread?: number): void {
     const at = placeLight(pool.mesh.position.x, pool.mesh.position.z, pool.probeFromY,
-      pool.mesh.position.y - POOL_FLOOR_LIFT, this.probe, this.storeys);
+      pool.mesh.position.y - POOL_FLOOR_LIFT, this.probe, this.storeys, spread);
+    if (spread !== undefined) { this.placements.set(pool, at); pool.reshape(at.shape, at.radius, at.surfaceY === null ? undefined : at.surfaceY + POOL_FLOOR_LIFT); n.spread = (n.spread ?? 0) + 1; return; }
     for (const k of at.notes) n[k] = (n[k] ?? 0) + 1;
     this.placements.set(pool, at);
     pool.setFloorless(at.floorless);   // the pool decides its visibility
