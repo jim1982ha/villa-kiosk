@@ -35,7 +35,9 @@
   --cat-light: #C08A2E;
   --cat-network: #2F6B4F;
   --cat-energy: #2E6E8F;
-  --cat-access-control: #A8457F;
+  /* THE PURPLE THE ALARM USED (owner, 2026-11-16: the raspberry pink read brighter than every other family; the purple
+     is free again since the alarm merged into amber, 2026-11-15). */
+  --cat-access-control: #6E57B8;
   --cat-others: #6E7B72;
 
   /* Not a light/dark concern — one shape constant for every standalone HUD
@@ -337,7 +339,7 @@
   --cat-light: #DFAB4D;
   --cat-network: #62B584;
   --cat-energy: #5AA3C9;
-  --cat-access-control: #D27AAE;
+  --cat-access-control: #A48BE0;
   --cat-others: #93A199;
 }
 
@@ -390,7 +392,7 @@
   --cat-light: #DFAB4D;
   --cat-network: #62B584;
   --cat-energy: #5AA3C9;
-  --cat-access-control: #D27AAE;
+  --cat-access-control: #8C76C8;
   --cat-others: #93A199;
 }
 
