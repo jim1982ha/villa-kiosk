@@ -1,3 +1,10 @@
+## 2.496.820
+
+- **The Cockpit counts only updates someone can install.** Some devices and apps only report that a newer version
+  exists, without any way to install it from the villa's system (a media server whose new version comes with its app's
+  own update): they no longer raise the Cockpit's updates count, which nothing could clear. Firmware and app updates
+  that can be installed are counted as before.
+
 ## 2.496.819
 
 - **Furniture is lit point by point, without light patches.** Chairs, stools, rails, cabinets and other small
