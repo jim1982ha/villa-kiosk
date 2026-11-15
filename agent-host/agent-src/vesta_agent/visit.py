@@ -12,7 +12,10 @@ VESTA did with it, and its siren request told as a line of its story.
 - the SIREN of a visit (siren.Request): its question on the visit's card in the owner's chats, the cameras
   that showed nothing lately snapped into the sheet instead of a message each, and "Siren offered to the Owner 18:35,
   expired on 18:50: nothing was done" a line of the visit's story (owner, 2026-11-06: six "Camera snapshot" messages and
-  a separate request came beside the alert at 18:35).
+  a separate request came beside the alert at 18:35);
+- the BURST of a step (owner, 2026-11-15: the Presence Guard's "Burst, best picked"): its frames' one kept
+  (photo_pick.Picker), the others deleted from the villa's media folder and the villa told, so the step has one photo
+  everywhere — the sheet, "All photos", the tablet's card and the villa's record (Visits.kept).
 """
 from __future__ import annotations
 
@@ -26,6 +29,7 @@ from datetime import datetime, timezone
 from typing import Awaitable, Callable
 
 from vesta_shared import visit_state
+from vesta_shared.limits import limit
 from vesta_shared.result import SHEET, TELL_VILLA, WITHDRAW_SIREN
 from vesta_shared.timeutil import clock
 
@@ -39,6 +43,16 @@ SIREN_LINE = "siren"
 ALBUM = 10
 #: How many visits' sheets are kept made (Visits.sheet): the ones being told now
 SHEETS_KEPT = 8
+#: The record's field the villa's tell script drops a step's other frames by (homeassistant/packages/vesta_visit.yaml)
+DROPPED_PHOTOS = "dropped_photos"
+#: How many bursts' choices are remembered (Visits.kept): a later step of the visit names its frames again
+PICKS_KEPT = 200
+
+
+def pick_wait_s() -> int:
+    return limit("visit.photo_pick_wait_s", 4, unit="seconds", group="run", lo=0, hi=30,
+                 says="How long a visit's message waits for the best of a step's burst of photos to be chosen.",
+                 reached="The message goes with the step's last photo; the chosen one replaces it once known.", told="")
 
 
 def photos(state, iid) -> list[dict]:
@@ -105,10 +119,12 @@ class Visits:
                  tell: Callable[[str, dict], Awaitable[bool]] | None = None,
                  keyboard: Callable[[int, int], dict | None] | None = None, name: Callable[[str], str] = str,
                  withdraw: Callable[[str], Awaitable[bool]] | None = None,
-                 album: Callable[[int, list, int | None], Awaitable[list[int]]] | None = None):
+                 album: Callable[[int, list, int | None], Awaitable[list[int]]] | None = None,
+                 pick: Callable[[list[str], str], Awaitable[int]] | None = None):
         """`photo(camera)`: what a camera shows now ((base64, mime) or None, outcome.camera_photo); `tell(script, data)`:
         the villa's script run with `data` (actions.Actions.tell_villa), None: the villa is never told; `keyboard(iid,
-        chat)`: the buttons a copy keeps (alert_buttons.AlertButtons); `name(camera)`: its name as the villa gives it."""
+        chat)`: the buttons a copy keeps (alert_buttons.AlertButtons); `name(camera)`: its name as the villa gives it;
+        `pick(paths, how)`: the frame of a step's burst kept (photo_pick.Picker.choose), None: its last."""
         self.name = name
         self._album = album               # delivery.Delivery.album: photos as Telegram albums, a reply to a message
         self._withdraw = withdraw         # approvals.Approvals.withdraw: a waiting request withdrawn, every copy told
@@ -116,6 +132,9 @@ class Visits:
         self.photo, self.out_dir, self.tz, self._tell, self.keyboard = photo, out_dir, timezone_name, tell, keyboard
         self._locks: dict[int, asyncio.Lock] = {}
         self._sheets: dict[int, tuple[str, tuple[bytes, str]]] = {}   # visit → (what it was made of, its sheet)
+        self._pick = pick
+        # (visit, burst) → the frame kept (its path), or the choice still running
+        self._picked: dict[tuple[int, str], str | asyncio.Task] = {}
 
     # ------------------------------------------------------------------ one result
     async def begin(self, res: dict, name: Callable[[int], str] = lambda iid: "") -> Run:
@@ -125,16 +144,21 @@ class Visits:
         count its picture leaves out, and its sheet made once. `name(iid)`: the alert's "#125-P1"."""
         run = Run(self)
         actions = [a for a in res.get("actions") or []]
+        told: dict[int, tuple[str, dict]] = {}          # visit → how the villa is told (its script, the visit named)
         for n, a in enumerate(actions):
             if (iid := _visit_of(a)) is not None and a["action"] == TELL_VILLA:
+                f = dict(a.get("fields") or {})
+                told[iid] = (str(a.get("script") or ""), {k: f[k] for k in ("record", "visit") if k in f})
                 try:
                     run._tells[n] = await self.step(iid, str(a.get("script") or ""), dict(a.get("fields") or {}), name(iid))
                 except Exception as e:  # noqa: BLE001 — the villa takes the visit back itself after its wait
                     log.warning("Incident #%s: its step could not be told to the villa (%s)", iid, type(e).__name__)
         for a in actions:
             if (iid := _visit_of(a)) is not None and a["action"] == SHEET:
-                self.state.set_visit_photos(iid, {"photos": list(a.get("photos") or []), "button": a.get("button") or {},
-                                                  "more": a.get("more") or {}, "shown": int(a.get("shown") or 1)})
+                shown = int(a.get("shown") or 1)
+                kept = await self.kept(iid, list(a.get("photos") or []), told.get(iid))
+                self.state.set_visit_photos(iid, {"photos": visit_state.ordered(kept, shown), "button": a.get("button") or {},
+                                                  "more": a.get("more") or {}, "shown": shown})
                 if line := self.more_line(iid):
                     run.lines.setdefault(iid, []).append(line)
                 if got := await self.sheet(iid):
@@ -146,6 +170,116 @@ class Visits:
             if str(iid_s or "").isdigit() and int(iid_s) not in run.sheets and (got := await self.sheet(int(iid_s))):
                 run.sheets[int(iid_s)] = got
         return run
+
+    # ------------------------------------------------------------------ a step's burst
+    async def kept(self, iid: int, photos: list[dict], told: tuple[str, dict] | None = None) -> list[dict]:
+        """`photos` (the desk's, the villa's record) with ONE frame per burst (a step's photos sharing `burst`), in the
+        place of its first: the frame chosen (photo_pick.Picker; a frame whose file is gone, deleted at an earlier
+        choice, is never one), waited for `pick_wait_s` at most — a choice still running keeps the last frame for now
+        and puts the chosen one in place once known (`_late`). `told`: how the villa is told (its script, the visit
+        named), so its record drops the frames deleted.
+
+        ⚠️ ONE PHOTO PER STEP, EVERYWHERE (owner, 2026-11-15): the sheet, "All photos" and the tablet's card read the
+        list kept here (photos), never the frames themselves."""
+        groups: dict[str, list[dict]] = {}
+        for p in photos:
+            if isinstance(p, dict) and p.get("burst"):
+                groups.setdefault(str(p["burst"]), []).append(p)
+        if not groups:
+            return photos
+        chosen: dict[str, dict] = {}
+        running: dict[str, tuple[asyncio.Task, list[dict]]] = {}
+        for key, frames in groups.items():
+            frames = sorted(frames, key=lambda f: int(f.get("frame") or 0))
+            live = [f for f in frames if sheet._inside(f.get("path"), (sheet.MEDIA,))] or frames[-1:]
+            got = self._picked.get((int(iid), key))
+            if isinstance(got, str):
+                chosen[key] = next((f for f in frames if f.get("path") == got), live[-1])
+            elif isinstance(got, asyncio.Task) or len(live) < 2:
+                chosen[key] = live[-1]
+            else:
+                task = asyncio.create_task(self._choose(int(iid), key, live, [f.get("path") for f in frames], told))
+                self._picked[(int(iid), key)] = task
+                running[key] = (task, live)
+        if running:
+            done, _ = await asyncio.wait([t for t, _ in running.values()], timeout=pick_wait_s())
+            for key, (task, live) in running.items():
+                if task in done:
+                    chosen[key] = next((f for f in live if f.get("path") == task.result()), live[-1])
+                else:
+                    chosen[key] = live[-1]
+                    task.add_done_callback(lambda t, key=key: self._then(int(iid), key, t))
+        out, placed = [], set()
+        for p in photos:
+            key = str(p.get("burst") or "") if isinstance(p, dict) else ""
+            if not key:
+                out.append(p)
+            elif key not in placed:
+                placed.add(key)
+                out.append(chosen[key])
+        return out
+
+    async def _choose(self, iid: int, key: str, live: list[dict], every: list[str], told) -> str:
+        """The frame of burst `key` kept (its path), the others deleted from the villa's media folder — only there, a
+        file already gone no error — and the villa told to drop them all (`every`: the burst's frames as its record
+        names them). The last frame, nothing deleted, when no choice could be made."""
+        paths = [str(f.get("path")) for f in live]
+        try:
+            i = await self._pick(paths, str(live[0].get("pick") or "")) if self._pick is not None else len(paths) - 1
+            keep = paths[i if 0 <= i < len(paths) else -1]
+        except Exception:  # noqa: BLE001 — the last frame stays, every frame kept
+            log.exception("Incident #%s: the best photo of a step could not be chosen", iid)
+            self._picked[(iid, key)] = paths[-1]
+            return paths[-1]
+        gone = []
+        for p in paths:
+            real = sheet._inside(p, (sheet.MEDIA,))
+            if p == keep or not real:
+                continue
+            try:
+                os.remove(real)
+                gone.append(p)
+            except FileNotFoundError:
+                pass
+            except OSError as e:
+                log.warning("Incident #%s: a photo of a step could not be deleted (%s)", iid, type(e).__name__)
+        log.info("Incident #%s: of %d photos of one step, %s kept, %d deleted", iid, len(paths), os.path.basename(keep),
+                 len(gone))
+        self._picked[(iid, key)] = keep
+        for old in [k for k, v in self._picked.items() if isinstance(v, str)][:-PICKS_KEPT]:
+            self._picked.pop(old, None)
+        if told and told[1]:
+            await self._told(iid, told[0], {**told[1], DROPPED_PHOTOS: [p for p in every if p != keep]}, cards=False)
+        return keep
+
+    def _then(self, iid: int, key: str, task: asyncio.Task) -> None:
+        """A choice that came after the message went (`kept`): the chosen frame in place."""
+        if task.cancelled() or task.exception() is not None:
+            return
+        late = asyncio.ensure_future(self._late(iid, key, task.result()))
+        self._picked.setdefault((iid, key + "#late"), late)       # kept until done: never collected mid-way
+        late.add_done_callback(lambda _t: self._picked.pop((iid, key + "#late"), None))
+
+    async def _late(self, iid: int, key: str, keep: str) -> None:
+        """Burst `key`'s chosen frame (`keep`) in the place of the one shown: the visit's photos, every copy's picture
+        and the tablet's card."""
+        try:
+            rec = self.state.visit_photos(iid)
+            photos = [{**p, "path": keep} if isinstance(p, dict) and str(p.get("burst") or "") == key else p
+                      for p in rec.get("photos") or []]
+            if photos == list(rec.get("photos") or []):
+                return
+            self.state.set_visit_photos(iid, {**rec, "photos": visit_state.ordered(photos, int(rec.get("shown") or 1))})
+            await self.picture(iid)
+            if hasattr(self.thread, "retell"):
+                self.thread.retell(iid)
+        except Exception:  # noqa: BLE001 — the step keeps the photo it shows
+            log.exception("Incident #%s: the chosen photo of a step could not be put in place", iid)
+
+    async def idle(self) -> None:
+        """Every choice of a burst's photo running now, finished (tests wait on it, never on a fixed time)."""
+        while running := [t for t in self._picked.values() if isinstance(t, asyncio.Future) and not t.done()]:
+            await asyncio.gather(*running, return_exceptions=True)
 
     # ------------------------------------------------------------------ the sheet
     async def sheet(self, iid: int) -> tuple[bytes, str] | None:

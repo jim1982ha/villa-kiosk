@@ -37,6 +37,11 @@ TRANSLATION = "translation"
 _TRANSLATION_BEFORE = JOB + "alert-translation"
 
 
+#: The best of a step's burst of photos chosen by the AI (vesta_agent.photo_pick): with the chat answers' limit, on a row
+#: of its own on the Costs tab — neither a reply nor a report (owner, 2026-11-15: "Burst, best picked").
+PHOTO_PICK = "photo_pick"
+
+
 def for_job(name: str) -> str:
     return JOB + name
 
@@ -44,6 +49,11 @@ def for_job(name: str) -> str:
 def is_translation(who: str) -> bool:
     """Whether a run was an alert card's translation (read before job_of / person_of: it is neither)."""
     return who in (TRANSLATION, _TRANSLATION_BEFORE)
+
+
+def is_photo_pick(who: str) -> bool:
+    """Whether a run chose the best photo of a visit's burst (read before job_of / person_of: it is neither)."""
+    return who == PHOTO_PICK
 
 
 def for_person(name: str | None, chat) -> str:

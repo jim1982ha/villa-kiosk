@@ -19,6 +19,9 @@ and skill.yaml (what the engine needs):
     translate:                       its alert cards' own words in each chat's language, by the AI (translation.py)
       instructions: "..."            what the AI is told (the engine adds the slots and the answer's shape) — it
                                      runs with the Chat answers' brain and limit per reply, never as an AI job
+    photo_pick:                      what the AI looks for when it keeps the best of a visit step's burst of photos
+      instructions: "..."            (photo_pick.py: the engine numbers the photos and asks for the number); the
+                                     model is the villa's ("Picked by"), the limit the Chat answers' per reply
     schedule:                        what the scheduler starts
       - when: "07:00"                "HH:MM" daily, "Mon 08:00" weekly, "1 08:00" monthly
         prompt: "..."                a model job (costs tokens)
@@ -256,6 +259,9 @@ class Skill:
     # its alert cards' own words in each chat's language (owner, 2026-10-23): {instructions} — AI work of the skill
     # with the Chat answers' brain and limit (translation.py, turn.translation_terms), not a job. None: as written
     translate: dict | None = None
+    # what the AI looks for in a visit step's burst of photos (owner, 2026-11-15: "Burst, best picked"): {instructions}
+    # — photo_pick.py; None: the photo most different from the first is kept, no AI
+    photo_pick: dict | None = None
     every_5_min: str | None = None
     # the rules whose findings every_5_min reads again — the rest wait for the nightly check: the Kiosk card's "Next check"
     # (owner, 2026-10-15). The skill says it, the engine only carries it to the card. ["*"]: `rechecks: all`, every
@@ -463,6 +469,7 @@ def parse_skill(name: str, path: str) -> Skill:
             entry.update(_ai_job(path, job, f"schedule[{i}]"))
         sk.schedule.append(entry)
     sk.translate = _translate(raw.get("translate"))
+    sk.photo_pick = _photo_pick(raw.get("photo_pick"))
     ai = [j for j in sk.schedule if j.get("prompt")]
     # ⚠️ AN EDITED 0.12.334–335 COPY STILL WORKS (owner, 2026-10-23: the translation runs with the Chat answers' brain,
     # not as a job): its alert desk gave `jobs_default` for its translation alone. Refused, it would switch the whole
@@ -561,6 +568,22 @@ def _translate(given) -> dict | None:
     if not instructions:
         raise SkillError("translate.instructions: what the AI is told when it translates")
     return {"instructions": instructions}
+
+
+def _photo_pick(given) -> dict | None:
+    """skill.yaml `photo_pick`: {instructions} — what the AI looks for in a visit step's burst of photos."""
+    if given is None:
+        return None
+    instructions = str(given.get("instructions") or "").strip() if isinstance(given, dict) else ""
+    if not instructions or set(given) - {"instructions"}:
+        raise SkillError("photo_pick.instructions: what the AI looks for in a step's photos")
+    return {"instructions": instructions}
+
+
+def photo_pickers(skills: dict) -> list["Skill"]:
+    """Every skill that says what the AI looks for in a burst of photos (skill.yaml `photo_pick`), in skill order: the
+    first one's words are the question's (photo_pick.Picker)."""
+    return [sk for _, sk in sorted(skills.items()) if sk.photo_pick]
 
 
 def translators(skills: dict) -> list["Skill"]:

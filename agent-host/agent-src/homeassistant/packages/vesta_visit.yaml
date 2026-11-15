@@ -15,7 +15,8 @@
 #                               `python -m vesta_shared.message_format`: never edit the block by hand. It also names
 #                               the script below and the "VESTA reminder after" setting, for the blueprint.
 #   script.vesta_visit_tell     how the VESTA Agent tells the villa what it did: it holds the visit, its number, the
-#                               cards it shows in each chat, the step it has told, an answer, a reminder sent.
+#                               cards it shows in each chat, the step it has told, an answer, a reminder sent, the
+#                               photos of a step's burst it deleted once it kept the best one.
 #
 # Helpers live in this package file, never made from the screens (owner, 2026-10-18).
 
@@ -161,6 +162,11 @@ script:
         description: The villa's replies the VESTA Agent removed once it held the visit (their message ids).
         selector:
           object:
+      dropped_photos:
+        name: Photos removed
+        description: The photos of a step the VESTA Agent deleted once it kept the best one (their paths).
+        selector:
+          object:
     sequence:
       - condition: template
         value_template: "{{ record is defined and visit is defined and state_attr(record, 'id') == visit }}"
@@ -169,6 +175,8 @@ script:
           # (entity_id) and what the message is (photo or text) when the villa sent it; the villa's replies are kept,
           # but those VESTA removed (`dropped`: it holds the visit, its one card tells it all)
           gone: "{{ (dropped if dropped is defined and dropped is list else []) | map('int', 0) | list }}"
+          # the record's photos but those VESTA deleted (the other frames of a step's burst)
+          gone_photos: "{{ (dropped_photos if dropped_photos is defined and dropped_photos is list else []) | map('string') | list }}"
           cards: >-
             {%- set cur = state_attr(record, 'messages') or [] -%}
             {%- set ns = namespace(m=[]) -%}
@@ -189,6 +197,7 @@ script:
             {%- if (messages is defined and messages is list and messages) or gone -%}{%- set ns.d = dict(ns.d, messages=cards) -%}{%- endif -%}
             {%- if answered is defined and answered is mapping -%}{%- set ns.d = dict(ns.d, answered=answered) -%}{%- endif -%}
             {%- if reminded_at is defined and reminded_at -%}{%- set ns.d = dict(ns.d, reminded_at=reminded_at) -%}{%- endif -%}
+            {%- if gone_photos -%}{%- set ns.d = dict(ns.d, photos=(state_attr(record, 'photos') or []) | rejectattr('path', 'in', gone_photos) | list) -%}{%- endif -%}
             {{ ns.d }}
       - event: vesta_visit_record
         event_data:

@@ -46,3 +46,11 @@ translate:
     (its owner, its facility manager). Write them as a short, plain notice in the target language, the way a
     technician's alert reads there: no greeting, no explanation, no notes. A word in quotes or a device's state you
     cannot see is a value: it is one of the numbered slots, never translated. "What to do:" introduces what to check.
+# The best of a visit step's burst of photos (owner, 2026-11-15: the Presence Guard's "Burst, best picked"): up to 3
+# photos of one step, about 1.5 s apart; the model the villa set ("Picked by") keeps one, the others are deleted. Only
+# what the AI looks for is said here: the engine numbers the photos and asks for the number. With no answer, the photo
+# most different from the first is kept.
+photo_pick:
+  instructions: >-
+    You look at the photos one camera of a villa took a second or so apart, when it saw movement while nobody was
+    home. Choose the one that shows a person, a vehicle or an animal best: the most of it in view, the clearest.

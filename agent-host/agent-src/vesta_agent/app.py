@@ -240,12 +240,15 @@ class Vesta:
         self.chat_jobs = ChatJobs(self.delivery, self._safe, self.work, facts=self.chat_facts, poster=self.poster)
         # a visit of the villa's presence automation (visit.py): its sheet, the villa told, its siren in its story
         from .outcome import camera_photo
+        from .photo_pick import Picker
         from .visit import Visits
+        # the best photo of a step's burst (photo_pick.py): the villa's model, else change detection
+        self.photo_pick = Picker(settings=settings, state=self.state, skills=self.skills)
         self.visits = Visits(state=self.state, thread=self.thread, notices=self.notices,
                              photo=lambda cam: camera_photo(self.reader, cam), out_dir=settings.out_dir,
                              timezone_name=settings.timezone, tell=self.actions.tell_villa, name=self.name_of,
                              withdraw=lambda aid: self.approvals.withdraw(aid), album=self.delivery.album,
-                             keyboard=lambda iid, chat: self.buttons.still(iid, chat))
+                             keyboard=lambda iid, chat: self.buttons.still(iid, chat), pick=self.photo_pick.choose)
         # an approval request from start to end (approvals.py); the siren's gate asks through it too
         self.approvals = Approvals(state=self.state, policy=self.policy, actions=self.actions, thread=self.thread,
                                    post=self.poster.post, timezone_name=settings.timezone, safe=self._safe,

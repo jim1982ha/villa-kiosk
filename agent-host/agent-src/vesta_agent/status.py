@@ -42,6 +42,8 @@ RUNNING = "running"
 #: limit — counted with them, on a row of its own (owner, 2026-10-23: no dedicated job; skills.job_title's form)
 CHAT_REPLIES = "Chat replies"
 ALERT_TRANSLATION = f"{CHAT_REPLIES} › alert translation"
+#: The Costs tab's words for the AI's choice of a visit's best photo (photo_pick.py)
+PHOTO_PICK = "Visit photo choice"
 OUTCOME_WORDS = {ENDED: "done", FAILED: "not prepared", CUT: "stopped by a restart", RUNNING: "running", None: "run"}
 
 
@@ -79,7 +81,7 @@ def figures(records, cost: float | None = None) -> list[list]:
             d = agent_records.detail(c)
             if d.get("problem"):
                 failures += 1
-            elif agent_records.is_translation(str(d.get("who") or "")):
+            elif agent_records.is_translation(str(d.get("who") or "")) or agent_records.is_photo_pick(str(d.get("who") or "")):
                 pass                    # an alert card's words in a chat's language: neither a reply nor a report
             elif agent_records.job_of(str(d.get("who") or "")) is not None:
                 reports += 1
@@ -203,6 +205,8 @@ def costs(state, days: int = 30, now: datetime | None = None, zone=None, chat_la
         if agent_records.is_translation(who):
             # the chat answers' own work, on its own row (turn.translation_terms) — 0.12.334–335's job runs included
             kind, job, person, chat = "translation", ALERT_TRANSLATION, None, None
+        elif agent_records.is_photo_pick(who):
+            kind, job, person, chat = "photo_pick", PHOTO_PICK, None, None
         elif agent_records.job_of(who) is not None:
             kind, job, person, chat = "job", job_words(agent_records.job_of(who) or "?"), None, None
         else:

@@ -6,7 +6,7 @@ is a sheet of them all, replaced in place (editMessageMedia) at each step: its b
 `visit.sheet_tiles` photos it holds the strongest and the latest; the tablet's card holds every one (the villa's own
 announcement, which VESTA's card takes).
 
-The photos are the villa's own files, read where the app's read-only `media` folder shows them (MEDIA): a path outside
+The photos are the villa's own files, read where the app's `media` folder shows them (MEDIA; written only to delete a burst's frames not kept: visit.Visits.kept): a path outside
 it is never opened. Pillow draws the sheet (the image has no other picture library; measured 2026-11-06: about 6 MB of
 wheels for aarch64 and amd64, Python 3.13).
 """

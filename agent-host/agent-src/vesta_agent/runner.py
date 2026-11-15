@@ -328,25 +328,29 @@ def with_time(settings, prompt: str, now: datetime | None = None) -> str:
     return f"[Villa time: {now:%A %d %B %Y, %H:%M}]\n{prompt}"
 
 
-def message(prompt: str, image: tuple[str, str] | None = None):
+def message(prompt: str, image: tuple[str, str] | list[tuple[str, str]] | None = None):
     """What the SDK is sent: the text, or — with a photo a person sent (base64, mime) — one message holding the picture
-    and the text, so the AI looks at it (owner, 2026-10-10)."""
-    if image is None:
+    and the text, so the AI looks at it (owner, 2026-10-10). A list of photos (a step's burst: photo_pick.py): each
+    numbered ("Photo 1:") before it, in order, then the text."""
+    if not image:
         return prompt
+    images = [image] if isinstance(image, tuple) else list(image)
 
     async def one():
-        data, mime = image
+        content = []
+        for n, (data, mime) in enumerate(images, start=1):
+            if len(images) > 1:
+                content.append({"type": "text", "text": f"Photo {n}:"})
+            content.append({"type": "image", "source": {"type": "base64", "media_type": mime, "data": data}})
         yield {"type": "user", "parent_tool_use_id": None,
-               "message": {"role": "user", "content": [
-                   {"type": "image", "source": {"type": "base64", "media_type": mime, "data": data}},
-                   {"type": "text", "text": prompt}]}}
+               "message": {"role": "user", "content": [*content, {"type": "text", "text": prompt}]}}
     return one()
 
 
 async def run(settings, system_prompt: str, prompt: str, kit, terms, state, resume: str | None = None,
-              asked: str | None = None, image: tuple[str, str] | None = None) -> RunResult:
+              asked: str | None = None, image: tuple[str, str] | list[tuple[str, str]] | None = None) -> RunResult:
     """One run: `kit` its built tools (tools.Toolbox.for_run), `terms` its brain, limit and record (turn.Terms);
-    `image` a photo the person sent with the message (base64, mime)."""
+    `image` a photo the person sent with the message (base64, mime), or several (message)."""
     clean_environ()
     opts, denied = build_options(settings, system_prompt, kit, terms, state, resume)
     c = Collector(resume)

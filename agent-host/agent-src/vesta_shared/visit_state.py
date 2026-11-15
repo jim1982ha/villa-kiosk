@@ -167,14 +167,19 @@ def ending(v: dict) -> Ending:
 # picture shows marked `onSheet` (the lead and the latest of the rest).
 def photos_of(v: dict) -> list[dict]:
     """The photos visit `v`'s record holds, as the sheet and the tablet read them: [{path, label, at, strongest?}] — the
-    ones of the strongest step's device marked `strongest`; a photo with no file or no moment left out."""
+    ones of the strongest step's device marked `strongest`; a photo with no file or no moment left out. A frame of a
+    burst (several photos of one step, the Presence Guard's "Burst, best picked") keeps its `burst` (the step's shared
+    key), its `frame` (1, 2, 3) and its `pick` (how VESTA chooses one: a model's alias, or "diff"): the engine keeps
+    one frame per burst (visit.Visits.kept)."""
     top = (v.get("strongest") or {}).get("entity_id")
     out = []
     for ph in v.get("photos") or []:
         if not isinstance(ph, dict) or not ph.get("path") or not when(ph.get("at")):
             continue
         out.append({"path": str(ph["path"]), "label": str(ph.get("camera_name") or ph.get("camera") or ""),
-                    "at": str(ph["at"]), **({"strongest": True} if top and ph.get("entity_id") == top else {})})
+                    "at": str(ph["at"]), **({"strongest": True} if top and ph.get("entity_id") == top else {}),
+                    **({"burst": str(ph["burst"]), "frame": int(ph.get("frame") or 0), "pick": str(ph.get("pick") or "")}
+                       if ph.get("burst") else {})})
     return ordered(out)
 
 
