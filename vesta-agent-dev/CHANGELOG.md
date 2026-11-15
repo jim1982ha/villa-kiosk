@@ -1,3 +1,16 @@
+## 0.12.517
+
+- **A visit's photo can show who is there, not the empty scene a moment before.** The Presence Guard has a new
+  "Photo" setting: "Fixed delay" (one photo after the wait, as before) or "Burst, best picked": up to 3 photos of a
+  step, about 1.5s apart while the motion lasts. VESTA keeps the one that shows a person, a vehicle or an animal best
+  ("Picked by": Haiku, Sonnet, Opus, or change detection with no AI) and deletes the others, so each step has one photo
+  on Telegram, in "All photos", on the VESTA UI card and in the villa's record. If the AI fails or takes too long, the
+  photo most different from the first is kept. The alert never waits more than a few seconds for the choice: it goes
+  with the last photo, and the chosen one replaces it once known. The AI's cost is on the Costs tab ("Visit photo
+  choice").
+- **A first motion that waited for a second one keeps its own photo.** The photo taken at its own moment is the one the
+  visit shows, no longer a new one taken when the visit opens, up to a minute later.
+
 ## 0.12.516
 
 - **An escalation says what the settings waited.** It read "No answer from FM after 45min" even when the reminder had
