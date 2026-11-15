@@ -69,7 +69,7 @@ const CATEGORY_VAR: Record<Category, string> = {
 // possible" pattern as babylon/colors.ts.
 const FALLBACK_CATEGORY_COLOR: Record<Category, string> = {
   comfort: "#B4643C", light: "#C08A2E", network: "#2F6B4F",
-  energy: "#2E6E8F", access_control: "#A8457F", others: "#6E7B72",
+  energy: "#2E6E8F", access_control: "#6E57B8", others: "#6E7B72",
 };
 // the table's light-theme mirror, before the stylesheet paints (stateColors.STATUS_HEX: one copy, owner 2026-11-15)
 const FALLBACK_WARNING = STATUS_HEX.warn;
