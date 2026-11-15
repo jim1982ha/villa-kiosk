@@ -1,13 +1,23 @@
+## 0.12.518
+
+- **Every photo the siren takes reaches the alert card in the VESTA UI.** When the siren was offered, the photos VESTA
+  took of the cameras were kept in VESTA's own folder and sent to the tablet as pictures, with a size limit: on a visit
+  with many cameras some were left off the card. They are now saved in the villa's photo folder (/media/vesta) with
+  the villa's own visit photos, so the VESTA UI shows every one, and the villa's nightly clean-up removes them like
+  the others. A camera photographed again during the same visit keeps only its newest photo.
+- The photos kept in VESTA's own folder by earlier versions are moved into the villa's photo folder when VESTA starts,
+  and that folder is then removed: nothing is left behind.
+
 ## 0.12.517
 
 - **A visit's photo can show who is there, not the empty scene a moment before.** The Presence Guard has a new
-  "Photo" setting: "Fixed delay" (one photo after the wait, as before) or "Burst, best picked": up to 3 photos of a
-  step, about 1.5s apart while the motion lasts. VESTA keeps the one that shows a person, a vehicle or an animal best
-  ("Picked by": Haiku, Sonnet, Opus, or change detection with no AI) and deletes the others, so each step has one photo
-  on Telegram, in "All photos", on the VESTA UI card and in the villa's record. If the AI fails or takes too long, the
-  photo most different from the first is kept. The alert never waits more than a few seconds for the choice: it goes
-  with the last photo, and the chosen one replaces it once known. The AI's cost is on the Costs tab ("Visit photo
-  choice").
+  "Photo" setting: "Fixed delay" (one photo after the wait, as before) or a burst: up to 3 photos of a step, about
+  1.5s apart while the motion lasts. VESTA keeps the one that shows a person, a vehicle or an animal best and deletes
+  the others; the same "Photo" field chooses how: "Burst (Haiku)", "Burst (Sonnet)", "Burst (Opus)" or "Burst (Change
+  detection, no AI)". Each step has one photo on Telegram, in "All photos", on the VESTA UI card and in the villa's
+  record. If the AI fails or takes too long, the photo most different from the first is kept. The alert never waits
+  more than a few seconds for the choice: it goes with the last photo, and the chosen one replaces it once known. The
+  AI's cost is on the Costs tab ("Visit photo choice").
 - **A first motion that waited for a second one keeps its own photo.** The photo taken at its own moment is the one the
   visit shows, no longer a new one taken when the visit opens, up to a minute later.
 
