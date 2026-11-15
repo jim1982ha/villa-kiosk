@@ -59,6 +59,8 @@ import type { Material } from "@babylonjs/core/Materials/material";
 import type { MaterialDefines } from "@babylonjs/core/Materials/materialDefines";
 import type { UniformBuffer } from "@babylonjs/core/Materials/uniformBuffer";
 import type { Scene } from "@babylonjs/core/scene";
+import type { AbstractEngine } from "@babylonjs/core/Engines/abstractEngine";
+import type { SubMesh } from "@babylonjs/core/Meshes/subMesh";
 import { POOL_ALPHA_STOPS } from "./LightPools";
 import { BULB_REACH_M } from "./lightPlacement";
 
@@ -321,9 +323,21 @@ uniform float lampGlowCount;
     };
   }
 
-  override bindForSubMesh(ubo: UniformBuffer): void {
-    ubo.updateFloatArray("lampGlowPos", this.state.pos);
-    ubo.updateFloatArray("lampGlowCol", this.state.col);
+  // ⚠️ WITHOUT UNIFORM BUFFERS THE ARRAYS GO IN AS vec4 (owner's desktop,
+  // 2026-11-16). Babylon turns uniform buffers off for some browsers (its
+  // ThinEngine.ExceptionList: Chrome on macOS, Chrome 12x on Android), and
+  // then `updateFloatArray` uploads with uniform1fv, which WebGL refuses for
+  // a vec4[]: every lamp stayed at zero and the glow lit nothing there (the
+  // steps dark on a Mac, lit on a phone). setFloatArray4 is uniform4fv.
+  override bindForSubMesh(ubo: UniformBuffer, _scene: Scene, _engine: AbstractEngine, subMesh: SubMesh): void {
+    const effect = ubo.useUbo ? null : subMesh.effect;
+    if (effect) {
+      effect.setFloatArray4("lampGlowPos", this.state.pos);
+      effect.setFloatArray4("lampGlowCol", this.state.col);
+    } else {
+      ubo.updateFloatArray("lampGlowPos", this.state.pos);
+      ubo.updateFloatArray("lampGlowCol", this.state.col);
+    }
     ubo.updateFloat("lampGlowCount", this.state.count);
   }
 
