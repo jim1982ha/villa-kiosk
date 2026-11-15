@@ -2014,8 +2014,13 @@ def chase(store: Store, inc: dict, now: datetime, out: dict, params: VillaParams
             now - (_when(inc.get("reasked_at")) or asked) >= timedelta(minutes=max(escal - reask, 0)) and \
             store.move(inc["id"], (Incident.REASKED,), Incident.ESCALATED, escalated_at=now.isoformat(),
                        assignee=CHASE["escalates_to"]):
-        escalate(inc["id"], inc["severity"], out, about(inc, say("no_answer_from", role=role_in(CHASE["asks"]),
-                                                                 after=lasting_in(escal * 60))))
+        # ⚠️ WHAT THE SETTINGS WAITED, SAID AS THEY WAIT IT (owner's screenshot, 2026-11-15, live #177): "No answer from
+        # FM after 45min" when the reminder had waited for the visit to go quiet and 89 minutes had gone — the
+        # escalation comes escalate_minutes - reask_minutes after the reminder, and says so
+        gap = max(escal - reask, 0)
+        said = say("no_answer_after_reminder", role=role_in(CHASE["asks"]), after=lasting_in(gap * 60)) if gap else \
+            say("no_answer_from", role=role_in(CHASE["asks"]), after=lasting_in(escal * 60))
+        escalate(inc["id"], inc["severity"], out, about(inc, said))
         out["escalated"].append(inc["id"])
 
 

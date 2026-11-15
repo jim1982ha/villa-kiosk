@@ -90,7 +90,7 @@ def test_each_chat_keeps_only_the_latest_message_and_it_recalls_the_alert(agent)
     assert agent.tg.sent[-1][2], "the reminder carries the buttons"
     tick(agent, 50)                            # the escalation replaces Home Assistant's alert in the owner's chat
     (grp,) = shown(agent, GROUP)
-    assert re.fullmatch(r"Escalation sent (?:\d\d/\d\d(?:/\d{4})? )?\d\d:\d\d, No answer from FM after 45min \(to: Owner\)",
+    assert re.fullmatch(r"Escalation sent (?:\d\d/\d\d(?:/\d{4})? )?\d\d:\d\d, No answer from FM, 30min after the reminder \(to: Owner\)",
                         status(grp)) and SUMMARY in grp
     # an escalation does not ring (owner, 2026-11-08): the owner's copy edited in place, never sent again
     assert (GROUP, 500) not in agent.tg.deleted and (GROUP, 500) in {(c, m) for c, m, _t in agent.tg.edits}

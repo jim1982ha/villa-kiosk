@@ -119,13 +119,14 @@ def of_parts(key: str, p: dict, *, keyboard: dict | None = None, photo: str | No
     tr = p.get("tr")
     if isinstance(tr, dict) and tr.get("lang") and isinstance(tr.get("body"), str) and tr["body"].strip():
         languages.setdefault(tr["lang"], {})["body"] = tr["body"].strip()
+    story, said_with = _said_on_its_line(_tablet_lines((h.get("story") or h["history"])) if h else [], said, said_with)
     rec = {
         "key": key, "title": layout.title_line(h) if h else "", "to": to if to is not None else (h["to"] if h else ""),
         "takes": takes or [],
         "lead": p.get("lead"), "body": layout.body_shown(p, h),
         # the tablet is everyone's: every step, whoever it went to (layout.head's `story`), else this copy's own
-        "status": _lines(layout.status_shown(h, [*(_tablet_lines((h.get("story") or h["history"])) if h else []),
-                                                 *([f"- {said_with}"] if said_with else []), status]), "status", "statusLine"),
+        "status": _lines(layout.status_shown(h, [*story, *([f"- {said_with}"] if said_with else []), status]),
+                         "status", "statusLine"),
         "stage": (h or {}).get("word") or said.get("stage") or "", "mark": p.get("mark") or "",
         "buttons": buttons_of(keyboard), "languages": languages, "photos": tablet_photos(photos),
     }
@@ -165,6 +166,27 @@ def tablet_photos(photos) -> list[dict]:
         elif os.path.realpath(str(ph["path"])).startswith(root):
             out.append({"path": str(ph["path"]), **one})
     return out[:agreed_limit("photos")] if agreed_limit("photos") else []
+
+
+def _said_on_its_line(lines: list, said: dict, said_with: str) -> tuple[list, str]:
+    """The Status lines with the words said with the newest step (`said_with`: "No answer from FM after 1h 30min
+    (to: Owner)") on that step's own line when the lines hold it ("Escalation sent ⁣: No answer from FM after 1h 30min
+    (to: Owner)"), and no words left over; else the lines as they are and the words, for the line above the state.
+
+    ⚠️ ONE LINE PER EVENT, IN ITS TIME (owner's screenshot, 2026-11-15, live #177): a visit's step seen after the
+    escalation keeps the escalation among the lines, and its words were added after every line — "No answer from FM
+    after 45min" under "Seen at Waterwall Buddha, 14:08", the 12:27 escalation said twice, once out of its time."""
+    stage = said.get("stage")
+    if not said_with or not stage:
+        return lines, said_with
+    for i in range(len(lines) - 1, -1, -1):
+        x = lines[i]
+        if isinstance(x, dict) and str(x.get("id") or "").startswith(f"{stage}@"):
+            words = str(x.get("words") or "")
+            cut = words.rfind(" (")
+            step = words[:cut] if cut >= 0 and said_with.endswith(words[cut:]) else words
+            return [*lines[:i], {**x, "words": f"{step}: {said_with}"}, *lines[i + 1:]], ""
+    return lines, said_with
 
 
 #: The line of a visit's story only Telegram's copy needs: "+3 more photos on the tablet" (its picture holds a few)

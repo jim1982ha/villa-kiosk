@@ -42,6 +42,18 @@ no_answer_from:
   ja: "{role}から{after}経っても応答なし"
   ko: "{after} 동안 {role} 응답 없음"
 
+no_answer_after_reminder:
+  en: "No answer from {role}, {after} after the reminder"
+  fr: "Pas de réponse de {role}, {after} après le rappel"
+  id: "Tidak ada jawaban dari {role}, {after} setelah pengingat"
+  de: "Keine Antwort von {role}, {after} nach der Erinnerung"
+  es: "Sin respuesta de {role}, {after} después del recordatorio"
+  it: "Nessuna risposta da {role}, {after} dopo il promemoria"
+  nl: "Geen antwoord van {role}, {after} na de herinnering"
+  zh: "提醒后{after}，{role}仍无回复"
+  ja: "リマインダーから{after}経っても{role}から応答なし"
+  ko: "알림 후 {after} 동안 {role} 응답 없음"
+
 not_delivered:
   en: "Not delivered to {asked}: Telegram refused every chat of theirs. Over to {to}."
   fr: "Non remis à {asked}: Telegram a refusé toutes ses conversations. Transmis à {to}."

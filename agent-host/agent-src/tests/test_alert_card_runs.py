@@ -166,7 +166,7 @@ def test_a_run_that_came_back_starts_at_a_back_at_line_and_a_reminder_carries_it
     tick(agent, 50)                                     # the escalation: to the owner — in the group, not the FM's chat
     esc = card(agent, GROUP)
     lines = status_lines(esc)
-    assert re.fullmatch(rf"⚠️ ⚙️ Escalation sent {T}, No answer from FM after 45min \(to: Owner\)", lines[-1]), lines
+    assert re.fullmatch(rf"⚠️ ⚙️ Escalation sent {T}, No answer from FM, 30min after the reminder \(to: Owner\)", lines[-1]), lines
     assert any("(to: FM)" in ln for ln in lines), lines         # every step, the FM's too, "(to: …)" says whom
     # and the owner's step is shown on the FM's copy too, its "To:" still whom that copy went to (owner, 2026-11-12)
     fm_now = card(agent, FM_CHAT)

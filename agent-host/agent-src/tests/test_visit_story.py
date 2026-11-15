@@ -745,3 +745,23 @@ def test_the_same_room_again_widens_its_line_like_the_cameras(tmp_path, kiosk, m
     assert "- Sound heard in the Storage Room at 11:32" in st and "- Seen at Waterwall Buddha, 11:37" in st, st
     assert sum("Someone is inside" in ln for ln in st) == 1, st
     assert sum(ln.startswith("- Alert sent") for ln in st) == 1, st
+
+
+def test_the_escalations_words_stay_on_its_own_line_and_say_what_the_settings_waited(tmp_path, kiosk, media):
+    # owner's screenshot, 2026-11-15, live #177: a step seen after the escalation, and the tablet's card listed
+    # "No answer from FM after 45min" LAST, under it, beside "Escalation sent 12:27" — one event twice, out of its
+    # time; and "after 45min" when 89 minutes had gone: it says what the settings waited, after the reminder
+    v = villa(tmp_path, kiosk)
+    vi = evening(v, media)
+    play(v, lambda v: tick(v, 20), lambda v: tick(v, 70))
+    later = (datetime.now(timezone.utc) + timedelta(minutes=75)).isoformat()
+    vi.steps.append({"seq": len(vi.steps) + 1, "kind": "motion", "entity_id": WATERWALL, "name": NAMES[WATERWALL],
+                     "at": later})
+    play(v, send(vi.event()))
+    status = kiosk.messages["incident:1"]["status"]
+    escalation = [i for i, x in enumerate(status) if x.startswith("- Escalation sent")]
+    seen = [i for i, x in enumerate(status) if x.startswith("- Seen at Waterwall Buddha")]
+    assert len(escalation) == 1 and seen and escalation[0] < seen[-1], status
+    assert re.fullmatch(rf"- Escalation sent {TICKET_RE}: No answer from FM, 30min after the reminder \(to: Owner\)",
+                        status[escalation[0]]), status
+    assert not [x for x in status if x.startswith("- No answer")], status

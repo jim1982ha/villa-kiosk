@@ -677,7 +677,7 @@ def test_the_chase_roles_are_said_as_set_never_as_written_in_the_desk(store, mon
     desk.tick(store, T0 + timedelta(minutes=16))
     out = desk.tick(store, T0 + timedelta(minutes=50))
     (esc,) = [m for m in out["send"] if m["to"] == "fm"]
-    assert esc["status"].startswith("No answer from Owner after "), esc
+    assert esc["status"].startswith("No answer from Owner, "), esc
     assert store.incident(iid)["assignee"] == "fm"
     iid2 = desk.intake(store, event(rule="automation.critical_condition_back_door"), T0,
                        occupancy_reader=lambda: "occupied")["incident_id"]
@@ -980,7 +980,7 @@ def test_the_desks_durations_are_worded_as_both_apps_word_one(store, monkeypatch
     reminder = desk.tick(store, T0 + timedelta(minutes=91), params)
     assert reminder["reasked"] == [iid] and reminder["send"][0]["status"] == "No answer after 1h 30min"
     escalated = desk.tick(store, T0 + timedelta(minutes=151), params)
-    assert escalated["escalated"] == [iid] and escalated["send"][0]["status"] == "No answer from FM after 2h 30min"
+    assert escalated["escalated"] == [iid] and escalated["send"][0]["status"] == "No answer from FM, 1h after the reminder"
     monkeypatch.setitem(desk.RULES["siren"], "window_min", 90)
     monkeypatch.setattr(desk, "siren_minutes", lambda: 120)
     from test_siren_request import event as visit
