@@ -15,6 +15,8 @@ import { markBoot } from "@/utils/bootTimeline";
 import VestaMark from "@/components/VestaMark";
 import PinPad from "./PinPad";
 import ProblemLine from "@/components/common/ProblemLine";
+import SignInAgain from "./SignInAgain";
+import { signInExpired } from "@/auth/remoteSignIn";
 
 const ROLE_ICONS: Record<Role, typeof UserRound> = {
   guest: UserRound,
@@ -28,6 +30,8 @@ export default function ProfileGate({ children }: { children: ReactNode }) {
   const [pending, setPending] = useState<Role | null>(null);
   const [access, setAccess] = useState<Record<Role, ProfileAccess> | null>(null);
   const [gateError, setGateError] = useState<string | null>(null);
+  // the remote access sign-in expired: said with its button (auth/remoteSignIn), in place of the error line
+  const [signIn, setSignIn] = useState(false);
 
   // Kick off the (large) central GLB's background BYTE download as early as
   // possible, right when the gate screen first appears — a plain fetch(), no
@@ -54,12 +58,12 @@ export default function ProfileGate({ children }: { children: ReactNode }) {
     let cancelled = false;
     profileAccess()
       .then((req) => { if (!cancelled) setAccess(req); })
-      .catch(() => {
-        if (!cancelled) {
-          const gated = { pin: true, enabled: true };
-          setAccess({ guest: gated, owner: gated, ops: gated });
-          setGateError("Couldn't load the passcode settings, a passcode will be asked for every profile.");
-        }
+      .catch(async () => {
+        if (cancelled) return;
+        const gated = { pin: true, enabled: true };
+        setAccess({ guest: gated, owner: gated, ops: gated });
+        if (await signInExpired()) { if (!cancelled) setSignIn(true); return; }
+        if (!cancelled) setGateError("Couldn't load the passcode settings, a passcode will be asked for every profile.");
       });
     return () => { cancelled = true; };
   }, [role, switching]);
@@ -81,6 +85,7 @@ export default function ProfileGate({ children }: { children: ReactNode }) {
 
   const choose = (r: Role) => {
     setGateError(null);
+    setSignIn(false);
     if (access && !access[r].pin) {
       // Un-gated profile: one tap and in — but still establish a server session
       // first, so direct/Cloudflare access is authorized (the cookie, not this
@@ -90,7 +95,8 @@ export default function ProfileGate({ children }: { children: ReactNode }) {
           // A session cookie now exists; login() also retries the model
           // prefetch (auth/profileSession's signedIn).
           login(r);
-        } else if (res.kind === "closed") setGateError(res.text);
+        } else if (res.kind === "signIn") setSignIn(true);
+        else if (res.kind === "closed") setGateError(res.text);
         else if (res.kind === "unavailable") setGateError("Couldn't reach VESTA, please try again.");
         else setGateError("Couldn't start a session, please try again.");
       });
@@ -155,7 +161,8 @@ export default function ProfileGate({ children }: { children: ReactNode }) {
               <VestaMark size={52} className="profile-mark" />
               <h1 className="profile-title">{resolveSiteTitle(config)}</h1>
               <p className="profile-sub">Who's using VESTA?</p>
-              <ProblemLine className="profile-error">{gateError}</ProblemLine>
+              {signIn ? <SignInAgain className="profile-error" />
+                : <ProblemLine className="profile-error">{gateError}</ProblemLine>}
               <div className="profile-cards">
                 {ROLE_ORDER.map((r) => {
                   const Icon = ROLE_ICONS[r];

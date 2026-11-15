@@ -127,3 +127,6 @@
   .profile-card { min-height: 140px; flex-basis: 100%; max-width: 420px; }
   .pinpad-key { min-height: 54px; }
 }
+
+/* The remote access sign-in expired (components/auth/SignInAgain): its red line, then the one button, centred. */
+.sign-in-again { display: flex; flex-direction: column; align-items: center; gap: 10px; }

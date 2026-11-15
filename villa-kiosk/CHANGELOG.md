@@ -1,3 +1,11 @@
+## 2.496.822
+
+- **An expired remote sign-in has one way back in.** When VESTA is opened from its internet address and the sign-in
+  that protects that address has expired, the profiles and the passcode pad now say "Your remote access sign-in has
+  expired." with a **Sign in again** button, instead of "Couldn't reach the passcode service". The button opens the
+  address afresh, so the sign-in page appears and brings you straight back to VESTA: no more deleting the app,
+  clearing its data and installing it again. With no connection at all, the message stays "couldn't reach".
+
 ## 2.496.821
 
 - **Error messages are red again.** Since the status colours were swapped, the lines that say something went wrong

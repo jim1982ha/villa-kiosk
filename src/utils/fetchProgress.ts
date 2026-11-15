@@ -93,7 +93,7 @@ const SW_BYPASS_PARAM = "vk-sw-bypass";
  *  Query params don't affect nginx's /model/ routing (`try_files $uri`
  *  ignores the query string) and the existing ?v= stamp is preserved, so the
  *  immutable Cache-Control mapping still applies. */
-function withServiceWorkerBypass(url: string): string {
+export function withServiceWorkerBypass(url: string): string {
   try {
     const u = new URL(url, typeof location !== "undefined" ? location.href : "http://localhost");
     u.searchParams.set(SW_BYPASS_PARAM, "1");

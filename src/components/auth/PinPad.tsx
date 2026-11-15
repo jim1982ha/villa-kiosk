@@ -17,6 +17,7 @@ import { useInterval } from "@/hooks/useInterval";
 import { fmtDuration } from "@/components/panels/chartUtils";
 import { ChevronLeft, Delete } from "lucide-react";
 import ProblemLine from "@/components/common/ProblemLine";
+import SignInAgain from "./SignInAgain";
 
 const KEYS = ["1", "2", "3", "4", "5", "6", "7", "8", "9"];
 
@@ -45,6 +46,8 @@ export default function PinPad({
   const [digits, setDigits] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // the remote access sign-in expired: said with its button, not as "couldn't reach" (auth/remoteSignIn)
+  const [signIn, setSignIn] = useState(false);
   const [lockedFor, setLockedFor] = useState(0);
   // Wrong-code streak (server-side lockout has its own separate counter —
   // this is purely local, to decide when to show extra guidance). A wrong
@@ -62,6 +65,7 @@ export default function PinPad({
   const submit = useCallback(async (pin: string) => {
     setBusy(true);
     setError(null);
+    setSignIn(false);
     const result = await onSubmit(pin);
     if (!mounted.current) return;
     setBusy(false);
@@ -75,6 +79,8 @@ export default function PinPad({
     } else if (result.kind === "wrong") {
       setError("Incorrect code, try again.");
       setFailCount((c) => c + 1);
+    } else if (result.kind === "signIn") {
+      setSignIn(true);
     } else if (result.kind === "closed") {
       // The server's own reason — e.g. "set a passcode in the add-on's
       // options" — is the one actionable message.
@@ -130,6 +136,8 @@ export default function PinPad({
       <div className="pinpad-status" role="status">
         {locked ? (
           <ProblemLine>{`Too many attempts, locked for ${fmtDuration(lockedFor * 1000)}`}</ProblemLine>
+        ) : signIn ? (
+          <SignInAgain />
         ) : error ? (
           <ProblemLine>{error}</ProblemLine>
         ) : busy ? (
