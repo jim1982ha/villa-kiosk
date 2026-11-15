@@ -1,3 +1,10 @@
+## 2.496.821
+
+- **Error messages are red again.** Since the status colours were swapped, the lines that say something went wrong
+  ("Couldn't load the passcode settings…", a save that failed, a wrong passcode) and the notices for a failed save or
+  a model that could not be refreshed were drawn in the alarm purple. They now use the app's red for errors
+  everywhere; purple stays the colour of a device's alarm.
+
 ## 2.496.820
 
 - **The Cockpit counts only updates someone can install.** Some devices and apps only report that a newer version

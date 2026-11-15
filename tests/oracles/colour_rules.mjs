@@ -242,4 +242,17 @@ ck("no .ts/.tsx outside the table names a status or category token as a colour: 
      && actionColor("lock.example_door", "locked") === C.usual && actionColor("cover.example_blind", "open") === C.active
      && actionColor("cover.example_blind", "closed") === C.usual);
 }
+{
+  // owner, 2026-11-15: an error message reads in the app's red, never the alarm purple of a device's state
+  const { NoticeView } = await import("@/components/hud/Notice");
+  const { default: ProblemLine } = await import("@/components/common/ProblemLine");
+  const notice = draw(h(NoticeView, { tone: "error", children: "Could not save" }));
+  ck("an error notice wears the app's red (--status-danger), not the alarm purple",
+     notice.includes("var(--status-danger)") && !notice.includes("var(--status-alarm)"), notice);
+  const css = readFileSync(new URL("../../src/styles/08-shared.css", import.meta.url), "utf8");
+  const line = draw(h(ProblemLine, { children: "Could not save" }));
+  ck("  ...and so does an error line (ProblemLine), the amber kept for a warning",
+     /class="problem-line"/.test(line) && /\.problem-line \{[^}]*color: var\(--status-danger\)/.test(css)
+     && /\.problem-line\.warn \{ color: var\(--status-warning\)/.test(css), line);
+}
 done("✅ one colour per meaning, on every surface, for every device");

@@ -973,7 +973,7 @@ export default function BabylonCanvas({
       )}
       {/* drawn as every notice is, in the villa view's one column (Notice) — it was a red box of its own at the bottom */}
       {sh3dSyncMsg && (
-        <Notice tone="alert" role="alert" icon={<AlertTriangle size={16} />} onDismiss={() => setSh3dSyncMsg(null)}>
+        <Notice tone="error" role="alert" icon={<AlertTriangle size={16} />} onDismiss={() => setSh3dSyncMsg(null)}>
           {sh3dSyncMsg}
         </Notice>
       )}
