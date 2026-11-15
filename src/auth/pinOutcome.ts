@@ -11,6 +11,8 @@
 // string PREFIX. And a lockout without a number waited 60 s on one path and
 // nothing on the other.
 
+import { signInExpired } from "./remoteSignIn";
+
 export type PinOutcome =
   | { kind: "accepted"; token?: string }
   | { kind: "wrong" }
@@ -18,7 +20,9 @@ export type PinOutcome =
   /** The server refuses this profile/code on purpose — its own words. */
   | { kind: "closed"; text: string }
   /** No usable answer: offline, an error page, a body that is not ours. */
-  | { kind: "unavailable" };
+  | { kind: "unavailable" }
+  /** The remote access sign-in in front of VESTA expired (auth/remoteSignIn): signing in again is the way back. */
+  | { kind: "signIn" };
 
 /** Seconds a lockout lasts when the server did not say: the add-on option pin_lockout_minutes' own default (5), so
  *  the wait shown is never shorter than the one the add-on applies by default (2026-10-23: it said 60 s). */
@@ -42,8 +46,14 @@ export function readPinAnswer(status: number, body: unknown): PinOutcome {
   return { kind: "unavailable" };
 }
 
-/** POST a passcode request; never throws. */
+/** POST a passcode request; never throws. No usable answer: asked once whether the remote access sign-in expired. */
 export async function askPin(url: string, body: Record<string, unknown>): Promise<PinOutcome> {
+  const got = await postPin(url, body);
+  if (got.kind !== "unavailable") return got;
+  return (await signInExpired()) ? { kind: "signIn" } : got;
+}
+
+async function postPin(url: string, body: Record<string, unknown>): Promise<PinOutcome> {
   try {
     const resp = await fetch(url, {
       method: "POST",
