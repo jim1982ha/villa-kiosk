@@ -318,13 +318,27 @@ ${GLOW_TERM.map(([name, expr]) => `    float ${name} = ${expr};`).join("\n")}
     vec4 lgR = lampGlowRoom[lgI];
     if (lgW > 0.0 && lgR.w > 0.5 && lampGlowMaskSize.x > 0.0) {
       uint lgCellBits = lampGlowCell(vec2(pX, pZ), lgR.x);
-      if ((lgCellBits & 0x80000000u) != 0u) {
-        // A wall's face: the room it faces, read in front of it.
-        uint lgFront = lampGlowCell(vec2(pX + nX * lampGlowMaskAt.w, pZ + nZ * lampGlowMaskAt.w), lgR.x);
-        lgCellBits = (lgFront != 0u && (lgFront & 0x80000000u) == 0u) ? lgFront : (lgCellBits & 0x7fffffffu);
-      }
       uint lgLamp = uint(lgR.y + 0.5) | (uint(lgR.z + 0.5) << 24u);
-      if (lgCellBits != 0u && (lgCellBits & lgLamp) == 0u) lgW = 0.0;
+      if ((lgCellBits & 0x80000000u) != 0u) {
+        // In a wall: a face is the room it faces, read in front of it; what
+        // faces up (a wall's top, a rail or shelf against it) is lit only if
+        // every room around it is (roomLightMask.maskAllows).
+        float lgSide = length(vec2(nX, nZ));
+        if (lgSide >= 0.5) {
+          uint lgFront = lampGlowCell(vec2(pX, pZ) + vec2(nX, nZ) / lgSide * lampGlowMaskAt.w, lgR.x);
+          if (lgFront == 0u || (lgFront & 0x80000000u) != 0u || (lgFront & lgLamp) == 0u) lgW = 0.0;
+        } else {
+          bool lgAny = false, lgAll = true;
+          for (int lgK = 0; lgK < 4; lgK++) {
+            vec2 lgO = lgK == 0 ? vec2(1.0, 0.0) : lgK == 1 ? vec2(-1.0, 0.0) : lgK == 2 ? vec2(0.0, 1.0) : vec2(0.0, -1.0);
+            uint lgN4 = lampGlowCell(vec2(pX, pZ) + lgO * lampGlowMaskAt.w, lgR.x);
+            if (lgN4 == 0u || (lgN4 & 0x80000000u) != 0u) continue;
+            lgAny = true;
+            if ((lgN4 & lgLamp) == 0u) lgAll = false;
+          }
+          if (!lgAny || !lgAll) lgW = 0.0;
+        }
+      } else if (lgCellBits != 0u && (lgCellBits & lgLamp) == 0u) lgW = 0.0;
     }
 #endif
     lgSum += lgC.rgb * lgW;

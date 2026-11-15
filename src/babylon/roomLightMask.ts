@@ -39,11 +39,17 @@ export const MASK_GROW_M = 0.3;
  *  wall's thickness lies between two rooms, and its faces are the rooms they
  *  face. Only a surface standing in a wall cell: a bed head against the wall
  *  it shares with the living room, read in front, was the living room's and
- *  took its light (owner, 2026-11-16). */
+ *  took its light (owner, 2026-11-16). A surface in a wall that faces up
+ *  (the wall's top, a rail against it) read the outline the wall lies in,
+ *  and the living room lit the bedroom's wall tops and bed-head rails
+ *  (owner, 2026-11-16): it is lit only if every room around it, this far
+ *  each way, is — a shelf of a tall bookcase inside the room still is. */
 export const MASK_FACING_M = 0.25;
 /** A room's flood starts this far inside its outline (closer, a cell may be
  *  the next room's, across a wall the plan drew a little off). */
 const SEED_DEPTH_M = 0.5;
+/** A staircase's own walls stand within this of its outline. */
+const FLIGHT_EDGE_M = 0.2;
 /** Where the walls are read, above each storey's floor. */
 export const WALL_PROBE_ABOVE_M = 1.9;
 /** A border this long without a wall is open plan; a doorway is less. */
@@ -140,6 +146,10 @@ export function buildRoomLightMask<R extends MaskRoom>(
   const near = new Uint32Array(cells * storeyKeys.length);
   const seeds = new Uint32Array(cells * storeyKeys.length);
   const stairs = storeyKeys.map(() => 0);
+  /** Inside a staircase, clear of its edge: a flight rising past
+   *  WALL_PROBE_ABOVE_M reads as wall there (its upper treads and risers),
+   *  and is not one. */
+  const flight = new Uint8Array(cells * storeyKeys.length);
   for (const [r, { band, bit }] of bitOf) {
     const flag = (1 << bit) >>> 0;
     if (isStairwell(r.name)) stairs[band] = (stairs[band] | flag) >>> 0;
@@ -158,6 +168,7 @@ export function buildRoomLightMask<R extends MaskRoom>(
         const d = distanceToPolygonBoundary(x, z, r.pts);
         if (pointInPolygon(x, z, r.pts)) {
           inside[i] |= flag;
+          if (d > FLIGHT_EDGE_M && isStairwell(r.name)) flight[i] = 1;
           if (!walls[band][i - band * cells]) {
             insideCells.push(i);
             if (d >= SEED_DEPTH_M) { seeds[i] |= flag; seeded = true; }
@@ -175,7 +186,7 @@ export function buildRoomLightMask<R extends MaskRoom>(
     for (let c = 0; c < cells; c++) {
       const i = o + c;
       const own = reached[c] ? (reached[c] | (inside[i] & stairs[band])) >>> 0 : inside[i] || near[i];
-      words[i] = (walls[band][c] ? (own | WALL_BIT) : own) >>> 0;
+      words[i] = (walls[band][c] && !flight[i] ? (own | WALL_BIT) : own) >>> 0;
     }
   }
   const open = known ? [...known.open]
@@ -252,14 +263,23 @@ export function maskAllows<R>(mask: RoomLightMask<R>, bits: LampRoomBits | undef
     const i = ((bits.band * mask.rows + row) * mask.width + col) * 4;
     return (mask.data[i] | (mask.data[i + 1] << 8) | (mask.data[i + 2] << 16) | (mask.data[i + 3] << 24)) >>> 0;
   };
-  let cellBits = at(px, pz);
+  const cellBits = at(px, pz);
   if (cellBits === null) return true;
-  if (cellBits & WALL_BIT) {
-    // A wall's face: the room it faces, read in front of it.
-    const front = at(px + nx * MASK_FACING_M, pz + nz * MASK_FACING_M);
-    cellBits = front !== null && front !== 0 && !(front & WALL_BIT) ? front : (cellBits & ~WALL_BIT) >>> 0;
-  }
   const lampMask = (bits.lo + bits.hi * 0x1000000) >>> 0;
+  if (cellBits & WALL_BIT) {
+    // In a wall: a face is the room it faces, read in front of it; what
+    // faces no room (a wall's top, a rail against it) is no room's.
+    const side = Math.hypot(nx, nz);
+    if (side >= 0.5) {
+      const front = at(px + (nx / side) * MASK_FACING_M, pz + (nz / side) * MASK_FACING_M);
+      return !!front && !(front & WALL_BIT) && (front & lampMask) !== 0;
+    }
+    // Facing up: lit only if every room around it is.
+    const around = [[1, 0], [-1, 0], [0, 1], [0, -1]]
+      .map(([dx, dz]) => at(px + dx * MASK_FACING_M, pz + dz * MASK_FACING_M))
+      .filter((c): c is number => !!c && !(c & WALL_BIT));
+    return around.length > 0 && around.every((c) => (c & lampMask) !== 0);
+  }
   return cellBits === 0 || (cellBits & lampMask) !== 0;
 }
 

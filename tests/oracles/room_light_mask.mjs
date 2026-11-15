@@ -44,6 +44,7 @@ ck("lights the corridor's floor", lights("Corridor", 3, 2));
 ck("  ...and the corridor's own end wall, by its face", lights("Corridor", 6.05, 2, -1, 0));
 ck("not the bathroom past the wall: its floor, its far wall, its corner by the wall",
    !lights("Corridor", 7.5, 2) && !lights("Corridor", 8.95, 2) && !lights("Corridor", 6.15, 0.05));
+ck("the top of the wall it shares with the bathroom stays dark (the bathroom is on its other side)", !lights("Corridor", 6.05, 2, 0, 0));
 console.log("\n  open plan:");
 ck("the living room and the kitchen share their light (no wall between them)",
    lights("Living", 8, 7) && lights("Kitchen", 3, 7), mask.open);
