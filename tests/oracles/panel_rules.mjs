@@ -1,9 +1,7 @@
 // The control panels' per-device rules (src/utils/panelRules.ts, round 11,
 // 2.496.165) — driven by value, and each panel pinned to them: a rule copied
 // back into a .tsx would pass here and still be the one the screen runs.
-import { register } from "node:module";
 import { readFileSync } from "node:fs";
-register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 import * as JSX from "../consistency/jsx.mjs";
 import ts from "typescript";

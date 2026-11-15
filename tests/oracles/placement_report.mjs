@@ -4,12 +4,10 @@
 // the pass's whole input so an agent can replay it; these cases hold that promise: a pass reported and replayed
 // finds the same pairs, a changed focus changes the answer, the telemetry ring hears a failing pass once a minute at
 // most, and the probe runs on a report as a file.
-import { register } from "node:module";
 import { writeFileSync, mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
-register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 const { Matrix } = await import("@babylonjs/core/Maths/math.vector");
 const { Viewport } = await import("@babylonjs/core/Maths/math.viewport");

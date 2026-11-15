@@ -1,6 +1,4 @@
 // What a state timeline draws, driven by value (utils/timelineCells).
-import { register } from "node:module";
-register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 import { readFileSync } from "node:fs";
 const { timelineCells, timelineRuns, cellBackground } = await import("@/utils/timelineCells");

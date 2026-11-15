@@ -5,8 +5,6 @@
 // with only late maintenance had an amber sign and no mark. Driven by value through the shipped modules, from the same
 // villa state: attentionOf → attentionFor (the Overview) → deviceIssues (the badge) / issueSeverity (the sign)
 // / cockpitCard (the card's icons).
-import { register } from "node:module";
-register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 const { deviceLook, storeLookSource } = await import("@/utils/deviceActivity");
 const { attentionOf, attentionFor, deviceIssues, issueSeverity, faultsFor, recordDevicePill } = await import("@/config/attention");

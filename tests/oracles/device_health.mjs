@@ -4,8 +4,6 @@
 // or lost. Driven by value through the shipped modules, from one villa: the fold (deviceGroups.deviceFolding) → the
 // villa's devices (villaDevices) → the Cockpit's cards (attentionOf → attentionFor → cockpitCard), the window's sign
 // (issueSeverity), the badge (deviceLook) and its room (roomLook).
-import { register } from "node:module";
-register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 const { deviceFolding, villaDevices, lookFacts, deviceReadings } = await import("@/config/deviceGroups");
 const { buildReadiness } = await import("@/fm/readiness");

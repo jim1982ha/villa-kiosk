@@ -237,7 +237,8 @@ def main() -> int:
     ignored = [l.strip() for l in (ROOT / ".dockerignore").read_text().splitlines()]
     if "tools" not in ignored:
         third_party.append(".dockerignore  no longer keeps tools/ out of the image — its hosts now count")
-    report("a third-party host is named in shipped source", third_party,
+    report("a third-party host is named in shipped source (a placeholder address may be localhost or 127.0.0.1 only)",
+           third_party,
            "no third-party host anywhere shipped")
     report("an entity_id is hardcoded in executable code", ids,
            "no entity_id in executable code")

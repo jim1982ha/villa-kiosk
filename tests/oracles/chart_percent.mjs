@@ -1,8 +1,6 @@
 // A percentage's axis stays within 0–100 while its values do — never a cap
 // (owner, 2026-10-05: a battery at 100 % was drawn under a 100.5 / 101 axis;
 // "make sure you don't cap the Y-axis to 100 %… energy or others").
-import { register } from "node:module";
-register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 const { chartGeometry, naturalBounds } = await import("@/utils/chartGeometry");
 

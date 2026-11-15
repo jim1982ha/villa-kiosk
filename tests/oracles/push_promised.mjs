@@ -13,9 +13,7 @@
 //      Cancel was "nothing to push", and the next refresh brought the cancelled label back to every tablet.
 //
 // Driven by value: the real sync machine, the real stores' diff / apply / rebase, against fake stores.
-import { register } from "node:module";
 import { readFileSync } from "node:fs";
-register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 const { DEFAULT_CONFIG, normaliseConfig } = await import("@/config/AppConfig");
 const D = await import("@/config/deviceConfig");

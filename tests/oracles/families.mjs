@@ -1,7 +1,5 @@
 // The device families (owner, 2026-11-14: "no Others family for now"): where a safety sensor goes, which family
 // buttons the top bar draws, and the order of the bottom bar's tiles.
-import { register } from "node:module";
-register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 const { effectiveCategory, subjectOf, CATEGORY_ORDER } = await import("@/config/EntityCategories");
 const { occupiedCategories } = await import("@/config/villaVisibility");

@@ -8,9 +8,7 @@
 //
 // Driven by value: a real config, the store's own update (normalised), the shared store's own per-item diff and
 // rebase loop (utils/keyedSync pushWithRebase), and the draft's own rules. Then the wiring.
-import { register } from "node:module";
 import { readFileSync } from "node:fs";
-register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 const { ADVANCED_SETTINGS_KEYS: ADV, EMPTY_LEDGER, recordEdit, ledgerDirty, revertLedger, ledgerOnRemote } =
   await import("@/config/configSlice");

@@ -693,7 +693,7 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
         )}
       </div>
 
-      {/* Bottom row: status strip (purple online / green motion / grey gap)
+      {/* Bottom row: status strip (green online / red motion / grey gap)
           sharing the same offset + height as the control cluster, sized to
           fill the space left of it (see .camera-bottom-row flex rule) so it
           stays aligned with prev/next/zoom/fullscreen/close regardless of
@@ -746,7 +746,7 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
                 // and its motion part lost: the same rule, a part of a critical device as the device
                 : s === "offline" || s === "motion-unavailable" ? STATUS_COLOR[(badge?.statusRule ?? PLAIN_STATUS)("unavailable")]
                   // A camera that is up and recording is alive in its usual
-                  // state: purple. It is emphatically not the empty track,
+                  // state: the usual green. It is emphatically not the empty track,
                   // which painted a perfectly healthy camera the same colour
                   // as a stretch with nothing to show.
                   : STATUS_COLOR.usual

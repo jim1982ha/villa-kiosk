@@ -4,9 +4,7 @@
 // screen positions from Vector3.Project, which mirrors a point behind the
 // camera onto the screen — shown here on a real Babylon camera — so a room
 // behind could "overlap" a chip in front and lend it its name.
-import { register } from "node:module";
 import { readFileSync } from "node:fs";
-register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 const { NullEngine } = await import("@babylonjs/core/Engines/nullEngine.js");
 const { Scene } = await import("@babylonjs/core/scene.js");

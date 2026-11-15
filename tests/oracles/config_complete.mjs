@@ -6,10 +6,8 @@
 // dozen sites, each with its own copy of the default (the camera beam's 180°
 // and 30° lived only at the read site); the badge size was clamped by the top
 // bar and not by Settings, which printed a stored 0 as "0.00×".
-import { register } from "node:module";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
-register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done, tsFiles } from "../consistency/check.mjs";
 const A = await import("@/config/AppConfig");
 

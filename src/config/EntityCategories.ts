@@ -72,7 +72,6 @@ const FALLBACK_CATEGORY_COLOR: Record<Category, string> = {
   energy: "#2E6E8F", access_control: "#A8457F", others: "#6E7B72",
 };
 // the table's light-theme mirror, before the stylesheet paints (stateColors.STATUS_HEX: one copy, owner 2026-11-15)
-const FALLBACK_ALARM = STATUS_HEX.alert;
 const FALLBACK_WARNING = STATUS_HEX.warn;
 const FALLBACK_LOST = STATUS_HEX.unavailable;
 /** A corner mark's symbol: white, dark on the light grey of lost contact. */
@@ -144,7 +143,7 @@ interface CategorySurface {
    * The PICTOGRAM's colour — the camera, the bulb, the lock.
    *
    * Always the device's own hue (its category colour, or its per-entity
-   * `badgeColor` override) except where a STATUS colour outranks it: red for
+   * `badgeColor` override) except where a STATUS colour outranks it: amber for
    * alert, grey for unavailable. It does not go neutral when the device is
    * resting — see the `off` row for why.
    */
@@ -190,8 +189,9 @@ export function categorySurface(category: Category, state: DeviceSurfaceState, o
       return { fill: tintOver(hue, TINT_ALPHA, base), glyph: hue, ink: hue, ring: hue };
     }
     case "alert": {
-      const danger = cssVar("--status-alarm") || FALLBACK_ALARM;
-      return { fill: tintOver(danger, TINT_ALPHA, base), glyph: danger, ink: danger, ring: danger };
+      // needs attention: the table's amber (owner, 2026-11-15: one amber for every problem, urgency by a pulse)
+      const attention = cssVar("--status-warning") || FALLBACK_WARNING;
+      return { fill: tintOver(attention, TINT_ALPHA, base), glyph: attention, ink: attention, ring: attention };
     }
     case "unavailable": {
       // ⚠️ NO LONGER A DASHED AMBER RING (owner, 2026-10-22: badge proposal 2). A problem is the badge's corner mark
@@ -241,13 +241,15 @@ export function categorySurface(category: Category, state: DeviceSurfaceState, o
    (a linked switch on, a critical device lost) in another state's colour. Those facts are the badge's bottom-right pill and
    corner MARK now (markSurface, below); a ring is only ever its face's own. */
 
-/** A badge's corner mark, as painted: its fill and its symbol, in its ink (deviceActivity.BadgeMark — the same red, amber,
+/** A badge's corner mark, as painted: its fill and its symbol, in its ink (deviceActivity.BadgeMark — the same amber,
  *  grey and teal every other surface paints those meanings in: utils/stateColors STATUS_COLOR, the Cockpit's
  *  severities). Resolved to literal colours, like categorySurface, for the canvas bake. */
 export function markSurface(mark: Exclude<BadgeMark, "active">): { fill: string; symbol: string; ink: string } {
   switch (mark) {
-    case "critical": return { fill: cssVar("--status-alarm") || FALLBACK_ALARM, symbol: "?", ink: WHITE_INK };
-    case "alarm": return { fill: cssVar("--status-alarm") || FALLBACK_ALARM, symbol: "!", ink: WHITE_INK };
+    // ⚠️ ONE AMBER FOR EVERY PROBLEM (owner, 2026-11-15): an alarm and a critical device silent were the alarm's own
+    // colour; they are the fault's amber now, and their badge PULSES on the map (deviceActivity.URGENT_MARKS)
+    case "critical": return { fill: cssVar("--status-warning") || FALLBACK_WARNING, symbol: "?", ink: WHITE_INK };
+    case "alarm": return { fill: cssVar("--status-warning") || FALLBACK_WARNING, symbol: "!", ink: WHITE_INK };
     case "fault": return { fill: cssVar("--status-warning") || FALLBACK_WARNING, symbol: "!", ink: WHITE_INK };
     // ⚠️ DARK ON THE LIGHT GREY (owner, 2026-11-13: lost contact is a light grey): white on it is under 2:1
     case "lost": return { fill: cssVar("--status-lost") || FALLBACK_LOST, symbol: "?", ink: DARK_INK };

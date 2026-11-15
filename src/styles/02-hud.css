@@ -433,7 +433,7 @@
 .hud-left-col > * { pointer-events: auto; }
 /* The presence tile (PresenceTile): the rail's width, its icon and one short word; the icon in the map's colour for
    the state (--tone: green someone there, grey lost contact — utils/stateColors STATUS_COLOR), and EMPTY in the rail's
-   own icon colour, as every other rail button (owner, 2026-11-14: its purple read as a signal). */
+   own icon colour, as every other rail button (owner, 2026-11-14: its status colour read as a signal). */
 .hud-left-col .hud-presence-btn {
   width: 100%; height: auto; min-height: 44px; padding: 4px 0;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
@@ -683,7 +683,7 @@
    also simply the wrong meaning — a tile turns "warn" for an unlocked lock or
    a high energy draw, which is a confirmed condition needing attention, not
    Home Assistant losing contact. */
-.summary-tile.tone-warn { box-shadow: inset 0 -2px 0 var(--tile-ring, var(--status-alarm)); }
+.summary-tile.tone-warn { box-shadow: inset 0 -2px 0 var(--tile-ring, var(--status-warning)); }
 .summary-tile.tone-off .summary-tile-value { color: var(--text-secondary); }
 
 
@@ -786,10 +786,10 @@
 .summary-entity-row.is-lost .summary-entity-main { padding: 8px 10px; }
 .summary-entity-row.is-lost .summary-entity-state { color: var(--status-lost-ink); }
 .summary-entity-row.is-lost.is-critical {
-  border: 2px solid var(--status-alarm);
-  background: color-mix(in srgb, var(--status-alarm) 12%, var(--bg-input));
+  border: 2px solid var(--status-warning);
+  background: color-mix(in srgb, var(--status-warning) 12%, var(--bg-input));
 }
-.summary-entity-row.is-lost.is-critical .summary-entity-state { color: var(--status-alarm); }
+.summary-entity-row.is-lost.is-critical .summary-entity-state { color: var(--status-warning); }
 /* ⚠️ BASIS 0, NOT auto (owner, 2026-10-12: on a phone "Outdoor Terrace Light
    Terrace" pushed its switch onto a second line, alone at the left). The row
    wraps — only so the switch's "Unlock …?" can open on its own line — and a

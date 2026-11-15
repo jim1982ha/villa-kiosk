@@ -10,8 +10,6 @@
 // described in a different order, must be drawn the same way. That is exactly
 // what `mergeCollidingPiles` failed (fixed in 2.496.26) — so it is worth
 // knowing which of its siblings hold it and which do not.
-import { register } from "node:module";
-register("../consistency/alias-hook.mjs", import.meta.url);
 
 const { conflicts, buildCliques } = await import("@/babylon/badgePlacement");
 

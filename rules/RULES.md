@@ -37,7 +37,8 @@ Keep this file short: add a rule only when the owner states one, and remove rule
 - A repeated problem is one line with a count.
 - Every card has the same anatomy: the strip (icons, alert name, name, time), the state as its first line with the next
   check in its pill, one quiet line (room), the words, the who line, the buttons.
-- Status colours come from one table; red means "needs attention".
+- Status colours come from one table; amber means "needs attention", and pulsing means "act now" (owner, 2026-11-15:
+  the alarm purple merged into amber). The app's own errors are its red (--status-danger).
 - Works on iPhone and Android alike; controls that stop fitting wrap as a group.
 - Charts have a Y axis with grid lines; values from a known set are picked, not typed; long lists are pages of ten.
 

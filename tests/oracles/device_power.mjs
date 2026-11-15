@@ -3,9 +3,7 @@
 // linked LOCK read "Off" when unlocked and was sent `homeassistant.toggle`
 // (a lock has none); a paused TV's power button and its badge disagreed with
 // nobody saying they answer different questions.
-import { register } from "node:module";
 import { readFileSync } from "node:fs";
-register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 const { devicePower, deviceSwitch, switchAsk, POWER_DOMAINS } = await import("@/utils/devicePower");
 

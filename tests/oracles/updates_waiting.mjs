@@ -1,7 +1,5 @@
 // The Cockpit's updates count (config/updatesWaiting): an update counts only when someone can install it. Placeholder
 // entities; the feature bits as the villa's system reports them (1 install, 16 release notes).
-import { register } from "node:module";
-register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 const { updatesWaiting } = await import("@/config/updatesWaiting");
 

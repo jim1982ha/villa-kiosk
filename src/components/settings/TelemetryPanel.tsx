@@ -25,7 +25,7 @@ import type { TelemetryKind } from "@/utils/telemetry";
 import { backendFetch } from "@/auth/sessionLost";
 import { refusalOf } from "@/utils/storeSave";
 import { useOutsideClose } from "@/hooks/useOutsideClose";
-import { STATUS_COLOR } from "@/utils/stateColors";
+import { ERROR_COLOR, STATUS_COLOR } from "@/utils/stateColors";
 
 interface TelemetryEvent {
   // ⚠️ `string`, not TelemetryKind, and deliberately (2.427.0): these events are
@@ -307,11 +307,11 @@ export function telemetryTime(at: string | undefined): string {
   return at ? momentText(at, true) : "";
 }
 
-// an event's meaning, in the status table's colours (utils/stateColors STATUS_COLOR): a failure an alarm, a recovery a look
+// an event's meaning: a failure of the app in the app's red for its own errors (ERROR_COLOR), a recovery amber
 const TONE: Record<string, string> = {
-  error: STATUS_COLOR.alert,
-  freeze: STATUS_COLOR.alert,
-  "context-lost": STATUS_COLOR.alert,
+  error: ERROR_COLOR,
+  freeze: ERROR_COLOR,
+  "context-lost": ERROR_COLOR,
   "context-restored": STATUS_COLOR.warn,
   recovered: STATUS_COLOR.warn,
   csp: STATUS_COLOR.warn,

@@ -13,8 +13,6 @@
 // fault from the report silently, and "a fault wrongly shown as open is a
 // question someone asks; a fault wrongly shown as resolved is one nobody ever
 // asks again."
-import { register } from "node:module";
-register("../consistency/alias-hook.mjs", import.meta.url);
 const { ticketStats, isTicketOpen, isTicketResolved, stageOf } = await import("@/fm/fmEngine");
 // what is OPEN is counted per device card (deviceWork.openCounts — the Tickets tab's unit, the recap's since
 // 2.496.427); ticketStats keeps only the per-record figures (resolved, the mean). One record per device here.

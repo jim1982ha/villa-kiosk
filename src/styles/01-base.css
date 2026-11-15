@@ -231,20 +231,19 @@
   --text-dim: #9AA09B;
   --text-on-accent: #FFFDF9;
 
-  /* ⚠️ THE SEVEN MEANINGS (owner, 2026-11-13: one colour code for every status, utils/stateColors STATUS_COLOR): usual
-     green (the hue of --status-on), active red, moving teal (--status-pending), needs a look amber, alarm purple
-     (--status-alarm), lost contact a light grey, nothing to show the empty track (--bg-input). ⚠️ SWAPPED (owner,
-     2026-11-15): usual was purple, active green and alarm red. --status-danger stays the app's red for what is not a
-     device's state (a delete, an error, the connection lost). Purple is never --cat-access-control's, a category
-     colour being a device's identity, never a state (owner, 2026-11-14: its purple read as the status purple). */
+  /* ⚠️ THE SIX MEANINGS (owner, 2026-11-13: one colour code for every status, utils/stateColors STATUS_COLOR): usual
+     green (the hue of --status-on), active red, moving blue (--status-pending), needs attention amber
+     (--status-warning), lost contact a light grey, nothing to show the empty track (--bg-input). ⚠️ SWAPPED (owner,
+     2026-11-15): active was green and the alarm red before. The same day the alarm merged into amber: an open fault,
+     an alarm and a critical device silent are all amber, and what is urgent pulses (08-shared.css `urgent-pulse`).
+     --status-danger stays the app's red for what is not a device's state (a delete, an error, the connection lost). */
   --status-on: #34845A;
   --status-usual: #34845A;
   --status-active: #B24232;
-  --status-alarm: #6E57B8;
   --status-off: #D8D3C7;
   /* "Moving between two rest states" — see utils/stateColors STATUS_COLOR.
      ⚠️ A CLEAR BLUE (owner, 2026-11-15: the teal "Unlocking" read too close to the green "Locked" once usual became
-     green): about 70° from both greens, 40° from the alarm purple; saturated, against --cat-energy's softer, greyer
+     green): about 70° from both greens; saturated, against --cat-energy's softer, greyer
      blue. It reads as neither settled nor failing, which is the point — a lock motoring is doing what it was told.
      Also a cover part of the way open (panelRules.PARTIALLY_OPEN). */
   --status-pending: #2B67C0;
@@ -314,7 +313,6 @@
   --status-on: #4FC07E;
   --status-usual: #4FC07E;
   --status-active: #E2685A;
-  --status-alarm: #A48BE0;
   --status-off: #333833;
   --status-pending: #6A9BEC;
   --status-warning: #E0A93A;
@@ -368,7 +366,6 @@
   --status-on: #3E8F62;
   --status-usual: #3E8F62;
   --status-active: #A4483C;
-  --status-alarm: #8C76C8;
   --status-off: #23261F;
   --status-pending: #4A72BC;
   --status-warning: #A87C2A;
@@ -701,12 +698,12 @@ button {
 }
 /* Lit state for toggle / open icon buttons (view mode, display toggles, menus). */
 .icon-btn.active { background: var(--accent); color: var(--text-on-accent); border-color: transparent; }
-/* Unavailable-devices button (HUD category row): quiet at zero, red the
-   instant something's offline — same colour language as the map badge ring
-   and the status pill's "Unavailable" state, so it reads as the same signal. */
-.icon-btn.has-alert { color: var(--status-alarm); border-color: var(--status-alarm); }
-/* a warning (a late task, an ordinary device offline, a fault): amber, its count too — red is an alarm or a critical
-   device offline only (attention.healthClass) */
+/* Unavailable-devices button (HUD category row): quiet at zero, amber and PULSING the instant something needs acting
+   on now (an alarm, a critical device offline: attention.healthClass) — the map badge's urgent mark, the same signal
+   (08-shared.css urgent-pulse). */
+.icon-btn.has-alert { color: var(--status-warning); border-color: var(--status-warning); }
+/* a warning (a late task, an ordinary device offline, a fault): amber, its count too, still: only an alarm or a
+   critical device offline pulses (attention.healthClass) */
 .icon-btn.has-warn { color: var(--status-warning); border-color: var(--status-warning); }
 .icon-btn.has-warn .icon-btn-count { background: var(--status-warning); }
 .icon-btn { position: relative; }
@@ -719,7 +716,7 @@ button {
 .icon-btn-count {
   position: absolute; top: 1px; right: 1px; min-width: 16px; height: 16px;
   padding: 0 3px; border-radius: var(--radius-pill);
-  background: var(--status-alarm); color: #fff;
+  background: var(--status-warning); color: #fff;
   font-size: var(--text-2xs); font-weight: 700; line-height: 16px; text-align: center;
   box-shadow: 0 0 0 1.5px var(--bg-overlay);
 }

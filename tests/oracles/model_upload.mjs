@@ -1,8 +1,6 @@
 // tests/oracles/model_upload.mjs
 // A model the 3D view would refuse whole is never uploaded (owner, 2026-11-12: a texture written without its image,
 // "/textures/364/source: Failed to find index", and every tablet then failed to load the villa). Invented models.
-import { register } from "node:module";
-register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 const { planModelUpload } = await import("@/utils/modelUpload");
 

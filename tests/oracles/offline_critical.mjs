@@ -6,8 +6,6 @@
 // #2: every offline device was red. ONE list of critical devices — the villa's "critical devices offline" rule's,
 // read by the proxy (GET /critical-devices) — makes an offline device red; any other is amber, and the villa's
 // health is danger only for an alarm or a critical device offline.
-import { register } from "node:module";
-register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 const { isOffline, isUnavailable } = await import("@/utils/deviceHealth");
 const { villaDevices, deviceFolding } = await import("@/config/deviceGroups");
@@ -95,36 +93,36 @@ console.log("  a critical device that lost contact is red everywhere, not only o
   const map = mapLookSource(new Map(Object.entries(entities)), new Map(), () => config);
   const door = deviceLook("lock.door", store), th = deviceLook("sensor.th_humidity", store);
   // owner, 2026-10-22 (badge proposal 2): the problem is the corner mark — red "?" critical, grey "?" any other
-  ck("the badge: a faded face and a RED \"?\" for the critical lost device",
+  ck("the badge: a faded face and an amber \"?\" (urgent) for the critical lost device",
      door.critical && door.face === "unavailable" && door.mark === "critical", door);
   ck("  ...an ordinary lost device: the grey \"?\"", !th.critical && th.mark === "lost", th);
   ck("  ...the map's source paints it the same", JSON.stringify(deviceLook("lock.door", map)) === JSON.stringify(door));
-  ck("  ...drawn as the danger red's \"?\" over the faded face (no new picture to fetch: the same baked squircle)",
+  ck("  ...drawn as the alarm's amber \"?\" over the faded face (no new picture to fetch: the same baked squircle)",
      markSurface(door.mark).fill === markSurface("alarm").fill && markSurface(door.mark).symbol === "?"
      && categorySurface("access_control", door.face).faded === true);
-  ck("the room chip: its number red for a critical lost device, grey for an ordinary one",
+  ck("the room chip: its number amber for a critical lost device, grey for an ordinary one",
      roomLook([door]).health === "alert" && roomLook([th]).health === "unavailable" && roomLook([door, th]).health === "alert");
   // the list rows read deviceLook over this same store (SummaryGroupPanel, pinned in device_look_source.mjs)
   const win = (id) => panelHeader({ panel: { entityId: id, mapping: entityMap[id] }, entities, config, canControl: false, linkedSwitch: null });
   // the window's lost notice paints its device's rule applied to lost contact (UnavailableNotice)
   const lostTone = (id) => STATUS_PILL_CLASS[win(id).badge.statusRule("unavailable")];
-  ck("the window: its lost notice is the danger red for the critical device, grey for the other",
+  ck("the window: its lost notice is the urgent amber pill for the critical device, grey for the other",
      lostTone("lock.door") === "danger" && lostTone("sensor.th_humidity") === "unavailable");
   // ⚠️ ONE RULE (architecture review item 6, 2026-11-13): a critical device's lost part kept the grey in the window
   // where its lock was red; every pill now takes the window's one fact, the critical list
   const lostReading = (rule) => readingOf("sensor.door_battery", e("sensor.door_battery", "unavailable"), "sensor", rule).pill;
   const lostBinary = (rule) => readingOf("binary_sensor.door_contact", e("binary_sensor.door_contact", "unavailable"), "binary_sensor", rule).pill;
-  ck("  ...and a reading of it that lost contact, a number or an on/off one, red on the list and grey off it",
+  ck("  ...and a reading of it that lost contact, a number or an on/off one, urgent amber on the list and grey off it",
      lostReading(RED) === "danger" && lostBinary(RED) === "danger" && lostReading(PLAIN) === "unavailable" && lostBinary(PLAIN) === "unavailable");
   ck("  ...only lost contact and \"needs a look\": a critical device's other tones are its own",
      controlPill("switch.pump", e("switch.pump", "on"), "on", RED).tone === "active"
      && readingOf("sensor.door_battery", e("sensor.door_battery", "80"), "sensor", RED).pill === null);
   const back = deviceLook("lock.door", storeLookSource({ ...entities, "lock.door": e("lock.door", "locked") }, config));
-  ck("a critical device that answers is not red (critical needs lost contact)", !back.critical && back.mark !== "critical", back);
+  ck("a critical device that answers is not urgent (critical needs lost contact)", !back.critical && back.mark !== "critical", back);
   ck("  ...the window has that one fact, no second one for \"critical and lost\"",
      !("critical" in win("lock.door").badge));
   // owner, 2026-11-13: "a critical door unlocked" is red, an ordinary one amber; lost, red too (stateColors.criticalStatus)
-  ck("a critical lock's window: unlocked red as every unlocked door, lost the alarm; locked usual for both (owner, 2026-11-15)",
+  ck("a critical lock's window: unlocked red (active) as every unlocked door, lost the urgent amber; locked usual for both (owner, 2026-11-15)",
      lockPill("lock.door", "unlocked", win("lock.door").badge.statusRule).tone === "active"
      && lockPill("sensor.th_humidity", "unlocked", win("sensor.th_humidity").badge.statusRule).tone !== "danger"
      && lockPill("lock.door", "unlocked", PLAIN).tone === "active"
@@ -154,9 +152,9 @@ console.log("  a critical door UNLOCKED is red on every surface, an ordinary one
   const devices = villaDevices({ ...input, facts });
   const src = storeLookSource(ents, { entityMap: map, ...lookMarks(marksOf(facts, new Set())) });
   const front = deviceLook(FRONT, src), back = deviceLook(BACK, src);
-  ck("its badge: the red \"!\" of an alarm; the ordinary door's the plain dot of a door in use",
+  ck("its badge: the amber \"!\" of an alarm (urgent); the ordinary door's the plain dot of a door in use",
      front.mark === "alarm" && back.mark === "active", { front: front.mark, back: back.mark });
-  ck("  ...its room's number red; the ordinary door's room quiet",
+  ck("  ...its room's number amber; the ordinary door's room quiet",
      roomLook([front]).health === "alert" && roomLook([back]).health === "ok", [roomLook([front]).health, roomLook([back]).health]);
   // owner, 2026-11-15: a critical door left unlocked is RED as any unlocked door (its pill, its bar, its 3D object, its
   // "Unlock door…") — and its alarm is raised exactly as before (its "!", its room, the Cockpit, the health, the Recap)
@@ -164,7 +162,7 @@ console.log("  a critical door UNLOCKED is red on every surface, an ordinary one
      meshLookFor(FRONT, src).tone === "active" && meshLookFor(BACK, src).tone === "active"
      && lockPill(FRONT, "unlocked", front.statusRule).tone === "active" && lockPill(BACK, "unlocked", back.statusRule).tone === "active");
   ck("  ...and its ALARM still raised: its own status the alarm, the ordinary door's not",
-     front.alert === true && front.status === "alert" && back.alert === false, { front: [front.alert, front.status], back: [back.alert, back.status] });
+     front.alert === true && front.status === "warn" && back.alert === false, { front: [front.alert, front.status], back: [back.alert, back.status] });
   const view = attentionFor({ devices, attentionItems: attentionOf({ devices, entities: ents, entityMap: map, resolvedRooms: {},
     fmData: EMPTY_FM_DATA }).attentionItems }, () => true);
   const cards = view.attentionGroups.map((g) => `${g.title}: ${g.items.map((i) => `${i.kind} ${i.detail}`).join()}`);
@@ -200,7 +198,7 @@ console.log("  a critical camera whose motion detection (its linked entity) lost
       health: att.health.level };
   };
   const crit = view(new Set([CAMERA])), plain = view(new Set());
-  ck("its badge's pill the RED \"?\", its room's number and its card red, the villa's health danger",
+  ck("its badge's pill the amber \"?\", its room's number and its card urgent, the villa's health danger",
      crit.look.linkPill === "critical" && crit.room === "alert" && crit.card === "danger" && crit.health === "danger", crit);
   ck("  ...an ordinary camera's: the grey \"?\", its room grey, its card grey, a warning",
      plain.look.linkPill === "lost" && plain.room === "unavailable" && plain.card === "lost" && plain.health === "warn", plain);
@@ -217,12 +215,12 @@ console.log("  a hidden device is quiet in 3D too (architecture review item 6, 2
   const map = { [LEAK]: { entityId: LEAK, type: "binary_sensor" }, [LOCK]: { entityId: LOCK, type: "lock" }, [PLUG]: { entityId: PLUG, type: "switch" } };
   const cfg = (hidden) => ({ entityMap: map, isCritical: () => true, isHidden: () => hidden, hasFault: () => false, partsOf: () => [] });
   const shown = storeLookSource(ents, cfg(false)), hid = storeLookSource(ents, cfg(true));
-  ck("shown: the leak pulses in the alarm's colour, the critical lock unlocked is an unlocked door's red, the plug glows",
-     meshLookFor(LEAK, shown).on && meshLookFor(LEAK, shown).tone === "alert" && meshLookFor(LOCK, shown).tone === "active"
+  ck("shown: the leak pulses in the alarm's amber, the critical lock unlocked is an unlocked door's red, the plug glows",
+     meshLookFor(LEAK, shown).on && meshLookFor(LEAK, shown).tone === "warn" && meshLookFor(LOCK, shown).tone === "active"
      && meshLookFor(PLUG, shown).on);
-  ck("hidden: no pulse, no glow, the lock its rest tint; its look never red or amber",
+  ck("hidden: no pulse, no glow, the lock its rest tint; its look never amber",
      !meshLookFor(LEAK, hid).on && meshLookFor(LOCK, hid).tone === "usual" && !meshLookFor(PLUG, hid).on
-     && [LEAK, LOCK, PLUG].every((id) => !["alert", "warn"].includes(deviceLook(id, hid).status) && deviceLook(id, hid).mark === null),
+     && [LEAK, LOCK, PLUG].every((id) => deviceLook(id, hid).status !== "warn" && deviceLook(id, hid).mark === null),
      [LEAK, LOCK, PLUG].map((id) => [meshLookFor(id, hid), deviceLook(id, hid).status]));
 }
 
@@ -230,4 +228,4 @@ console.log("  the proxy's answer:");
 ck("its entity ids are read", JSON.stringify(parseCriticalDevices({ entities: ["lock.door", 3], rules: [], at: "x" })) === '["lock.door"]');
 ck("  ...an answer that is not one is null, never an empty list taken as 'none critical'",
    parseCriticalDevices({ error: "x" }) === null && parseCriticalDevices(null) === null);
-done("✅ offline means lost contact; red is the rule's list of critical devices");
+done("✅ offline means lost contact; urgent amber is the rule's list of critical devices");

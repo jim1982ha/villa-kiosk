@@ -9,9 +9,7 @@
 //
 // Driven by value: the real sync machine against a fake store, then the real FmDataProvider under React
 // (tests/consistency/fakedom.mjs) against a fake add-on that is down, then back.
-import { register } from "node:module";
 import { readFileSync } from "node:fs";
-register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 import { mountRoot } from "../consistency/fakedom.mjs";
 const { SyncedDocument } = await import("@/utils/syncedDocument");

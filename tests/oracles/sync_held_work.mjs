@@ -13,8 +13,6 @@
 // Driven by value: the real providers under React (tests/consistency/fakedom.mjs) against a fake add-on that acts as
 // the proxy does for a guest (an empty reader view; only new open guest reports written), reloaded by mounting again
 // over the same browser storage; the real unsentWorkHeld the 04:00 reload asks.
-import { register } from "node:module";
-register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 import { mountRoot } from "../consistency/fakedom.mjs";
 const { EMPTY_FM_DATA } = await import("@/fm/fmTypes");

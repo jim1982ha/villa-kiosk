@@ -61,7 +61,7 @@ export function conditionOf(type: EntityType, entity: Pick<HassEntity, "entity_i
     case "binary_sensor":
       return binaryCondition(entity.entity_id, entity.attributes?.device_class as string | undefined, entity.state);
     case "sensor":
-      return statusKeyFor(entity.state, "sensor") === "alert" ? "wrong" : "rest";
+      return statusKeyFor(entity.state, "sensor") === "warn" ? "wrong" : "rest";
     default:
       return "rest";
   }
@@ -75,8 +75,9 @@ export function glowsRoom(entityId: string, deviceClass: string | undefined): bo
   return on === "inUse" || on === "wrong";
 }
 
-/** Whether its room's glow is an alarm (a leak, smoke: its "on" is WRONG), red, rather than a room in use (someone
- *  there, a door open), green — the status table's alert and active (owner, 2026-11-13: one colour code). */
+/** Whether its room's glow is an alarm (a leak, smoke: its "on" is WRONG), amber, rather than a room in use (someone
+ *  there, a door open), red — the status table's warn and active (owner, 2026-11-13: one colour code; 2026-11-15: the
+ *  alarm is amber). */
 export function glowIsAlarm(entityId: string, deviceClass: string | undefined): boolean {
   return binaryCondition(entityId, deviceClass, "on") === "wrong";
 }

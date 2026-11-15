@@ -2,8 +2,6 @@
 // VESTA Agent, edited on this tablet only. Drives the list's words through the pure module, and reads the setting's
 // markup: one picker of the villa's notify entities per role, saved to that role's list.
 import { readFileSync } from "node:fs";
-import { register } from "node:module";
-register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 
 const { ROLE_LISTS, LIST_MAX_CHARS, LISTS_WHERE, LISTS_TITLE, targetsOf, textOf, withChanges, heldChanges } =

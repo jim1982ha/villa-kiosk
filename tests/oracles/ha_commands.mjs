@@ -10,8 +10,6 @@
 // fails on one the table does not list.
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { register } from "node:module";
-register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done, tsFiles } from "../consistency/check.mjs";
 
 const table = JSON.parse(readFileSync(new URL("../../rootfs/usr/share/vesta/ha-commands.json", import.meta.url), "utf8"));

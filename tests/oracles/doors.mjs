@@ -6,9 +6,7 @@
 // Dashboard re-asked each capability beside each window it mounts. This drives
 // doorsFor by value over every profile in the ONE role table (roles.json) and
 // both agent states, then checks every surface reads the answer.
-import { register } from "node:module";
 import { readFileSync } from "node:fs";
-register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 const { doorsFor } = await import("@/auth/doors");
 const { ROLE_ORDER } = await import("@/auth/roles");

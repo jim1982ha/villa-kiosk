@@ -39,7 +39,7 @@ import { coverState, coverStateLabel } from "@/utils/panelRules";
 /** The colour a measurement's number (and its chart) takes at each level. */
 const LEVEL_COLOR: Record<AlertLevel, string> = {
   normal: STATUS_COLOR.usual,
-  danger: STATUS_COLOR.alert,
+  danger: STATUS_COLOR.warn,
 };
 
 export interface Reading {
@@ -108,7 +108,7 @@ export function readingOf(
     const alarm = !unavailable && level === "danger";
     const words = look.word(state);
     // no value is the empty track's tone (stateColors noValue): nothing to say, nothing wrong
-    const status = rule(lost ? "unavailable" : noValue ? "noValue" : alarm ? "alert" : look.status(state));
+    const status = rule(lost ? "unavailable" : noValue ? "noValue" : alarm ? "warn" : look.status(state));
     return {
       kind, unavailable, contact, level, status,
       // ⚠️ SAID ONCE, SHOUTED BY ITS PILL (owner, 2026-11-13: one style in every window): an alarm's and a lost

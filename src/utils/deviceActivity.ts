@@ -89,8 +89,8 @@ export interface DeviceReading {
   /** Its status as the ALERTS read it: `colour`, except a critical door left unlocked, the alarm (owner, 2026-11-15:
    *  red like any unlocked door, its alarm unchanged). Its badge's "!", its room's number and the Cockpit's alarms. */
   status: StatusKey;
-  /** The status of its lost parts, its rule applied: "alert" for a critical device's (its red "?"), "unavailable"
-   *  else (the grey "?"); null when no part is lost. */
+  /** The status of its lost parts, its rule applied: "warn" for a critical device's (its amber "?", pulsing),
+   *  "unavailable" else (the grey "?"); null when no part is lost. */
   partStatus: StatusKey | null;
 }
 
@@ -103,9 +103,9 @@ export type BadgeKind = DeviceActivity | "unavailable";
  * order (owner, 2026-10-22: badge proposal 2, "Corner dot": the square says what the device does, the dot says what is
  * wrong):
  *
- *   critical  a critical device has lost contact, with it or with a part of it   red "?"
+ *   critical  a critical device has lost contact, with it or with a part of it   amber "?", pulsing
  *   alarm     its status is the alarm (DeviceReading.status: a leak, a low battery, a jammed lock, a critical door
- *             unlocked)   red "!"
+ *             unlocked)   amber "!", pulsing
  *   fault     an open Cockpit fault                 amber "!"
  *   lost      contact lost, with it or with a part of it (DeviceReading.partLost)   grey "?"
  *   asleep    asleep by design, its last report shown   grey "z"
@@ -116,11 +116,21 @@ export type BadgeKind = DeviceActivity | "unavailable";
  * ⚠️ IN USE IS NOT AN ERROR (owner, 2026-10-26: "reserve the ! for devices that are really in error"): a motion sensor
  * that saw someone, a lock unlocked, wore the red "!" of a leak. They take the plain dot the linked entity's "on" pill
  * is (linkPillOf), last in the order, and no dot when at rest.
- * No mark: all fine. The colours are one vocabulary with every other surface: red act now, amber check soon, grey no
- * contact, teal moving (EntityCategories.markSurface paints them).
+ * No mark: all fine. The colours are one vocabulary with every other surface: amber needs attention, grey no contact,
+ * blue moving (EntityCategories.markSurface paints them); what needs acting on now PULSES (URGENT_MARKS, owner
+ * 2026-11-15: the alarm's own colour merged into amber, urgency is a pulse, never a colour).
  */
 export type BadgeMark = "critical" | "alarm" | "fault" | "lost" | "asleep" | "moving" | "active";
 export const MARK_ORDER: readonly BadgeMark[] = ["critical", "alarm", "fault", "lost", "asleep", "moving", "active"];
+
+/** The marks that say "act now": an alarm, a critical device silent. Their badge pulses on the map, their room's
+ *  number, their line in the lists and their pill pulse too; an open fault ("!", check soon) is amber and still. */
+export const URGENT_MARKS: ReadonlySet<BadgeMark | LinkPill> = new Set<BadgeMark | LinkPill>(["alarm", "critical"]);
+
+/** Whether a badge with these corners says "act now" (URGENT_MARKS on either corner): it pulses. */
+export function isUrgent(look: { mark: BadgeMark | null; linkPill: LinkPill }): boolean {
+  return URGENT_MARKS.has(look.mark) || URGENT_MARKS.has(look.linkPill);
+}
 
 /** The facts a mark is chosen from — each one independent, the ORDER decides (badgeMarkFor). */
 type MarkFacts = Record<BadgeMark, boolean>;
@@ -199,8 +209,8 @@ export function badgeMarkOf(r: DeviceReading): BadgeMark | null {
     // ⚠️ THE STATUS, READ ONCE (architecture review item 5, 2026-11-14): the mark asked "critical" of lost contact only
     // and "alarm" of the condition, so a critical door unlocked, red in its window and in 3D, wore the plain "in use"
     // dot, and a critical camera's lost motion part the grey "?". Both are the device's one status now.
-    critical: (lost && r.status === "alert") || r.partStatus === "alert",
-    alarm: !lost && r.status === "alert",
+    critical: (lost && r.status === "warn") || r.partStatus === "warn",
+    alarm: !lost && r.status === "warn",
     fault: r.fault,
     // ⚠️ A DEAD PART IS SAID TOO (architecture review item 4, 2026-11-13): a camera streaming with its person detection
     // unavailable for days wore no mark; its face still says what it does, its corner the grey "?"
@@ -349,7 +359,7 @@ export function meshLookFor(entityId: string, source: LookSource): MeshLook {
     case "lock":
       return { kind: "tint", tone: quiet ? "usual" : status };
     case "binary_sensor":
-      return { kind: "pulse", on: !quiet && kind !== "unavailable" && (status === "alert" || status === "active"),
+      return { kind: "pulse", on: !quiet && kind !== "unavailable" && (status === "warn" || status === "active"),
         unavailable: !quiet && kind === "unavailable", tone: status };
     case "switch":
     case "media_player":
@@ -578,7 +588,7 @@ function ownReadingOf(entityId: string, source: LookSource, linkedId?: string, o
   // Unlocked is in use (active, red) on every lock — its pill, its history bar, its button, its 3D tint (`colour`);
   // on the critical list it is still the alarm (owner, 2026-11-13) for what raises one — the Cockpit's card, the
   // villa's health, the Recap's "Doors locked", the badge's "!" (`status`).
-  const status: StatusKey = critical && !hidden && source.typeOf(entityId) === "lock" && colour === "active" ? "alert" : colour;
+  const status: StatusKey = critical && !hidden && source.typeOf(entityId) === "lock" && colour === "active" ? "warn" : colour;
   const partLost = condition !== "lost"
     && lostParts(entityId, source.config.partsOf, (id) => source.state(id)).some((p) => p !== linkedId);
   return {
@@ -609,9 +619,9 @@ export function deviceLook(entityId: string, source: LookSource): DeviceLook {
   return {
     type: r.type, face: badgeFace(r), mark: badgeMarkOf(r), linkPill: linkPillOf(r), kind, own,
     active: kind === "on",
-    alert: own !== "unavailable" && r.status === "alert",
+    alert: own !== "unavailable" && r.status === "warn",
     unavailable: own === "unavailable",
-    critical: own === "unavailable" && r.status === "alert",
+    critical: own === "unavailable" && r.status === "warn",
     status: r.status,
     statusRule: r.rule,
     fault: r.fault && !r.hidden,
@@ -719,9 +729,6 @@ interface GroupLook {
  *   DRAWING A COUNT      nothing inside says anything, so: red if ANY member's
  *     kind alerts; else the neutral "on" ring if any member is active.
  */
-/** The corner pills that say "needs attention" (STATUS_COLOR.alert): an alarm (a critical door unlocked included), a
- *  critical device silent or with a part silent — the device's ONE status, as its mark says it (badgeMarkOf). */
-const RED_PILLS: ReadonlySet<BadgeMark | LinkPill> = new Set<BadgeMark | LinkPill>(["alarm", "critical"]);
 
 export function groupLook(
   members: readonly (DeviceLook | null | undefined)[],
@@ -738,7 +745,7 @@ export function groupLook(
     // ⚠️ RED, READ ONCE (architecture review, 2026-10-26): a member needing attention was read three ways here (its
     // kind, its critical flag, its pills). It is a red pill on either corner: an alarm (its status the alarm), or a
     // critical device that lost contact (owner, 2026-10-19), its own, a part's or its linked entity's. In use is never red.
-    const red = RED_PILLS.has(m.mark) || RED_PILLS.has(link);
+    const red = isUrgent(m);
     if (red) anyAlert = true;
     else everyRingAlert = false;
     if (m.kind === "on") anyActive = true;

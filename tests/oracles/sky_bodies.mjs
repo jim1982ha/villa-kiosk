@@ -22,8 +22,6 @@
 //     the villa so the house hides it.
 // 2.496.390 drew a fixed sky direction per hour: facing north the sun jumped
 // from the right of the villa to the left at noon. The path check fails it.
-import { register } from "node:module";
-register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 // The discs are painted procedurally; placement needs no pixels.
 globalThis.OffscreenCanvas ??= class {

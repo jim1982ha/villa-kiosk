@@ -6,8 +6,6 @@
 // so a second edit in the same moment erased the first. Each edit is now a
 // function of the config it applies to, and update() (ConfigContext) runs it
 // against the config React holds at that moment.
-import { register } from "node:module";
-register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";

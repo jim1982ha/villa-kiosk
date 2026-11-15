@@ -9,11 +9,10 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 const DEVICE = "America/Los_Angeles";
 if (process.env.TZ !== DEVICE) {
-  const r = spawnSync(process.execPath, ["--no-warnings", fileURLToPath(import.meta.url)], { stdio: "inherit", env: { ...process.env, TZ: DEVICE } });
+  const r = spawnSync(process.execPath, ["--no-warnings", "--import", new URL("../consistency/register.mjs", import.meta.url).href,
+    fileURLToPath(import.meta.url)], { stdio: "inherit", env: { ...process.env, TZ: DEVICE } });
   process.exit(r.status ?? 1);
 }
-import { register } from "node:module";
-register("../consistency/alias-hook.mjs", import.meta.url);
 import { readFileSync } from "node:fs";
 import ts from "typescript";
 import { ck, done, tsFiles } from "../consistency/check.mjs";

@@ -125,7 +125,7 @@ export default function BasePanel({ title, entityId, icon, className, headerActi
   // or a profile that can't see the badge) the CSS falls back to the accent.
   const deviceTint = badge && categorySurface(badge.category, "active", badge.color);
   // The family's colour for this device's value and trend (trendHue): its badge's hue — the category's, or the one
-  // picked for this badge. Others has no family colour of its own: its trend keeps the usual purple.
+  // picked for this badge. Others has no family colour of its own: its trend keeps the usual colour.
   const trendHue = badge && (badge.category !== "others" || badge.color) ? deviceTint!.ink : null;
 
   const headerIcon = badge

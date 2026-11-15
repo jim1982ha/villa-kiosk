@@ -9,9 +9,9 @@
 // WHAT it is (`tone`, its words, what a tap does); NoticeStack places them, one column under the top bar.
 //
 // The tone is a meaning of "Map colours & keys" (utils/stateColors STATUS_COLOR, the legend's own swatches), never a
-// colour of the notice's own: contact lost = unavailable, a sensor triggered = active, an alarm = alert. `error` — the
-// app's own failure (a save that did not happen, the model not refreshed) — is the app's red (--status-danger), never
-// the alarm purple: a failure of the app is no device's state (owner, 2026-11-15). `info` — news that is no device's
+// colour of the notice's own: contact lost = unavailable, a sensor triggered = active, a problem = the amber of "needs
+// attention" (`alert`). `error` — the app's own failure (a save that did not happen, the model not refreshed) — is the
+// app's red (--status-danger): a failure of the app is no device's state (owner, 2026-11-15). `info` — news that is no device's
 // state (a new version, a floor not modelled) — is the VESTA accent.
 // An alert's notice wears its card's strip colour (a StripTone: the strips' one table, 07-facility.css .strip-*).
 
@@ -27,7 +27,7 @@ export type NoticeTone = "active" | "unavailable" | "alert" | "error" | "info";
 const TONE: Record<NoticeTone, string> = {
   active: STATUS_COLOR.active,
   unavailable: STATUS_COLOR.unavailable,
-  alert: STATUS_COLOR.alert,
+  alert: STATUS_COLOR.warn,
   error: ERROR_COLOR,
   info: "var(--accent)",
 };

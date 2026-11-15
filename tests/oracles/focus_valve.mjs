@@ -5,9 +5,7 @@
 // CSS px rebuilt as renderHeight × hwScale, which the truncated render height
 // left up to a pixel short — one lattice rung "farther" near a boundary, and
 // the focus was dropped with the camera dead still (50 of 12,020 cases).
-import { register } from "node:module";
 import { readFileSync } from "node:fs";
-register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 const { rungAt, cssExtent } = await import("@/babylon/badgeScale");
 const { PHONE_MAX_CSS_WIDTH } = await import("@/babylon/badgeMetrics");

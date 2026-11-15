@@ -7,11 +7,8 @@
 //   the badge's corner mark, a linked entity's bottom-right pill, the 3D object (tint, pulse), the room's glow, the
 //   room's number (groupLook → roomHealth), a line in the Cockpit's "Needs attention", and the window's status.
 //
-// ⚠️ THE WINDOW SAYS THE STATUS, ONE COLOUR PER MEANING (owner, 2026-11-13): in use is the purple of "on" in its window
-// as on the map (it was red there from 2026-10-26, "keep red there"), an unlocked lock needs a look (amber), and red
-// is only what is wrong. The table's `window` column says the status key for every row, beside the condition.
-import { register } from "node:module";
-register("../consistency/alias-hook.mjs", import.meta.url);
+// ⚠️ THE WINDOW SAYS THE STATUS, ONE COLOUR PER MEANING (owner, 2026-11-13): in use is the colour of "on" in its window
+// as on the map, and amber is only what is wrong (the alarm's own colour merged into amber on 2026-11-15). The table's `window` column says the status key for every row, beside the condition.
 import { ck, done } from "../consistency/check.mjs";
 const { conditionOf, glowsRoom } = await import("@/config/deviceCondition");
 const { deviceLook, storeLookSource, meshLookFor, groupLook } = await import("@/utils/deviceActivity");
@@ -25,11 +22,11 @@ const { devicesOf } = await import("../consistency/devices.mjs");
 
 // [type, entity id, device_class, state, condition (map, Cockpit), its window's status (pill, history bar)]
 const TABLE = [
-  ["binary_sensor", "binary_sensor.leak", "moisture", "on", "wrong", "alert"],
+  ["binary_sensor", "binary_sensor.leak", "moisture", "on", "wrong", "warn"],
   ["binary_sensor", "binary_sensor.leak", "moisture", "off", "rest", "usual"],
-  ["binary_sensor", "binary_sensor.smoke", "smoke", "on", "wrong", "alert"],
-  ["binary_sensor", "binary_sensor.batt", "battery", "on", "wrong", "alert"],
-  ["binary_sensor", "binary_sensor.ap", "connectivity", "off", "wrong", "alert"],
+  ["binary_sensor", "binary_sensor.smoke", "smoke", "on", "wrong", "warn"],
+  ["binary_sensor", "binary_sensor.batt", "battery", "on", "wrong", "warn"],
+  ["binary_sensor", "binary_sensor.ap", "connectivity", "off", "wrong", "warn"],
   ["binary_sensor", "binary_sensor.ap", "connectivity", "on", "rest", "usual"],
   ["binary_sensor", "binary_sensor.hall", "motion", "on", "inUse", "active"],
   ["binary_sensor", "binary_sensor.hall", "motion", "off", "rest", "usual"],
@@ -42,18 +39,18 @@ const TABLE = [
   ["binary_sensor", "binary_sensor.bolt", "lock", "on", "inUse", "active"],
   // no class: its id names a detection ("…_pir") or nothing (a bare "on" is a problem, as ever)
   ["binary_sensor", "binary_sensor.garden_pir", undefined, "on", "inUse", "active"],
-  ["binary_sensor", "binary_sensor.thing", undefined, "on", "wrong", "alert"],
+  ["binary_sensor", "binary_sensor.thing", undefined, "on", "wrong", "warn"],
   ["binary_sensor", "binary_sensor.plug", "plug", "on", "rest", "active"],
   ["binary_sensor", "binary_sensor.leak", "moisture", "unavailable", "lost", "unavailable"],
   ["binary_sensor", "binary_sensor.leak", "moisture", "unknown", "noValue", "noValue"],
   ["lock", "lock.front", undefined, "locked", "rest", "usual"],
   ["lock", "lock.front", undefined, "unlocked", "inUse", "active"],
   ["lock", "lock.front", undefined, "open", "inUse", "active"],
-  ["lock", "lock.front", undefined, "jammed", "wrong", "alert"],
+  ["lock", "lock.front", undefined, "jammed", "wrong", "warn"],
   ["lock", "lock.front", undefined, "locking", "rest", "transitional"],
   ["lock", "lock.front", undefined, "unavailable", "lost", "unavailable"],
   ["lock", "lock.front", undefined, "unknown", "noValue", "noValue"],
-  ["sensor", "sensor.alarm_panel", undefined, "triggered", "wrong", "alert"],
+  ["sensor", "sensor.alarm_panel", undefined, "triggered", "wrong", "warn"],
   ["sensor", "sensor.temp", "temperature", "21", "rest", "usual"],
   ["light", "light.lamp", undefined, "on", "rest", "active"],
 ];
@@ -105,22 +102,22 @@ ck("every row reads the condition the table says (a leak, smoke, a low battery, 
 console.log("\n  the map and the Cockpit project it:");
 const pillOk = (s) => (MOVING.has(s.row) ? s.pill === "moving"
   : MAP[s.want].pill === null ? s.pill === "on" || s.pill === "off" : s.pill === MAP[s.want].pill);
-// owner, 2026-11-04: "always consistent with the device status": a sensor pulses exactly when its window is red, a
-// lock is tinted its window's status (amber unlocked, red jammed, teal on its way, grey lost)
+// owner, 2026-11-04: "always consistent with the device status": a sensor pulses exactly when its window is amber or
+// active, a lock is tinted its window's status (active unlocked, amber jammed, blue on its way, grey lost)
 // owner, 2026-11-13: "I used to see it blinking": a sensor on pulses in its window's colour, a detection too
-const meshOk = (s) => (s.mesh.kind === "pulse" ? s.mesh.on === (s.windowWant === "alert" || s.windowWant === "active")
+const meshOk = (s) => (s.mesh.kind === "pulse" ? s.mesh.on === (s.windowWant === "warn" || s.windowWant === "active")
     && (!s.mesh.on || s.mesh.tone === s.windowWant)
   : s.mesh.kind === "tint" ? s.mesh.tone === s.windowWant
   : true);
-ck("the badge's corner: the red \"!\" only when wrong, the plain dot in use, nothing at rest",
+ck("the badge's corner: the amber \"!\" (urgent) only when wrong, the plain dot in use, nothing at rest",
    miss((s) => s.mark === markWanted(s)).length === 0, miss((s) => s.mark === markWanted(s)));
 ck("  ...a linked entity's pill: the same mark, in use the filled \"on\" dot; at rest only its power",
    miss(pillOk).length === 0, miss(pillOk));
-ck("  ...the room's number: red only for what is wrong, never for a device in use",
+ck("  ...the room's number: amber only for what is wrong, never for a device in use",
    miss((s) => s.health === MAP[s.want].health).length === 0, miss((s) => s.health === MAP[s.want].health));
 ck("  ...a line in \"Needs attention\" exactly when it is wrong",
    miss((s) => s.cockpit === MAP[s.want].cockpit).length === 0, miss((s) => s.cockpit === MAP[s.want].cockpit));
-ck("  ...the 3D object: a sensor pulses in its window's colour exactly while it is on (red or active), a lock is tinted its window's status",
+ck("  ...the 3D object: a sensor pulses in its window's colour exactly while it is on (amber or active), a lock is tinted its window's status",
    miss(meshOk).length === 0 && seen.some((s) => s.mesh.kind === "tint") && seen.some((s) => s.mesh.kind === "pulse"),
    miss(meshOk));
 const glowWanted = seen.filter((s) => s.row.startsWith("binary_sensor") && s.row.endsWith(" on")
@@ -130,14 +127,14 @@ ck("  ...a sensor's \"on\" glows its room when in use or wrong (someone there, a
    seen.filter((s) => s.glows).map((s) => s.row));
 
 console.log("\n  the window says the status, one colour per meaning (owner, 2026-11-13):");
-ck("its pill and history bar read the status the table says: red only when wrong, in use active, a lock unlocked amber",
+ck("its pill and history bar read the status the table says: amber only when wrong, in use active, a lock unlocked active",
    miss((s) => s.window === s.windowWant && s.windowOf === s.windowWant).length === 0,
    miss((s) => s.window === s.windowWant && s.windowOf === s.windowWant));
 ck("  ...so in use is calm everywhere: active in the window, the plain dot on the map, no Cockpit line (a door, motion)",
    ["binary_sensor/door door on", "binary_sensor/motion hall on", "binary_sensor garden_pir on"]
      .every((r) => { const s = seen.find((x) => x.row === r); return s && s.window === "active" && s.mark === "active" && s.health === "ok" && !s.cockpit; }));
 
-// owner, 2026-11-13: 2.496.792's "shut" purple went; a curtain and a fan read as a light: usual at rest, active on
+// owner, 2026-11-13: 2.496.792's "shut" category colour went; a curtain and a fan read as a light: usual at rest, active on
 console.log("\n  a curtain and a fan: closed or off usual, open or on active, moving teal, lost its grey:");
 ck("curtain: open active, opening/closing moving, closed usual; fan: on active, off usual; unavailable lost for both",
    statusKeyFor("open", "cover") === "active" && statusKeyFor("opening", "cover") === "transitional"

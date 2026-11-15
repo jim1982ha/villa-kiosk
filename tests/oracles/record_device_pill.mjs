@@ -4,8 +4,6 @@
 // Inbox card of the same record named and opened its device. Driven by value: the record goes through the Inbox's own
 // pipeline (attentionOf → groupAttention: its card's title and what its name opens) and through the Tickets
 // tab's pill (attention.recordDevicePill), and the two must agree. TicketsTab.tsx draws that pill and nothing else.
-import { register } from "node:module";
-register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 import { elements, parseTsx, propText } from "../consistency/jsx.mjs";
 const { attentionOf, groupAttention, recordDevicePill } = await import("@/config/attention");

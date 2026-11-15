@@ -1,13 +1,12 @@
 // ONE COLOUR PER MEANING, ON EVERY SURFACE (owner, 2026-11-13: "one colour code for every status"). The table is
-// utils/stateColors STATUS_COLOR: usual green ("the device is alive, and reporting the usual state"), active purple,
-// moving teal, needs a look amber, alarm red, lost contact a light grey, nothing to show the empty track. This drives
-// the states of every kind of device through it by value, holds the 3D object's colours, the pills and the theme
-// tokens to the same seven meanings, and a device type nobody has seen yet to a sensible answer.
+// utils/stateColors STATUS_COLOR: usual green ("the device is alive, and reporting the usual state"), active red,
+// moving blue, needs attention amber (an alarm included since 2026-11-15: urgency is a pulse, never a colour), lost
+// contact a light grey, nothing to show the empty track. This drives the states of every kind of device through it by
+// value, holds the 3D object's colours, the pills and the theme tokens to the same six meanings, and a device type
+// nobody has seen yet to a sensible answer.
 //
 // ⚠️ IT GUARDS THE DEVICES TO COME: a new domain or a new state word lands on a meaning here (or falls back to "usual"),
 // and a new surface reads STATUS_COLOR — the scan at the end refuses a status colour written anywhere else.
-import { register } from "node:module";
-register("../consistency/alias-hook.mjs", import.meta.url);
 import { readFileSync } from "node:fs";
 import { ck, done, tsFiles } from "../consistency/check.mjs";
 const { h, draw } = await import("../consistency/screen.mjs");
@@ -20,10 +19,10 @@ const { windowStatusOf } = await import("@/config/deviceCondition");
 const { presenceOf, presenceStateWords, stageStatus, stageColor } = await import("@/config/presence");
 const { default: PowerToggle } = await import("@/components/panels/PowerToggle");
 
-const KEYS = ["usual", "active", "transitional", "warn", "alert", "unavailable", "noValue"];
+const KEYS = ["usual", "active", "transitional", "warn", "unavailable", "noValue"];
 const src = (f) => readFileSync(new URL(`../../src/${f}`, import.meta.url), "utf8");
 
-console.log("  every kind of device, its usual state green and its on/open state purple:");
+console.log("  every kind of device, its usual state green and its on/open state red:");
 // [domain or entity id, state, meaning]
 const TABLE = [
   ["light", "off", "usual"], ["light", "on", "active"],
@@ -34,15 +33,15 @@ const TABLE = [
   ["valve", "closed", "usual"], ["valve", "open", "active"],
   ["cover", "partially_open", "transitional"],
   ["lock", "locked", "usual"], ["lock", "unlocked", "active"], ["lock", "open", "active"], ["lock", "locking", "transitional"],
-  ["lock", "unlocking", "transitional"], ["lock", "jammed", "alert"],
+  ["lock", "unlocking", "transitional"], ["lock", "jammed", "warn"],
   ["alarm_control_panel", "disarmed", "usual"], ["alarm_control_panel", "armed_away", "active"],
-  ["alarm_control_panel", "arming", "transitional"], ["alarm_control_panel", "triggered", "alert"],
+  ["alarm_control_panel", "arming", "transitional"], ["alarm_control_panel", "triggered", "warn"],
   ["media_player", "off", "usual"], ["media_player", "idle", "usual"], ["media_player", "paused", "usual"],
   ["media_player", "playing", "active"], ["media_player", "buffering", "transitional"],
   ["vacuum", "docked", "usual"], ["vacuum", "cleaning", "active"], ["vacuum", "returning", "transitional"],
   ["climate", "off", "usual"], ["climate", "cool", "active"],
   ["person", "not_home", "usual"], ["person", "home", "active"],
-  ["sensor", "fault", "alert"], ["sensor", "21.5", "usual"],
+  ["sensor", "fault", "warn"], ["sensor", "21.5", "usual"],
 ];
 const bad = TABLE.filter(([d, s, want]) => statusKeyFor(s, d) !== want).map(([d, s, want]) => ({ d, s, want, got: statusKeyFor(s, d) }));
 ck("each domain's states read the meaning the rule gives them", bad.length === 0, bad);
@@ -61,24 +60,24 @@ ck("  ...the same by a full entity id as by its domain (a lock's \"open\", its l
    statusKeyFor("open", "lock.<room>_door") === "active" && statusKeyFor("open", "cover.<room>_blind") === "active"
    && statusKeyFor("locked", "lock.<room>_door") === "usual");
 
-// [device class, state, meaning]: a problem class's problem state red and its other state green; a class in use
-// (motion, occupancy, a door) on purple and off green, never red
+// [device class, state, meaning]: a problem class's problem state amber and its other state green; a class in use
+// (motion, occupancy, a door) on red and off green, never amber
 const BINARY = [
   ["motion", "on", "active"], ["motion", "off", "usual"],
   ["occupancy", "on", "active"], ["occupancy", "off", "usual"],
   ["door", "on", "active"], ["door", "off", "usual"],
-  ["moisture", "on", "alert"], ["moisture", "off", "usual"],
-  ["smoke", "on", "alert"], ["gas", "on", "alert"], ["tamper", "on", "alert"],
-  ["connectivity", "off", "alert"], ["connectivity", "on", "usual"],
+  ["moisture", "on", "warn"], ["moisture", "off", "usual"],
+  ["smoke", "on", "warn"], ["gas", "on", "warn"], ["tamper", "on", "warn"],
+  ["connectivity", "off", "warn"], ["connectivity", "on", "usual"],
   ["plug", "on", "active"], ["plug", "off", "usual"],
 ];
 const binBad = BINARY.map(([dc, s, want]) => ({ dc, s, want,
   got: windowStatusOf({ entity_id: "binary_sensor.<room>_sensor", state: s, attributes: { device_class: dc } }) }))
   .filter((r) => r.got !== r.want);
-ck("a binary sensor: a problem marked by its class is red, its other state green; in use purple, at rest green",
+ck("a binary sensor: a problem marked by its class is amber, its other state green; in use red, at rest green",
    binBad.length === 0, binBad);
-ck("  ...the problem state is the alert whichever state it is (\"off\" for a lost link)",
-   binaryStatus("off", "off") === "alert" && binaryStatus("on", "off") === "usual" && binaryStatus("on", "on") === "alert");
+ck("  ...the problem state needs attention whichever state it is (\"off\" for a lost link)",
+   binaryStatus("off", "off") === "warn" && binaryStatus("on", "off") === "usual" && binaryStatus("on", "on") === "warn");
 
 console.log("\n  no contact, no value, and a device nobody has seen yet:");
 const anyDomain = ["light", "lock", "cover", "binary_sensor", "sensor", "lawn_mower", "water_heater", undefined];
@@ -90,29 +89,29 @@ try {
   unseen = [statusKeyFor("mowing", "lawn_mower"), statusKeyFor("returning", "lawn_mower"), statusKeyFor("error", "lawn_mower"),
     statusKeyFor("unknown", "water_heater"), statusKeyFor("some_vendor_word", "a_domain_nobody_has")];
 } catch (e) { threw = String(e); }
-ck("a domain never seen falls back to a meaning, never throws: mowing active, returning moving, error red, unknown "
-   + "no value, any other word usual", !threw && unseen.join() === "active,transitional,alert,noValue,usual", threw ?? unseen);
+ck("a domain never seen falls back to a meaning, never throws: mowing active, returning moving, error amber, unknown "
+   + "no value, any other word usual", !threw && unseen.join() === "active,transitional,warn,noValue,usual", threw ?? unseen);
 ck("  ...and a history bar paints it in a colour of the table", Object.values(STATUS_COLOR).includes(historyStateColor("lawn_mower.x")("docked")));
 
-console.log("\n  the table: seven meanings, seven colours, none a category's:");
-ck("STATUS_COLOR has exactly the seven meanings", JSON.stringify(Object.keys(STATUS_COLOR).sort()) === JSON.stringify([...KEYS].sort()),
+console.log("\n  the table: six meanings, six colours, none a category's:");
+ck("STATUS_COLOR has exactly the six meanings (owner, 2026-11-15: the alarm is amber)", JSON.stringify(Object.keys(STATUS_COLOR).sort()) === JSON.stringify([...KEYS].sort()),
    Object.keys(STATUS_COLOR));
 const tokens = Object.values(STATUS_COLOR);
-ck("  ...seven distinct theme tokens", new Set(tokens).size === 7 && tokens.every((t) => /^var\(--[\w-]+\)$/.test(t)), tokens);
+ck("  ...six distinct theme tokens", new Set(tokens).size === 6 && tokens.every((t) => /^var\(--[\w-]+\)$/.test(t)), tokens);
 ck("  ...none of them a category colour (--cat-*): a category is a device's identity, never a state",
    tokens.every((t) => !t.includes("--cat-")), tokens);
 ck("  ...history no longer kept is the empty track, as no value", NOT_KEPT_COLOR === STATUS_COLOR.noValue);
-ck("the 3D object's colours have the same seven keys, seven distinct colours",
+ck("the 3D object's colours have the same six keys, six distinct colours",
    JSON.stringify(Object.keys(STATUS_COLOR3).sort()) === JSON.stringify([...KEYS].sort())
-   && new Set(Object.values(STATUS_COLOR3).map((c) => c.toHexString())).size === 7, Object.keys(STATUS_COLOR3));
-ck("the pills have the same seven keys, seven distinct classes, each drawn by the stylesheet",
+   && new Set(Object.values(STATUS_COLOR3).map((c) => c.toHexString())).size === 6, Object.keys(STATUS_COLOR3));
+ck("the pills have the same six keys, six distinct classes, each drawn by the stylesheet",
    JSON.stringify(Object.keys(STATUS_PILL_CLASS).sort()) === JSON.stringify([...KEYS].sort())
-   && new Set(Object.values(STATUS_PILL_CLASS)).size === 7
+   && new Set(Object.values(STATUS_PILL_CLASS)).size === 6
    && Object.values(STATUS_PILL_CLASS).every((c) => src("styles/03-panels.css").includes(`.status-pill.${c} {`)),
    STATUS_PILL_CLASS);
 
-// Each theme block of the tokens: every status token has a value, the seven are seven colours, and active's purple
-// is not the Access control category's (2.496.792 borrowed it for a closed curtain)
+// Each theme block of the tokens: every status token has a value, the six are six colours, and the usual colour is
+// no category's (2.496.792 borrowed the Access control category's for a closed curtain)
 const css = src("styles/01-base.css");
 const block = (sel) => { const i = css.indexOf(`${sel} {`); return css.slice(i, css.indexOf("\n}", i)); };
 const val = (b, name) => (b.match(new RegExp(`--${name}:\\s*([^;]+);`)) ?? [])[1]?.trim();
@@ -122,22 +121,22 @@ for (const [name, b] of Object.entries(THEMES)) {
   const own = (t) => val(b, t) ?? val(BASE, t);
   const vals = tokens.map((t) => own(t.slice(6, -1)));
   const cats = [...BASE.matchAll(/--(cat-[\w-]+):/g)].map((m) => own(m[1]));
-  if (vals.some((v) => !v) || new Set(vals).size !== 7 || cats.includes(own("status-usual"))) themeBad.push({ name, vals, cats });
+  if (vals.some((v) => !v) || new Set(vals).size !== 6 || cats.includes(own("status-usual"))) themeBad.push({ name, vals, cats });
 }
-ck("every theme gives the seven meanings seven colours, its purple none of its category colours", themeBad.length === 0, themeBad);
+ck("every theme gives the six meanings six colours, its usual colour none of its category colours", themeBad.length === 0, themeBad);
 {
   // owner, 2026-11-15: every colour of a meaning defined ONE time — the light theme's tokens, and the one mirror the 3D
   // colours, the baked pills and the badge marks read (stateColors.STATUS_HEX), the same values
   const { STATUS_HEX } = await import("@/utils/stateColors");
   const TOKEN = { usual: "status-usual", active: "status-active", transitional: "status-pending", warn: "status-warning",
-    alert: "status-alarm", unavailable: "status-lost", noValue: "status-off" };
+    unavailable: "status-lost", noValue: "status-off" };
   const off = Object.entries(TOKEN).filter(([k, t]) => val(BASE, t)?.toLowerCase() !== STATUS_HEX[k].toLowerCase())
     .map(([k, t]) => ({ k, token: val(BASE, t), mirror: STATUS_HEX[k] }));
   ck("the table's one hex mirror equals the light theme's tokens, meaning by meaning", off.length === 0, off);
 }
 
-// ...and no category colour LOOKS like the usual purple either: a hue at least 30° away (owner, 2026-11-14: the Access
-// control family's #6B5AA6 read as the purple of a room all right; it is a raspberry pink since 2.496.801)
+// ...and no status colour is the alarm's old violet (owner, 2026-11-15: the alarm merged into amber, urgency is a pulse):
+// every status token of every theme a hue at least 30° from the three old values, the token itself gone
 const hue = (hex) => {
   const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
   const max = Math.max(r, g, b), d = max - Math.min(r, g, b);
@@ -146,15 +145,17 @@ const hue = (hex) => {
   return (h * 60 + 360) % 360;
 };
 const apart = (a, b) => { const d = Math.abs(hue(a) - hue(b)); return Math.min(d, 360 - d); };
-const lookAlike = [];
+const OLD_ALARM = ["#6E57B8", "#A48BE0", "#8C76C8"];
+const violet = [];
 for (const [name, b] of Object.entries(THEMES)) {
   const own = (t) => val(b, t) ?? val(BASE, t);
-  for (const m of BASE.matchAll(/--(cat-[\w-]+):/g))
-    if (apart(own(m[1]), own("status-alarm")) < 30) lookAlike.push({ name, cat: m[1], colour: own(m[1]), alarm: own("status-alarm") });
+  if (own("status-alarm")) violet.push({ name, token: "status-alarm", colour: own("status-alarm") });
+  for (const m of BASE.matchAll(/--(status-[\w-]+):/g)) {
+    const c = own(m[1]);
+    if (/^#[0-9a-f]{6}$/i.test(c) && OLD_ALARM.some((o) => apart(c, o) < 30)) violet.push({ name, token: m[1], colour: c });
+  }
 }
-// the alarm's purple (owner, 2026-11-14: Access control's purple read as the status purple; the purple is the alarm's
-// since 2026-11-15)
-ck("no category colour is within 30° of the alarm purple's hue, in any theme", lookAlike.length === 0, lookAlike);
+ck("no status colour is the alarm's old violet, in any theme: the alarm is the amber of needs attention", violet.length === 0, violet);
 
 console.log("\n  the villa's presence, the On button, a critical device:");
 const st = { sensorId: "sensor.<villa>_stage", order: [["home", "Someone home"], ["quiet", "Waiting for indoor quiet"],
@@ -189,17 +190,17 @@ ck("  ...and every window's pill says the state the same way: On active, Off usu
   const { statusRule } = await import("@/utils/stateColors");
   const crit = statusRule({ critical: true, hidden: false }), hid = statusRule({ critical: true, hidden: true }),
     plain = statusRule({ critical: false, hidden: false });
-  ck("a device's rule: critical, its needs-a-look and lost contact the alarm; hidden, never red or amber; plain, every meaning as it is",
-     KEYS.every((k) => crit(k) === criticalStatus(k, true) && plain(k) === k && hid(k) !== "alert" && hid(k) !== "warn")
+  ck("a device's rule: critical, its lost contact needs attention; hidden, never amber; plain, every meaning as it is",
+     KEYS.every((k) => crit(k) === criticalStatus(k, true) && plain(k) === k && hid(k) !== "warn")
      && hid("unavailable") === "unavailable" && hid("active") === "active", KEYS.map((k) => [k, crit(k), hid(k)]));
 }
-ck("a critical device: needs a look and lost contact become the alarm; every other meaning stays",
-   criticalStatus("warn", true) === "alert" && criticalStatus("unavailable", true) === "alert"
-   && criticalStatus("warn", false) === "warn" && KEYS.filter((k) => k !== "warn" && k !== "unavailable").every((k) => criticalStatus(k, true) === k));
-ck("a text sensor's words: a word the table knows takes its meaning (\"disconnected\" red), others a series colour, "
+ck("a critical device: lost contact needs attention (amber); every other meaning stays",
+   criticalStatus("unavailable", true) === "warn" && criticalStatus("unavailable", false) === "unavailable"
+   && KEYS.filter((k) => k !== "unavailable").every((k) => criticalStatus(k, true) === k));
+ck("a text sensor's words: a word the table knows takes its meaning (\"disconnected\" amber), others a series colour, "
    + "never a status", (() => {
      const p = paletteColorFor(["sunny", "disconnected", "cloudy"]);
-     return p("disconnected") === STATUS_COLOR.alert && !tokens.includes(p("sunny")) && !tokens.includes(p("cloudy"))
+     return p("disconnected") === STATUS_COLOR.warn && !tokens.includes(p("sunny")) && !tokens.includes(p("cloudy"))
        && p("unavailable") === STATUS_COLOR.unavailable && p("unknown") === STATUS_COLOR.noValue;
    })());
 
@@ -221,7 +222,7 @@ for (const f of tsFiles(root)) {
 ck("no .ts/.tsx outside the table names a status or category token as a colour: read STATUS_COLOR "
    + "(utils/stateColors) for a state, categoryColor for a device's identity", leaks.length === 0, leaks);
 
-// a room's glow: an alarm red, a room in use purple (owner, 2026-11-13)
+// a room's glow: an alarm amber, a room in use red (owner, 2026-11-13; the alarm amber since 2026-11-15)
 {
   const { motionRouting, motionLit, motionChanges, NOTHING_LIT } = await import("@/babylon/motionRouting");
   const at = (entityId, deviceClass) => motionRouting({ entityId, deviceClass, on: true, type: "binary_sensor", room: "Laundry",
@@ -229,7 +230,7 @@ ck("no .ts/.tsx outside the table names a status or category token as a colour: 
   const leak = at("binary_sensor.example_leak", "moisture"), motion = at("binary_sensor.example_motion", "motion");
   const calm = motionLit([motion]), wet = motionLit([motion, leak]);
   const again = motionChanges(calm, wet).rooms;
-  ck("a leak's room glows as an alarm, a detection's as in use; a lit room whose alarm comes is lit again in red",
+  ck("a leak's room glows as an alarm, a detection's as in use; a lit room whose alarm comes is lit again as an alarm",
      leak.rooms[0]?.alarm === true && !motion.rooms[0]?.alarm && again.length === 1 && again[0].on && again[0].alarm === true
      && motionChanges(NOTHING_LIT, calm).rooms[0]?.alarm === undefined, { leak, motion, again });
 }
@@ -243,16 +244,64 @@ ck("no .ts/.tsx outside the table names a status or category token as a colour: 
      && actionColor("cover.example_blind", "closed") === C.usual);
 }
 {
-  // owner, 2026-11-15: an error message reads in the app's red, never the alarm purple of a device's state
+  // owner, 2026-11-15: an error message reads in the app's red, never the amber of a device's state
   const { NoticeView } = await import("@/components/hud/Notice");
   const { default: ProblemLine } = await import("@/components/common/ProblemLine");
   const notice = draw(h(NoticeView, { tone: "error", children: "Could not save" }));
-  ck("an error notice wears the app's red (--status-danger), not the alarm purple",
-     notice.includes("var(--status-danger)") && !notice.includes("var(--status-alarm)"), notice);
+  ck("an error notice wears the app's red (--status-danger), not the amber of a device's state",
+     notice.includes("var(--status-danger)") && !notice.includes("var(--status-warning)"), notice);
   const css = readFileSync(new URL("../../src/styles/08-shared.css", import.meta.url), "utf8");
   const line = draw(h(ProblemLine, { children: "Could not save" }));
   ck("  ...and so does an error line (ProblemLine), the amber kept for a warning",
      /class="problem-line"/.test(line) && /\.problem-line \{[^}]*color: var\(--status-danger\)/.test(css)
      && /\.problem-line\.warn \{ color: var\(--status-warning\)/.test(css), line);
+}
+
+console.log("\n  one amber for every problem, urgency by a pulse (owner, 2026-11-15):");
+{
+  const { markSurface } = await import("@/config/EntityCategories");
+  const { healthPill } = await import("@/babylon/colors");
+  const { isUrgent, URGENT_MARKS } = await import("@/utils/deviceActivity");
+  const { readingOf } = await import("@/config/reading");
+  const { statusRule, STATUS_HEX } = await import("@/utils/stateColors");
+  const [alarm, fault, critical] = ["alarm", "fault", "critical"].map((m) => markSurface(m).fill);
+  ck("a badge's alarm \"!\", its fault \"!\" and a critical device's \"?\" are one amber", alarm === fault && critical === fault
+     && !["#6E57B8", "#A48BE0", "#8C76C8"].includes(alarm.toUpperCase()), { alarm, fault, critical });
+  ck("  ...and a room's number is that amber for an alarm as for a fault", healthPill("alert").fill === healthPill("fault").fill
+     && healthPill("fault").fill === STATUS_HEX.warn, [healthPill("alert"), healthPill("fault")]);
+  const leak = readingOf("binary_sensor.<room>_leak", { entity_id: "binary_sensor.<room>_leak", state: "on",
+    attributes: { device_class: "moisture" } }, "binary_sensor");
+  const silent = readingOf("binary_sensor.<room>_door", { entity_id: "binary_sensor.<room>_door", state: "unavailable",
+    attributes: { device_class: "door" } }, "binary_sensor", statusRule({ critical: true, hidden: false }));
+  ck("  ...a leak's pill and a critical device's silent pill are amber, the urgent pill",
+     leak.status === "warn" && silent.status === "warn" && leak.pill === silent.pill, { leak: leak.pill, silent: silent.pill });
+  ck("only an alarm or a critical device silent is urgent (pulses), on either corner of its badge; an open fault does not",
+     isUrgent({ mark: "alarm", linkPill: null }) && isUrgent({ mark: "critical", linkPill: null })
+     && isUrgent({ mark: null, linkPill: "alarm" }) && !isUrgent({ mark: "fault", linkPill: "fault" })
+     && !isUrgent({ mark: "lost", linkPill: "on" }) && URGENT_MARKS.size === 2);
+
+  // what the stylesheet does with an urgent mark: the rules that name a selector, outside and inside reduced motion
+  const sheet = ["01-base.css", "02-hud.css", "03-panels.css", "04-modals.css", "07-facility.css", "08-shared.css"]
+    .map((f) => readFileSync(new URL(`../../src/styles/${f}`, import.meta.url), "utf8").replace(/\/\*[\s\S]*?\*\//g, "")).join("\n");
+  const reduced = [...sheet.matchAll(/@media \(prefers-reduced-motion: reduce\) \{([\s\S]*?)\n\}/g)].map((m) => m[1]).join("\n");
+  const plain = sheet.replace(/@media \(prefers-reduced-motion: reduce\) \{[\s\S]*?\n\}/g, "");
+  const animation = (css, sel) => {
+    let found = null;
+    for (const m of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+      const sels = m[1].split(",").map((x) => x.trim());
+      const a = /(?:^|;|\s)animation:\s*([^;]+)/.exec(m[2]);
+      if (a && sels.includes(sel)) found = a[1].trim();
+    }
+    return found;
+  };
+  const URGENT = [".status-pill.danger", ".icon-btn.has-alert", ".cockpit-attention-danger", ".urgent"];
+  const CALM = [".status-pill.warn", ".icon-btn.has-warn", ".cockpit-attention-warn"];
+  const moves = URGENT.map((sel) => [sel, animation(plain, sel)]);
+  ck("an urgent pill, the alert button, the Cockpit's urgent icon pulse with the one shared pulse",
+     moves.every(([, a]) => /^urgent-pulse\b/.test(a ?? "")), moves);
+  ck("  ...their amber twins that are not urgent (a fault, a warning) stay still",
+     CALM.every((sel) => !animation(plain, sel)), CALM.map((sel) => [sel, animation(plain, sel)]));
+  ck("  ...and with reduced motion asked for, nothing pulses: the amber stays",
+     URGENT.every((sel) => animation(reduced, sel) === "none !important"), URGENT.map((sel) => [sel, animation(reduced, sel)]));
 }
 done("✅ one colour per meaning, on every surface, for every device");

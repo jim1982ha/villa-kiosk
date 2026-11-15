@@ -1,8 +1,6 @@
 // An expired remote access sign-in (auth/remoteSignIn, owner 2026-11-15): the passcode pad and the profiles say so,
 // with one button that opens VESTA's address past the app's offline copy. The gate is a redirect away from VESTA's
 // own answer; no connection at all stays "couldn't reach".
-import { register } from "node:module";
-register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 const { h, draw } = await import("../consistency/screen.mjs");
 

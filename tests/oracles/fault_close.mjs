@@ -3,9 +3,7 @@
 // isClearedStep) and the proxy's retention (_fm_last_resolution, _fm_cleared_step) each answered "of the status
 // changes in time order, the last close: cleared or repaired?", each tested on histories of its own — and 2.496.372
 // had to fix the same misreading on both. tests/store-doors.py drives the proxy through these same cases.
-import { register } from "node:module";
 import { readFileSync } from "node:fs";
-register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 
 const contract = JSON.parse(readFileSync(new URL("../../rootfs/usr/share/vesta/agent-contract.json", import.meta.url), "utf8"));

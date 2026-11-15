@@ -5,8 +5,6 @@
 // report), two widths for one card, a badge's box measured at its anchor
 // rather than where it is drawn, the depth pull. badgeLayout is that glue for
 // one badge; this calls it directly instead of reading EntityVisuals' source.
-import { register } from "node:module";
-register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 const { onGlass, depthPull, glyphDrawPx, glyphBakePx } = await import("@/babylon/badgeLayout");
 const { viewBasis, VIEW_BASIS_STEPS } = await import("@/babylon/badgeProjection");

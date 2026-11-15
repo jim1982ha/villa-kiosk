@@ -6,9 +6,7 @@
 // device-config sync had always asked AFTER the fetch, for exactly this window.
 // Both now ask utils/pullDecision. This checks the rule, replays the race
 // through it, and pins that both stores ask it after the await.
-import { register } from "node:module";
 import { readFileSync } from "node:fs";
-register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 const { decidePull } = await import("@/utils/pullDecision");
 

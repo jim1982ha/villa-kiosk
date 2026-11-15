@@ -4,8 +4,6 @@
 // Before 2.496.223 the rights were written twice — PERMISSION_MATRIX here and
 // ROLE_CAPABILITIES in the proxy — and kept equal by a test that scraped the
 // TypeScript as text. These drive VALUES through the app's own resolvers.
-import { register } from "node:module";
-register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 import { readFileSync } from "node:fs";
 const { CAPABILITIES, hasCapability, isCategoryAllowed, isTypeAllowed } = await import("@/auth/permissions");

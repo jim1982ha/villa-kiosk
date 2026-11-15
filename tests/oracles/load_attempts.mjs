@@ -1,8 +1,6 @@
 // tests/oracles/load_attempts.mjs
 // Only a load whose page was killed counts towards "ran out of memory" (owner, 2026-11-12: a model the page refused
 // itself, twice, was then called out of memory). Each attempt is ended by itself, once; the store is in memory here.
-import { register } from "node:module";
-register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 
 const store = new Map();
