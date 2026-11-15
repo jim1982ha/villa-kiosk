@@ -28,6 +28,7 @@ import { LightPool, poolStrength } from "./LightPools";
 import type { Pt2 } from "@/utils/geometry";
 import { Storeys } from "./storeys";
 import { placeLight, LIGHT_POOL_RADIUS, POOL_FLOOR_LIFT, type LightPlacement } from "./lightPlacement";
+import type { LampRoomBits } from "./roomLightMask";
 
 // Where each light stands — its floor, room, storey, the glow's floor and
 // ceiling, the pool's reach — is lightPlacement's, one answer per pool that
@@ -74,6 +75,7 @@ export class LightPoolSet {
   /** Bumped by anything that changes what `glowLamps` would answer. */
   version = 0;
   private strength = 1;
+  private roomBits: ((room: PoolRoom | null | undefined) => LampRoomBits | undefined) | null = null;
   // Plain fields rather than parameter properties: Node's type stripping
   // cannot run the shorthand, and the oracle loads this class directly.
   private readonly scene: Scene;
@@ -179,9 +181,9 @@ export class LightPoolSet {
    * merged and dropped toward what is below, which is not where it shines from.
    */
   glowLamps(): { x: number; y: number; z: number; r: number; g: number; b: number;
-                 amount: number; radius: number; floorY: number; ceilingY: number }[] {
+                 amount: number; radius: number; floorY: number; ceilingY: number; room?: LampRoomBits }[] {
     const out: { x: number; y: number; z: number; r: number; g: number; b: number;
-                 amount: number; radius: number; floorY: number; ceilingY: number }[] = [];
+                 amount: number; radius: number; floorY: number; ceilingY: number; room?: LampRoomBits }[] = [];
     for (const [meshId, r] of this.readings()) {
       if (!r.on) continue;
       for (const pool of this.pools.get(meshId) ?? []) {
@@ -195,10 +197,18 @@ export class LightPoolSet {
           // here from pool fields. Before calibration: the pool's own floor.
           floorY: this.placements.get(pool)?.glowFloorY ?? p.y - POOL_FLOOR_LIFT,
           ceilingY: this.placements.get(pool)?.ceilingY ?? Infinity,
+          // The rooms it lights: its placement's room and those open to it.
+          room: this.roomBits?.(this.placements.get(pool)?.room),
         });
       }
     }
     return out;
+  }
+
+  /** Which rooms a lamp of a room lights (roomLightMask.ts); null: any. */
+  setRoomBits(fn: ((room: PoolRoom | null | undefined) => LampRoomBits | undefined) | null): void {
+    this.roomBits = fn;
+    this.version++;
   }
 
   /** The global "Light effect strength". Returns whether it changed. */

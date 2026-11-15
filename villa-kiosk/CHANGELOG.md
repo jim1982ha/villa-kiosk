@@ -1,3 +1,17 @@
+## 2.496.828
+
+- **A light no longer reaches past the wall onto what stands against it.** The living room light still lit the heads
+  of the beds in the bedroom next to it, through the wall they stand against; a room's outline drawn a little across
+  a wall no longer lends it the next room's light either.
+
+## 2.496.827
+
+- **A light stays in its room.** A light that is on no longer lights the room behind a wall: the corridor light
+  upstairs left the bathroom beside it lit, and the living room lights the bedroom next to it. Rooms open onto each
+  other, like the living room and the kitchen, still share their light, and a light still lights the garden around it.
+  VESTA finds the walls in the villa model by itself, once per model on each device; after that, opening VESTA
+  takes no longer than before.
+
 ## 2.496.826
 
 - **Lights light the room on a Mac in Chrome too.** In Chrome on a Mac, a light that was on lit the floor under it
