@@ -1,3 +1,15 @@
+## 2.496.825
+
+- **The stairs light lights the stairs again.** Switched on, the lights along a staircase now light the steps under
+  and around them, up to the landing, and nothing else. Before, part of them were taken for lights of the room built
+  under the stairs: they laid a bright patch on the floor below, in that room, while the steps stayed
+  dark. Their light also stops a little under the steps, so the room under the stairs stays dark through them. A light
+  hanging down the stairwell from the floor above lights the steps under it and the floor above as well.
+- **A light alone in its room or garden lights the ground as far as its light goes.** Switched on, the entrance light
+  now lights the path under it and along it, as far out as it lights the hedge beside it; before, only a small circle
+  under the lamp was lit and the rest of the path stayed dark next to bright plants. The same goes for a bathroom with
+  a single ceiling light. It still stops at the walls. Rooms with several lights look as before.
+
 ## 2.496.824
 
 - **Access control is purple again.** Locks, cameras, motion and the other access control devices wear a purple that
