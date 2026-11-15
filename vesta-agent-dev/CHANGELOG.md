@@ -1,3 +1,13 @@
+## 0.12.516
+
+- **An escalation says what the settings waited.** It read "No answer from FM after 45min" even when the reminder had
+  waited for a visit to go quiet and much longer had gone. It now reads "No answer from FM, 30min after the reminder"
+  (the escalation comes that long after the reminder: "escalate after" minus "reminder after").
+- **On the alert card in the VESTA UI, the escalation's words are on the escalation's own line.** When a visit had
+  another step after the escalation, "No answer from FM …" was listed last, under that later step, and the escalation
+  was said twice. It is now one line in its place: "Escalation sent 12:27: No answer from FM, 30min after the reminder
+  (to: Owner)".
+
 ## 0.12.515
 
 - Nothing changes in the VESTA Agent itself. Its copy of the villa's visit package now matches the villa's: it names
