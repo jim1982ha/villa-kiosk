@@ -68,8 +68,12 @@ import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
 import type { Scene } from "@babylonjs/core/scene";
 import { LightPoolSet, type LightReading, type PoolFloorProbe, type PoolRoom } from "./lightPoolSet";
 import { attachLampGlow, hasLampGlow, lampGlowFor, BULB_REACH_M } from "./lampGlow";
-import { isHelperMesh } from "./meshRoles";
+import { isHelperMesh, structureRole } from "./meshRoles";
 import type { Storeys } from "./storeys";
+import { buildRoomLightMask, type TriangleVisitor } from "./roomLightMask";
+import { ModelKeyedStore } from "./modelStore";
+import { Matrix } from "@babylonjs/core/Maths/math.vector";
+import { VertexBuffer } from "@babylonjs/core/Buffers/buffer";
 
 /** The bulbs' own warm white — a fixture's baseline glow and a PointLight's
  *  colour before a state has named one. */
@@ -145,6 +149,10 @@ export class BulbSet {
   private readonly probe: BulbFloorProbe;
   private readonly readings: () => Iterable<BulbReading>;
   private readonly casters: () => readonly AbstractMesh[];
+  private readonly log: (line: string) => void;
+  /** Which rooms are open to each other, per model and plan: reading the
+   *  walls off the model is the one slow step of the room map. */
+  private readonly roomStore = new ModelKeyedStore<string[]>("vk.roomlight1.", /^vk\.roomlight\d*\./);
 
   constructor(
     scene: Scene,
@@ -158,6 +166,7 @@ export class BulbSet {
     this.probe = probe;
     this.readings = readings;
     this.casters = casters;
+    this.log = log;
     this.pools = new LightPoolSet(scene, probe, () => this.poolReadings(), log);
   }
 
@@ -295,7 +304,34 @@ export class BulbSet {
   }
 
   /** The calibrated villa plan: the pools take their rooms' shapes and floors. */
-  setRooms(plan: Storeys<PoolRoom>): void { this.pools.setRooms(plan); }
+  setRooms(plan: Storeys<PoolRoom>): void {
+    this.pools.setRooms(plan);
+    this.holdToRooms(plan);
+  }
+
+  /** The versioned model URL the room map's wall answers are kept under;
+   *  null keeps nothing. */
+  setCacheKey(key: string | null): void { this.roomStore.setModel(key); }
+
+  /**
+   * Each lamp lights its own room and the rooms open to it (roomLightMask.ts).
+   * Only where the glow is (a lightmapped villa). The walls are read off the
+   * model once per model and plan on this device; after that, a load draws
+   * the map from the stored answer in a few milliseconds.
+   */
+  private holdToRooms(plan: Storeys<PoolRoom>): void {
+    if (!this.glowMeshes.length) return;
+    const t0 = performance.now();
+    const sig = plan.rooms.map((r) => `${r.name}@${r.storey ?? ""}:${r.pts.map((p) => `${p.x.toFixed(2)},${p.z.toFixed(2)}`).join(" ")}`).join("/");
+    const stored = this.roomStore.load();
+    const known = stored.get(sig);
+    const mask = buildRoomLightMask(plan, known ? null : structureTriangles(this.scene), known);
+    if (mask && !known) this.roomStore.save(new Map([[sig, mask.open]]));
+    lampGlowFor(this.scene).setMask(this.scene, mask);
+    this.pools.setRoomBits(mask ? (room) => mask.bitsOf(room) : null);
+    this.log(`room light: ${mask ? `${mask.width}x${mask.rows}x${mask.bands}` : "none"} open=[${mask?.open.join(", ") ?? ""}]`
+      + ` ${known ? "stored" : "walls read"} ${(performance.now() - t0).toFixed(0)}ms`);
+  }
 
   /** The light the bulbs that are on give the furniture light (lampGlow):
    *  one lamp per pool, where its placement says it stands. */
@@ -405,4 +441,35 @@ export class BulbSet {
     light.setEnabled(false);
     return light;
   }
+}
+
+/** The villa's opaque walls and slabs as world-space triangles: what the room
+ *  map reads the walls from. Never a ceiling, glass, furniture or a helper. */
+function structureTriangles(scene: Scene): TriangleVisitor {
+  return (visit) => {
+    const world = new Matrix();
+    for (const m of scene.meshes) {
+      if (isHelperMesh(m)) continue;
+      const role = structureRole(m);
+      if (!role.isStructure || role.isCeiling) continue;
+      const mat = m.material;
+      if (mat && (mat.alpha < 1 || mat.transparencyMode === Material.MATERIAL_ALPHABLEND)) continue;
+      const pos = m.getVerticesData(VertexBuffer.PositionKind);
+      const idx = m.getIndices();
+      if (!pos || !idx) continue;
+      world.copyFrom(m.computeWorldMatrix(true));
+      const w = world.m;
+      const wp = new Float32Array(pos.length);
+      for (let i = 0; i < pos.length; i += 3) {
+        const x = pos[i], y = pos[i + 1], z = pos[i + 2];
+        wp[i] = x * w[0] + y * w[4] + z * w[8] + w[12];
+        wp[i + 1] = x * w[1] + y * w[5] + z * w[9] + w[13];
+        wp[i + 2] = x * w[2] + y * w[6] + z * w[10] + w[14];
+      }
+      for (let t = 0; t + 2 < idx.length; t += 3) {
+        const a = idx[t] * 3, b = idx[t + 1] * 3, c = idx[t + 2] * 3;
+        visit(wp[a], wp[a + 1], wp[a + 2], wp[b], wp[b + 1], wp[b + 2], wp[c], wp[c + 1], wp[c + 2]);
+      }
+    }
+  };
 }

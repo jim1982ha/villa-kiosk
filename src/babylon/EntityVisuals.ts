@@ -1398,6 +1398,8 @@ export class EntityVisuals {
     // The camera beams' clip lengths ride the same model key — same premise
     // (a pure function of this GLB's geometry), same ~21ms raycasts.
     this.beams.setCacheKey(key);
+    // And which rooms are open to each other, for the lamps' light.
+    this.bulbs.setCacheKey(key);
   }
 
   /** The shared floor probe, for SceneManager's own storey queries — one

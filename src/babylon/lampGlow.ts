@@ -63,6 +63,9 @@ import type { AbstractEngine } from "@babylonjs/core/Engines/abstractEngine";
 import type { SubMesh } from "@babylonjs/core/Meshes/subMesh";
 import { POOL_ALPHA_STOPS } from "./LightPools";
 import { BULB_REACH_M } from "./lightPlacement";
+import { MASK_FACING_M, type LampRoomBits, type RoomLightMask } from "./roomLightMask";
+import { RawTexture } from "@babylonjs/core/Materials/Textures/rawTexture";
+import { Texture } from "@babylonjs/core/Materials/Textures/texture";
 
 const f = (v: number) => v.toFixed(4);
 
@@ -118,14 +121,53 @@ interface GlowLamp {
   /** The floor of the storey above — nothing at or above it is lit.
    *  Infinity: no storey above. */
   ceilingY: number;
+  /** The rooms it lights (roomLightMask.ts); none: not held to a room. */
+  room?: LampRoomBits;
 }
 
 /** What every glowing material binds this frame. One per scene. */
 export class LampGlowState {
   readonly pos = new Float32Array(LAMP_GLOW_MAX * 4);
   readonly col = new Float32Array(LAMP_GLOW_MAX * 4);
+  /** Per lamp: its band of the room map, its rooms (24 + 8 bits), 1 when held. */
+  readonly room = new Float32Array(LAMP_GLOW_MAX * 4);
+  /** The room map (roomLightMask.ts): origin x, z, 1 / cell, how far in front
+   *  of a surface it is read; width, rows. */
+  readonly maskAt = new Float32Array(4);
+  readonly maskSize = new Float32Array(4);
+  /** The room map's texture; a blank cell until the plan has been drawn, so
+   *  the shader never recompiles when it arrives. */
+  maskTexture: RawTexture | null = null;
   count = 0;
   private key = "";
+  private maskKey = "";
+
+  /** Draw the room map into the texture (once per plan; null clears it). */
+  setMask(scene: Scene, mask: RoomLightMask<unknown> | null): void {
+    const old = this.maskTexture;
+    if (mask) {
+      this.maskTexture = RawTexture.CreateRGBATexture(mask.data, mask.width, mask.rows * mask.bands, scene,
+        false, false, Texture.NEAREST_SAMPLINGMODE);
+      this.maskAt.set([mask.originX, mask.originZ, 1 / mask.cell, MASK_FACING_M]);
+      this.maskSize.set([mask.width, mask.rows, 0, 0]);
+      this.maskKey = `${mask.originX},${mask.originZ},${mask.width},${mask.rows},${mask.bands},${mask.open.join(";")}`;
+    } else {
+      this.maskTexture = null;
+      this.maskSize.fill(0);
+      this.maskKey = "";
+    }
+    old?.dispose();
+    this.key = "";   // the lamps' rooms are re-read on the next set()
+  }
+
+  /** The texture to bind: the map, or a blank cell. */
+  boundMask(scene: Scene): RawTexture {
+    if (!this.maskTexture) {
+      this.maskTexture = RawTexture.CreateRGBATexture(new Uint8Array(4), 1, 1, scene, false, false, Texture.NEAREST_SAMPLINGMODE);
+      this.maskSize.fill(0);
+    }
+    return this.maskTexture;
+  }
 
   /** Write the lamps to show — more than fit are merged (fitLamps). Returns
    *  whether anything changed. Pure apart from the arrays it fills. */
@@ -133,16 +175,18 @@ export class LampGlowState {
     const on = lamps.filter((l) => l.amount > 0 && l.radius > 0);
     // Keyed on the lamps AS GIVEN, so a caller may hand them every frame: the
     // same lamps cost a string, never a merge (fitLamps).
-    let key = "";
-    for (const l of on) key += `${l.x},${l.y},${l.z},${l.r},${l.g},${l.b},${l.amount},${l.radius},${l.floorY},${l.ceilingY};`;
+    let key = this.maskKey;
+    for (const l of on) key += `${l.x},${l.y},${l.z},${l.r},${l.g},${l.b},${l.amount},${l.radius},${l.floorY},${l.ceilingY},${l.room ? `${l.room.band}:${l.room.lo}:${l.room.hi}` : ""};`;
     if (key === this.key) return false;
     this.key = key;
     const chosen = fitLamps(on, LAMP_GLOW_MAX);
     this.pos.fill(0);
     this.col.fill(0);
+    this.room.fill(0);
     chosen.forEach((l, i) => {
       this.pos.set([l.x, l.y, l.z, l.floorY], i * 4);
       this.col.set([l.r * l.amount, l.g * l.amount, l.b * l.amount, Math.min(l.ceilingY, 1e6)], i * 4);
+      if (l.room) this.room.set([l.room.band, l.room.lo, l.room.hi, 1], i * 4);
     });
     this.count = chosen.length;
     return true;
@@ -195,6 +239,9 @@ export function fitLamps(lamps: readonly GlowLamp[], max: number): GlowLamp[] {
       x: w("x"), y: w("y"), z: w("z"), r: w("r"), g: w("g"), b: w("b"), amount: sum,
       radius: Math.max(a.radius, b.radius) + Math.sqrt(best) / 2,
       floorY: Math.min(a.floorY, b.floorY), ceilingY: Math.min(a.ceilingY, b.ceilingY),
+      // Two lamps' rooms together; across two storeys' bands, held to none.
+      room: a.room && b.room && a.room.band === b.room.band
+        ? { band: a.room.band, lo: (a.room.lo | b.room.lo) >>> 0, hi: (a.room.hi | b.room.hi) >>> 0 } : undefined,
     };
     out.splice(bj, 1);
     out[bi] = merged;
@@ -253,6 +300,20 @@ const ACCUMULATE = `
     float lgPx = lgP.x; float lgPy = lgP.y; float lgPz = lgP.z;
     float lgFloor = lgP.w; float lgCeil = lgC.w;
 ${GLOW_TERM.map(([name, expr]) => `    float ${name} = ${expr};`).join("\n")}
+#ifdef LAMPGLOW_ROOMS
+    // Its own room and those open to it (roomLightMask.ts, maskAllows).
+    vec4 lgR = lampGlowRoom[lgI];
+    if (lgW > 0.0 && lgR.w > 0.5 && lampGlowMaskSize.x > 0.0) {
+      // Read in front of the surface: a wall's face is the room it faces.
+      ivec2 lgCell = ivec2(floor((vec2(pX + nX * lampGlowMaskAt.w, pZ + nZ * lampGlowMaskAt.w) - lampGlowMaskAt.xy) * lampGlowMaskAt.z));
+      if (lgCell.x >= 0 && lgCell.y >= 0 && float(lgCell.x) < lampGlowMaskSize.x && float(lgCell.y) < lampGlowMaskSize.y) {
+        uvec4 lgT = uvec4(texelFetch(lampGlowMask, ivec2(lgCell.x, lgCell.y + int(lgR.x + 0.5) * int(lampGlowMaskSize.y)), 0) * 255.0 + 0.5);
+        uint lgCellBits = lgT.r | (lgT.g << 8u) | (lgT.b << 16u) | (lgT.a << 24u);
+        uint lgLamp = uint(lgR.y + 0.5) | (uint(lgR.z + 0.5) << 24u);
+        if (lgCellBits != 0u && (lgCellBits & lgLamp) == 0u) lgW = 0.0;
+      }
+    }
+#endif
     lgSum += lgC.rgb * lgW;
   }
 #if defined(LAMPGLOW_VERTEXLIT) && defined(VERTEXCOLOR)
@@ -286,12 +347,15 @@ export const LAMP_GLOW_PLAIN_GLSL = `
 #endif
 `;
 
+/** The room test's integer ops and texelFetch are WebGL2 shader language. */
+const isWebGL2 = (scene: Scene): boolean => ((scene.getEngine() as { webGLVersion?: number }).webGLVersion ?? 1) >= 2;
+
 class LampGlowPlugin extends MaterialPluginBase {
   private readonly state: LampGlowState;
   private readonly vertexLit: boolean;
 
   constructor(material: Material, state: LampGlowState, vertexLit: boolean) {
-    super(material, "LampGlow", 200, { LAMPGLOW: false, LAMPGLOW_VERTEXLIT: false });
+    super(material, "LampGlow", 200, { LAMPGLOW: false, LAMPGLOW_VERTEXLIT: false, LAMPGLOW_ROOMS: false });
     this.state = state;
     this.vertexLit = vertexLit;
     this._enable(true);
@@ -303,9 +367,16 @@ class LampGlowPlugin extends MaterialPluginBase {
   // stays out of the shader and the structure renders exactly as before.
   override isCompatible(shaderLanguage: number): boolean { return shaderLanguage === 0; }
 
-  override prepareDefines(defines: MaterialDefines): void {
+  override prepareDefines(defines: MaterialDefines, scene: Scene): void {
     defines.LAMPGLOW = true;
     defines.LAMPGLOW_VERTEXLIT = this.vertexLit;
+    // The room test needs integer ops and texelFetch: WebGL2's shaders. On
+    // WebGL1 the glow lights as before, through walls.
+    defines.LAMPGLOW_ROOMS = isWebGL2(scene);
+  }
+
+  override getSamplers(samplers: string[]): void {
+    samplers.push("lampGlowMask");
   }
 
   override getUniforms() {
@@ -314,11 +385,17 @@ class LampGlowPlugin extends MaterialPluginBase {
         { name: "lampGlowPos", size: 4, type: "vec4", arraySize: LAMP_GLOW_MAX },
         { name: "lampGlowCol", size: 4, type: "vec4", arraySize: LAMP_GLOW_MAX },
         { name: "lampGlowCount", size: 1, type: "float" },
+        { name: "lampGlowRoom", size: 4, type: "vec4", arraySize: LAMP_GLOW_MAX },
+        { name: "lampGlowMaskAt", size: 4, type: "vec4" },
+        { name: "lampGlowMaskSize", size: 4, type: "vec4" },
       ],
       fragment: `#ifdef LAMPGLOW
 uniform vec4 lampGlowPos[${LAMP_GLOW_MAX}];
 uniform vec4 lampGlowCol[${LAMP_GLOW_MAX}];
 uniform float lampGlowCount;
+uniform vec4 lampGlowRoom[${LAMP_GLOW_MAX}];
+uniform vec4 lampGlowMaskAt;
+uniform vec4 lampGlowMaskSize;
 #endif`,
     };
   }
@@ -334,16 +411,29 @@ uniform float lampGlowCount;
     if (effect) {
       effect.setFloatArray4("lampGlowPos", this.state.pos);
       effect.setFloatArray4("lampGlowCol", this.state.col);
+      effect.setFloatArray4("lampGlowRoom", this.state.room);
     } else {
       ubo.updateFloatArray("lampGlowPos", this.state.pos);
       ubo.updateFloatArray("lampGlowCol", this.state.col);
+      ubo.updateFloatArray("lampGlowRoom", this.state.room);
     }
     ubo.updateFloat("lampGlowCount", this.state.count);
+    if (isWebGL2(this._material.getScene())) {
+      const mask = this.state.boundMask(this._material.getScene());
+      ubo.updateFloat4("lampGlowMaskAt", this.state.maskAt[0], this.state.maskAt[1], this.state.maskAt[2], this.state.maskAt[3]);
+      ubo.updateFloat4("lampGlowMaskSize", this.state.maskSize[0], this.state.maskSize[1], this.state.maskSize[2], this.state.maskSize[3]);
+      ubo.setTexture("lampGlowMask", mask);
+    }
   }
 
   override getCustomCode(shaderType: string): { [pointName: string]: string } | null {
     if (shaderType !== "fragment") return null;
-    return { [`!${LAMP_GLOW_ANCHOR}`]: `$0${LAMP_GLOW_GLSL}`, [LAMP_GLOW_PLAIN_POINT]: LAMP_GLOW_PLAIN_GLSL };
+    // A sampler is never in the uniform text above (Babylon writes that only
+    // without uniform buffers): it is declared with the shader's definitions.
+    return {
+      CUSTOM_FRAGMENT_DEFINITIONS: "#ifdef LAMPGLOW_ROOMS\nuniform sampler2D lampGlowMask;\n#endif\n",
+      [`!${LAMP_GLOW_ANCHOR}`]: `$0${LAMP_GLOW_GLSL}`, [LAMP_GLOW_PLAIN_POINT]: LAMP_GLOW_PLAIN_GLSL,
+    };
   }
 }
 
