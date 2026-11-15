@@ -1,3 +1,9 @@
+## 2.496.824
+
+- **Access control is purple again.** Locks, cameras, motion and the other access control devices wear a purple that
+  sits with the other families' tones, in place of the bright pink. Purple is free since alarms became amber, so it no
+  longer means anything but this family.
+
 ## 2.496.823
 
 - **Purple is gone: amber means "needs attention", pulsing means "act now".** An open fault, an alarm (a leak, smoke,
