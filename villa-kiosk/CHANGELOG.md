@@ -1,3 +1,9 @@
+## 2.496.831
+
+- **On a phone or tablet, lights stay in their room too.** The room each light keeps to was worked out with numbers a
+  phone's graphics chip shortens, so on a phone the living room light still lit the bedroom's walls and the rails of
+  its beds, while a computer showed it right. Phones now work it out in full.
+
 ## 2.496.830
 
 - **Lights stay in their room after a settings sync.** When VESTA picked up a change from another device (a sync it
