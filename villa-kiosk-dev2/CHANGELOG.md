@@ -1,3 +1,13 @@
+## 2.496.823
+
+- **Purple is gone: amber means "needs attention", pulsing means "act now".** An open fault, an alarm (a leak, smoke,
+  a jammed lock, a low battery) and a critical device that has gone silent are all marked in amber now, on the map's
+  badges, the room numbers, the status pills, the Cockpit and the top bar. What must be acted on now (an alarm, a
+  critical device silent) pulses: its badge on the map, its room's glow, its status pill, its icon in the Cockpit and
+  the top bar's alert button. An open fault stays amber and still. If your device asks for reduced motion, nothing
+  pulses and the amber stays. "Map colours & keys" says it the same way. Errors of the app itself stay red.
+- The tests load their path setting once for the whole run (nothing changes on screen).
+
 ## 2.496.822
 
 - **An expired remote sign-in has one way back in.** When VESTA is opened from its internet address and the sign-in
