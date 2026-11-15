@@ -89,6 +89,9 @@ export const STATUS_HEX: Record<StatusKey, string> = {
  *  words say which ("No longer kept"). ⚠️ NO LONGER ITS OWN BLUE HAZE (owner, 2026-11-13: "nothing to show is the empty
  *  track"); its own colour since 2026-10-20 sat beside the grey of lost contact. */
 export const NOT_KEPT_COLOR = STATUS_COLOR.noValue;
+/** The app's own red for its own failures (a save that did not happen, the model not refreshed): no device's state, so
+ *  not one of the seven meanings, and never the alarm purple (owner, 2026-11-15). */
+export const ERROR_COLOR = "var(--status-danger)";
 
 /** A critical device's reading (on the villa's critical list): its "needs a look" and its lost contact are an alarm
  *  (owner, 2026-11-13: "a critical door unlocked, a critical device offline" are red). Every other meaning stays. The

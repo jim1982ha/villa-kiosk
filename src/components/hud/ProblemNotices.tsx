@@ -48,5 +48,5 @@ function ProblemNotice({ line, passes, onGone }: { line: string; passes: boolean
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- one time per line, not per draw
   }, [passes]);
-  return <NoticeView tone="alert" role="alert" icon={<AlertTriangle size={16} />} onDismiss={onGone}>{line}</NoticeView>;
+  return <NoticeView tone="error" role="alert" icon={<AlertTriangle size={16} />} onDismiss={onGone}>{line}</NoticeView>;
 }
