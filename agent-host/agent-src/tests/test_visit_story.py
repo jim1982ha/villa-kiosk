@@ -10,8 +10,10 @@ import asyncio
 import base64
 import io
 import json
+import os
 import re
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 import pytest
 
@@ -288,18 +290,80 @@ def test_the_siren_question_is_on_the_owners_card_never_a_message_of_its_own(tmp
     # the parking camera showed nothing within the siren's window: snapped into the sheet, never a message of its own
     assert any(n == "ha_get_camera_image" for n, _a in v.reader.calls)
     assert v.state.visit_snaps(1) and not [t for _c, t, _k in v.tg.sent if "Camera snapshot" in t]
-    # Telegram and the tablet show the same photos (#154, 2026-11-08): the snapshot on the tablet's card too (the picture
-    # itself: the Kiosk reads no file of the Agent's folder), in the one list Telegram's "All photos" sends
+    # Telegram and the tablet show the same photos (#154, 2026-11-08): the snapshot on the tablet's card too, by its
+    # path in the villa's media folder like the villa's photos (#181), in the one list Telegram's "All photos" sends
     shown = kiosk.messages["incident:1"]["photos"]
     want = v.visits.every_photo(1)
     assert [(p["label"], p["at"]) for p in shown] == [(p["label"], p["at"]) for p in want] and len(shown) > 1, shown
-    (snap,) = [p for p in shown if "photo" in p]
-    assert snap["label"] == v.state.visit_snaps(1)[0]["label"] and base64.b64decode(snap["photo"])[:2] == b"\xff\xd8"
+    (snap,) = [p for p in shown if p["label"] == v.state.visit_snaps(1)[0]["label"]]
+    assert snap["path"].startswith(str(media) + "/") and open(snap["path"], "rb").read(2) == b"\xff\xd8", snap
     for chat in (OWNER, FM):
         (line,) = [ln for ln in lines(copy(v, chat, 1)["text"]) if "Siren offered" in ln]
         assert re.fullmatch(r"- Siren offered to the Owner \d\d:\d\d: waiting for your answer", line), line
     # asked once per visit, whatever came after (four more steps, two sources each time)
     assert len(v.state.approvals_in("pending")) == 1
+
+
+def camera_view():
+    """What a camera shows: a full-size picture that compresses badly (noise), as base64."""
+    from PIL import Image
+    buf = io.BytesIO()
+    Image.frombytes("RGB", (1280, 720), os.urandom(1280 * 720 * 3)).save(buf, "JPEG", quality=90)
+    return base64.b64encode(buf.getvalue()).decode()
+
+
+def test_every_siren_snapshot_reaches_the_tablets_card_by_path_however_many_cameras(tmp_path, kiosk, media):
+    # owner, 2026-11-15, live #181: two of VESTA's own siren snapshots were left off the VESTA UI card ("too large"):
+    # they were sent as pictures within a size budget. Saved in the villa's media folder, each goes by path
+    v = villa(tmp_path, kiosk)
+    vi = evening(v, media)
+    cams = [f"camera.example_view{i}" for i in range(8)]
+    for cam in cams:
+        v.reader.images[cam] = camera_view()
+    assert asyncio.run(v.visits.snap(1, cams)) == len(cams)
+    vi.add("motion", PARKING, "18:37:30")
+    play(v, send(vi.event()))
+    snaps = v.state.visit_snaps(1)
+    assert {s["camera"] for s in snaps} == {PARKING_CAM, *cams}
+    shown = {p["path"] for p in kiosk.messages["incident:1"]["photos"]}
+    assert {s["path"] for s in snaps} <= shown, "every snapshot on the card"
+    assert all(os.path.dirname(s["path"]) == str(media) and os.path.isfile(s["path"]) for s in snaps), snaps
+    assert not os.path.exists(os.path.join(v.s.out_dir, "visits")), "nothing in the Agent's own folder"
+
+
+def test_a_camera_snapped_twice_in_a_visit_keeps_one_file(tmp_path, kiosk, media):
+    v = villa(tmp_path, kiosk)
+    evening(v, media)
+    (first,) = [s["path"] for s in v.state.visit_snaps(1) if s["camera"] == PARKING_CAM]
+    assert os.path.isfile(first)
+    asyncio.run(v.visits.snap(1, [PARKING_CAM]))
+    files = sorted(f for f in os.listdir(media) if f.startswith("vesta_snap_1_example_parking_"))
+    (now,) = [s["path"] for s in v.state.visit_snaps(1) if s["camera"] == PARKING_CAM]
+    assert [os.path.join(str(media), f) for f in files] == [now], files
+
+
+def test_snapshots_kept_in_the_agents_own_folder_move_to_the_media_folder_at_start(tmp_path, kiosk, media):
+    # an Agent before 0.12.518 kept its snapshots in its own folder (out_dir/visits), flagged "own"
+    v = villa(tmp_path, kiosk)
+    vi = Visit(media=media)
+    vi.add("motion", PARKING, "18:20:16", photo=True)
+    play(v, send(vi.event("opened")))
+    old = os.path.join(v.s.out_dir, "visits")
+    os.makedirs(os.path.join(old, "1"))
+    os.makedirs(os.path.join(old, "7"))
+    jpeg(Path(old, "1", "example_parking.jpg"))
+    jpeg(Path(old, "7", "example_left_over.jpg"))
+    v.state.set_visit_snaps(1, [
+        {"path": os.path.join(old, "1", "example_parking.jpg"), "label": "Parking Camera", "at": at("18:21:05"),
+         "camera": PARKING_CAM, "own": True},
+        {"path": os.path.join(old, "1", "example_gone.jpg"), "label": "Gone", "at": at("18:21:05"),
+         "camera": "camera.example_gone", "own": True}])
+    for _ in range(2):                                   # a second start finds nothing more to move
+        v = restarted(v)
+        (snap,) = v.state.visit_snaps(1)
+        assert snap["path"] == str(media / "vesta_snap_1_example_parking_20261106_182105.jpg") and "own" not in snap
+        assert os.path.isfile(snap["path"]) and not os.path.exists(old), "no photo left in the Agent's own folder"
+        assert snap["path"] in [p["path"] for p in v.visits.every_photo(1)]
 
 
 def test_the_siren_on_the_card_needs_the_owners_own_press(tmp_path, kiosk, media):

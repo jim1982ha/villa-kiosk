@@ -77,7 +77,7 @@ def test_a_visits_photos_are_one_list_the_strongest_first_then_oldest_first_the_
     assert got[0]["lead"] and [p["at"][14:16] for p in got if p["onSheet"]] == ["54", "57", "58"], got
     assert VS.off_sheet(got) == 3
     # the siren's snapshots join the same order; an older list ordered again keeps it
-    snap = {"path": "/out/visits/1/cam.jpg", "label": "Cam", "at": "2026-11-07T11:51:00+00:00", "own": True}
+    snap = {"path": "/media/vesta/vesta_snap_1_cam_20261107_115100.jpg", "label": "Cam", "at": "2026-11-07T11:51:00+00:00"}
     again = VS.ordered(got + [snap], 3)
     assert [p["at"][14:16] for p in again] == ["54", "50", "51", "52", "55", "57", "58"]
     assert VS.ordered(VS.ordered(got), 3) == got

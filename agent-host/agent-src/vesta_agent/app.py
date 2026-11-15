@@ -380,6 +380,9 @@ class Vesta:
                 log.error("Telegram: %s", e)
         else:
             log.info("Telegram: off (the app's setting \"Agent replies on Telegram\" is off): nothing is sent")
+        # the siren snapshots kept in the Agent's own folder before 0.12.518: moved into the media folder (visit.py),
+        # before any card is drawn again
+        await self._safe(asyncio.to_thread(self.visits.move_old_snaps))
         # an alert's step recorded once per repeat by an engine before 0.6.447 (#125-P1: "Still-there alert sent …" three
         # times): ONE line, counted, in its history and every copy, before the tablet is told its cards (tell_open)
         refolded = 0

@@ -6,8 +6,10 @@ is a sheet of them all, replaced in place (editMessageMedia) at each step: its b
 `visit.sheet_tiles` photos it holds the strongest and the latest; the tablet's card holds every one (the villa's own
 announcement, which VESTA's card takes).
 
-The photos are the villa's own files, read where the app's `media` folder shows them (MEDIA; written only to delete a burst's frames not kept: visit.Visits.kept): a path outside
-it is never opened. Pillow draws the sheet (the image has no other picture library; measured 2026-11-06: about 6 MB of
+The photos are files of the villa's media folder, read where the app's `media` folder shows them (MEDIA): a path
+outside it is never opened. The Agent writes there for two things only: the siren's snapshots of a visit, saved under
+MEDIA/vesta like the villa's photos (visit.Visits.snap, SNAPS), and the deletion of a burst's frames not kept
+(visit.Visits.kept). Pillow draws the sheet (the image has no other picture library; measured 2026-11-06: about 6 MB of
 wheels for aarch64 and amd64, Python 3.13).
 """
 from __future__ import annotations
@@ -26,6 +28,14 @@ log = logging.getLogger("vesta.sheet")
 
 #: Where the Supervisor shows the villa's media folder inside the app (vesta-agent/config.yaml `map: media`).
 MEDIA = "/media"
+#: The folder of MEDIA the villa's visit photos are in, where the siren's snapshots are saved too (visit.Visits.snap):
+#: the villa's nightly retention purges it, the Kiosk copies its files by path
+SNAPS = "vesta"
+
+
+def snaps_folder() -> str:
+    """Where a visit's siren snapshots are saved: MEDIA/vesta (read when asked: MEDIA is the app's, or a test's)."""
+    return os.path.join(MEDIA, SNAPS)
 
 
 def tile_px() -> int:
@@ -88,18 +98,17 @@ def cells(n: int) -> tuple[tuple[int, int], list[tuple[int, int, int]]]:
     return (3, 2 + -(-max(0, n - 3) // 3)), out
 
 
-def build(photos: list[dict], shown: int, zone: str, own: str | None = None) -> bytes | None:
+def build(photos: list[dict], shown: int, zone: str) -> bytes | None:
     """The sheet of `photos` ([{path, label, at}], the strongest first) as a JPEG, each tile labelled with its camera and
-    its time ("Parking 18:34") written on the photo itself; None when none of them can be read. `own`: the agent's own
-    folder of the cameras it snapped for the visit (visit.Visits.snap), the one place besides MEDIA a photo is read
-    from."""
+    its time ("Parking 18:34") written on the photo itself; None when none of them can be read. Only MEDIA's files are
+    read."""
     from PIL import Image, ImageDraw, ImageFont, ImageOps
     w = tile_px()
     h = w * 9 // 16                                   # the cameras' own shape: a 16:9 photo fills its tile
     tiles = []
     # the tiles the visit's one order marks for the picture (visit_state.ordered: the lead, then the latest)
     for p in [p for p in visit_state.ordered(photos, shown) if p.get("onSheet")]:
-        path = _inside(p.get("path"), (MEDIA, own))
+        path = _inside(p.get("path"), (MEDIA,))
         if not path or os.path.getsize(path) > photo_bytes():
             log.info("A visit photo was left out of its sheet: %s", "too large" if path else "not in the media folder")
             continue

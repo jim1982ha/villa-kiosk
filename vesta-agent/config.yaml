@@ -10,7 +10,7 @@
 # ⚠️ BUMP `version` ON EVERY PUSH. The Supervisor resolves image:<version>, never
 # :latest, so an unchanged version is an update Home Assistant cannot see.
 name: "VESTA Agent"
-version: "0.12.517"
+version: "0.12.518"
 slug: vesta_agent
 description: "Runs the VESTA Agent, the villa's AI assistant"
 url: "https://github.com/jim1982ha/villa-kiosk"
@@ -48,9 +48,11 @@ map:
   - type: addon_config
     read_only: false
   # The villa's camera photos of a visit (/media/vesta/…), read to draw the one picture of its Telegram card (owner,
-  # 2026-11-06: one visit, one story). ⚠️ WRITABLE FOR ONE THING ONLY (owner, 2026-11-15: "Burst, best picked"): the
-  # agent deletes the frames of a step's burst it did not keep (visit.Visits.kept), only files of the villa's own
-  # visit record, only under /media; it never writes a file there.
+  # 2026-11-06: one visit, one story). ⚠️ WRITABLE FOR TWO THINGS ONLY, both under /media/vesta: the agent saves the
+  # siren's snapshots of a visit there like the villa's photos, deleting a camera's earlier one of the same visit
+  # (visit.Visits.snap; owner, 2026-11-15, #181: the tablet copies them by path, the villa's retention purges them),
+  # and deletes the frames of a step's burst it did not keep (visit.Visits.kept; owner, 2026-11-15: "Burst, best
+  # picked"), only files of the villa's own visit record.
   - type: media
     read_only: false
 # SIGTERM → agent's stop grace → sidecar stop must all fit in here (SPEC 10).

@@ -23,7 +23,6 @@ The record's shape is the agreement's (agent-contract.json `vestaMessage`): its 
 from __future__ import annotations
 
 import asyncio
-import base64
 import hashlib
 import json
 import logging
@@ -44,11 +43,6 @@ log = logging.getLogger("vesta.kiosk")
 REMEMBERED = 500
 #: A report's page as a file of the out folder, until the push uploads it and names it by its Kiosk id (`page`).
 PAGE_FILE = "_page"
-
-
-#: The most base64 of the Agent's own photos one record carries: the Kiosk reads a push of at most 1 MB (its web
-#: server's default request size), the card's words and its other photos with them
-OWN_PHOTOS_B64 = 700_000
 
 
 def agreed_limit(name: str) -> int:
@@ -142,29 +136,22 @@ def of_parts(key: str, p: dict, *, keyboard: dict | None = None, photo: str | No
 
 
 def tablet_photos(photos) -> list[dict]:
-    """`photos` ({path, label, at, strongest?, own?}, a visit's one list in its order: visit.photos) as a record names
-    them for the Kiosk, at most the agreement's count, each label cut at its length: a file of the villa's media folder
-    by its `path` (the Kiosk copies it, as a villa announcement's), one the Agent took itself (`own`: a camera its siren
-    snapped, in its own folder the Kiosk cannot read) as the picture itself, `photo` (base64 of a JPEG no larger than a
-    sheet's tile, sheet.small) — together never more than OWN_PHOTOS_B64, the rest left out (logged)."""
+    """`photos` ({path, label, at, strongest?}, a visit's one list in its order: visit.photos) as a record names them
+    for the Kiosk, at most the agreement's count, each label cut at its length: a file of the villa's media folder by
+    its `path` (the Kiosk copies it, as a villa announcement's); a path outside it is left out.
+
+    ⚠️ BY PATH, HOWEVER MANY (owner, 2026-11-15, live #181): the siren's snapshots were kept in the Agent's own folder
+    and sent as the picture itself, under a size budget, and two of them were left off the card ("too large"). They are
+    now saved in the villa's media folder (visit.Visits.snap) and go by path like the villa's photos."""
     from . import sheet
     root = os.path.realpath(sheet.MEDIA) + os.sep
-    out, room = [], OWN_PHOTOS_B64
+    out = []
     for ph in photos or []:
         if not isinstance(ph, dict) or not ph.get("path"):
             continue
-        one = {"label": _cut(ph.get("label"), "photoLabel"), "at": str(ph.get("at") or ""),
-               **({"strongest": True} if ph.get("strongest") else {})}
-        if ph.get("own"):
-            jpeg = sheet.small(str(ph["path"]))
-            b64 = base64.b64encode(jpeg).decode() if jpeg else ""
-            if not b64 or len(b64) > room:
-                log.info("A photo of a visit was left off the tablet's card: %s", "too large" if b64 else "unreadable")
-                continue
-            room -= len(b64)
-            out.append({"photo": b64, **one})
-        elif os.path.realpath(str(ph["path"])).startswith(root):
-            out.append({"path": str(ph["path"]), **one})
+        if os.path.realpath(str(ph["path"])).startswith(root):
+            out.append({"path": str(ph["path"]), "label": _cut(ph.get("label"), "photoLabel"),
+                        "at": str(ph.get("at") or ""), **({"strongest": True} if ph.get("strongest") else {})})
     return out[:agreed_limit("photos")] if agreed_limit("photos") else []
 
 

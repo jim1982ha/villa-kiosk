@@ -25,6 +25,7 @@ import hashlib
 import json
 import logging
 import os
+import shutil
 from datetime import datetime, timezone
 from typing import Awaitable, Callable
 
@@ -47,6 +48,29 @@ SHEETS_KEPT = 8
 DROPPED_PHOTOS = "dropped_photos"
 #: How many bursts' choices are remembered (Visits.kept): a later step of the visit names its frames again
 PICKS_KEPT = 200
+
+
+def _save_snap(iid, cam: str, jpeg: bytes, at: datetime) -> str:
+    """`jpeg`, a siren snapshot of visit `iid`'s camera `cam` taken `at`, saved in the villa's media folder
+    (sheet.snaps_folder, made when missing) as vesta_snap_<iid>_<camera object id>_<YYYYmmdd_HHMMSS>.jpg, its time in
+    UTC: its path. OSError when the folder cannot be written."""
+    folder = sheet.snaps_folder()
+    os.makedirs(folder, exist_ok=True)
+    stamp = at.astimezone(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    path = os.path.join(folder, f"vesta_snap_{iid}_{str(cam).split('.', 1)[-1]}_{stamp}.jpg")
+    with open(path, "wb") as f:
+        f.write(jpeg)
+    return path
+
+
+def _drop_file(path) -> None:
+    """The file at `path` deleted when it is one of the villa's media folder (sheet.MEDIA); anything else untouched."""
+    real = sheet._inside(path, (sheet.MEDIA,))
+    if real:
+        try:
+            os.remove(real)
+        except OSError as e:
+            log.info("An earlier snapshot could not be deleted (%s)", type(e).__name__)
 
 
 def pick_wait_s() -> int:
@@ -298,8 +322,7 @@ class Visits:
         if kept and kept[0] == made_of:
             return kept[1]
         try:
-            jpeg = await asyncio.to_thread(sheet.build, visit_state.ordered(taken + snaps, shown), shown, self.tz,
-                                           os.path.join(self.out_dir, "visits"))
+            jpeg = await asyncio.to_thread(sheet.build, visit_state.ordered(taken + snaps, shown), shown, self.tz)
         except Exception:  # noqa: BLE001 — the card goes without its sheet, never not at all
             log.exception("Incident #%s: its photo sheet could not be made", iid)
             return None
@@ -349,10 +372,9 @@ class Visits:
         iid = p.parts[0]
         if not iid.isdigit() or p.place != "telegram" or self._album is None:
             return await p.toast("Unknown button.")
-        own = os.path.join(self.out_dir, "visits")
         got = []
         for ph in self.every_photo(int(iid)):
-            path = sheet._inside(ph.get("path"), (sheet.MEDIA, own))
+            path = sheet._inside(ph.get("path"), (sheet.MEDIA,))
             if not path or os.path.getsize(path) > sheet.photo_bytes():
                 continue
             with open(path, "rb") as f:
@@ -435,7 +457,14 @@ class Visits:
 
     async def snap(self, iid: int, cameras) -> int:
         """What each of `cameras` shows now, kept as a photo of the visit (its sheet carries it, the tablet's card too):
-        how many."""
+        how many.
+
+        ⚠️ A VISIT PHOTO LIKE THE VILLA'S (owner, 2026-11-15, live #181): kept in the Agent's own folder, the Kiosk could
+        not read a snapshot and was sent the picture itself, and two were left off the tablet's card as too large. Each
+        is saved in the villa's media folder (sheet.snaps_folder: /media/vesta), named
+        vesta_snap_<visit>_<camera object id>_<YYYYmmdd_HHMMSS, UTC>.jpg: the Kiosk copies it by path, the villa's
+        nightly retention removes it like the villa's photos. A camera snapped again within the visit replaces its
+        earlier file, which is deleted (only under /media): nothing is left over."""
         kept = self.state.visit_snaps(iid)
         n = 0
         for cam in cameras or []:
@@ -446,19 +475,84 @@ class Visits:
                 continue
             if not got:
                 continue
-            folder = os.path.join(self.out_dir, "visits", str(iid))
-            os.makedirs(folder, exist_ok=True)
-            path = os.path.join(folder, f"{cam.split('.', 1)[-1]}.jpg")
-            with open(path, "wb") as f:
-                f.write(base64.b64decode(got[0]))
-            at = datetime.now(timezone.utc).isoformat()
-            kept = [k for k in kept if k.get("camera") != cam] + [{"path": path, "label": self.name(cam), "at": at, "camera": cam,
-                                                                  "own": True}]
+            now = datetime.now(timezone.utc)
+            try:
+                path = await asyncio.to_thread(_save_snap, iid, cam, base64.b64decode(got[0]), now)
+            except OSError as e:
+                log.warning("Incident #%s: the snapshot of %s could not be saved in the media folder (%s)", iid, cam,
+                            type(e).__name__)
+                continue
+            for k in kept:
+                if k.get("camera") == cam and k.get("path") != path:
+                    _drop_file(k.get("path"))
+            kept = [k for k in kept if k.get("camera") != cam] + [{"path": path, "label": self.name(cam),
+                                                                  "at": now.isoformat(), "camera": cam}]
             n += 1
         self.state.set_visit_snaps(iid, kept)
         if n and (line := self.more_line(iid)):
             self.notices.observe(iid, [line])           # every copy drawn with it by the question that follows (offered)
         return n
+
+    def move_old_snaps(self) -> dict:
+        """At start: the siren snapshots an Agent before 0.12.518 kept in its own folder (out_dir/visits/<visit>/
+        <camera>.jpg, flagged "own") moved into the villa's media folder under their new name (snap), each record's path
+        changed and its flag dropped; an entry whose file is gone is dropped. Then the old folder is deleted whole: no
+        photo is left in the app's own folder. Idempotent: run again, nothing is left to move. ⚠️ NEVER A PHOTO LOST:
+        when the media folder cannot be written, the old files and records stay as they are (tried again at the next
+        start). {"moved": n, "dropped": n, "kept_back": n}."""
+        old = os.path.join(self.out_dir, "visits")
+        out = {"moved": 0, "dropped": 0, "kept_back": 0}
+        root = os.path.realpath(old) + os.sep
+        for key, raw in self.state.kv_prefix("visitsnaps:").items():
+            iid = key.split(":", 1)[1]
+            try:
+                snaps = json.loads(raw or "[]")
+            except ValueError:
+                continue
+            changed, now = False, []
+            for k in snaps:
+                if not isinstance(k, dict):
+                    changed = True
+                    continue
+                path = str(k.get("path") or "")
+                if not os.path.realpath(path).startswith(root):
+                    if "own" in k:
+                        k = {f: v for f, v in k.items() if f != "own"}
+                        changed = True
+                    now.append(k)
+                    continue
+                if not os.path.isfile(path):
+                    out["dropped"] += 1
+                    changed = True
+                    continue
+                try:
+                    at = datetime.fromisoformat(str(k.get("at")))
+                except (TypeError, ValueError):
+                    at = datetime.fromtimestamp(os.path.getmtime(path), timezone.utc)
+                cam = str(k.get("camera") or os.path.splitext(os.path.basename(path))[0])
+                try:
+                    with open(path, "rb") as f:
+                        new = _save_snap(iid, cam, f.read(), at)
+                    os.remove(path)
+                except OSError as e:
+                    log.warning("Incident #%s: an earlier snapshot could not be moved into the media folder (%s): "
+                                "kept where it is", iid, type(e).__name__)
+                    out["kept_back"] += 1
+                    now.append(k)
+                    continue
+                now.append({**{f: v for f, v in k.items() if f != "own"}, "path": new})
+                out["moved"] += 1
+                changed = True
+            if changed:
+                self.state.set_visit_snaps(iid, now)
+        if not out["kept_back"] and os.path.isdir(old):
+            shutil.rmtree(old, ignore_errors=True)
+            log.info("Visit snapshots: the Agent's own folder of them removed (%s moved into the media folder, %s "
+                     "whose file was gone dropped)", out["moved"], out["dropped"])
+        elif out["kept_back"]:
+            log.warning("Visit snapshots: %s could not be moved into the media folder; the Agent's own folder of them "
+                        "kept (tried again at the next start)", out["kept_back"])
+        return out
 
     async def offered(self, iid: int, aid: str, said: str, said_in: dict | None = None, *, chats=(),
                       buttons: dict | None = None, waiting: str = "", waiting_in: dict | None = None,
