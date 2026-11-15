@@ -2,8 +2,6 @@
 // untested until round 10, 2.496.160): the handshake, a subscription, and
 // what a reconnect restores — driven against a fake socket playing Home
 // Assistant, with the browser globals it touches stubbed.
-import { register } from "node:module";
-register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 
 // ── the browser, as little of it as the socket touches ──────────────────────

@@ -9,8 +9,6 @@
 //
 // Driven by value through the stores' own diff and replay, as the push runs them: the store's copy, the tablet's
 // change replayed on it, and what the tablet's screen becomes and is told.
-import { register } from "node:module";
-register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 const { EMPTY_FM_DATA } = await import("@/fm/fmTypes");
 const { diffFmData, applyFmDiff, foldOthers } = await import("@/fm/fmApi");

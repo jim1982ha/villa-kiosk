@@ -1,9 +1,7 @@
 // How much fits on this screen (placementPass: viewportBudget, cellCapFor,
 // drawableMaxOf — 2.496.287). It was derived inside EntityVisuals, so every
 // oracle handed the pass fixed caps and the measuring loop never ran here.
-import { register } from "node:module";
 import { readFileSync } from "node:fs";
-register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 const { viewportBudget, cellCapFor, drawableMaxOf, cardOf } = await import("@/babylon/placementPass");
 const { MAX_GRID_CHIPS, MAX_TOTAL_CHIPS } = await import("@/babylon/badgeCard");

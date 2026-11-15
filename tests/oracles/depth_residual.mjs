@@ -18,8 +18,6 @@
 // because it made EVERYTHING merge earlier, including badges near the camera
 // where the residual is zero or negative. The correction pinned here asks each
 // badge for exactly the extra room its own depth will cost it.
-import { register } from "node:module";
-register("../consistency/alias-hook.mjs", import.meta.url);
 const { viewBasis, projectToView, VIEW_BASIS_STEPS } = await import("@/babylon/badgeProjection");
 const { depthPull } = await import("@/babylon/badgeLayout");
 

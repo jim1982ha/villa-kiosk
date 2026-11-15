@@ -5,8 +5,6 @@
 // ring become — was inline in EntityVisuals.deriveChips and never under test.
 // roomChips.ts holds it now (the first slice of the tier resolution); this
 // runs the real bucketing and the real combine, inside the real merge loop.
-import { register } from "node:module";
-register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 const { bucketRoomChips, combineChips } = await import("@/babylon/roomChips");
 const { roomChipModel } = await import("@/babylon/summaryLook");
@@ -38,11 +36,11 @@ const chips = bucketRoomChips(members, clustered, display);
 ck("one chip per CLUSTERED room, in first-seen order", chips.map((c) => c.key).join() === "kitchen,bedroom", chips.map((c) => c.key));
 ck("a chip prints the room's own spelling, not its key, on one line", chips[1].room === "Bedroom 1" && chips[1].lines.length === 1 && chips[1].lines[0].label === "Bedroom 1");
 ck("its centre is its members' mean position", chips[0].centre.x === 1, chips[0].centre);
-// owner, 2026-10-01: red is the legend's "Needs attention" — a device merely ON never rings red
-ck("a member that is on gives the chip the neutral 'on' ring, NOT red", chips[0].ringOn === true && chips[0].ringRed === false);
+// owner, 2026-10-01: the legend's "Needs attention" (amber since 2026-11-15) — a device merely ON never rings it
+ck("a member that is on gives the chip the neutral 'on' ring, NOT the needs-attention ring", chips[0].ringOn === true && chips[0].ringRed === false);
 {
   const alerting = bucketRoomChips([M("lock.d", "door", 0, "alert"), M("light.d", "door", 1, "on")], () => true, (k) => k);
-  ck("a member that needs attention rings it red, and red wins over 'on'", alerting[0].ringRed === true && alerting[0].ringOn === false);
+  ck("a member that needs attention rings it, and it wins over 'on'", alerting[0].ringRed === true && alerting[0].ringOn === false);
 }
 ck("an unavailable member dims it, and does NOT ring it", chips[1].unavailable === true && chips[1].ringRed === false);
 
@@ -96,12 +94,12 @@ console.log("\n  a merged chip lists its rooms (owner, 2026-11-14: was \"Living 
   ck("  ...busiest room first, then by room (stable however the merge went)",
      model.lines.map((l) => `${l.label} (${l.count})`).join(", ") === "Master Bedroom (3), Den (2), Study (2), Hall (1), Master Bathroom (1)",
      model.lines.map((l) => `${l.label} (${l.count})`));
-  ck("  ...each pill its OWN room's health: red alert, amber fault, grey lost, green all right",
+  ck("  ...each pill its OWN room's health: an alarm first, then a fault, grey lost, green all right",
      model.lines.map((l) => `${l.room}=${l.health}`).join() === "Master Bedroom=alert,Den=ok,Study=fault,Hall=ok,Master Bathroom=unavailable",
      model.lines.map((l) => [l.room, l.health]));
   ck("  ...each line's pill is the colour and number that room's chip shows standing alone",
      model.lines.every((l) => healthPill(l.health).fill === healthPill(alone[l.key].health).fill && l.count === alone[l.key].count && l.label === alone[l.key].label));
-  ck("  ...four pill colours, not one", new Set(model.lines.map((l) => healthPill(l.health).fill)).size === 4);
+  ck("  ...three pill colours, not one: an alarm and a fault the one amber (owner, 2026-11-15)", new Set(model.lines.map((l) => healthPill(l.health).fill)).size === 3);
   ck("  ...a tap on a line names that room and only its devices",
      model.lines.find((l) => l.room === "Study").entityIds.join() === "c1,c2");
 }

@@ -5,8 +5,6 @@
 // were pinned by regexes on SOURCE ORDER (push_batch, registry_refresh,
 // registry_resolve). Now the store is a plain module, and these checks read
 // what it sends and what it holds.
-import { register } from "node:module";
-register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 
 const noop = () => {};

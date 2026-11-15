@@ -1,8 +1,6 @@
 // The Cockpit's Messages tab (ticket 17 of "One inbox", owner 2026-10-28): one pure model turns the open issues, the
 // watched faults and the villa's announcements into what the tab lists, its filters' counts and the item open on the
 // right. Every Messages screen reads it. Driven by value; placeholder titles.
-import { register } from "node:module";
-register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 import { h, draw, inside, text } from "../consistency/screen.mjs";
 import { readFileSync } from "node:fs";

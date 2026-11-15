@@ -8,8 +8,6 @@
 //       not, is told it waits.
 //
 // Driven by value: the real providers under React (tests/consistency/fakedom.mjs) against a fake add-on.
-import { register } from "node:module";
-register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 import { mountRoot } from "../consistency/fakedom.mjs";
 const { EMPTY_FM_DATA } = await import("@/fm/fmTypes");

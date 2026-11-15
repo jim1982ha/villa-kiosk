@@ -10,8 +10,6 @@
 //     (measured on the villa: 1,080 orphan findings over 144 walk frames,
 //     120 after);
 //   * a room chip far down the corridor from a badge still "collided" with it.
-import { register } from "node:module";
-register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 const { PlacementPass, groundOf } = await import("@/babylon/placementPass");
 const { RoomFocus } = await import("@/babylon/roomFocus");

@@ -7,8 +7,6 @@
 // history depth, a `go()` whose popstate arrives LATER, React's passive-effect
 // flush between the microtask and the next task — and asserts what Back,
 // Escape, nesting and a swap leave behind.
-import { register } from "node:module";
-register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 const { createBackStack } = await import("@/hooks/backStack");
 

@@ -44,7 +44,7 @@ export default function LastDayTimeline({
   words?: (state: string) => string;
   /** A sensor's reading in words (an access point's "Connected"): its usual state in the window's family colour, as
    *  its numbers would be (trendHue). Never a device's on/off band: its "Off" is the status table's, as its pill and
-   *  its button say it (owner, 2026-11-14: a fan's "Off" band was orange beside a purple "Turn off"). */
+   *  its button say it (owner, 2026-11-14: a fan's "Off" band was orange beside a "Turn off" in the usual colour). */
   trend?: boolean;
 }) {
   const { range, picker } = useHistoryRange();

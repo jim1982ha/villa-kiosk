@@ -11,8 +11,6 @@
 // Driven by value: the real FmDataProvider under React (tests/consistency/fakedom.mjs) against a fake add-on that goes
 // down and comes back, "reloaded" by unmounting it and mounting a new one over the same browser storage; the real sync
 // machine with a fake keeper; the real daily reload at 04:00 with a fake clock.
-import { register } from "node:module";
-register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 import { mountRoot } from "../consistency/fakedom.mjs";
 const { EMPTY_FM_DATA, FM_COLLECTIONS } = await import("@/fm/fmTypes");

@@ -2,8 +2,6 @@
 // stamped there, the same for every write (architecture review, 2026-10-14). A fault a person RAISED carried no step
 // and no author — "Opened 14:20" where its close read "by Facility manager". Driven by value. Since 2.496.623 the
 // profile is stamped by its id beside its words (roles.authorStamp; architecture review round 8, 2026-10-30).
-import { register } from "node:module";
-register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 const { applyFmCommand } = await import("@/fm/fmCommands");
 const { faultMove, moveState, moveWho } = await import("@/fm/faultNotes");

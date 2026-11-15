@@ -3,8 +3,6 @@
 // "unavailable", through ONE place: the entity store (ha/unavailableByDesign), which every screen reads. Driven against
 // a fake socket playing the villa's system and a fake history, by value; then the screens' own reading of "offline"
 // (villaDevices.unavailable: the live cards, the counts, the badges) is asked of what the store holds.
-import { register } from "node:module";
-register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 import { parseTsx, elements, childTags } from "../consistency/jsx.mjs";
 

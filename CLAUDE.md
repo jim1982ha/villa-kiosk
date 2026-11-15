@@ -8,7 +8,7 @@ small Python proxy, `rootfs/usr/bin/supervisor-proxy.py`). Path alias `@/*` → 
 ```bash
 npm run dev                  # https://localhost:5173
 npm run build                # tsc -b + vite build: run before calling a change done
-npm test                     # the tests in tests/oracles/ (node --test)
+npm test                     # every oracle; one: node --no-warnings --import ./tests/consistency/register.mjs --test tests/oracles/x.mjs
 npm run test:proxy           # the proxy's rules (Python, needs aiohttp)
 npm run test:hard-rules      # nothing villa-specific, no internet dependency
 npm run gates                # build + the three above: what CI runs before the image's start-up test
@@ -27,7 +27,7 @@ the proxy (`ship` runs it when the proxy is staged). Never move it under `tests/
 - **Release**: write the new entry at the top of `villa-kiosk/CHANGELOG.md` (what the owner will see, plain words; its
   `## x.y.z` heading is the version), stage what ships by name, then `npm run ship -- -F msg.txt`. Exit 0 means the
   store offers it; anything else is not shipped. CI runs every check before the image is built. Before `ship`, run only
-  the test files that name a file you changed (`grep -l <name> tests/oracles/*.mjs`, then `node --test` on them;
+  the test files that name a file you changed (`grep -l <name> tests/oracles/*.mjs`, then the one-file command above on them;
   owner, 2026-11-11: a second file pinning the old screen failed a release), never the whole suite.
 - Commit messages: a subject of at most 72 characters, a blank line, then the body.
 

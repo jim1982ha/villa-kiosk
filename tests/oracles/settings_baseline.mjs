@@ -7,8 +7,6 @@
 // type error. What stays for this oracle: the slice's rules, by value, and the
 // one thing tsc cannot see — that the dialog did not take a second way to
 // write (useConfig().update) around the slice.
-import { register } from "node:module";
-register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 import { readFileSync } from "node:fs";
 const { sliceOf, draftedView, EMPTY_LEDGER, recordEdit, ledgerDirty } = await import("@/config/configSlice");

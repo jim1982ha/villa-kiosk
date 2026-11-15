@@ -8,9 +8,7 @@
 //      not a power of two (badgeScale.rungPx now quantises in CSS px).
 // And the owner's rule for when a room groups at all: only when what is drawn
 // would overlap — no floor on the distance between two centres.
-import { register } from "node:module";
 import { readFileSync } from "node:fs";
-register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 const { movesTheView } = await import("@/babylon/frameScheduler");
 const { rungAt, rungPx, cssExtent } = await import("@/babylon/badgeScale");

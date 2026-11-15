@@ -3,9 +3,7 @@
 // The client carried three separate copies of it (PinVerifier, PinPad,
 // SuperadminGate) and nothing compared any of them with the proxy. This reads
 // the proxy's own PIN_RE and SUPERADMIN_PIN_RE and drives isPinShape by value.
-import { register } from "node:module";
 import { readFileSync } from "node:fs";
-register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 const { PIN_LENGTH, SUPERADMIN_PIN_LENGTH, isPinShape } = await import("@/auth/pinShape");
 

@@ -10,9 +10,7 @@
 //
 // Driven by value: the mapping on fake answers through BOTH real adapters, the real sync machine, then the real
 // ConfigProvider + DeviceConfigSync under React (tests/consistency/fakedom.mjs) against a fake add-on.
-import { register } from "node:module";
 import { readFileSync } from "node:fs";
-register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 import { mountRoot } from "../consistency/fakedom.mjs";
 const { React, act, render } = mountRoot();

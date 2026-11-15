@@ -28,41 +28,46 @@ import type { Category } from "@/types/scene.types";
  *  ⚠️ THE SQUARE SAYS WHAT THE DEVICE DOES, THE CORNER MARK WHAT IS WRONG (owner, 2026-10-22: badge proposal 2,
  *  "Corner dot"): the face is off or on, never a problem colour; one mark at most, top-right, in the order below
  *  (deviceActivity.MARK_ORDER). ONE CORNER PER DEVICE (owner, 2026-10-22): the top-right pill is the device itself,
- *  the bottom-right one the device linked to it — its own problem with the same marks, else filled on / hollow off. */
-const BADGE_ITEMS: { label: string; state: DeviceSurfaceState; mark?: BadgeMark; linkPill?: LinkPill; note: string }[] = [
+ *  the bottom-right one the device linked to it — its own problem with the same marks, else filled on / hollow off.
+ *  ⚠️ ONE AMBER, URGENCY BY A PULSE (owner, 2026-11-15): an alarm and a critical device silent had their own colour
+ *  beside the fault's amber; every "needs attention" mark is amber now, and what must be acted on now pulses
+ *  (deviceActivity.URGENT_MARKS), drawn here with the same pulse (`urgent`, 08-shared.css). */
+const BADGE_ITEMS: { label: string; state: DeviceSurfaceState; mark?: BadgeMark; linkPill?: LinkPill; note: string; pulse?: boolean }[] = [
   { label: "Off", state: "off", note: "Plain square, icon in the device's colour, resting" },
   { label: "On", state: "active", note: "Tinted in the device's colour, on, or working" },
   { label: "Bottom-right pill", state: "off", linkPill: "on",
     note: "The device linked to it, filled when on, hollow when off, or its own problem with the same marks" },
-  { label: "Purple \"?\"", state: "unavailable", mark: "critical", note: "A critical device has gone silent, act now" },
   { label: "Top-right dot", state: "active", mark: "active", note: "In use, motion seen, a door open, a lock unlocked" },
-  { label: "Purple \"!\"", state: "active", mark: "alarm", note: "Alarm, a leak, smoke, a low battery, a jammed lock" },
-  { label: "Amber \"!\"", state: "off", mark: "fault", note: "An open fault, check soon" },
+  { label: "Amber \"!\"", state: "off", mark: "fault",
+    note: "Something needs attention: an open fault, or an alarm (a leak, smoke, a low battery, a jammed lock)" },
+  { label: "Amber \"?\"", state: "unavailable", mark: "critical", note: "A critical device has gone silent" },
+  { label: "Pulsing", state: "active", mark: "alarm", pulse: true,
+    note: "Act now: an alarm, or a critical device gone silent. An open fault does not pulse" },
   { label: "Grey \"?\"", state: "unavailable", mark: "lost", note: "No contact, the square is faded" },
   { label: "Grey \"z\"", state: "off", mark: "asleep", note: "Asleep by design, its last report is shown" },
-  { label: "Teal \"…\"", state: "off", mark: "moving", note: "Moving, locking, opening, closing" },
+  { label: "Blue \"…\"", state: "off", mark: "moving", note: "Moving, locking, opening, closing" },
 ];
 
 /** A room chip: its number's colour is the room's health (summaryLook.roomHealth → colors.healthPill). */
 const CHIP_COUNTS: { label: string; health: RoomHealth; note: string }[] = [
   { label: "Green number", health: "ok", note: "All right, every device is reporting and nothing needs attention" },
   { label: "Grey number", health: "unavailable", note: "No contact with a device in the room" },
-  { label: "Amber number", health: "fault", note: "A device in the room has an open fault, shown before grey" },
-  { label: "Purple number", health: "alert", note: "Act now: an alarm, or a critical device gone silent, shown first" },
+  { label: "Amber number", health: "alert",
+    note: "Something in the room needs attention: an alarm, a critical device gone silent or an open fault, shown before grey" },
 ];
 
-/** The seven status colours, as every pill, history bar, On button and 3D object paints them (utils/stateColors
+/** The six status colours, as every pill, history bar, On button and 3D object paints them (utils/stateColors
  *  STATUS_COLOR, read here so the legend cannot describe another colour). ⚠️ ONE MEANING PER COLOUR (owner,
  *  2026-11-13; swapped 2026-11-15): green is "the device is alive, and reporting the usual state", red "on, doing
- *  something", purple the alarm. */
+ *  something", amber "needs attention" (the alarm included since 2026-11-15, its pill pulsing). */
 const STATUS_ITEMS: { label: string; swatch: string; note: string }[] = [
   { label: "Usual", swatch: STATUS_COLOR.usual, note: "Alive, in its usual state: off, closed, locked, no motion, no leak, disarmed" },
   { label: "On / active", swatch: STATUS_COLOR.active, note: "Doing something, nothing wrong: on, open, unlocked, motion seen, occupied, playing, armed" },
   // ONE entry for the one meaning (owner, 2026-11-15): moving, and a cover part of the way open (panelRules.PARTIALLY_OPEN)
   { label: "In between", swatch: STATUS_COLOR.transitional,
     note: "Moving (opening, closing, locking, arming), or a curtain, blind or shutter partly open" },
-  { label: "Needs a look", swatch: STATUS_COLOR.warn, note: "A late maintenance, a state marked as a warning" },
-  { label: "Alarm", swatch: STATUS_COLOR.alert, note: "Act now: a leak or smoke, a jammed lock, a fault, a critical door unlocked or offline" },
+  { label: "Needs attention", swatch: STATUS_COLOR.warn,
+    note: "A leak or smoke, a jammed lock, a fault, a critical door unlocked or offline. Its pill pulses: act now" },
   { label: "Unavailable", swatch: STATUS_COLOR.unavailable, note: "No contact with the device" },
   { label: "No value", swatch: STATUS_COLOR.noValue, note: "The device answers with no value to give right now" },
   // the same empty track, said apart (stateColors.NOT_KEPT_COLOR)
@@ -124,7 +129,7 @@ export default function LegendModal({ onClose, listable, onListCategory }: {
           {BADGE_ITEMS.map((b) => (
             <div className="legend-row" key={b.label}>
               <img
-                className="legend-badge"
+                className={b.pulse ? "legend-badge urgent" : "legend-badge"}
                 src={badgeImage({ category: "light", iconKey: "lightbulb", state: b.state, mark: b.mark, linkPill: b.linkPill, bakePx: 64 })}
                 alt=""
                 draggable={false}

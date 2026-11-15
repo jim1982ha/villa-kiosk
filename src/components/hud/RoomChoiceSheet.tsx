@@ -79,7 +79,7 @@ export default function RoomChoiceSheet({
             <MapPin size={16} className="room-choice-icon" />
             <span className="room-choice-name">{c.room}</span>
             <span
-              className="room-choice-count"
+              className={`room-choice-count${c.health === "alert" ? " urgent" : ""}`}
               style={{ background: healthPill(c.health).fill, color: healthPill(c.health).ink }}
             >{c.count}</span>
           </button>

@@ -5,8 +5,6 @@
 // lived in the Dashboard as callbacks and six loose states, checked only by
 // matching the page's source; a hand-over closed its window before asking
 // whether the device could open (2.496.274). Each move is an action now.
-import { register } from "node:module";
-register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 const { START, screenReducer, backLabel } = await import("@/pages/screen");
 

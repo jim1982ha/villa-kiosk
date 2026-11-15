@@ -3,9 +3,7 @@
 // the close (kind cleared) carries `lasting` (the agreement's ticketUpdate), the VESTA Agent never reads it again, it
 // is watched by nothing (straight to Closed), its pill says so, and the device's live state of it, begun before that
 // close, is no open issue; begun after, it is new. Driven through the real modules.
-import { register } from "node:module";
 import { readFileSync } from "node:fs";
-register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 const { applyFmCommand } = await import("@/fm/fmCommands");
 const { closedAsLasting } = await import("@/fm/fmEngine");

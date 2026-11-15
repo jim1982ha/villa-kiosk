@@ -96,7 +96,7 @@ import { resolveMeshToMapping, extractVariantSuffix, hasVariantSuffix, deviceTyp
 import { groupMemberIds, groupForPrimary } from "@/config/deviceGroups";
 import { effectiveCategory, subjectOf, categorySurface } from "@/config/EntityCategories";
 import {
-  badgeOwnerOf, deviceLook, drawsBadge, lookMarks, mapLookSource, meshLookFor, NO_MARKS, sameMarks,
+  badgeOwnerOf, deviceLook, drawsBadge, isUrgent, lookMarks, mapLookSource, meshLookFor, NO_MARKS, sameMarks,
   type DeviceMarks, type LookSource,
 } from "@/utils/deviceActivity";
 import { hsToRgb, kelvinToRgb } from "@/utils/colorUtils";
@@ -513,7 +513,7 @@ const CAMERA_LOCAL_FORWARD = new Vector3(0, 0, 1);
  *  blue — see categoryColor("energy") — a room summary shouldn't look like a device
  *  category), and lighter than the translucent near-black tried before that
  *  (read as "just black" at a glance). Deliberately outside every category
- *  hue (green/orange/purple/gold/blue) so a chip reads as UI chrome — a
+ *  hue (green/orange/pink/gold/blue) so a chip reads as UI chrome — a
  *  navigation affordance, not a device — rather than any category's badge. */
 const CLUSTER_BG_COLOR = "#475569"; // until the first pass paints the idle badge's surface (renderChips)
 /** How far a room chip's count pill sits inside its line's top-right corner. */
@@ -580,6 +580,8 @@ const CHIP_COUNT_INSET_PX = 3;
 // Advanced by real elapsed time so the alert pulse breathes at the same rate on
 // a 60 Hz tablet and a 120 Hz phone.
 const PULSE_RAD_PER_SEC = 3.6;
+/** How faint an urgent badge gets at the bottom of its breath (animatePulse): still plainly there, never gone. */
+const BADGE_PULSE_MIN = 0.45;
 
 
 /** Bucket name for badges whose entity has no room configured — they still
@@ -758,6 +760,12 @@ export class EntityVisuals {
   /** The meshes pulsing, each in its window's status colour (meshLookFor's `tone`), with its own scratch colour: the
    *  material keeps the Color3 it is given, so two pulses of different colours cannot share one. */
   private pulsing = new Map<AbstractMesh, { tone: Color3; now: Color3 }>();
+  /** The badges that say "act now" (deviceActivity.isUrgent: an alarm, a critical device silent): their badge breathes on
+   *  the pulse clock the meshes use (animatePulse), amber like their mark (owner, 2026-11-15: urgency is a pulse, never a
+   *  colour). An open fault's amber "!" is still. */
+  private urgentBadges = new Set<string>();
+  /** The viewer asked for less motion: an urgent badge stays still, its amber mark says it. */
+  private readonly reducedMotion = typeof matchMedia === "function" ? matchMedia("(prefers-reduced-motion: reduce)") : null;
 
   // ── Badge-layout frame budget (2.113.0) ──────────────────────────────────
   // cullLabels() runs from registerBeforeRender, i.e. on EVERY rendered frame,
@@ -1950,6 +1958,7 @@ export class EntityVisuals {
     this.roomHighlight.dispose();
     this.fans.clear();
     this.pulsing.clear();
+    this.urgentBadges.clear();
     this.labels.clear();
     this.labelsNewestFirst.length = 0;
     this.lastState.clear();
@@ -3325,6 +3334,9 @@ export class EntityVisuals {
       });
     }
     lbl.badge.alpha = 1;
+    // an alarm or a critical device silent: the badge breathes (animatePulse); anything else is still
+    if (isUrgent({ mark, linkPill })) this.urgentBadges.add(entityId);
+    else this.urgentBadges.delete(entityId);
     // The value pill is never shown for an unavailable entity anyway
     // (compactValue short-circuits to "" for every type when state is
     // unavailable/unknown — see below), so it needs no alpha of its own.
@@ -5845,7 +5857,7 @@ export class EntityVisuals {
           this.pulsing.delete(mesh);
           setEmissive?.(LOST_GREY.scale(0.4));
         } else if (look.on) {
-          this.pulsing.set(mesh, { tone: STATUS_COLOR3[look.tone ?? "alert"], now: new Color3(0, 0, 0) });
+          this.pulsing.set(mesh, { tone: STATUS_COLOR3[look.tone ?? "warn"], now: new Color3(0, 0, 0) });
         } else {
           this.pulsing.delete(mesh);
           setEmissive?.(Color3.Black());
@@ -5868,7 +5880,9 @@ export class EntityVisuals {
   }
 
   private animatePulse(dtMs: number): void {
-    if (this.pulsing.size === 0 && !this.beams.hasActive()) return;
+    // reduced motion: an urgent badge stays whole (updateLabel), so it asks for no frame of its own
+    const breathing = this.urgentBadges.size > 0 && !(this.reducedMotion?.matches ?? false);
+    if (this.pulsing.size === 0 && !breathing && !this.beams.hasActive()) return;
     this.pulseT += (dtMs / 1000) * PULSE_RAD_PER_SEC;
     const intensity = (Math.sin(this.pulseT) + 1) / 2; // 0..1
     // Reused, not rebuilt (each pulse's own `now`): this runs every frame for as long as a sensor stays on, and
@@ -5878,6 +5892,12 @@ export class EntityVisuals {
       this.emissiveOf(mesh)?.(p.now);
     }
     this.beams.applyPulse(intensity);
+    // the urgent badges breathe on the same clock, between whole and BADGE_PULSE_MIN (reduced motion: whole, still)
+    for (const id of this.urgentBadges) {
+      const lbl = this.labels.get(id);
+      if (!lbl) { this.urgentBadges.delete(id); continue; }
+      lbl.badge.alpha = breathing ? BADGE_PULSE_MIN + (1 - BADGE_PULSE_MIN) * intensity : 1;
+    }
     this.requestAnimationRender();
   }
 

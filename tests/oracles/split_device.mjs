@@ -8,8 +8,6 @@
 // (deviceFolding, with the registry's sub-devices) → lookFacts → villaDevices → the Cockpit's cards (attentionOf →
 // attentionFor), each window's warning sign (issueSeverity), its "Also on this device" (deviceReadings → readingRows),
 // and each badge (deviceLook). Invented ids.
-import { register } from "node:module";
-register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 const { deviceFolding, villaDevices, lookFacts, deviceReadings } = await import("@/config/deviceGroups");
 const { attentionOf, attentionFor, issueSeverity } = await import("@/config/attention");

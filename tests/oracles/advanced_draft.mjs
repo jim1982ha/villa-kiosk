@@ -6,9 +6,7 @@
 //
 // Driven by value: the real edits each section of Advanced Settings makes, applied to a real config, through the
 // slice's own rule and the config's own normalisation — then the wiring.
-import { register } from "node:module";
 import { readFileSync } from "node:fs";
-register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 const { ADVANCED_SETTINGS_KEYS: KEYS, sliceOf, EMPTY_LEDGER, recordEdit, ledgerDirty, revertLedger } =
   await import("@/config/configSlice");

@@ -15,8 +15,6 @@
 // layout under the OLD rule (no alphaIndex) really does put a pool before the
 // glow from some of them. Without that counterfactual the oracle could pass
 // for a reason unrelated to the fix.
-import { register } from "node:module";
-register("../consistency/alias-hook.mjs", import.meta.url);
 
 // The pool's gradient is drawn on a 2D canvas, which Node has none of. The
 // NullEngine never uploads it, so a canvas that accepts the calls is enough —

@@ -20,8 +20,6 @@
 // the value is perfectly known and interpolation threw that away. The two
 // compose — step first, then split — and the last check below is the one that
 // proves the composition rather than either half.
-import { register } from "node:module";
-register("../consistency/alias-hook.mjs", import.meta.url);
 
 const { stepped } = await import("@/utils/stepSeries");
 const { splitAtGaps } = await import("@/utils/historyGaps");

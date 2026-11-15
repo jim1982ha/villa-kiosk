@@ -5,8 +5,6 @@
 // baseline, the key list); missing one in the parser silently dropped that
 // setting on every pull, and none of it was tested. Each key is one row now.
 // These checks loop over EVERY key, so a key added later is covered unasked.
-import { register } from "node:module";
-register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 const dc = await import("@/config/deviceConfig");
 const { SHARED_CONFIG_KEYS: KEYS } = dc;

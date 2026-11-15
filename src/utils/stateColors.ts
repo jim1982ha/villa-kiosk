@@ -19,7 +19,7 @@ export const NO_RECORD_WORDS = "No record yet";
 export const isNoHistory = (state: string): boolean => state === NOT_KEPT || state === NO_RECORD;
 
 /**
- * THE status vocabulary: seven meanings, one colour each, defined here and nowhere else (owner, 2026-11-13: "one
+ * THE status vocabulary: six meanings, one colour each, defined here and nowhere else (owner, 2026-11-13: "one
  * colour code for every status"). The same table paints the state pill, the history bar, the On button, the 3D
  * object, the map, the Cockpit, the presence tile, the camera's bar and the "Map colours & keys" legend.
  *
@@ -27,19 +27,20 @@ export const isNoHistory = (state: string): boolean => state === NOT_KEPT || sta
  *   active        red          on, doing something, nothing wrong: on, open, unlocked, motion seen, occupied, playing,
  *                              armed
  *   transitional  blue         in between: moving (opening, closing, locking, arming, returning), or a cover partly open
- *   warn          amber        needs a look: a late maintenance, a state marked as a warning
- *   alert         purple       an alarm: a leak, smoke, jammed, a fault word, a critical device offline
- * ⚠️ SWAPPED (owner, 2026-11-15): usual was purple, active green, alarm red; a lock was its own exception (locked green,
- *  unlocked amber or red) and follows the table now like every device.
+ *   warn          amber        needs attention: an alarm (a leak, smoke, jammed, a fault word), a critical device
+ *                              offline, a critical door unlocked
+ * ⚠️ SWAPPED (owner, 2026-11-15): active was green and the alarm red before; a lock was its own exception (locked green,
+ *  unlocked amber or red) and follows the table now like every device. The same day the alarm's own colour merged into
+ *  amber: urgency is no colour, what is urgent PULSES (deviceActivity.URGENT_MARKS, 08-shared.css urgent-pulse).
  *   unavailable   light grey   lost contact ("unavailable"), a plain colour, never striped
  *   noValue       empty track  nothing to show: "unknown", blank, "none", and history no longer kept
  *
  * ⚠️ ONE COLOUR IS "THE DEVICE IS ALIVE, AND REPORTING THE USUAL STATE" (owner, 2026-11-13), never a judgement: where a
- * state is a problem, its usual state is that colour and the problem amber or red. ⚠️ PURPLE, ACTIVE GREEN (owner, the
+ * state is a problem, its usual state is that colour and the problem amber. ⚠️ USUAL AND ACTIVE INVERTED (owner, the
  * same evening: "consistently and globally invert" the two): the swap is these two lines and their tokens
  * (--status-usual, --status-active), nothing else. Until 2.496.792 "active" was green for
  * on and "idle" the empty track for off, so a light off, a curtain closed and a sensor with no value were one colour;
- * 2.496.792 then gave a closed curtain the Access control category's purple ("shut"). ⚠️ A CATEGORY COLOUR (--cat-*)
+ * 2.496.792 then gave a closed curtain the Access control category's colour ("shut"). ⚠️ A CATEGORY COLOUR (--cat-*)
  * IS NEVER A STATUS: it is a device's identity, on its icon tile only. Stripes are not a colour either: a chart's
  * period that mixed several states is striped in the colours it mixed (timelineCells.cellBackground), nothing else.
  *
@@ -54,8 +55,9 @@ export const STATUS_COLOR = {
    *  fault: without it every transitional state fell onto lost contact's colour, so a lock's history read "lost
    *  contact" for the second or two it spent motoring. See TRANSITIONAL_STATES. */
   transitional: "var(--status-pending)",
+  /** Needs attention, the one colour of every problem a device states (an alarm, a critical device silent) and of an
+   *  open fault: urgency is said by a pulse, never by a second colour (owner, 2026-11-15). */
   warn: "var(--status-warning)",
-  alert: "var(--status-alarm)",
   /** The villa's system has lost contact ("unavailable"), never "unknown", a device answering with no value
    *  (contactOf "no-value": noValue). ⚠️ GREY, NO LONGER AMBER (owner, 2026-10-22: badge proposal 2), and LIGHT and
    *  PLAIN since 2026-11-13: the stripes it was drawn in were the chart's, not the state's. */
@@ -80,7 +82,6 @@ export const STATUS_HEX: Record<StatusKey, string> = {
   active: "#B24232",       // --status-active
   transitional: "#2B67C0", // --status-pending
   warn: "#B8801F",         // --status-warning
-  alert: "#6E57B8",        // --status-alarm
   unavailable: "#9A9F98",  // --status-lost
   noValue: "#D8D3C7",      // --status-off
 };
@@ -90,19 +91,19 @@ export const STATUS_HEX: Record<StatusKey, string> = {
  *  track"); its own colour since 2026-10-20 sat beside the grey of lost contact. */
 export const NOT_KEPT_COLOR = STATUS_COLOR.noValue;
 /** The app's own red for its own failures (a save that did not happen, the model not refreshed): no device's state, so
- *  not one of the seven meanings, and never the alarm purple (owner, 2026-11-15). */
+ *  not one of the six meanings, and never the amber of "needs attention" (owner, 2026-11-15). */
 export const ERROR_COLOR = "var(--status-danger)";
 
-/** A critical device's reading (on the villa's critical list): its "needs a look" and its lost contact are an alarm
- *  (owner, 2026-11-13: "a critical door unlocked, a critical device offline" are red). Every other meaning stays. The
- *  one escalation, applied to the meaning before anything paints it, through the device's rule (statusRule). */
+/** A critical device's reading (on the villa's critical list): its lost contact needs attention (owner, 2026-11-13: "a
+ *  critical device offline" is an alarm), amber like every alarm, and urgent (its "?" pulses). Every other meaning
+ *  stays. The one escalation, applied to the meaning before anything paints it, through the device's rule (statusRule). */
 export function criticalStatus(key: StatusKey, critical: boolean): StatusKey {
-  return critical && (key === "warn" || key === "unavailable") ? "alert" : key;
+  return critical && key === "unavailable" ? "warn" : key;
 }
 
 /** ONE DEVICE'S RULE for every status it shows: a state's meaning, once it is known whether its device is on the
- *  villa's critical list (criticalStatus: "needs a look" and lost contact are the alarm's red) or hidden in the villa's
- *  system (never red or amber anywhere: its alarm and its "needs a look" read as its usual state). The device's look
+ *  villa's critical list (criticalStatus: lost contact needs attention) or hidden in the villa's
+ *  system (never amber anywhere: its alarm reads as its usual state). The device's look
  *  carries it (deviceActivity.DeviceLook.statusRule); its badge, its 3D object, its room's number, the Cockpit's alarms
  *  and every pill of its window project what it says. */
 export type StatusRule = (key: StatusKey) => StatusKey;
@@ -110,7 +111,7 @@ export type StatusRule = (key: StatusKey) => StatusKey;
 /** The rule of a device neither critical nor hidden (or before the villa is read): every meaning as it is. */
 export const PLAIN_STATUS: StatusRule = (key) => key;
 
-const HIDDEN_STATUS: StatusRule = (key) => (key === "alert" || key === "warn" ? "usual" : key);
+const HIDDEN_STATUS: StatusRule = (key) => (key === "warn" ? "usual" : key);
 const CRITICAL_STATUS: StatusRule = (key) => criticalStatus(key, true);
 
 /** The rule of a device with these facts (hidden wins: it is no device anywhere). The COLOUR of every state it shows;
@@ -121,7 +122,7 @@ export function statusRule(facts: { critical: boolean; hidden: boolean }): Statu
 }
 
 /** The colour of a button that MOVES a device to `target` (its state as the villa's system names it: "unlocked",
- *  "open"): the colour of the state it leads to, from this table — "Unlock door…" amber (red for a critical door),
+ *  "open"): the colour of the state it leads to, from this table — "Unlock door…" in the active colour,
  *  "Lock door" and "Close" in the usual colour, "Open" in the active one. A button that SAYS a state (the power button)
  *  takes the state it says (PowerToggle). ⚠️ AN ACTION WEARS WHERE IT LEADS (owner, 2026-11-13: "Shall the `Unlock
  *  door` button colour be contextual to the `unlocked` colour state?"): it wore the app's green accent, a colour that
@@ -182,24 +183,24 @@ const UNIVERSAL_STATES: Record<string, StatusKey> = {
   // utils/deviceActivity.ts already treats as an alert on the map badge and
   // the device list — one device reporting "fault" must not be a red badge
   // and a grey history segment.
-  jammed: "alert",
-  triggered: "alert",
-  problem: "alert",
-  alarm: "alert",
-  tripped: "alert",
-  error: "alert",
-  fault: "alert",
-  faulted: "alert",
-  failed: "alert",
-  fail: "alert",
+  jammed: "warn",
+  triggered: "warn",
+  problem: "warn",
+  alarm: "warn",
+  tripped: "warn",
+  error: "warn",
+  fault: "warn",
+  faulted: "warn",
+  failed: "warn",
+  fail: "warn",
   // A device REPORTING that it is offline/unreachable is an observation the
   // device successfully made — not the same thing as the villa's system having
   // lost contact with the entity (which is `unavailable`, handled above).
-  offline: "alert",
-  disconnected: "alert",
-  unreachable: "alert",
-  down: "alert",
-  disabled: "alert",
+  offline: "warn",
+  disconnected: "warn",
+  unreachable: "warn",
+  down: "warn",
+  disabled: "warn",
 };
 
 /** Where a domain reads a state differently from the universal table. */
@@ -293,15 +294,16 @@ export const STATUS_PILL_CLASS: Record<StatusKey, string> = {
   usual: "usual",
   active: "active",
   transitional: "transitional",
-  warn: "warn",
-  alert: "danger",
+  /** A device's "needs attention" is always urgent (an alarm, a critical device silent: an open fault is no state of
+   *  the device), so its pill is the urgent one: amber, pulsing (03-panels `.status-pill.danger`). */
+  warn: "danger",
   unavailable: "unavailable",
   noValue: "novalue",
 };
 
 /**
  * A binary_sensor's meaning. When it has a PROBLEM state — its device class's (leak, smoke, gas, tamper, a low
- * battery…: deviceCondition.windowProblemState) — that state is an alert and the OTHER one is the device alive in
+ * battery…: deviceCondition.windowProblemState) — that state needs attention (amber, urgent) and the OTHER one is the device alive in
  * its usual state: "usual", green. Without one (presence, motion, a door, a plug, a running pump): on is active, off
  * usual. Unavailable/unknown keep their own meaning.
  *
@@ -312,7 +314,7 @@ export const STATUS_PILL_CLASS: Record<StatusKey, string> = {
 export function binaryStatus(state: string, alertState?: string): StatusKey {
   const plain = statusKeyFor(state, "binary_sensor");
   if (state !== "on" && state !== "off") return plain;
-  if (alertState === "on" || alertState === "off") return state === alertState ? "alert" : "usual";
+  if (alertState === "on" || alertState === "off") return state === alertState ? "warn" : "usual";
   return plain;
 }
 
@@ -329,7 +331,7 @@ function knownStatus(state: string): StatusKey | undefined {
 /**
  * Stable colour-per-distinct-state for an arbitrary text/enum sensor whose possible values aren't known ahead of time
  * (an access point's "connected"/"disconnected", a weather condition string, …): a word the table knows takes its
- * meaning's colour (a "disconnected" is red here as everywhere), any other a series colour in first-seen order,
+ * meaning's colour (a "disconnected" is amber here as everywhere), any other a series colour in first-seen order,
  * cycling if there are more distinct words than colours.
  */
 export function paletteColorFor(states: string[]): (state: string) => string {

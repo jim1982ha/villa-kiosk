@@ -12,8 +12,6 @@
 //     chipping their rooms — one refusal once chipped five rooms;
 //   * a card with nowhere to stand escalates its rooms, and says so;
 //   * a focused room's card never escalates.
-import { register } from "node:module";
-register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 const { PlacementPass, roomSpanLabel, roomOfEntity, cardOf, layoutOf, sortCardMembers } = await import("@/babylon/placementPass");
 const { RoomFocus } = await import("@/babylon/roomFocus");

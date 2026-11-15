@@ -9,9 +9,7 @@
 //   inside(html, "fm-record-head")                    // the markup of the first element with that class
 //   text(html)                                        // what a reader sees: words, an [icon] for each svg, "|" between
 //
-// Importing it registers the alias hook (the `@/` imports, .tsx screens, stylesheets emptied), so it goes first.
-import { register } from "node:module";
-register("./alias-hook.mjs", import.meta.url);
+// The alias hook (the `@/` imports, .tsx screens, stylesheets emptied) is registered once for the run (register.mjs).
 const React = (await import("react")).default;
 const { renderToStaticMarkup } = await import("react-dom/server");
 const { SuperadminGate } = await import("@/auth/SuperadminGate");

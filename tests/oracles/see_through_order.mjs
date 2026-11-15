@@ -8,8 +8,6 @@
 // its depth, and the cone behind the pane failed the depth test — the same
 // defect class as the light pools under the presence glow (2.496.53).
 // Babylon's own transparent sort, on the real CameraBeams mesh.
-import { register } from "node:module";
-register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 globalThis.OffscreenCanvas ??= class { constructor(w,h){this.width=w;this.height=h} getContext(){return{createImageData:(w,h)=>({data:new Uint8ClampedArray(w*h*4)}),putImageData(){}}} };
 const { NullEngine } = await import("@babylonjs/core/Engines/nullEngine.js");

@@ -9,7 +9,6 @@
 // value through the same draft, and the tree: every handler of Settings writes through it (Advanced Settings' edits are
 // driven by tests/oracles/advanced_draft.mjs, its typed fields by dialog_pending.mjs).
 import { register } from "node:module";
-register("../consistency/alias-hook.mjs", import.meta.url);
 // asked before the alias hook (registered last): the store's context exported, as the screenshot harness does
 register(`data:text/javascript,${encodeURIComponent(`
 export async function load(url, context, next) {

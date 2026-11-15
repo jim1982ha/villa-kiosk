@@ -7,8 +7,6 @@
 // broke on exactly these (2.496.79: every ground-floor bulb cut off at the
 // tread; the clearance rule sent a 2.3 m ceiling lamp to the staircase's storey
 // and to no room at all). Replayed with and without the plan's storey numbers.
-import { register } from "node:module";
-register("../consistency/alias-hook.mjs", import.meta.url);
 const { Storeys, isStairwell } = await import("@/babylon/storeys");
 import { readFileSync, readdirSync, statSync, existsSync } from "node:fs";
 import { join } from "node:path";

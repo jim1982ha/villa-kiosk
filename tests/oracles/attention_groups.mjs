@@ -11,9 +11,7 @@
 // keeps its Close, no-device problems stand alone, an unknown entity is its
 // own device, the profile filter runs first, the worst problem leads, the
 // order does not depend on arrival, and every count reads the rows.
-import { register } from "node:module";
 import { readFileSync } from "node:fs";
-register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 const { attentionOf, groupAttention, attentionFor } = await import("@/config/attention");
 const { EMPTY_FM_DATA } = await import("@/fm/fmTypes");

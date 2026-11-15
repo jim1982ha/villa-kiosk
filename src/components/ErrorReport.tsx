@@ -7,7 +7,7 @@
 import { useRef, useState, type ReactNode } from "react";
 import { AlertTriangle, Copy, Check } from "lucide-react";
 import { copyText } from "@/utils/clipboard";
-import { STATUS_COLOR } from "@/utils/stateColors";
+import { ERROR_COLOR } from "@/utils/stateColors";
 
 interface Props {
   title: string;
@@ -57,8 +57,8 @@ export default function ErrorReport({ title, hint, detail, actions }: Props) {
       }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <AlertTriangle size={22} style={{ color: STATUS_COLOR.alert, flexShrink: 0 }} />
-        <h2 style={{ fontFamily: "var(--font-display)", color: STATUS_COLOR.alert, margin: 0 }}>{title}</h2>
+        <AlertTriangle size={22} style={{ color: ERROR_COLOR, flexShrink: 0 }} />
+        <h2 style={{ fontFamily: "var(--font-display)", color: ERROR_COLOR, margin: 0 }}>{title}</h2>
       </div>
 
       {hint && <div className="body-text" style={{ maxWidth: 640 }}>{hint}</div>}

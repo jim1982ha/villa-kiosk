@@ -1,8 +1,6 @@
 // What Home Assistant's registries say about each entity
 // (src/ha/registryResolve.ts), and when the kiosk re-reads them
 // (HAStateStore's one on-connected pass) — round 10, 2.496.160.
-import { register } from "node:module";
-register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 const R = await import("@/ha/registryResolve");
 

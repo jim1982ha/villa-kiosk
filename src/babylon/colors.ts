@@ -7,28 +7,29 @@ import { STATUS_HEX, type StatusKey } from "@/utils/stateColors";
 
 // ⚠️ NO HEX OF ITS OWN (owner, 2026-11-15: every colour of a meaning defined ONE time): the 3D colours and the baked
 // pills read the status table's one light-theme mirror (stateColors.STATUS_HEX). The alarm's own ALERT_RED and its
-// hex, a red until 2026-11-15, are gone: an alarm is STATUS_COLOR3.alert.
+// hex, a red until 2026-11-15, are gone: an alarm is STATUS_COLOR3.warn, the amber of "needs attention" (owner,
+// 2026-11-15: the alarm's own colour merged into amber, urgency is a pulse).
 
 // "The villa's system has lost contact with this device — its state isn't known": distinct from the alarm (a
 // confirmed, actionable state) on purpose — tinting an unavailable lock/sensor mesh as an alarm would assert a state
 // never observed (EntityVisuals.applyToMesh). Grey, a fault's amber being "check soon" (owner, 2026-10-22).
 export const LOST_GREY = Color3.FromHexString(STATUS_HEX.unavailable);
 
-/** A room's health as the status table's colour (summaryLook.roomHealth): a fault is "needs a look", all right the
- *  usual green (owner, 2026-11-14: green for "all right"; since 2026-11-15 that IS the usual's colour), an alarm the
- *  alarm's purple. */
-const HEALTH_STATUS = { alert: "alert", fault: "warn", unavailable: "unavailable", ok: "usual" } as const satisfies Record<string, StatusKey>;
+/** A room's health as the status table's colour (summaryLook.roomHealth): an alarm and a fault both "needs attention"
+ *  amber (owner, 2026-11-15; the alarm is listed first, roomHealth's order), all right the usual green (owner,
+ *  2026-11-14: green for "all right"; since 2026-11-15 that IS the usual's colour). */
+const HEALTH_STATUS = { alert: "warn", fault: "warn", unavailable: "unavailable", ok: "usual" } as const satisfies Record<string, StatusKey>;
 /** The ink on each pill: white on the dark fills, dark on the light ones. */
 const DARK_INK = "#17191A";
 
-/** A room's count pill, by the room's HEALTH (summaryLook.roomHealth): the alarm's purple —
- *  something needs attention; amber — a device has an open fault; grey —
+/** A room's count pill, by the room's HEALTH (summaryLook.roomHealth): amber — something needs attention (an alarm,
+ *  a critical device silent, a device with an open fault); grey —
  *  contact with a device is lost; green — all right. ONE answer for the map
  *  chip (EntityVisuals.renderChips), the "Which room?" list (RoomChoiceSheet)
  *  and the legend.
  *
  *  The vocabulary's own colours, as the badges' corner marks (owner,
- *  2026-10-22: badge proposal 2): red act now, amber a fault, grey no contact.
+ *  2026-10-22: badge proposal 2): amber needs attention, grey no contact.
  *  2.496.265 briefly had red for the BORDER and amber/green here — two signals
  *  on one chip, which read as contradicting each other (owner, 2026-10-04).
  *

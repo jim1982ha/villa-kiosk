@@ -13,9 +13,7 @@
 // And one scale for every depth, while the walker stands among the badges —
 // now each badge is measured at the reference depth along its own line of
 // sight (atReferenceDepth), so every distance is an on-screen separation.
-import { register } from "node:module";
 import { readFileSync } from "node:fs";
-register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 const { onGlass } = await import("@/babylon/badgeLayout");
 const { viewBasis, VIEW_BASIS_STEPS, atReferenceDepth } = await import("@/babylon/badgeProjection");

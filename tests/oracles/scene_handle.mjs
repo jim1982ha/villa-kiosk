@@ -2,8 +2,6 @@
 // A call on the 3D scene after it was torn down does nothing, whoever makes it and whenever (owner's report,
 // 2.496.784: "Cannot read properties of null (reading 'setDeviceMarks')" reloading an edited model). An invented
 // scene stands in for the real one, torn down the way it is: its parts nulled.
-import { register } from "node:module";
-register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 const { sceneHandle } = await import("@/babylon/sceneHandle");
 

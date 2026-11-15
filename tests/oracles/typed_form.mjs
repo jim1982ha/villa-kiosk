@@ -5,8 +5,6 @@
 //
 // Driven under React (tests/consistency/fakedom.mjs): the window's real guard and a form's real hook, typed into,
 // left, answered.
-import { register } from "node:module";
-register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 import { mountRoot } from "../consistency/fakedom.mjs";
 const { React, act, render } = mountRoot();

@@ -7,8 +7,6 @@
 // Driven by value through the production path: the villa's devices (villaDevices, over a states fixture), the items
 // (attentionOf), the cards (groupAttention → cockpitCard), the Inbox's alert card drawn (issueAsTold → CockpitAttentionRow), and
 // the counts (attentionFor's health). Placeholder ids.
-import { register } from "node:module";
-register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 import { h, draw } from "../consistency/screen.mjs";
 const { villaDevices } = await import("@/config/deviceGroups");

@@ -2,9 +2,7 @@
 // review 2026-10-15): the Kiosk side of the check — the agent host's tests hold the other side against the same file.
 // Its stamp and source are what the proxy writes, every origin has its icon, the sample reads as the alert it is, and
 // "Open Ticket" in the Kiosk writes exactly the step the agreement calls a take-on (the agent stops chasing on it).
-import { register } from "node:module";
 import { readFileSync } from "node:fs";
-register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 
 const contract = JSON.parse(readFileSync(new URL("../../rootfs/usr/share/vesta/agent-contract.json", import.meta.url), "utf8"));

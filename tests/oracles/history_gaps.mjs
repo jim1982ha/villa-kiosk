@@ -16,12 +16,10 @@
 // a value it can colour. The numeric path turns states into numbers first, and
 // a number cannot say "there was nothing here" — the same shape as the older
 // `Number(null) === 0` defect, one level up.
-import { register } from "node:module";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-register("../consistency/alias-hook.mjs", import.meta.url);
 
 const { gapsFrom, splitAtGaps, gapBand } = await import("@/utils/historyGaps");
 

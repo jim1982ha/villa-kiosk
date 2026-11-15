@@ -1,8 +1,6 @@
 // A window's two exits (owner, 2026-10-20): Save saves AND closes, Cancel undoes every change — every tab's — and
 // closes; a passing notice says which, only when something changed. Escape and the backdrop are Cancel. By value
 // (ModalFooter's footerExits), and the wiring by the screens' own tree.
-import { register } from "node:module";
-register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 import { readFileSync, existsSync } from "node:fs";
 const { footerExits, SAVED_NOTICE, CANCELLED_NOTICE } = await import("@/components/common/ModalFooter");

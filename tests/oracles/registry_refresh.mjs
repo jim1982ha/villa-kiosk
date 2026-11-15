@@ -6,8 +6,6 @@
 // failure — so the AREA registry failing alone re-derived every place from an
 // empty area map and blanked every room name and floor number in the villa
 // until the next registry event. The resolver was tested; its caller was not.
-import { register } from "node:module";
-register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 const { placesAfterRefresh } = await import("@/ha/registryResolve");
 

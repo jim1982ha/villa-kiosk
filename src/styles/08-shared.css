@@ -52,6 +52,26 @@
 }
 @keyframes reduced-motion-breathe { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
 
+/* ⚠️ ACT NOW PULSES, IN AMBER (owner, 2026-11-15): the alarm had its own colour beside the fault's amber; every "needs
+   attention" mark is amber now, and URGENCY IS THIS PULSE, never a colour: an alarm (a leak, smoke, a jammed lock, a
+   low battery) and a critical device gone silent, as the map's badge and room glow pulse them (deviceActivity
+   URGENT_MARKS). An open fault, a late task, an ordinary device offline stay amber and still. ONE animation for every
+   urgent mark of the HUD, the Cockpit and the windows; `.urgent` for any other. Reduced motion: no pulse, the amber
+   stays. */
+@keyframes urgent-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
+.urgent, .icon-btn.has-alert, .cockpit-attention-danger, .status-pill.danger, .panel-reading-value.danger,
+.fm-check-icon.fail, .summary-entity-row.is-lost.is-critical .summary-entity-state,
+.fm-record-strip.strip-danger .fm-record-number {
+  animation: urgent-pulse 1.6s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .urgent, .icon-btn.has-alert, .cockpit-attention-danger, .status-pill.danger, .panel-reading-value.danger,
+  .fm-check-icon.fail, .summary-entity-row.is-lost.is-critical .summary-entity-state,
+  .fm-record-strip.strip-danger .fm-record-number {
+    animation: none !important;
+  }
+}
+
 /* ---- Notices (components/hud/Notice) ----------------------------------
    The connection notice is amber, not red: the socket dropping is recoverable and usually self-heals in seconds, and
    red is what the map reserves for a device that needs attention (an unlocked door, a leak). */
@@ -249,10 +269,10 @@ body:has(.camera-fullscreen) .vesta-notice.below-camera { display: none; }
 }
 .source-role-badge.two { font-size: 6.5px; }
 /* A problem's icon in its SEVERITY (config/attention.attentionSeverity — the one rule the Cockpit button, the
-   card and the Recap's row share, owner 2026-10-18): red only for an alarm or a critical device offline; a fault,
-   any other offline device and a late task are a warning, amber. The five per-kind rules this replaces still
+   card and the Recap's row share, owner 2026-10-18): amber, PULSING (urgent-pulse, above) only for an alarm or a critical
+   device offline; a fault, any other offline device and a late task are amber and still. The five per-kind rules this replaces still
    painted every fault red after that decision (architecture review, 2026-10-19). */
-.cockpit-attention-danger { color: var(--status-alarm); }
+.cockpit-attention-danger { color: var(--status-warning); }
 .cockpit-attention-warn { color: var(--status-warning); }
 /* any other device offline: grey, "no contact" — the map badge's grey "?" (owner, 2026-10-22: badge proposal 2) */
 .cockpit-attention-lost { color: var(--status-lost-ink); }
@@ -382,8 +402,8 @@ body:has(.camera-fullscreen) .vesta-notice.below-camera { display: none; }
   flex: 0 0 auto; min-width: 24px; padding: 2px 8px;
   border-radius: 999px;
   font-size: var(--text-xs); font-weight: 600; font-variant-numeric: tabular-nums;
-  /* Background and ink set inline (colors.healthPill): red = needs attention,
-     amber = a fault, grey = no contact, green = all right — the map chip's count pill. */
+  /* Background and ink set inline (colors.healthPill): amber = needs attention (an alarm, a critical device silent,
+     a fault), grey = no contact, green = all right — the map chip's count pill. */
   text-align: center;
 }
 
@@ -506,7 +526,7 @@ body:has(.camera-fullscreen) .vesta-notice.below-camera { display: none; }
    Recap check, the spending cap — the frame of any card whose state is a warning or a danger. It was written four
    times in 07-facility.css under four vocabularies. `--tone` is the status colour; a card's icon or bar may use it. */
 .tone-warn { --tone: var(--status-warning); --tone-fill: 6%; --tone-edge: 25%; }
-.tone-danger { --tone: var(--status-alarm); --tone-fill: 7%; --tone-edge: 28%; }
+.tone-danger { --tone: var(--status-warning); --tone-fill: 7%; --tone-edge: 28%; }
 .tone-warn, .tone-danger {
   background: color-mix(in srgb, var(--tone) var(--tone-fill), var(--bg-card));
   border-color: color-mix(in srgb, var(--tone) var(--tone-edge), var(--hairline));

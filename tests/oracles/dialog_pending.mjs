@@ -11,9 +11,7 @@
 //
 // Driven under React itself (tests/consistency/fakedom.mjs): the real ConfigProvider, the real dialog draft, the real
 // field hook and preview seam, mounted, typed into, closed. Then the wiring of the real dialogs.
-import { register } from "node:module";
 import { readFileSync, existsSync } from "node:fs";
-register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 import { mountRoot } from "../consistency/fakedom.mjs";
 const { React, act, render } = mountRoot();

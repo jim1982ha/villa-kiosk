@@ -2,8 +2,6 @@
 // with stand-in adapters — until 2.496.233 it lived in two screen files and
 // the oracles could only search their text. Also the one "opened inside Home
 // Assistant" rule (ha/ingress.ingressBaseOf).
-import { register } from "node:module";
-register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 const { ProfileSession } = await import("@/auth/profileSession");
 const { ingressBaseOf } = await import("@/ha/ingress");

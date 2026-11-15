@@ -7,8 +7,6 @@
 // 2.124.0 the animation cap. Nothing could run it without a live engine.
 // FrameScheduler.tick is now that rule; this drives it with a fake resolution
 // valve and a clock that only moves when told to.
-import { register } from "node:module";
-register("../consistency/alias-hook.mjs", import.meta.url);
 const { FrameScheduler } = await import("@/babylon/frameScheduler");
 
 let fail = 0;

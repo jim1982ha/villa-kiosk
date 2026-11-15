@@ -9,8 +9,6 @@
 //
 // The first check below reruns the old axis and proves it loses the band, so a
 // pass here means the window is what fixed it.
-import { register } from "node:module";
-register("../consistency/alias-hook.mjs", import.meta.url);
 const { gapsFrom } = await import("@/utils/historyGaps");
 const { chartWindow, timeScale, lineRuns, windowEndingAt, bucketGaps } = await import("@/utils/lineChart");
 const { gapBand } = await import("@/utils/historyGaps");

@@ -11,9 +11,7 @@
 //
 // Driven by value: the real config normalisation, the real edits, the real sync machine against a fake store, the
 // shared store's own diff, merge and remote change. Then the wiring.
-import { register } from "node:module";
 import { readFileSync } from "node:fs";
-register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 const { DEFAULT_CONFIG, normaliseConfig } = await import("@/config/AppConfig");
 const D = await import("@/config/deviceConfig");

@@ -32,11 +32,12 @@ import { Storeys } from "./storeys";
 import { STATUS_COLOR3 } from "./colors";
 import { ROOM_GLOW_ALPHA_INDEX } from "./seeThroughOrder";
 
-// ⚠️ THE TABLE'S "ON, DOING SOMETHING" (red since 2026-11-15, owner: usual green, active red, alarm purple): someone
-// there or a door open is in use, never an alarm. The status table's own value.
+// ⚠️ THE TABLE'S "ON, DOING SOMETHING" (red since 2026-11-15, owner: usual green, active red, needs attention amber):
+// someone there or a door open is in use, never an alarm. The status table's own value.
 const GLOW_COLOR = STATUS_COLOR3.active;
-// …and a leak's or smoke's room, an alarm, in the table's alarm purple (setActive's `alarm`)
-const ALARM_GLOW_COLOR = STATUS_COLOR3.alert;
+// …and a leak's or smoke's room, an alarm, in the table's amber of "needs attention" (setActive's `alarm`), pulsing as
+// every glow does (owner, 2026-11-15: the alarm's own colour merged into amber, urgency is the pulse)
+const ALARM_GLOW_COLOR = STATUS_COLOR3.warn;
 // This glow is a translucent 3D overlay blended with the floor beneath it, so
 // it can never look pixel-identical to a flat 2D colour, but it should still
 // clearly read as its colour rather than a pale wash. 0.28/0.5

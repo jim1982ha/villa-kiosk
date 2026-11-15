@@ -3,8 +3,6 @@
 // "Full-screen announcements"). The villa's list (`fullScreen`, every tablet, empty by default) and this tablet's
 // switch ("Full screen on this tablet") are read, migrated, drafted and drawn here, by value and through the
 // compiler's tree.
-import { register } from "node:module";
-register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 import { elements, guardsOf, parseTsx, propText } from "../consistency/jsx.mjs";
 const dc = await import("@/config/deviceConfig");

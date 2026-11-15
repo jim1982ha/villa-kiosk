@@ -2,8 +2,6 @@
 // opening a temperature & humidity sensor — "Invalid array length" in the axis
 // ticks, three times since 2.496.269). Readings 21.4 and 21.400000000000002
 // made a step below 21.4's own precision; `v += step` never moved.
-import { register } from "node:module";
-register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 const { niceTicks, chartGeometry, isFlat } = await import("@/utils/chartGeometry");
 

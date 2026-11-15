@@ -11,8 +11,6 @@
 //
 // Driven by value: the real merge, the real Facility diff / apply / fold, the real commands (fmCommands) through the
 // real sync machine against a fake store; then the real FmDataProvider under React (tests/consistency/fakedom.mjs).
-import { register } from "node:module";
-register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 import { mountRoot } from "../consistency/fakedom.mjs";
 const { mergeItem } = await import("@/utils/keyedSync");

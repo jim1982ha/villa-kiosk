@@ -7,9 +7,7 @@
 // d0b3e9d4 had already met the other half of it (`occl=52/16` after going
 // upstairs). This drives the real OcclusionSweep with a fake ray cast and a
 // clock that only moves when told to.
-import { register } from "node:module";
 import { readFileSync } from "node:fs";
-register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 const { OcclusionSweep, owesLayout, wallStep } = await import("@/babylon/occlusionSweep");
 const { LayoutGate } = await import("@/babylon/layoutGate");

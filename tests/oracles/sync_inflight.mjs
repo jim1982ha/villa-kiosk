@@ -11,8 +11,6 @@
 //
 // Driven by value: the real sync machine (utils/syncedDocument, with the shared store's own diff, apply and rebase)
 // against a fake store, the real config normalisation, the real edits, the real draft rules.
-import { register } from "node:module";
-register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 const { SyncedDocument } = await import("@/utils/syncedDocument");
 const D = await import("@/config/deviceConfig");

@@ -8,9 +8,7 @@
 // the map's own rule (deviceLook: `alert` = its own red "!" mark, since 2026-10-22 — the face was red before); this drives a set
 // of states through the MAP's adapter and through attentionOf and
 // asserts red ⇔ listed, then that every count of attention reads that list.
-import { register } from "node:module";
 import { readFileSync } from "node:fs";
-register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 const { deviceLook, mapLookSource } = await import("@/utils/deviceActivity");
 const { attentionOf, attentionFor, villaHealthFrom, groupAttention } = await import("@/config/attention");

@@ -2,8 +2,6 @@
 // 10, 2.496.154), driven against a fake store: the four rules the config
 // store's header states, the Facility store's failed-write retry, and the race
 // only one of the two used to guard — a write started DURING a pull's fetch.
-import { register } from "node:module";
-register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 const { SyncedDocument } = await import("@/utils/syncedDocument");
 const { diffKeyed, applyKeyed, keyedDiffIsEmpty } = await import("@/utils/keyedSync");
