@@ -1,3 +1,11 @@
+## 2.496.829
+
+- **The tops of the walls around a lit room stay dark on the other side.** With the living room light on, the top of
+  the wall between it and the bedroom, the bedroom's other wall tops and the rails of the beds against that wall
+  lit up, so the bedroom looked partly lit from above. A wall's top, or anything against it facing up, now takes a
+  light only when every room around it is lit by it; a tall bookcase inside the lit room keeps its light, and the
+  staircase's steps are lit as before.
+
 ## 2.496.828
 
 - **A light no longer reaches past the wall onto what stands against it.** The living room light still lit the heads
