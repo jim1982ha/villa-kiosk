@@ -25,14 +25,25 @@ export function updateName(e: HassEntity, entityMap: NameMap): string {
   return ["Villa system", ...words.slice(2)].join(" ");
 }
 
+/** The update feature bit that means it can be installed from the villa's system (its `supported_features`). */
+const INSTALL = 1;
+
+/** Whether update `e` can be installed at all: an update that only reports a newer version (release notes, no
+ *  install) is nobody's to act on — it arrives with the software that carries it. */
+export function canInstall(e: HassEntity): boolean {
+  return (Number(e.attributes.supported_features) & INSTALL) === INSTALL;
+}
+
 /** The names of the updates waiting (an `update` entity that is "on"), sorted — as the villa's own Settings lists
  *  them: never one hidden in the villa's system (`hidden`: the store's one reading of it, registryResolve), nor a
- *  version skipped there (its entity then reads "off" itself).
- *  ⚠️ owner, 2026-10-21: the Cockpit counted "1" for a media server's update the owner had hidden — Settings showed none. */
+ *  version skipped there (its entity then reads "off" itself), nor one that cannot be installed (canInstall).
+ *  ⚠️ owner, 2026-10-21: the Cockpit counted "1" for a media server's update the owner had hidden — Settings showed none.
+ *  ⚠️ owner, 2026-11-15: the Cockpit counted "1" for a media server's newer version that only its app's own update
+ *  brings: nothing anyone could press cleared it. */
 export function updatesWaiting(entities: Readonly<Record<string, HassEntity>>, hidden: ReadonlySet<string>,
   entityMap: NameMap): string[] {
   return Object.values(entities)
-    .filter((e) => domainOf(e.entity_id) === "update" && e.state === "on" && !hidden.has(e.entity_id))
+    .filter((e) => domainOf(e.entity_id) === "update" && e.state === "on" && !hidden.has(e.entity_id) && canInstall(e))
     .map((e) => updateName(e, entityMap))
     .sort((a, b) => a.localeCompare(b));
 }
