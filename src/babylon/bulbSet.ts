@@ -70,7 +70,7 @@ import { LightPoolSet, type LightReading, type PoolFloorProbe, type PoolRoom } f
 import { attachLampGlow, hasLampGlow, lampGlowFor, BULB_REACH_M } from "./lampGlow";
 import { isHelperMesh, structureRole } from "./meshRoles";
 import type { Storeys } from "./storeys";
-import { buildRoomLightMask, type TriangleVisitor } from "./roomLightMask";
+import { buildRoomLightMask, type RoomLightKnown, type TriangleVisitor } from "./roomLightMask";
 import { ModelKeyedStore } from "./modelStore";
 import { Matrix } from "@babylonjs/core/Maths/math.vector";
 import { VertexBuffer } from "@babylonjs/core/Buffers/buffer";
@@ -150,9 +150,9 @@ export class BulbSet {
   private readonly readings: () => Iterable<BulbReading>;
   private readonly casters: () => readonly AbstractMesh[];
   private readonly log: (line: string) => void;
-  /** Which rooms are open to each other, per model and plan: reading the
-   *  walls off the model is the one slow step of the room map. */
-  private readonly roomStore = new ModelKeyedStore<string[]>("vk.roomlight1.", /^vk\.roomlight\d*\./);
+  /** The walls and which rooms are open to each other, per model and plan:
+   *  reading the walls off the model is the one slow step of the room map. */
+  private readonly roomStore = new ModelKeyedStore<RoomLightKnown>("vk.roomlight2.", /^vk\.roomlight\d*\./);
 
   constructor(
     scene: Scene,
@@ -326,7 +326,7 @@ export class BulbSet {
     const stored = this.roomStore.load();
     const known = stored.get(sig);
     const mask = buildRoomLightMask(plan, known ? null : structureTriangles(this.scene), known);
-    if (mask && !known) this.roomStore.save(new Map([[sig, mask.open]]));
+    if (mask && !known) this.roomStore.save(new Map([[sig, mask.known]]));
     lampGlowFor(this.scene).setMask(this.scene, mask);
     this.pools.setRoomBits(mask ? (room) => mask.bitsOf(room) : null);
     this.log(`room light: ${mask ? `${mask.width}x${mask.rows}x${mask.bands}` : "none"} open=[${mask?.open.join(", ") ?? ""}]`

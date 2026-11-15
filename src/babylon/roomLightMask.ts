@@ -25,7 +25,7 @@
 // tests/oracles/room_light_mask.mjs.
 
 import { boundsXZ, distanceToPolygonBoundary, pointInPolygon, type Pt2 } from "@/utils/geometry";
-import type { Storeys } from "./storeys";
+import { isStairwell, type Storeys } from "./storeys";
 
 /** The map's cell, unless the plan is so large that MASK_MAX_CELLS cells
  *  across would not cover it. */
@@ -35,13 +35,15 @@ const MASK_MAX_CELLS = 1024;
  *  another room): its own walls' faces are its room's, wherever the plan drew
  *  the outline in the wall's thickness. */
 export const MASK_GROW_M = 0.3;
-/** How far in front of a surface (along its normal) the map is read. A wall's
- *  thickness belongs to no room, and the bedroom's face of a wall it shares
- *  with a stairwell open to the living room took the living room's light
- *  through it (owner, 2026-11-16): read in front, a face is the room it
- *  faces. Past MASK_GROW_M, so it leaves the wall; a floor reads straight
- *  down. */
-export const MASK_FACING_M = 0.35;
+/** How far in front of a WALL's face (along its normal) the map is read: a
+ *  wall's thickness lies between two rooms, and its faces are the rooms they
+ *  face. Only a surface standing in a wall cell: a bed head against the wall
+ *  it shares with the living room, read in front, was the living room's and
+ *  took its light (owner, 2026-11-16). */
+export const MASK_FACING_M = 0.25;
+/** A room's flood starts this far inside its outline (closer, a cell may be
+ *  the next room's, across a wall the plan drew a little off). */
+const SEED_DEPTH_M = 0.5;
 /** Where the walls are read, above each storey's floor. */
 export const WALL_PROBE_ABOVE_M = 1.9;
 /** A border this long without a wall is open plan; a doorway is less. */
@@ -50,13 +52,19 @@ export const OPEN_BORDER_M = 1.5;
 const BORDER_NEAR_M = 0.35;
 const WALL_NEAR_M = 0.3;
 const STEP_M = 0.1;
-/** One bit per room, per storey. A room past the 32nd of its storey has none:
- *  lamps in it are not held back, and its surfaces read as no room. */
-const BITS = 32;
+/** One bit per room, per storey; the 32nd marks a wall cell. A room past the
+ *  31st of its storey has none: lamps in it are not held back, and its
+ *  surfaces read as no room. */
+const BITS = 31;
+const WALL_BIT = 0x80000000;
 
 /** A lamp's room, as the shader reads it: the storey's band of the map, and
  *  the rooms it lights as two exact floats (24 low bits, 8 high bits). */
 export interface LampRoomBits { band: number; lo: number; hi: number }
+
+/** What a device keeps per model and plan, so a load reads no wall again:
+ *  the open borders, and each band's wall cells as [start, length] runs. */
+export interface RoomLightKnown { open: string[]; walls: number[][] }
 
 export interface RoomLightMask<R> {
   /** RGBA bytes, `bands` maps of `rows` rows of `width` cells, stacked. */
@@ -69,8 +77,10 @@ export interface RoomLightMask<R> {
   cell: number;
   /** The rooms each room's lamps may light (its own and those open to it). */
   bitsOf(room: R | null | undefined): LampRoomBits | undefined;
-  /** The open borders, as `name|name` keys — what is cached per model. */
+  /** The open borders, as `name|name` keys. */
   open: string[];
+  /** What to keep for the next load (RoomLightKnown). */
+  known: RoomLightKnown;
 }
 
 /** One triangle in world space, nine numbers. */
@@ -82,16 +92,25 @@ interface Grid { originX: number; originZ: number; cell: number; width: number; 
 /** `a|b`, the same whichever way round. */
 export const borderKey = (a: string, b: string): string => (a < b ? `${a}|${b}` : `${b}|${a}`);
 
-/**
- * Draw the plan's rooms into a map, and find which neighbours are open to
- * each other: from `known` (a previous load's answer for the same model and
- * plan), else from the model's walls (`triangles`); with neither, every
- * border counts as walled.
- */
 type MaskRoom = { name: string; pts: Pt2[]; floorY: number; storey?: number };
 
+/**
+ * Draw the plan's rooms into a map, with the walls between them, and find
+ * which neighbours are open to each other: from `known` (a previous load's
+ * answer for the same model and plan), else from the model's walls
+ * (`triangles`); with neither, no wall is known and every border is walled.
+ *
+ * A cell's rooms, in order:
+ *  * the rooms that reach it from their middle without crossing a wall, the
+ *    nearest first (several: a tie). An outline drawn a little across a wall
+ *    is the room it lies in, not the one whose outline it is;
+ *  * else the outlines it lies in (a closet the flood cannot enter);
+ *  * else the outlines within MASK_GROW_M (a wall's thickness);
+ * and a staircase keeps its whole outline: its flight stands over the rooms
+ * built under it, and its lights light the steps above them.
+ */
 export function buildRoomLightMask<R extends MaskRoom>(
-  storeys: Storeys<R>, triangles: TriangleVisitor | null, known?: readonly string[],
+  storeys: Storeys<R>, triangles: TriangleVisitor | null, known?: RoomLightKnown,
 ): RoomLightMask<R> | null {
   const rooms = storeys.rooms;
   const b = boundsXZ(rooms.flatMap((r) => r.pts));
@@ -113,33 +132,54 @@ export function buildRoomLightMask<R extends MaskRoom>(
     bitOf.set(r, { band, bit: perBand[band]++ });
   }
   const cells = grid.width * grid.rows;
-  // Two passes. Inside an outline, a cell is that room's alone; only a cell
-  // inside NO outline (a wall's thickness, the ground beyond) takes the rooms
-  // within MASK_GROW_M — their own walls' faces. Grown into the next room, it
-  // let the corridor light the bathroom's corner beside it (owner, 2026-11-16).
+  const walls = known && known.walls.length === storeyKeys.length
+    ? known.walls.map((runs) => fromRuns(runs, cells))
+    : triangles ? wallMaps(storeys, storeyKeys, grid, triangles)
+    : storeyKeys.map(() => new Uint8Array(cells));
   const inside = new Uint32Array(cells * storeyKeys.length);
   const near = new Uint32Array(cells * storeyKeys.length);
+  const seeds = new Uint32Array(cells * storeyKeys.length);
+  const stairs = storeyKeys.map(() => 0);
   for (const [r, { band, bit }] of bitOf) {
+    const flag = (1 << bit) >>> 0;
+    if (isStairwell(r.name)) stairs[band] = (stairs[band] | flag) >>> 0;
     const rb = boundsXZ(r.pts)!;
     const c0 = Math.max(0, Math.floor((rb.minX - MASK_GROW_M - grid.originX) / cell));
     const c1 = Math.min(grid.width - 1, Math.floor((rb.maxX + MASK_GROW_M - grid.originX) / cell));
     const r0 = Math.max(0, Math.floor((rb.minZ - MASK_GROW_M - grid.originZ) / cell));
     const r1 = Math.min(grid.rows - 1, Math.floor((rb.maxZ + MASK_GROW_M - grid.originZ) / cell));
-    const flag = (1 << bit) >>> 0;
+    let seeded = false;
+    const insideCells: number[] = [];
     for (let row = r0; row <= r1; row++) {
       const z = grid.originZ + (row + 0.5) * cell;
       for (let col = c0; col <= c1; col++) {
         const x = grid.originX + (col + 0.5) * cell;
         const i = band * cells + row * grid.width + col;
-        if (pointInPolygon(x, z, r.pts)) inside[i] |= flag;
-        else if (distanceToPolygonBoundary(x, z, r.pts) <= MASK_GROW_M) near[i] |= flag;
+        const d = distanceToPolygonBoundary(x, z, r.pts);
+        if (pointInPolygon(x, z, r.pts)) {
+          inside[i] |= flag;
+          if (!walls[band][i - band * cells]) {
+            insideCells.push(i);
+            if (d >= SEED_DEPTH_M) { seeds[i] |= flag; seeded = true; }
+          }
+        } else if (d <= MASK_GROW_M) near[i] |= flag;
       }
     }
+    // A room too narrow to have a middle starts from all of it.
+    if (!seeded) for (const i of insideCells) seeds[i] |= flag;
   }
   const words = new Uint32Array(cells * storeyKeys.length);
-  for (let i = 0; i < words.length; i++) words[i] = inside[i] || near[i];
-  const open = known ? [...known]
-    : triangles ? openBorders(storeys, [...bitOf.keys()], wallMaps(storeys, storeyKeys, grid, triangles), bandOf, grid)
+  for (let band = 0; band < storeyKeys.length; band++) {
+    const o = band * cells;
+    const reached = flood(grid, walls[band], seeds.subarray(o, o + cells), inside.subarray(o, o + cells), near.subarray(o, o + cells));
+    for (let c = 0; c < cells; c++) {
+      const i = o + c;
+      const own = reached[c] ? (reached[c] | (inside[i] & stairs[band])) >>> 0 : inside[i] || near[i];
+      words[i] = (walls[band][c] ? (own | WALL_BIT) : own) >>> 0;
+    }
+  }
+  const open = known ? [...known.open]
+    : triangles ? openBorders(storeys, [...bitOf.keys()], walls, bandOf, grid)
     : [];
   const openSet = new Set(open);
   const lampBits = new Map<R, LampRoomBits>();
@@ -154,7 +194,51 @@ export function buildRoomLightMask<R extends MaskRoom>(
     originX: grid.originX, originZ: grid.originZ, cell,
     bitsOf: (room) => (room ? lampBits.get(room) : undefined),
     open,
+    known: { open, walls: walls.map(toRuns) },
   };
+}
+
+/** Every room spreads from its seeds at once, a cell a step, through cells
+ *  that are no wall and lie in or near its outline; a cell is the room(s)
+ *  that reach it first. */
+function flood(grid: Grid, wall: Uint8Array, seeds: Uint32Array, inside: Uint32Array, near: Uint32Array): Uint32Array {
+  const n = grid.width * grid.rows;
+  const got = new Uint32Array(n);
+  let front: number[] = [];
+  for (let i = 0; i < n; i++) if (seeds[i]) { got[i] = seeds[i]; front.push(i); }
+  while (front.length) {
+    const next = new Map<number, number>();
+    for (const i of front) {
+      const col = i % grid.width;
+      for (const j of [i - 1, i + 1, i - grid.width, i + grid.width]) {
+        if (j < 0 || j >= n || got[j] || wall[j]) continue;
+        if ((j === i - 1 && col === 0) || (j === i + 1 && col === grid.width - 1)) continue;
+        const bits = (got[i] & (inside[j] | near[j])) >>> 0;
+        if (bits) next.set(j, ((next.get(j) ?? 0) | bits) >>> 0);
+      }
+    }
+    front = [];
+    for (const [j, bits] of next) { got[j] = bits; front.push(j); }
+  }
+  return got;
+}
+
+/** Wall cells as [start, length, start, length, ...]. */
+function toRuns(m: Uint8Array): number[] {
+  const out: number[] = [];
+  for (let i = 0; i < m.length; i++) {
+    if (!m[i]) continue;
+    let j = i;
+    while (j < m.length && m[j]) j++;
+    out.push(i, j - i);
+    i = j;
+  }
+  return out;
+}
+function fromRuns(runs: number[], cells: number): Uint8Array {
+  const m = new Uint8Array(cells);
+  for (let k = 0; k + 1 < runs.length; k += 2) m.fill(1, runs[k], Math.min(cells, runs[k] + runs[k + 1]));
+  return m;
 }
 
 /** Whether a lamp of these bits lights a surface at (x, z) facing (nx, nz)
@@ -162,11 +246,19 @@ export function buildRoomLightMask<R extends MaskRoom>(
 export function maskAllows<R>(mask: RoomLightMask<R>, bits: LampRoomBits | undefined, px: number, pz: number,
   nx = 0, nz = 0): boolean {
   if (!bits) return true;
-  const x = px + nx * MASK_FACING_M, z = pz + nz * MASK_FACING_M;
-  const col = Math.floor((x - mask.originX) / mask.cell), row = Math.floor((z - mask.originZ) / mask.cell);
-  if (col < 0 || row < 0 || col >= mask.width || row >= mask.rows) return true;
-  const i = ((bits.band * mask.rows + row) * mask.width + col) * 4;
-  const cellBits = (mask.data[i] | (mask.data[i + 1] << 8) | (mask.data[i + 2] << 16) | (mask.data[i + 3] << 24)) >>> 0;
+  const at = (x: number, z: number): number | null => {
+    const col = Math.floor((x - mask.originX) / mask.cell), row = Math.floor((z - mask.originZ) / mask.cell);
+    if (col < 0 || row < 0 || col >= mask.width || row >= mask.rows) return null;
+    const i = ((bits.band * mask.rows + row) * mask.width + col) * 4;
+    return (mask.data[i] | (mask.data[i + 1] << 8) | (mask.data[i + 2] << 16) | (mask.data[i + 3] << 24)) >>> 0;
+  };
+  let cellBits = at(px, pz);
+  if (cellBits === null) return true;
+  if (cellBits & WALL_BIT) {
+    // A wall's face: the room it faces, read in front of it.
+    const front = at(px + nx * MASK_FACING_M, pz + nz * MASK_FACING_M);
+    cellBits = front !== null && front !== 0 && !(front & WALL_BIT) ? front : (cellBits & ~WALL_BIT) >>> 0;
+  }
   const lampMask = (bits.lo + bits.hi * 0x1000000) >>> 0;
   return cellBits === 0 || (cellBits & lampMask) !== 0;
 }

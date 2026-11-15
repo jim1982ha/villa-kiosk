@@ -1,3 +1,9 @@
+## 2.496.828
+
+- **A light no longer reaches past the wall onto what stands against it.** The living room light still lit the heads
+  of the beds in the bedroom next to it, through the wall they stand against; a room's outline drawn a little across
+  a wall no longer lends it the next room's light either.
+
 ## 2.496.827
 
 - **A light stays in its room.** A light that is on no longer lights the room behind a wall: the corridor light

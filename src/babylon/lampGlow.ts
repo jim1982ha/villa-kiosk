@@ -286,6 +286,19 @@ export const GLOW_TERM: ReadonlyArray<readonly [string, string]> = [
 /** The cap on every bulb together, as a multiple of a pool's centre. */
 const GLOW_CAP_TOTAL = POOL_CENTRE * GLOW_CAP_ALL;
 
+/** The room map's cell under a point, on a band (roomLightMask.ts): its rooms'
+ *  bits, the top one marking a wall; 0 off the map. */
+const LAMP_GLOW_ROOM_LOOKUP = `#ifdef LAMPGLOW_ROOMS
+uniform sampler2D lampGlowMask;
+uint lampGlowCell(vec2 p, float band) {
+  ivec2 c = ivec2(floor((p - lampGlowMaskAt.xy) * lampGlowMaskAt.z));
+  if (c.x < 0 || c.y < 0 || float(c.x) >= lampGlowMaskSize.x || float(c.y) >= lampGlowMaskSize.y) return 0u;
+  uvec4 t = uvec4(texelFetch(lampGlowMask, ivec2(c.x, c.y + int(band + 0.5) * int(lampGlowMaskSize.y)), 0) * 255.0 + 0.5);
+  return t.r | (t.g << 8u) | (t.b << 16u) | (t.a << 24u);
+}
+#endif
+`;
+
 /** The bulbs' light on this fragment, into `lgAdd` — shared by both hooks. */
 const ACCUMULATE = `
   vec3 lgN = normalize(normalW);
@@ -304,14 +317,14 @@ ${GLOW_TERM.map(([name, expr]) => `    float ${name} = ${expr};`).join("\n")}
     // Its own room and those open to it (roomLightMask.ts, maskAllows).
     vec4 lgR = lampGlowRoom[lgI];
     if (lgW > 0.0 && lgR.w > 0.5 && lampGlowMaskSize.x > 0.0) {
-      // Read in front of the surface: a wall's face is the room it faces.
-      ivec2 lgCell = ivec2(floor((vec2(pX + nX * lampGlowMaskAt.w, pZ + nZ * lampGlowMaskAt.w) - lampGlowMaskAt.xy) * lampGlowMaskAt.z));
-      if (lgCell.x >= 0 && lgCell.y >= 0 && float(lgCell.x) < lampGlowMaskSize.x && float(lgCell.y) < lampGlowMaskSize.y) {
-        uvec4 lgT = uvec4(texelFetch(lampGlowMask, ivec2(lgCell.x, lgCell.y + int(lgR.x + 0.5) * int(lampGlowMaskSize.y)), 0) * 255.0 + 0.5);
-        uint lgCellBits = lgT.r | (lgT.g << 8u) | (lgT.b << 16u) | (lgT.a << 24u);
-        uint lgLamp = uint(lgR.y + 0.5) | (uint(lgR.z + 0.5) << 24u);
-        if (lgCellBits != 0u && (lgCellBits & lgLamp) == 0u) lgW = 0.0;
+      uint lgCellBits = lampGlowCell(vec2(pX, pZ), lgR.x);
+      if ((lgCellBits & 0x80000000u) != 0u) {
+        // A wall's face: the room it faces, read in front of it.
+        uint lgFront = lampGlowCell(vec2(pX + nX * lampGlowMaskAt.w, pZ + nZ * lampGlowMaskAt.w), lgR.x);
+        lgCellBits = (lgFront != 0u && (lgFront & 0x80000000u) == 0u) ? lgFront : (lgCellBits & 0x7fffffffu);
       }
+      uint lgLamp = uint(lgR.y + 0.5) | (uint(lgR.z + 0.5) << 24u);
+      if (lgCellBits != 0u && (lgCellBits & lgLamp) == 0u) lgW = 0.0;
     }
 #endif
     lgSum += lgC.rgb * lgW;
@@ -431,7 +444,7 @@ uniform vec4 lampGlowMaskSize;
     // A sampler is never in the uniform text above (Babylon writes that only
     // without uniform buffers): it is declared with the shader's definitions.
     return {
-      CUSTOM_FRAGMENT_DEFINITIONS: "#ifdef LAMPGLOW_ROOMS\nuniform sampler2D lampGlowMask;\n#endif\n",
+      CUSTOM_FRAGMENT_DEFINITIONS: LAMP_GLOW_ROOM_LOOKUP,
       [`!${LAMP_GLOW_ANCHOR}`]: `$0${LAMP_GLOW_GLSL}`, [LAMP_GLOW_PLAIN_POINT]: LAMP_GLOW_PLAIN_GLSL,
     };
   }

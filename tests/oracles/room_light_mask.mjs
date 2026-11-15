@@ -18,6 +18,8 @@ const plan = new Storeys([
   room("Kitchen", sq(6, 9, 4.1, 10)),
   room("Bedroom", sq(0, 6, 10.1, 14)),
   room("Guest", sq(6, 9, 10.1, 14)),
+  // The living room again, its outline drawn 0.15 m into the bedroom.
+  room("Spill", sq(0, 2.5, 4.1, 10.2)),
 ]);
 /** Walls as the model would have them: vertical faces, 3 m tall. */
 const walls = [
@@ -39,7 +41,7 @@ const lights = (from, x, z, nx = 0, nz = 0) => maskAllows(mask, mask.bitsOf(R[fr
 
 console.log("\n  the corridor light:");
 ck("lights the corridor's floor", lights("Corridor", 3, 2));
-ck("  ...and the corridor's own end wall, by its face", lights("Corridor", 6.0, 2, -1, 0));
+ck("  ...and the corridor's own end wall, by its face", lights("Corridor", 6.05, 2, -1, 0));
 ck("not the bathroom past the wall: its floor, its far wall, its corner by the wall",
    !lights("Corridor", 7.5, 2) && !lights("Corridor", 8.95, 2) && !lights("Corridor", 6.15, 0.05));
 console.log("\n  open plan:");
@@ -47,12 +49,16 @@ ck("the living room and the kitchen share their light (no wall between them)",
    lights("Living", 8, 7) && lights("Kitchen", 3, 7), mask.open);
 ck("a doorway is not open plan: the living room's light stays out of the bedroom", !lights("Living", 3, 12));
 ck("a wall the kitchen shares with a guest room: the living room's light reaches the kitchen's face of it, not the guest room's",
-   lights("Living", 7.5, 10.02, 0, -1) && !lights("Living", 7.5, 10.08, 0, 1));
+   lights("Living", 7.5, 10.05, 0, -1) && !lights("Living", 7.5, 10.05, 0, 1));
+ck("a bed head against the wall the bedroom shares with the living room, facing that wall, stays dark",
+   !lights("Living", 1, 10.2, 0, -1));
+ck("an outline drawn across a wall: the strip past the wall is the room it lies in, not the outline's",
+   !lights("Spill", 1, 10.15) && lights("Bedroom", 1, 10.15));
 console.log("\n  beyond the plan:");
 ck("ground outside every room takes any lamp's light, as before", lights("Corridor", -3, 2));
 
 console.log("\n  a previous load's answer:");
-const again = buildRoomLightMask(plan, null, mask.open);
+const again = buildRoomLightMask(plan, null, mask.known);
 ck("draws the same map without reading a wall", Buffer.compare(Buffer.from(again.data), Buffer.from(mask.data)) === 0
    && again.open.join() === mask.open.join());
 done();
