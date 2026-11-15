@@ -287,13 +287,19 @@ export const GLOW_TERM: ReadonlyArray<readonly [string, string]> = [
 const GLOW_CAP_TOTAL = POOL_CENTRE * GLOW_CAP_ALL;
 
 /** The room map's cell under a point, on a band (roomLightMask.ts): its rooms'
- *  bits, the top one marking a wall; 0 off the map. */
+ *  bits, the top one marking a wall; 0 off the map.
+ *
+ *  ⚠️ EVERY INTEGER HERE IS highp. A fragment shader's default int precision
+ *  is mediump, which a desktop GPU runs at 32 bits and a phone's at 16: the
+ *  rooms past the 16th and the wall bit fell off, and the owner's phone lit
+ *  the bedroom through the wall while the Mac and the render rig did not
+ *  (2.496.830). */
 const LAMP_GLOW_ROOM_LOOKUP = `#ifdef LAMPGLOW_ROOMS
 uniform sampler2D lampGlowMask;
-uint lampGlowCell(vec2 p, float band) {
+highp uint lampGlowCell(vec2 p, float band) {
   ivec2 c = ivec2(floor((p - lampGlowMaskAt.xy) * lampGlowMaskAt.z));
   if (c.x < 0 || c.y < 0 || float(c.x) >= lampGlowMaskSize.x || float(c.y) >= lampGlowMaskSize.y) return 0u;
-  uvec4 t = uvec4(texelFetch(lampGlowMask, ivec2(c.x, c.y + int(band + 0.5) * int(lampGlowMaskSize.y)), 0) * 255.0 + 0.5);
+  highp uvec4 t = uvec4(texelFetch(lampGlowMask, ivec2(c.x, c.y + int(band + 0.5) * int(lampGlowMaskSize.y)), 0) * 255.0 + 0.5);
   return t.r | (t.g << 8u) | (t.b << 16u) | (t.a << 24u);
 }
 #endif
@@ -317,21 +323,21 @@ ${GLOW_TERM.map(([name, expr]) => `    float ${name} = ${expr};`).join("\n")}
     // Its own room and those open to it (roomLightMask.ts, maskAllows).
     vec4 lgR = lampGlowRoom[lgI];
     if (lgW > 0.0 && lgR.w > 0.5 && lampGlowMaskSize.x > 0.0) {
-      uint lgCellBits = lampGlowCell(vec2(pX, pZ), lgR.x);
-      uint lgLamp = uint(lgR.y + 0.5) | (uint(lgR.z + 0.5) << 24u);
+      highp uint lgCellBits = lampGlowCell(vec2(pX, pZ), lgR.x);
+      highp uint lgLamp = uint(lgR.y + 0.5) | (uint(lgR.z + 0.5) << 24u);
       if ((lgCellBits & 0x80000000u) != 0u) {
         // In a wall: a face is the room it faces, read in front of it; what
         // faces up (a wall's top, a rail or shelf against it) is lit only if
         // every room around it is (roomLightMask.maskAllows).
         float lgSide = length(vec2(nX, nZ));
         if (lgSide >= 0.5) {
-          uint lgFront = lampGlowCell(vec2(pX, pZ) + vec2(nX, nZ) / lgSide * lampGlowMaskAt.w, lgR.x);
+          highp uint lgFront = lampGlowCell(vec2(pX, pZ) + vec2(nX, nZ) / lgSide * lampGlowMaskAt.w, lgR.x);
           if (lgFront == 0u || (lgFront & 0x80000000u) != 0u || (lgFront & lgLamp) == 0u) lgW = 0.0;
         } else {
           bool lgAny = false, lgAll = true;
           for (int lgK = 0; lgK < 4; lgK++) {
             vec2 lgO = lgK == 0 ? vec2(1.0, 0.0) : lgK == 1 ? vec2(-1.0, 0.0) : lgK == 2 ? vec2(0.0, 1.0) : vec2(0.0, -1.0);
-            uint lgN4 = lampGlowCell(vec2(pX, pZ) + lgO * lampGlowMaskAt.w, lgR.x);
+            highp uint lgN4 = lampGlowCell(vec2(pX, pZ) + lgO * lampGlowMaskAt.w, lgR.x);
             if (lgN4 == 0u || (lgN4 & 0x80000000u) != 0u) continue;
             lgAny = true;
             if ((lgN4 & lgLamp) == 0u) lgAll = false;
