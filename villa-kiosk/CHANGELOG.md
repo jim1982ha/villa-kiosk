@@ -1,3 +1,9 @@
+## 2.496.830
+
+- **Lights stay in their room after a settings sync.** When VESTA picked up a change from another device (a sync it
+  does by itself), every light lost its room until VESTA was opened again: the living room light lit the bedroom's
+  curtains and walls through the wall, while a freshly opened VESTA looked right. Each light now keeps its room.
+
 ## 2.496.829
 
 - **The tops of the walls around a lit room stay dark on the other side.** With the living room light on, the top of
