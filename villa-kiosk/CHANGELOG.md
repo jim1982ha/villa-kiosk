@@ -1,3 +1,9 @@
+## 2.496.826
+
+- **Lights light the room on a Mac in Chrome too.** In Chrome on a Mac, a light that was on lit the floor under it
+  but nothing standing in the room: the steps, the furniture, the walls and the plants stayed dark, so the stairs
+  light seemed to light nothing at all. They now take the light as they do on a phone or a tablet.
+
 ## 2.496.825
 
 - **The stairs light lights the stairs again.** Switched on, the lights along a staircase now light the steps under
