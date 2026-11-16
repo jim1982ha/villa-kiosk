@@ -8,6 +8,10 @@ one (visit.Visits.kept), chosen here as the villa set it ("Picked by"):
 - a model (its alias, haiku / sonnet / opus): ONE call with the frames, asking which shows a person, a vehicle or an
   animal best — what it looks for is the skill's words (skill.yaml `photo_pick`), the answer's shape the engine's;
   recorded with the AI costs (agent_records.PHOTO_PICK), bounded by `visit.photo_pick_timeout_s`;
+- with a model, and the skill naming a `frame` colour: the model also says where in the photo it chose what it saw is,
+  and a rectangle of that colour is drawn around it on the photo kept, the saved file itself, so Telegram and the
+  tablet show it (owner, 2026-11-16, a sample with a green box around the gardener); an answer with no place, or one
+  that is not a place in the photo, keeps the photo as taken;
 - `diff`, or a model that did not answer (failed, timed out, no skill declares it, or it saw none of them): change
   detection — the frame most different from the first (downscaled grey), the first never chosen while there are
   others. It never needs the AI.
@@ -71,10 +75,50 @@ def answered(text: str, n: int) -> int | None:
     return k - 1 if 1 <= k <= n else None
 
 
-def asked(n: int) -> str:
-    """The engine's part of the question: the frames' numbering and the answer's shape."""
+def asked(n: int, where: bool = False) -> str:
+    """The engine's part of the question: the frames' numbering and the answer's shape (`where`: and its place)."""
+    if not where:
+        return (f"The {n} photos above are numbered 1 to {n}, in the order the camera took them. Answer with the number "
+                "of the photo you choose, and nothing else; answer 0 when none of them shows what you look for.")
     return (f"The {n} photos above are numbered 1 to {n}, in the order the camera took them. Answer with the number of "
-            "the photo you choose, and nothing else; answer 0 when none of them shows what you look for.")
+            "the photo you choose, then where what you saw is in that photo: four numbers between 0 and 1, its left, "
+            "top, right and bottom edges as fractions of the photo's width and height, the box holding all of it. "
+            "For example: 2 0.08 0.31 0.30 0.72. Nothing else; answer 0 when none of them shows what you look for.")
+
+
+#: A place smaller than this share of the photo is a mis-read, larger is no place at all
+_BOX_AREA = (0.002, 0.9)
+
+
+def placed(text: str) -> tuple[float, float, float, float] | None:
+    """The place (left, top, right, bottom, fractions of the photo) after the frame's number in the model's answer,
+    None when it gives none, or one that is not a place in the photo."""
+    nums = re.findall(r"\d*\.?\d+", text or "")
+    if len(nums) < 5:
+        return None
+    left, top, right, bottom = (float(v) for v in nums[1:5])
+    if not (0 <= left < right <= 1 and 0 <= top < bottom <= 1):
+        return None
+    area = (right - left) * (bottom - top)
+    return (left, top, right, bottom) if _BOX_AREA[0] <= area <= _BOX_AREA[1] else None
+
+
+def framed(path: str, box: tuple[float, float, float, float], colour: str) -> bool:
+    """A rectangle of `colour` drawn around `box` on the photo at `path`, saved in its place. False when it could not."""
+    from PIL import Image, ImageDraw
+    try:
+        with Image.open(path) as im:
+            img = im.convert("RGB")
+        w, h = img.size
+        line = max(3, round(min(w, h) / 120))
+        left, top, right, bottom = box
+        ImageDraw.Draw(img).rectangle([round(left * w), round(top * h), round(right * w), round(bottom * h)],
+                                      outline=colour, width=line)
+        img.save(path, "JPEG", quality=92)
+        return True
+    except Exception as e:  # noqa: BLE001 — the photo is kept as taken
+        log.warning("The rectangle could not be drawn on a burst's photo (%s)", type(e).__name__)
+        return False
 
 
 class Picker:
@@ -83,11 +127,12 @@ class Picker:
     def __init__(self, *, settings, state, skills):
         self.s, self.state, self.skills = settings, state, skills
 
-    def _instructions(self) -> tuple[str, str] | None:
-        """(the skill that says what is looked for, its words), None when no skill declares `photo_pick`."""
+    def _instructions(self) -> tuple[str, str, str | None] | None:
+        """(the skill that says what is looked for, its words, its rectangle's colour or None), None when no skill
+        declares `photo_pick`."""
         from .skills import photo_pickers
         sk = next(iter(photo_pickers(self.skills.all())), None)
-        return None if sk is None else (sk.name, sk.photo_pick["instructions"])
+        return None if sk is None else (sk.name, sk.photo_pick["instructions"], sk.photo_pick.get("frame"))
 
     async def choose(self, paths: list[str], how: str) -> int:
         if len(paths) < 2:
@@ -125,11 +170,15 @@ class Picker:
         from . import __version__
         from .tools import SERVER, Kit
         kit = Kit(create_sdk_mcp_server(name=SERVER, version=__version__, tools=[]), set(), [], None)
-        skill, instructions = said
+        skill, instructions, frame = said
         terms = Terms(frozenset(), profile, chat_brain(self.s)[1], agent_records.PHOTO_PICK, skill)
-        res = await runner.run(self.s.in_folder("photo_pick"), instructions, asked(len(images)), kit, terms,
-                               self.state, asked=f"Best of {len(images)} photos of one step", image=images)
+        res = await runner.run(self.s.in_folder("photo_pick"), instructions, asked(len(images), where=bool(frame)), kit,
+                               terms, self.state, asked=f"Best of {len(images)} photos of one step", image=images)
         if res.problem or (res.error and not res.text):
             log.warning("The AI could not choose a burst's photo (%s): change detection keeps one", res.problem or "error")
             return None
-        return answered(res.text, len(images))
+        got = answered(res.text, len(images))
+        box = placed(res.text) if frame and got is not None else None
+        if box is not None:
+            await asyncio.to_thread(framed, paths[got], box, frame)
+        return got

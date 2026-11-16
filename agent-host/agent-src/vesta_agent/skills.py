@@ -22,6 +22,8 @@ and skill.yaml (what the engine needs):
     photo_pick:                      what the AI looks for when it keeps the best of a visit step's burst of photos
       instructions: "..."            (photo_pick.py: the engine numbers the photos and asks for the number); the
                                      model is the villa's ("Picked by"), the limit the Chat answers' per reply
+      frame: "#4fdc4f"               optional: the colour of the rectangle drawn on the photo kept, around what
+                                     the model saw (the engine asks where); none: the photo is kept as taken
     schedule:                        what the scheduler starts
       - when: "07:00"                "HH:MM" daily, "Mon 08:00" weekly, "1 08:00" monthly
         prompt: "..."                a model job (costs tokens)
@@ -571,13 +573,17 @@ def _translate(given) -> dict | None:
 
 
 def _photo_pick(given) -> dict | None:
-    """skill.yaml `photo_pick`: {instructions} — what the AI looks for in a visit step's burst of photos."""
+    """skill.yaml `photo_pick`: {instructions, frame?} — what the AI looks for in a visit step's burst of photos, and
+    the colour of the rectangle drawn around what it saw (#rrggbb; none: no rectangle)."""
     if given is None:
         return None
     instructions = str(given.get("instructions") or "").strip() if isinstance(given, dict) else ""
-    if not instructions or set(given) - {"instructions"}:
+    if not instructions or set(given) - {"instructions", "frame"}:
         raise SkillError("photo_pick.instructions: what the AI looks for in a step's photos")
-    return {"instructions": instructions}
+    frame = given.get("frame")
+    if frame is not None and not re.fullmatch(r"#[0-9a-fA-F]{6}", str(frame)):
+        raise SkillError("photo_pick.frame: the rectangle's colour, as #rrggbb")
+    return {"instructions": instructions, **({"frame": str(frame)} if frame else {})}
 
 
 def photo_pickers(skills: dict) -> list["Skill"]:

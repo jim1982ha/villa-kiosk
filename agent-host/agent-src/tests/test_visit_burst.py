@@ -110,6 +110,33 @@ def test_the_model_the_villa_set_chooses_the_frame_and_its_cost_is_counted(tmp_p
     assert len(rows) == 1 and rows[0]["cost"] == 0.002, "with the AI costs, on a row of its own"
 
 
+def test_where_the_model_saw_someone_is_framed_in_green_on_the_photo_kept(tmp_path, kiosk, media, monkeypatch):
+    # owner, 2026-11-16: a green rectangle around the person the model found, on the saved photo, Telegram and tablet
+    from PIL import Image
+    sdk(monkeypatch, answer="2 0.25 0.25 0.75 0.75")
+    v = villa(tmp_path, kiosk)
+    vi = Visit(media=media)
+    f1, f2, f3 = burst(vi, media, "18:20:16", "haiku")
+    play(v, send(vi.event("opened")))
+    assert [p["path"] for p in v.visits.every_photo(1)] == [f2]
+    with Image.open(f2) as im:
+        edge, inside = im.convert("RGB").getpixel((16, 24)), im.convert("RGB").getpixel((32, 24))
+    assert edge[1] > 150 and edge[0] < 150 and edge[2] < 150, ("the rectangle's edge is green", edge)
+    assert max(abs(c - 60) for c in inside) < 25, ("inside it, the photo as taken", inside)
+
+
+def test_an_answer_with_no_place_keeps_the_photo_as_taken(tmp_path, kiosk, media, monkeypatch):
+    from PIL import Image
+    sdk(monkeypatch, answer="2")
+    v = villa(tmp_path, kiosk)
+    vi = Visit(media=media)
+    f1, f2, f3 = burst(vi, media, "18:20:16", "haiku")
+    play(v, send(vi.event("opened")))
+    with Image.open(f2) as im:
+        px = im.convert("RGB").getpixel((16, 24))
+    assert max(abs(c - 60) for c in px) < 25, ("no rectangle", px)
+
+
 def test_a_model_that_fails_falls_back_to_change_detection(tmp_path, kiosk, media, monkeypatch):
     sdk(monkeypatch, fail=True)
     v = villa(tmp_path, kiosk)
