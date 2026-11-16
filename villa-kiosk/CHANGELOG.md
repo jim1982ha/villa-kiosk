@@ -1,3 +1,9 @@
+## 2.496.838
+
+- **No visible change.** Which rooms each lamp lights now has one owner in the code, which keeps itself right after a
+  settings sync in any order. The bug where a lamp lit the next room through the wall after a sync can no longer come
+  back unnoticed: a check now fails before a release instead.
+
 ## 2.496.837
 
 - **The top bar stays while the villa loads.** "Loading the villa…" used to cover the whole screen, so a model that

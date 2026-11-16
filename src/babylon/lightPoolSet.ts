@@ -14,11 +14,13 @@
 // Each is now a decision inside this module, and tests/oracles/light_pools.mjs
 // replays them against a fake floor.
 //
-// Interface: `addFixture` on the load path, `setRooms` after calibration,
-// `setLight` on a state change, `setStrength` from the slider, `resync` after a
-// floor switch, `clear` on unload. The floor probe comes in as a port —
-// FloorProbe in the app — and the live readings as a callback, so the module
-// can repaint a pool it creates late without knowing what an entity is.
+// Interface: `addFixture` on the load path, `setRooms` once the plan and the
+// fixtures are both in (lampRooms.ts decides when), `setLight` on a state
+// change, `setStrength` from the slider, `resync` after a floor switch, `clear`
+// on unload. The floor probe comes in as a port — FloorProbe in the app — and
+// the live readings as a callback, so the module can repaint a pool it creates
+// late without knowing what an entity is; which rooms a lamp of a room lights
+// is a port too (lampRooms.ts).
 
 import { Vector3 } from "@babylonjs/core/Maths/math.vector";
 import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
@@ -75,7 +77,6 @@ export class LightPoolSet {
   /** Bumped by anything that changes what `glowLamps` would answer. */
   version = 0;
   private strength = 1;
-  private roomBits: ((room: PoolRoom | null | undefined) => LampRoomBits | undefined) | null = null;
   // Plain fields rather than parameter properties: Node's type stripping
   // cannot run the shorthand, and the oracle loads this class directly.
   private readonly scene: Scene;
@@ -83,17 +84,21 @@ export class LightPoolSet {
   /** Every fixture's current reading, for repainting pools in bulk. */
   private readonly readings: () => Iterable<[number, LightReading]>;
   private readonly log: (line: string) => void;
+  /** Which rooms a lamp of a room lights; undefined: any. */
+  private readonly roomBits: (room: PoolRoom | null | undefined) => LampRoomBits | undefined;
 
   constructor(
     scene: Scene,
     probe: PoolFloorProbe,
     readings: () => Iterable<[number, LightReading]>,
     log: (line: string) => void = () => {},
+    roomBits: (room: PoolRoom | null | undefined) => LampRoomBits | undefined = () => undefined,
   ) {
     this.scene = scene;
     this.probe = probe;
     this.readings = readings;
     this.log = log;
+    this.roomBits = roomBits;
   }
 
   /**
@@ -124,9 +129,10 @@ export class LightPoolSet {
   }
 
   /**
-   * The calibrated rooms have landed (or changed): retry every deferred spot,
-   * then give each pool its room's shape and its real floor height. Runs once
-   * per calibration, after first paint — never on a state change.
+   * The calibrated rooms have landed, or the fixtures were built again under
+   * them: retry every deferred spot, then give each pool its room's shape and
+   * its real floor height. Called by lampRooms.ts once per change of either,
+   * before the next frame — never on a state change.
    */
   setRooms(plan: Storeys<PoolRoom>): void {
     // The plan SceneManager built — the same object the badges and the
@@ -198,7 +204,7 @@ export class LightPoolSet {
           floorY: this.placements.get(pool)?.glowFloorY ?? p.y - POOL_FLOOR_LIFT,
           ceilingY: this.placements.get(pool)?.ceilingY ?? Infinity,
           // The rooms it lights: its placement's room and those open to it.
-          room: this.roomBits?.(this.placements.get(pool)?.room),
+          room: this.roomBits(this.placements.get(pool)?.room),
         });
       }
     }
@@ -213,12 +219,6 @@ export class LightPoolSet {
       if (!this.placements.get(pool)?.room) noRoom++;
     }
     return { lamps, noRoom };
-  }
-
-  /** Which rooms a lamp of a room lights (roomLightMask.ts); null: any. */
-  setRoomBits(fn: ((room: PoolRoom | null | undefined) => LampRoomBits | undefined) | null): void {
-    this.roomBits = fn;
-    this.version++;
   }
 
   /** The global "Light effect strength". Returns whether it changed. */

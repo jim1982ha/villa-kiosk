@@ -1655,9 +1655,6 @@ export class EntityVisuals {
     this.extendStripJoints();
     this.bulbs.mergeStrips(this.lightEntityMeshes());
     if (this.lighting.furnitureLight) this.bulbs.glowEverythingLit();
-    // The lights were just cleared (disposeLights), their rooms with them:
-    // they take back the plan they had (BulbSet.ready).
-    this.bulbs.ready();
     this.reportRender();
     scene.blockMaterialDirtyMechanism = false;
 
@@ -1987,7 +1984,8 @@ export class EntityVisuals {
     // in any grouping decision and the cache is gone with the fan.
     this.plan = plan;
     this.planRoomCache.clear();
-    // The earliest moment the pools can take their rooms' shapes and floors.
+    // The pools take their rooms' shapes and floors, the lamps their rooms —
+    // and keep them through every re-index after (lampRooms.ts).
     this.bulbs.setRooms(plan);
     this.reportRender();
     this.markLayoutDirty();               // the layout reads the plan (walkExempt's plan rooms)
