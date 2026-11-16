@@ -17,7 +17,10 @@
 // DirectionalLight takes it.)
 
 import { getSunPosition, getMoonPosition, getMoonIllumination } from "@/utils/sunCalc";
-import { sunGeometry, towardBody, unit, type SunGeometry } from "./sunState";
+import { sunGeometry, towardBody, unit, TWILIGHT, type SunGeometry } from "./sunState";
+
+/** The sun Settings' Day sets at least this high: a clear daytime sky, never a sunset's. */
+const DAY_SUN_MIN = (15 * Math.PI) / 180;
 import type { Vec3 } from "./skyBodies";
 
 type DayNightPreview = "day" | "auto" | "night";
@@ -72,8 +75,11 @@ export function skyMoment(date: Date, place: SkyPlace, preview: DayNightPreview 
   const s = getSunPosition(date, latitude, longitude);
   const azimuth = s.azimuth + north;
   const realAltitude = s.altitude;
-  const altitude = preview === "day" ? Math.abs(realAltitude)
-    : preview === "night" ? -Math.abs(realAltitude)
+  // ⚠️ A PIN IS A WHOLE SIDE OF THE HORIZON, NOT THE REAL SUN MIRRORED (owner, 2026-11-16: Night set at sunset, the
+  // villa stayed in daylight). Mirrored, a sun on the horizon stayed on it, so Night at dusk and Day at dawn were
+  // twilight: Night puts the sun at least TWILIGHT under (the whole night look), Day at least DAY_SUN_MIN over.
+  const altitude = preview === "day" ? Math.max(Math.abs(realAltitude), DAY_SUN_MIN)
+    : preview === "night" ? -Math.max(Math.abs(realAltitude), TWILIGHT)
     : realAltitude;
   const light = sunGeometry(altitude, azimuth);
 
