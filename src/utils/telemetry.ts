@@ -72,6 +72,11 @@ export type TelemetryKind =
   // throttled by PlacementTelemetry. Read from Settings › Advanced › Device telemetry, replayed by
   // tools/placement-probe.mjs.
   | "placement"
+  // How this device holds the lights to their rooms (EntityVisuals.reportRender): the GPU, whether uniform buffers
+  // are on, whether the room map was built, how many lights have no room. Sent when it changes; the add-on keeps
+  // each device's latest in a Home Assistant sensor so it can be read without an export (owner, 2026-11-16: the
+  // phone lit the next room for three releases while every computer showed it right).
+  | "render"
   | "csp";            // a Content-Security-Policy violation the BROWSER posted (csp.conf report-uri)
   // "roomzoom" lived here from 2.361.0 and is GONE (2.427.0). It asked whether a
   // room shot was the WALL fit or a tighter badge-spread, and it got its answer:

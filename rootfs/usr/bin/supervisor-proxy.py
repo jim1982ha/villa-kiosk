@@ -3173,7 +3173,88 @@ async def telemetry_post_handler(request: web.Request) -> web.Response:
         # rather than lose every event from here on.
         ring = [body]
         await TELEMETRY.replace(ring)
+    if body.get("kind") == "render":
+        await _publish_render(request.app, body)
     return web.json_response({"ok": True, "stored": len(ring)})
+
+
+# ── Each device's `render` report, as one Home Assistant sensor ─────────────
+# How a device draws the lights (its GPU, uniform buffers on or off, whether
+# the room map was built, how many lights have no room), its latest report per
+# device. Readable from Home Assistant by anyone helping, with no export: the
+# owner's phone lit the next room for three releases while every computer
+# showed it right, and only an exported ring could have told them apart
+# (owner, 2026-11-16). No person, no IP: a device is named by its browser.
+RENDER_SENSOR = "sensor.vesta_ui_devices"
+RENDER_FIELDS = ("v", "gpu", "webgl", "ubo", "glow", "roomMap", "lamps", "lampsNoRoom")
+RENDER_KEEP_DAYS = 14
+
+
+def _device_label(ua: str, scrw: object, scrh: object) -> str:
+    """A device as its browser names it: system, browser or app, screen size."""
+    ha_app = "Home Assistant/" in ua
+    if "iPad" in ua or ("Macintosh" in ua and ha_app and "Mobile" in ua):
+        system = "iPadOS"
+    elif "iPhone" in ua:
+        system = "iOS"
+    elif "Android" in ua:
+        system = "Android"
+    elif "Macintosh" in ua:
+        system = "macOS"
+    elif "Windows" in ua:
+        system = "Windows"
+    elif "Linux" in ua:
+        system = "Linux"
+    else:
+        system = "other"
+    if ha_app:
+        app = "HA app"
+        model = re.search(r"Android [\d.]+; ([^;)]+)\)", ua.split("Home Assistant/", 1)[1])
+        if model:
+            app += f" {model.group(1).strip()}"
+    elif "Edg/" in ua:
+        app = "Edge"
+    elif "Firefox/" in ua:
+        app = "Firefox"
+    elif "Chrome/" in ua:
+        app = "Chrome"
+    elif "Safari/" in ua:
+        app = "Safari"
+    else:
+        app = "browser"
+    screen = f"{scrw}x{scrh}" if isinstance(scrw, int) and isinstance(scrh, int) else "?"
+    return f"{system} · {app} · {screen}"
+
+
+def _render_devices(devices: dict, label: str, body: dict, now: datetime) -> dict:
+    """The devices' reports with this one set, older than RENDER_KEEP_DAYS dropped. Pure."""
+    out: dict = {}
+    cutoff = now.timestamp() - RENDER_KEEP_DAYS * 86400
+    for name, entry in (devices or {}).items():
+        try:
+            if datetime.fromisoformat(str(entry.get("at"))).timestamp() >= cutoff:
+                out[name] = entry
+        except (AttributeError, ValueError):
+            continue
+    out[label] = {k: body[k] for k in RENDER_FIELDS if k in body} | {"at": now.isoformat(timespec="seconds")}
+    return out
+
+
+async def _publish_render(app: web.Application, body: dict) -> None:
+    """Set this device's report on RENDER_SENSOR; a villa not reached is no error (the ring has the event)."""
+    current = await _villa_state(app, RENDER_SENSOR)
+    devices = _render_devices(((current or {}).get("attributes") or {}).get("devices") or {},
+                              _device_label(str(body.get("ua", "")), body.get("scrw"), body.get("scrh")),
+                              body, datetime.now(timezone.utc))
+    state = {"state": len(devices), "attributes": {
+        "friendly_name": "VESTA UI devices", "icon": "mdi:monitor-cellphone", "devices": devices}}
+    try:
+        async with app["session"].post(f"http://{SUPERVISOR}/core/api/states/{RENDER_SENSOR}", headers=AUTH,
+                                       json=state, timeout=ClientTimeout(total=10)) as resp:
+            if resp.status >= 300:
+                print(f"[supervisor-proxy] render sensor: Home Assistant answered {resp.status}", flush=True)
+    except (ClientError, OSError, asyncio.TimeoutError) as err:
+        print(f"[supervisor-proxy] render sensor: not set ({type(err).__name__})", flush=True)
 
 
 async def telemetry_get_handler(request: web.Request) -> web.Response:
