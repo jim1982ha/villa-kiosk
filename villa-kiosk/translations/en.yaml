@@ -54,6 +54,14 @@ configuration:
       ON means the villa's floor plan can be downloaded by anyone who can
       reach this add-on, with no passcode — only use it behind something like
       Cloudflare Access.
+  remove_model:
+    name: Remove the 3D model at the next start
+    description: >-
+      Turn on, save, then start or restart VESTA: the uploaded 3D model (and
+      its room data) is deleted, and this switch turns itself off again. Every
+      device then shows the upload screen, so a new model can be sent. Use it
+      when a model never finishes loading: the loading screen covers Settings,
+      so the model cannot be replaced from inside the app.
   session_days:
     name: Stay signed in for (days)
     description: >-

@@ -1179,6 +1179,58 @@ ck("a device's report replaces its last, a device silent for two weeks is droppe
                                                         "at": "2026-11-16T12:00:00+00:00"})
 
 print()
+
+# owner, 2026-11-16: a 125 MB model kept "Loading the villa…" over the whole page, Settings included, and the model
+# sits in /data where no file editor reaches. The remove_model switch deletes it at start and turns itself off.
+import asyncio as _aio
+
+
+class _FakeResp:
+    def __init__(self, status, body=None):
+        self.status, self._body = status, body or {}
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *a):
+        return False
+
+    async def json(self):
+        return self._body
+
+
+class _FakeSupervisor:
+    def __init__(self, options):
+        self.options, self.saved = options, None
+
+    def get(self, url, **k):
+        return _FakeResp(200, {"data": {"options": self.options}})
+
+    def post(self, url, json=None, **k):
+        self.saved = json["options"]
+        return _FakeResp(200)
+
+
+for _on in (True, False):
+    with tempfile.TemporaryDirectory() as tmp:
+        proxy.DATA_DIR = tmp
+        os.makedirs(os.path.join(tmp, "www"))
+        _names = ("villa.glb", "villa.glb.upload.json", "villa.rooms.json", "villa.rooms.json.upload.json")
+        for n in _names:
+            open(os.path.join(tmp, "www", n), "w").close()
+        _stored = {"owner_pin": "1234", "remove_model": _on}
+        _sup = _FakeSupervisor(_stored)
+        proxy._read_options = lambda s=_stored: s   # earlier checks replaced the reader
+        _aio.run(proxy._remove_model_if_asked(_sup))
+        _left = sorted(os.listdir(os.path.join(tmp, "www")))
+        if _on:
+            ck("remove_model on: the model, its room data and their upload records are deleted at start", _left == [])
+            ck("  ...and the switch is saved off again, every other option kept",
+               _sup.saved == {"owner_pin": "1234", "remove_model": False})
+        else:
+            ck("remove_model off: the model stays and no option is written", _left == sorted(_names) and _sup.saved is None)
+
+
 print("✅ the proxy's pure rules hold" if FAIL == 0
       else "❌ A PROXY RULE IS BROKEN")
 sys.exit(1 if FAIL else 0)
