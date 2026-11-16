@@ -1,3 +1,8 @@
+## 2.496.833
+
+- **No visible change.** The step that gives each light its room back after a settings sync moved into the lights'
+  own code, where the render checks reach it.
+
 ## 2.496.832
 
 - **Home Assistant shows how each screen draws the lights.** A new sensor, "VESTA UI devices", lists every phone,

@@ -1655,13 +1655,9 @@ export class EntityVisuals {
     this.extendStripJoints();
     this.bulbs.mergeStrips(this.lightEntityMeshes());
     if (this.lighting.furnitureLight) this.bulbs.glowEverythingLit();
-    // ⚠️ THE LIGHTS WERE JUST CLEARED (disposeLights) AND THEIR ROOMS WITH THEM.
-    // The plan only came back with the next calibration, which a config sync
-    // does not run: until then every lamp had no room, its pool no outline,
-    // and its glow lit the next room through the wall (owner's phone,
-    // 2.496.829, while a fresh load on the Mac looked right). A plan already
-    // known is handed straight back.
-    if (this.plan.rooms.length) this.bulbs.setRooms(this.plan);
+    // The lights were just cleared (disposeLights), their rooms with them:
+    // they take back the plan they had (BulbSet.ready).
+    this.bulbs.ready();
     this.reportRender();
     scene.blockMaterialDirtyMechanism = false;
 

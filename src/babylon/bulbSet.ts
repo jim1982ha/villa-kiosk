@@ -150,6 +150,8 @@ export class BulbSet {
   private readonly readings: () => Iterable<BulbReading>;
   private readonly casters: () => readonly AbstractMesh[];
   private readonly log: (line: string) => void;
+  /** The last plan, kept through clear(): ready() hands it back. */
+  private plan: Storeys<PoolRoom> | null = null;
   /** The walls and which rooms are open to each other, per model and plan:
    *  reading the walls off the model is the one slow step of the room map. */
   private readonly roomStore = new ModelKeyedStore<RoomLightKnown>("vk.roomlight2.", /^vk\.roomlight\d*\./);
@@ -305,8 +307,22 @@ export class BulbSet {
 
   /** The calibrated villa plan: the pools take their rooms' shapes and floors. */
   setRooms(plan: Storeys<PoolRoom>): void {
+    this.plan = plan;
     this.pools.setRooms(plan);
     this.holdToRooms(plan);
+  }
+
+  /**
+   * Every fixture is in (the load path's last step): the lights take back the
+   * plan they last had.
+   *
+   * ⚠️ clear() TAKES THE LIGHTS' ROOMS WITH THEM, AND A CONFIG SYNC CLEARS
+   * THEM. The plan came back only with the next calibration, which a sync does
+   * not run: until then every lamp had no room, its pool no outline, and its
+   * glow lit the next room through the wall (owner's phone, 2.496.829).
+   */
+  ready(): void {
+    if (this.plan?.rooms.length) this.setRooms(this.plan);
   }
 
   /** How this device holds its lights to their rooms, for the `render` report. */
