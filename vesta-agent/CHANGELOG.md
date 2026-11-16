@@ -1,3 +1,14 @@
+## 0.12.520
+
+- **The AI's photo choice no longer runs out of time.** About half of today's burst choices were stopped after 15
+  seconds, so no photo was picked by the AI and no green rectangle drawn. The AI now answers straight away, without
+  thinking first, in a few seconds, and has up to 45 seconds; the message never waits for it (after 4 seconds it goes
+  with a photo, which the chosen one replaces when it comes).
+- The AI's answer is only read where it gives the photo and the rectangle as asked, and each answer is written to the
+  log, so a misplaced rectangle can be checked against what the AI said.
+- On the Costs tab, a run stopped at its time limit no longer reads "Stopped by a restart of the agent": it reads
+  "Stopped before its end".
+
 ## 0.12.519
 
 - **A green rectangle shows who the AI found on the photo.** With the Presence Guard's Photo set to a Burst picked by

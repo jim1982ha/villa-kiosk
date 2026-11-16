@@ -105,8 +105,10 @@ export async function costs(days = 7) {
       // a run that ended without sending its report (agent_records.JOB_NO_RESULT): the agent's words of why
       : r.no_result ? h("span", { class: "chips one-line" }, infoButton("Not sent", r.no_result.why), chip("not sent", "alert"))
       // the (!) a failed run has, its words in the tooltip (owner, 2026-10-15: "a single (!) icon, the details in tooltip")
-      : r.interrupted ? alertButton("Stopped by a restart", () => h("div", {}, h("b", {}, "Stopped by a restart of the agent."),
-        h("div", { class: "tooltip-detail" }, "It was still working when the agent restarted. Anthropic reports a run's cost when it ends, so this one's is not here: the Anthropic Console has it.")))
+      // a run cut before its end: by a restart of the agent, or stopped at its own time limit (a visit's photo choice;
+      // owner, 2026-11-16: those read "a restart" when nothing had restarted)
+      : r.interrupted ? alertButton("Stopped before its end", () => h("div", {}, h("b", {}, "Stopped before its end."),
+        h("div", { class: "tooltip-detail" }, "It was still working when it was stopped: by a restart of the agent, or at its own time limit. Anthropic reports a run's cost when it ends, so this one's is not here: the Anthropic Console has it.")))
       : r.stopped ? chip("stopped at its limit", "alert") : r.error ? alertButton("This run failed", () => h("div", {}, h("b", {}, r.cause ? `This run failed: ${r.cause}.` : "This run failed."),
       r.what_to_do ? h("div", {}, r.what_to_do) : null, h("div", { class: "tooltip-detail" }, r.error))) : ""] }));
   fill($view,

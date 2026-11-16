@@ -37,6 +37,9 @@ class Terms:
     # the skill the run was started for (a scheduled job's, or the command skill a person called): the first of the
     # Costs tab's "Skills" for that run, before those the AI read or ran (runner.Collector.skills)
     skill: str | None = None
+    # False: the model answers at once, no thinking — a run whose answer is a few numbers (photo_pick.py: thinking made
+    # Haiku write ~1,000 tokens and take 6-15 s to name a photo, half of them cut at the limit; owner, 2026-11-16)
+    think: bool = True
 
     @property
     def model(self) -> str:

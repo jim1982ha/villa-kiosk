@@ -264,6 +264,7 @@ def build_options(settings, system_prompt: str, kit, terms, state,
              "DISABLE_AUTOUPDATER": "1", "DISABLE_TELEMETRY": "1", "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1"},
         model=terms.model,
         effort=terms.effort,
+        thinking=None if getattr(terms, "think", True) else {"type": "disabled"},
         max_budget_usd=float(terms.limit_usd),
         resume=resume,
     )

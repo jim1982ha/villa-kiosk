@@ -55,10 +55,12 @@ def every_photo_sent(v, chat=OWNER):
 def sdk(monkeypatch, answer=None, fail=False):
     """The model's side of one run: its answer, or a failure."""
     seen = []
+    thinking = sdk.thinking = []
 
     class Fake:
         def __init__(self, options):
             seen.append(options.model)
+            thinking.append(options.thinking)
 
         async def __aenter__(self):
             if fail:
@@ -123,6 +125,22 @@ def test_where_the_model_saw_someone_is_framed_in_green_on_the_photo_kept(tmp_pa
         edge, inside = im.convert("RGB").getpixel((16, 24)), im.convert("RGB").getpixel((32, 24))
     assert edge[1] > 150 and edge[0] < 150 and edge[2] < 150, ("the rectangle's edge is green", edge)
     assert max(abs(c - 60) for c in inside) < 25, ("inside it, the photo as taken", inside)
+
+
+def test_a_wordy_answer_is_read_only_where_it_answers_as_asked_and_the_model_does_not_think(tmp_path, kiosk, media,
+                                                                                            monkeypatch):
+    # owner, 2026-11-16: half the choices cut at the limit, ~1,000 tokens written for one line of numbers
+    from PIL import Image
+    sdk(monkeypatch, answer="Photo 1 shows the yard at 15:07:24 and photo 3 is blurred. 2 0.25 0.25 0.75 0.75")
+    v = villa(tmp_path, kiosk)
+    vi = Visit(media=media)
+    f1, f2, f3 = burst(vi, media, "18:20:16", "haiku")
+    play(v, send(vi.event("opened")))
+    assert [p["path"] for p in v.visits.every_photo(1)] == [f2], "the frame of the answer as asked, not \"photo 1\""
+    with Image.open(f2) as im:
+        edge = im.convert("RGB").getpixel((16, 24))
+    assert edge[1] > 150 and edge[0] < 150, ("framed where it answered", edge)
+    assert sdk.thinking == [{"type": "disabled"}], "the photo choice runs without thinking"
 
 
 def test_an_answer_with_no_place_keeps_the_photo_as_taken(tmp_path, kiosk, media, monkeypatch):

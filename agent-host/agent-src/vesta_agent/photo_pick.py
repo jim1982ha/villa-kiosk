@@ -36,7 +36,9 @@ _GREY = (96, 54)
 
 
 def timeout_s() -> int:
-    return limit("visit.photo_pick_timeout_s", 15, unit="seconds", group="run", lo=3, hi=120,
+    # 45 s, not 15 (owner, 2026-11-16: half the runs cut at 15 s, no frame chosen, no rectangle): the message never
+    # waits for it (visit.pick_wait_s), a choice that comes later replaces the photo shown
+    return limit("visit.photo_pick_timeout_s", 45, unit="seconds", group="run", lo=3, hi=120,
                  says="How long the AI may take to choose the best of a step's burst of photos.",
                  reached="The photo most different from the first is kept instead (no AI).", told="")
 
@@ -68,10 +70,12 @@ def changed_most(paths: list[str]) -> int:
 
 
 def answered(text: str, n: int) -> int | None:
-    """The frame (0-based) the model's answer names ("2", "Photo 2"), None when it names none of the `n` (its "0": it
-    saw no person, vehicle or animal)."""
+    """The frame (0-based) the model's answer names ("2", "Photo 2", "2 0.1 0.2 0.3 0.4"), None when it names none of
+    the `n` (its "0": it saw no person, vehicle or animal). The number of an answer as asked first (its place after
+    it), else the first number."""
+    full = _ANSWER.findall(text or "")
     m = re.search(r"\d+", text or "")
-    k = int(m.group()) if m else 0
+    k = int(full[-1][0]) if full else int(m.group()) if m else 0
     return k - 1 if 1 <= k <= n else None
 
 
@@ -83,20 +87,28 @@ def asked(n: int, where: bool = False) -> str:
     return (f"The {n} photos above are numbered 1 to {n}, in the order the camera took them. Answer with the number of "
             "the photo you choose, then where what you saw is in that photo: four numbers between 0 and 1, its left, "
             "top, right and bottom edges as fractions of the photo's width and height, the box holding all of it. "
-            "For example: 2 0.08 0.31 0.30 0.72. Nothing else; answer 0 when none of them shows what you look for.")
+            "Your whole answer is that one line, for example: 2 0.08 0.31 0.30 0.72 — no words, no explanation. "
+            "Answer 0 when none of them shows what you look for.")
 
 
 #: A place smaller than this share of the photo is a mis-read, larger is no place at all
 _BOX_AREA = (0.002, 0.9)
 
 
+#: The answer's one line: the frame's number then its place, four fractions (asked)
+_ANSWER = re.compile(r"(?<![\d.])(\d+)\s+(0?\.\d+|[01](?:\.\d+)?)\s+(0?\.\d+|[01](?:\.\d+)?)\s+"
+                     r"(0?\.\d+|[01](?:\.\d+)?)\s+(0?\.\d+|[01](?:\.\d+)?)(?![\d.])")
+
+
 def placed(text: str) -> tuple[float, float, float, float] | None:
-    """The place (left, top, right, bottom, fractions of the photo) after the frame's number in the model's answer,
-    None when it gives none, or one that is not a place in the photo."""
-    nums = re.findall(r"\d*\.?\d+", text or "")
-    if len(nums) < 5:
+    """The place (left, top, right, bottom, fractions of the photo) in the model's answer, only as asked: the frame's
+    number and four fractions in a row (the last such run). None when it gives none, or one that is not a place in
+    the photo. ⚠️ NEVER NUMBERS GATHERED FROM WORDS: an answer that explains itself is full of them ("photo 1", the
+    camera's clock), and they drew the rectangle on an empty patch of ground (owner, 2026-11-16)."""
+    found = _ANSWER.findall(text or "")
+    if not found:
         return None
-    left, top, right, bottom = (float(v) for v in nums[1:5])
+    left, top, right, bottom = (float(v) for v in found[-1][1:5])
     if not (0 <= left < right <= 1 and 0 <= top < bottom <= 1):
         return None
     area = (right - left) * (bottom - top)
@@ -171,7 +183,7 @@ class Picker:
         from .tools import SERVER, Kit
         kit = Kit(create_sdk_mcp_server(name=SERVER, version=__version__, tools=[]), set(), [], None)
         skill, instructions, frame = said
-        terms = Terms(frozenset(), profile, chat_brain(self.s)[1], agent_records.PHOTO_PICK, skill)
+        terms = Terms(frozenset(), profile, chat_brain(self.s)[1], agent_records.PHOTO_PICK, skill, think=False)
         res = await runner.run(self.s.in_folder("photo_pick"), instructions, asked(len(images), where=bool(frame)), kit,
                                terms, self.state, asked=f"Best of {len(images)} photos of one step", image=images)
         if res.problem or (res.error and not res.text):
@@ -179,6 +191,9 @@ class Picker:
             return None
         got = answered(res.text, len(images))
         box = placed(res.text) if frame and got is not None else None
+        # what it said, for whoever checks a rectangle against the photo (owner, 2026-11-16)
+        log.info("The AI chose photo %s of %d%s (it answered: %r)", None if got is None else got + 1, len(images),
+                 f", what it saw at {box}" if box else ", no place", (res.text or "")[:160])
         if box is not None:
             await asyncio.to_thread(framed, paths[got], box, frame)
         return got
