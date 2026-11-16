@@ -1,3 +1,10 @@
+## 2.496.836
+
+- **A switch to remove the 3D model, on the add-on's Configuration page.** "Remove the 3D model at the next start":
+  turn it on, save, then start or restart VESTA. The uploaded model and its room data are deleted, the switch turns
+  itself off, and every device shows the upload screen. It is the way out when a model never finishes loading, since
+  the loading screen covers Settings and its Upload button.
+
 ## 2.496.835
 
 - **Villa lighting's Night is night at every hour.** Set to Night around sunset (or Day around dawn), the villa stayed

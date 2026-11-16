@@ -5,7 +5,7 @@
 # no-compile operation. The {arch} placeholder + version resolve to e.g.
 # ghcr.io/jim1982ha/villa-kiosk-amd64:2.0.0 — published by .github/workflows/build.yaml.
 name: VESTA (dev2)
-version: "2.496.835"
+version: "2.496.836"
 slug: villa_kiosk_dev2
 description: Interactive 3D map of your property — live devices, energy, security and maintenance at a glance
 url: https://github.com/jim1982ha/villa-kiosk
@@ -67,6 +67,11 @@ panel_title: VESTA dev2
 # turn this on if something else already gates the hostname itself (e.g.
 # Cloudflare Access) — it's meaningless for Ingress, which is already
 # auto-trusted, and unnecessary if you never expose port 8099 directly.
+#
+# remove_model (off by default): a ONE-SHOT switch. On at a start, the proxy
+# deletes the uploaded model (and its room data) and turns the switch off again.
+# The way out when a model never finishes loading: the loading screen covers
+# Settings, and the model sits in the private /data no file editor reaches.
 #
 # superadmin_pin (empty by default = the capability is OFF): a SIX-digit code
 # that authorises permanently deleting a Facility Manager EVIDENCE record — a
@@ -152,6 +157,7 @@ options:
   ops_pin: ""
   superadmin_pin: ""
   public_model_access: false
+  remove_model: false
   session_days: 30
   telemetry_max_events: 500
   pin_lockout_minutes: 5
@@ -165,6 +171,7 @@ schema:
   ops_pin: match(^[0-9]{4}$|^$)?
   superadmin_pin: match(^[0-9]{6}$|^$)?
   public_model_access: bool?
+  remove_model: bool?
   session_days: int(1,365)?
   telemetry_max_events: int(50,5000)?
   pin_lockout_minutes: int(1,1440)?
