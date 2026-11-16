@@ -1,3 +1,9 @@
+## 2.496.834
+
+- **Villa lighting sits on its name's line on a phone.** In Settings, the three Villa lighting buttons (day, night,
+  automatic) now stay at the right of their name, as compact as the Interface buttons in the header, instead of a
+  wide bar on a line of their own.
+
 ## 2.496.833
 
 - **No visible change.** The step that gives each light its room back after a settings sync moved into the lights'
