@@ -1060,6 +1060,7 @@ OPTIONS = {
     "ops_pin": Option("text", "", pattern=PIN_RE),
     "superadmin_pin": Option("text", "", pattern=SUPERADMIN_PIN_RE),
     "public_model_access": Option("bool", False),
+    "remove_model": Option("bool", False),
     "session_days": Option("int", 30, 1, 365),
     "telemetry_max_events": Option("int", 500, 50, 5000),
     "pin_lockout_minutes": Option("int", 5, 1, 1440),
@@ -1203,6 +1204,51 @@ async def _cleanup_stale_options(session: ClientSession) -> None:
                 )
     except Exception as err:  # noqa: BLE001 — best-effort, must never block startup
         print(f"[supervisor-proxy] stale-option cleanup skipped: {err}", flush=True)
+
+
+def _remove_model_files() -> list[str]:
+    """Delete the uploaded model, its room-data sidecar and their upload records; the names actually removed. The
+    kiosk then shows its "No 3D model loaded yet" screen with the uploader."""
+    www = _data(WWW_NAME)
+    glb = MANAGED_PATH["glb"]
+    gone = []
+    for rel in (glb, glb + ".upload.json", _rooms_rel(glb), _rooms_rel(glb) + ".upload.json"):
+        try:
+            os.remove(os.path.join(www, rel))
+            gone.append(rel)
+        except FileNotFoundError:
+            pass
+        except OSError as err:
+            print(f"[supervisor-proxy] could not remove {rel}: {err}", flush=True)
+    return gone
+
+
+async def _remove_model_if_asked(session: ClientSession) -> None:
+    """The `remove_model` option: a one-shot switch. At start, with it on, the model goes and the switch is turned off
+    again through the same endpoint the Configuration page saves with — so the NEXT upload is not removed at the next
+    restart.
+
+    ⚠️ WHY IT EXISTS (owner, 2026-11-16): a 125 MB GLB kept every device on "Loading the villa…", and that screen
+    covers the whole page, Settings and its Upload button included. The model lives in the add-on's private /data,
+    which no file editor reaches: there was no way left to replace it."""
+    if not opt("remove_model"):
+        return
+    gone = _remove_model_files()
+    print(f"[supervisor-proxy] remove_model: removed {gone or 'nothing (no model was stored)'}", flush=True)
+    try:
+        async with session.get(f"http://{SUPERVISOR}/addons/self/info", headers=AUTH) as resp:
+            if resp.status != 200:
+                raise RuntimeError(f"HTTP {resp.status} reading the options")
+            options = (await resp.json()).get("data", {}).get("options") or {}
+        options = dict(options, remove_model=False)
+        async with session.post(f"http://{SUPERVISOR}/addons/self/options", headers=AUTH,
+                                json={"options": options}) as resp:
+            if resp.status != 200:
+                raise RuntimeError(f"HTTP {resp.status} saving the options")
+        print("[supervisor-proxy] remove_model: switched off again", flush=True)
+    except Exception as err:  # noqa: BLE001 — never block startup; the log says to switch it off by hand
+        print(f"[supervisor-proxy] remove_model: could not switch it off ({err}) — turn it off on the "
+              "Configuration page, or the next start removes the model again", flush=True)
 
 
 #: Files this process once kept in /data and no longer reads: removed at start, once, so a retired store never lingers
@@ -5712,6 +5758,7 @@ def build_app(data_dir: str | None = None) -> web.Application:
         os.makedirs(_data(WWW_NAME), exist_ok=True)
         _session_secret()  # create the signing key on first boot
         await _cleanup_stale_options(a["session"])
+        await _remove_model_if_asked(a["session"])
         if (gone := _remove_retired_data()):
             print(f"[supervisor-proxy] removed retired file(s): {gone}", flush=True)
         if await DEVICE_CONFIG.settle():
