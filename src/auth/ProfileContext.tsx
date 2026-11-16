@@ -17,7 +17,7 @@ import { report as reportTelemetry } from "@/utils/telemetry";
 import { ingressPath } from "@/ha/ingress";
 import { purgeModelCache } from "@/utils/modelCache";
 import { markBoot } from "@/utils/bootTimeline";
-import { startModelPrefetch } from "@/utils/modelPrefetch";
+import { modelLifecycle } from "@/utils/modelLifecycle";
 import { readJson, writeJson, removeStored } from "@/utils/storedJson";
 
 const SESSION_KEY = "villa-kiosk:profile:v1";
@@ -108,7 +108,7 @@ function browserAdapters(): SessionAdapters {
     forget: () => { void purgeModelCache(); },
     // The one honest boundary between waiting on a PERSON and on the APP
     // (bootTimeline), and the model download once a cookie exists.
-    signedIn: () => { markBoot("auth"); startModelPrefetch(); },
+    signedIn: () => { markBoot("auth"); modelLifecycle.prefetch(); },
     report: (p, now) => reportTelemetry("session", { phase: "lost", source: p.source, lostRole: p.role, agoMs: p.at ? now - p.at : undefined }),
     now: () => Date.now(),
   };

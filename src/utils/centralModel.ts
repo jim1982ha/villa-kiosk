@@ -71,14 +71,6 @@ export const centralModelUrl = (cfg: AddonConfig): string =>
 export const centralRoomsUrl = (cfg: AddonConfig): string =>
   cfg.model_path ? modelUrl(roomsPathFor(cfg.model_path), cfg.rooms_version) : "";
 
-let _addonConfigCache: AddonConfig | null = null;
-
-/** Drop the cached add-on config so the next fetchAddonConfig() re-reads it
- *  (e.g. right after a central upload changes the effective paths). */
-export function clearAddonConfigCache(): void {
-  _addonConfigCache = null;
-}
-
 
 // HA's Ingress gateway rejects any single request over ~16 MB with HTTP 413
 // (a Supervisor-level cap the add-on cannot raise), so anything bigger goes up
@@ -198,8 +190,8 @@ async function postUploadRequest(
  * Upload a central model file (GLB or room-data sidecar) to the add-on, which
  * writes it into its own /data store (overwriting the previous one) via the
  * supervisor-proxy's /model-upload endpoint. Returns the resolved path.
- * Invalidates the addon-config cache so the freshly-uploaded model is picked up
- * on the next fetch. Takes a Blob so a caller can upload a re-packaged Blob if
+ * The caller then tells modelLifecycle.replaced(), which re-reads the add-on's
+ * answer and reloads the villa once. Takes a Blob so a caller can upload a re-packaged Blob if
  * needed. Files above ~12 MB go up via the chunked protocol.
  */
 export async function uploadCentralModel(
@@ -239,7 +231,6 @@ export async function uploadCentralModel(
       onProgress?.(Math.min(offset + UPLOAD_CHUNK_BYTES, file.size), file.size);
     }
   }
-  _addonConfigCache = null;
   return result;
 }
 
@@ -258,18 +249,17 @@ export type AddonConfigAnswer =
  * expired session, three dropped requests — and the load read that as "the
  * villa has no model" and showed the upload screen on a villa that had one,
  * until something reloaded the page. Only a 200 is an answer; anything else
- * is returned as no answer, and the caller decides (modelSource retries it).
+ * is returned as no answer, and the caller decides (modelLifecycle retries it).
  *
  * A network-level failure (fetch throwing, or the 3 s abort on a slow public
  * hop) is retried twice here with a short backoff; an HTTP status is returned
  * at once — a 401 is the expected "not signed in yet" of the pre-login
  * prefetch, and retrying it would only delay that screen.
  *
- * Cached after the first 200 (even one reporting an empty model_path); a
- * failure never is, so an early 401 cannot poison the post-login call.
+ * Not cached here: modelLifecycle holds the answer (one place for "the current
+ * model"), and asks again only when it is told the model was replaced.
  */
 export async function readAddonConfig(): Promise<AddonConfigAnswer> {
-  if (_addonConfigCache) return { ok: true, cfg: _addonConfigCache };
   const ATTEMPTS = 3;
   for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
     try {
@@ -282,20 +272,10 @@ export async function readAddonConfig(): Promise<AddonConfigAnswer> {
         clearTimeout(tid);
       }
       if (!resp.ok) return { ok: false, status: resp.status };
-      const cfg = await resp.json() as AddonConfig;
-      _addonConfigCache = cfg;
-      return { ok: true, cfg };
+      return { ok: true, cfg: await resp.json() as AddonConfig };
     } catch {
       if (attempt < ATTEMPTS - 1) await new Promise((r) => setTimeout(r, 600 * (attempt + 1)));
     }
   }
   return { ok: false };
-}
-
-/** readAddonConfig for a caller to whom no answer and no model are the same
- *  thing — the pre-login prefetch (nothing to fetch yet) and Settings' model
- *  info (nothing to show). Never the load: see readAddonConfig. */
-export async function fetchAddonConfig(): Promise<AddonConfig> {
-  const got = await readAddonConfig();
-  return got.ok ? got.cfg : { model_path: "" };
 }

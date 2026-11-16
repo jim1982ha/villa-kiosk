@@ -45,7 +45,8 @@
 // resync (floor switch, or anything else that changes an input without a state
 // event — it redraws the shadow maps too), invalidateShadows (a pose swap
 // changed what occludes), setRooms (calibration), syncGlow (before a frame),
-// clear (unload).
+// clear (unload). Which rooms each lamp lights is lampRooms.ts's: it keeps up
+// with the fixtures and the plan by itself, in whatever order they come.
 
 import { Vector3 } from "@babylonjs/core/Maths/math.vector";
 import { Color3 } from "@babylonjs/core/Maths/math.color";
@@ -59,7 +60,7 @@ import { ShadowGenerator } from "@babylonjs/core/Lights/Shadows/shadowGenerator"
 // without it, and tsc cannot see that. No file in src had it, so on a villa
 // whose walls' shadows are not baked (lightingMode.lightShadows) the first
 // light turned on threw out of EntityVisuals.apply — latent on this villa,
-// which is baked. Found by driving BulbSet in tests/oracles/bulb_set.mjs.
+// which is baked. Found by driving BulbSet on Babylon's NullEngine.
 import "@babylonjs/core/Lights/Shadows/shadowGeneratorSceneComponent";
 // For its REFRESHRATE_* constants (see castShadow). Adds nothing to the bundle
 // — ShadowGenerator already pulls this module in.
@@ -70,8 +71,8 @@ import { LightPoolSet, type LightReading, type PoolFloorProbe, type PoolRoom } f
 import { attachLampGlow, hasLampGlow, lampGlowFor, BULB_REACH_M } from "./lampGlow";
 import { isHelperMesh, structureRole } from "./meshRoles";
 import type { Storeys } from "./storeys";
-import { buildRoomLightMask, type RoomLightKnown, type TriangleVisitor } from "./roomLightMask";
-import { ModelKeyedStore } from "./modelStore";
+import type { TriangleVisitor } from "./roomLightMask";
+import { LampRooms } from "./lampRooms";
 import { Matrix } from "@babylonjs/core/Maths/math.vector";
 import { VertexBuffer } from "@babylonjs/core/Buffers/buffer";
 
@@ -149,12 +150,7 @@ export class BulbSet {
   private readonly probe: BulbFloorProbe;
   private readonly readings: () => Iterable<BulbReading>;
   private readonly casters: () => readonly AbstractMesh[];
-  private readonly log: (line: string) => void;
-  /** The last plan, kept through clear(): ready() hands it back. */
-  private plan: Storeys<PoolRoom> | null = null;
-  /** The walls and which rooms are open to each other, per model and plan:
-   *  reading the walls off the model is the one slow step of the room map. */
-  private readonly roomStore = new ModelKeyedStore<RoomLightKnown>("vk.roomlight2.", /^vk\.roomlight\d*\./);
+  private readonly rooms: LampRooms<PoolRoom>;
 
   constructor(
     scene: Scene,
@@ -168,8 +164,15 @@ export class BulbSet {
     this.probe = probe;
     this.readings = readings;
     this.casters = casters;
-    this.log = log;
-    this.pools = new LightPoolSet(scene, probe, () => this.poolReadings(), log);
+    this.pools = new LightPoolSet(scene, probe, () => this.poolReadings(), log, (room) => this.rooms.bitsOf(room));
+    // Each lamp lights its own room and the rooms open to it — only where the
+    // glow is (a lightmapped villa).
+    this.rooms = new LampRooms<PoolRoom>({
+      place: (plan) => this.pools.setRooms(plan),
+      walls: () => (this.glowMeshes.length ? structureTriangles(scene) : null),
+      draw: (mask) => lampGlowFor(scene).setMask(scene, mask),
+      log,
+    });
   }
 
   /** Whether a lit entity casts a cube shadow map (lightingMode.lightShadows:
@@ -192,6 +195,7 @@ export class BulbSet {
     if (withPools) {
       this.pools.addFixture(mesh, { min: bb.minimumWorld, max: bb.maximumWorld, centerY: bb.centerWorld.y },
         shape.strip && shape.horizontal);
+      this.rooms.lampsChanged();
     }
   }
 
@@ -244,6 +248,7 @@ export class BulbSet {
     }
     this.glowMeshes = this.scene.meshes.filter((m) => hasLampGlow(m.material));
     for (const l of new Set(this.lights.values())) l.excludedMeshes.push(...this.glowMeshes);
+    this.rooms.lampsChanged();
   }
 
   /** One light entity's state: every output of every bulb it has — its own
@@ -305,59 +310,27 @@ export class BulbSet {
     this.invalidateShadows();
   }
 
-  /** The calibrated villa plan: the pools take their rooms' shapes and floors. */
-  setRooms(plan: Storeys<PoolRoom>): void {
-    this.plan = plan;
-    this.pools.setRooms(plan);
-    this.holdToRooms(plan);
-  }
-
-  /**
-   * Every fixture is in (the load path's last step): the lights take back the
-   * plan they last had.
-   *
-   * ⚠️ clear() TAKES THE LIGHTS' ROOMS WITH THEM, AND A CONFIG SYNC CLEARS
-   * THEM. The plan came back only with the next calibration, which a sync does
-   * not run: until then every lamp had no room, its pool no outline, and its
-   * glow lit the next room through the wall (owner's phone, 2.496.829).
-   */
-  ready(): void {
-    if (this.plan?.rooms.length) this.setRooms(this.plan);
-  }
+  /** The calibrated villa plan: the pools take their rooms' shapes and
+   *  floors, and the lamps their rooms — now, or once fixtures exist. */
+  setRooms(plan: Storeys<PoolRoom>): void { this.rooms.setPlan(plan); }
 
   /** How this device holds its lights to their rooms, for the `render` report. */
   roomReport(): { roomMap: boolean; lamps: number; lampsNoRoom: number } {
+    this.rooms.settle();
     const { lamps, noRoom } = this.pools.roomCounts();
-    return { roomMap: lampGlowFor(this.scene).hasMask, lamps, lampsNoRoom: noRoom };
+    return { roomMap: this.rooms.hasMap, lamps, lampsNoRoom: noRoom };
   }
 
   /** The versioned model URL the room map's wall answers are kept under;
    *  null keeps nothing. */
-  setCacheKey(key: string | null): void { this.roomStore.setModel(key); }
-
-  /**
-   * Each lamp lights its own room and the rooms open to it (roomLightMask.ts).
-   * Only where the glow is (a lightmapped villa). The walls are read off the
-   * model once per model and plan on this device; after that, a load draws
-   * the map from the stored answer in a few milliseconds.
-   */
-  private holdToRooms(plan: Storeys<PoolRoom>): void {
-    if (!this.glowMeshes.length) return;
-    const t0 = performance.now();
-    const sig = plan.rooms.map((r) => `${r.name}@${r.storey ?? ""}:${r.pts.map((p) => `${p.x.toFixed(2)},${p.z.toFixed(2)}`).join(" ")}`).join("/");
-    const stored = this.roomStore.load();
-    const known = stored.get(sig);
-    const mask = buildRoomLightMask(plan, known ? null : structureTriangles(this.scene), known);
-    if (mask && !known) this.roomStore.save(new Map([[sig, mask.known]]));
-    lampGlowFor(this.scene).setMask(this.scene, mask);
-    this.pools.setRoomBits(mask ? (room) => mask.bitsOf(room) : null);
-    this.log(`room light: ${mask ? `${mask.width}x${mask.rows}x${mask.bands}` : "none"} open=[${mask?.open.join(", ") ?? ""}]`
-      + ` ${known ? "stored" : "walls read"} ${(performance.now() - t0).toFixed(0)}ms`);
-  }
+  setCacheKey(key: string | null): void { this.rooms.setCacheKey(key); }
 
   /** The light the bulbs that are on give the furniture light (lampGlow):
    *  one lamp per pool, where its placement says it stands. */
-  lamps(): ReturnType<LightPoolSet["glowLamps"]> { return this.pools.glowLamps(); }
+  lamps(): ReturnType<LightPoolSet["glowLamps"]> {
+    this.rooms.settle();
+    return this.pools.glowLamps();
+  }
 
   /** Before EVERY frame: hand the pools that are on to the furniture light,
    *  which merges them only when they changed (LampGlowState.set). Never with
@@ -370,6 +343,8 @@ export class BulbSet {
    *  version moved, and the furniture went unlit — some change to the lamps
    *  does not move it. The lamps themselves are the key now. */
   syncGlow(): void {
+    // Ungated: the pools take their rooms' shapes on every villa.
+    this.rooms.settle();
     if (!this.glowMeshes.length) return;
     lampGlowFor(this.scene).set(this.lamps());
   }
@@ -381,6 +356,7 @@ export class BulbSet {
     this.lights.clear();
     this.pools.clear();
     this.glowMeshes = [];
+    this.rooms.lampsChanged();
   }
 
   /** Every bulb's reading as the pools want it: per mesh, the storey folded in. */

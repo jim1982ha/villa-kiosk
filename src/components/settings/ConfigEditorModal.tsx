@@ -69,8 +69,6 @@ interface Props {
   /** When opened from a device panel's edit shortcut, pre-filter the entity
    *  table to this entity_id so its row is right there. */
   focusEntityId?: string;
-  /** A GLB/room-data upload changed the model — remount the canvas to load it. */
-  onModelChanged: () => void;
   /** The heading the 3D view looks along, in degrees (SceneManager.viewHeadingDeg) — what "Set North" adopts. */
   viewHeadingDeg?: () => number | null;
 }
@@ -258,7 +256,7 @@ export function HeaderActions({ glbUpload, logout }: {
   );
 }
 
-export default function ConfigEditorModal({ onBack, withinSettings, focusEntityId, onModelChanged, viewHeadingDeg }: Props) {
+export default function ConfigEditorModal({ onBack, withinSettings, focusEntityId, viewHeadingDeg }: Props) {
   // ⚠️ ONE DRAFT FOR WHAT THIS DIALOG EDITS (configSlice.ADVANCED_SETTINGS_KEYS). Every edit below applies live through
   // ConfigContext.update and reaches every tablet; the draft records what this dialog itself changed, item by item. Over
   // Settings, Settings' draft records the same changes and this dialog just closes back to it; on its own, it is this
@@ -285,7 +283,7 @@ export default function ConfigEditorModal({ onBack, withinSettings, focusEntityI
   const canUploadModel = roleCan(role, "manageModel");
   // Central GLB/room-data upload — Owner only. In this modal's header, beside Log Out All (HeaderActions), not the main
   // app's top bar: it's an administration action scoped to Advanced Settings.
-  const glbUpload = useGlbUpload(canUploadModel, onModelChanged);
+  const glbUpload = useGlbUpload(canUploadModel);
 
   // ⚠️ EVERY CONTROL BELOW WRITES AS THE DIALOG (DialogEdits): what the open drafts' Cancel takes back. The model
   // upload above writes its rooms from here (not as the dialog), and the devices the reloaded model finds are written

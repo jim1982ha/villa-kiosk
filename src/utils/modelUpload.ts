@@ -107,9 +107,11 @@ export async function runModelUpload(
   return { written };
 }
 
-const amount = (size: number) => {
+/** A file's size as a person reads it ("17.9 MB", "125 MB", "640 KB"), ONE
+ *  definition for the upload's words and the "too heavy" screen. */
+export const fmtBytes = (size: number) => {
   const mb = size / 1_000_000;
-  return mb < 1 ? `${(size / 1000).toFixed(0)} KB` : `${mb.toFixed(1)} MB`;
+  return mb < 1 ? `${(size / 1000).toFixed(0)} KB` : `${mb.toFixed(1).replace(/\.0$/, "")} MB`;
 };
 
 /**
@@ -129,12 +131,12 @@ export function uploadReport(outcome: UploadOutcome): { text: string; ok: boolea
     if (glb && outcome.failed.kind === "rooms") {
       return {
         ok: false, reload,
-        text: `The model was uploaded (${amount(glb.size)}), but its room data was not: ${outcome.failed.message} `
+        text: `The model was uploaded (${fmtBytes(glb.size)}), but its room data was not: ${outcome.failed.message} `
           + "Every device shows the new model with the previous rooms until you upload it again.",
       };
     }
     return { ok: false, reload, text: outcome.failed.message };
   }
-  if (glb) return { ok: true, reload, text: `Uploaded ${amount(glb.size)} → ${glb.path} with its room data. Reloading…` };
-  return { ok: true, reload, text: `Uploaded ${amount(rooms!.size)} → ${rooms!.path}. Reloading…` };
+  if (glb) return { ok: true, reload, text: `Uploaded ${fmtBytes(glb.size)} → ${glb.path} with its room data. Reloading…` };
+  return { ok: true, reload, text: `Uploaded ${fmtBytes(rooms!.size)} → ${rooms!.path}. Reloading…` };
 }

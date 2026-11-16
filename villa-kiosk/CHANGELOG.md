@@ -1,3 +1,16 @@
+## 2.496.839
+
+- **A 3D model too heavy to load gets its own screen.** Instead of "Loading the villa…" for ever, the VESTA UI says
+  "This 3D model is too heavy to load", with its size and the 60 MB limit, and the owner can upload a lighter one
+  right there. It knows the size before downloading anything, so a slow connection never triggers it. After an
+  upload the villa reloads once.
+
+## 2.496.838
+
+- **No visible change.** Which rooms each lamp lights now has one owner in the code, which keeps itself right after a
+  settings sync in any order. The bug where a lamp lit the next room through the wall after a sync can no longer come
+  back unnoticed: a check now fails before a release instead.
+
 ## 2.496.837
 
 - **The top bar stays while the villa loads.** "Loading the villa…" used to cover the whole screen, so a model that

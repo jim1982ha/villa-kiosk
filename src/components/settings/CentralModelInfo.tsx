@@ -4,7 +4,7 @@
 // (ConfigEditorModal's HeaderActions, owner 2026-10-25), for the profile that
 // may upload a model only.
 
-import type { getLoadedModelInfo } from "@/utils/modelInfo";
+import type { LoadedModelInfo } from "@/utils/modelInfo";
 import type { AddonConfig } from "@/utils/centralModel";
 import { momentText } from "@/utils/dateText";
 
@@ -12,7 +12,7 @@ export default function CentralModelInfo({
   addonCfg, loadedModel,
 }: {
   addonCfg: AddonConfig | null;
-  loadedModel: ReturnType<typeof getLoadedModelInfo>;
+  loadedModel: LoadedModelInfo | null;
 }) {
   // the details only once a model is set up; the words below always
   const cfg = addonCfg?.model_path ? addonCfg : null;

@@ -1,5 +1,5 @@
 // src/components/settings/ModelUploader.tsx
-// The no-model screen's upload: the villa's first model, sent to the add-on
+// The upload the no-model and too-heavy screens offer: a model sent to the add-on
 // exactly as Settings sends it (useGlbUpload → utils/modelUpload), so it
 // reaches every device with its room data.
 //
@@ -12,8 +12,8 @@
 import { Upload } from "lucide-react";
 import { useGlbUpload, ModelFileInput } from "./useGlbUpload";
 
-export default function ModelUploader({ onUploaded }: { onUploaded: () => void }) {
-  const up = useGlbUpload(true, onUploaded);
+export default function ModelUploader() {
+  const up = useGlbUpload(true);
   return (
     <div>
       <ModelFileInput upload={up} />

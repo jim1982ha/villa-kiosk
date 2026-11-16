@@ -11,11 +11,9 @@ import { useConfig } from "@/config/ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
 import { filterConfigForRole, roleCan } from "@/auth/permissions";
 import { useHA } from "@/ha/HAStateStore";
-import { forgetBrowserModel } from "@/utils/localModel";
-import { readAddonConfig, centralRoomsUrl, roomsPathFor } from "@/utils/centralModel";
-import { modelBytes } from "@/utils/modelPrefetch";
-import { acquireModel } from "@/utils/modelSource";
-import { setLoadedModelInfo, sha256Hex } from "@/utils/modelInfo";
+import { centralRoomsUrl, roomsPathFor } from "@/utils/centralModel";
+import { modelLifecycle, useModel, tooHeavyLine } from "@/utils/modelLifecycle";
+import { sha256Hex } from "@/utils/modelInfo";
 import { fetchRoomData, roomDataPatch, type RoomDataFetch } from "@/config/roomData";
 import { report as reportTelemetry } from "@/utils/telemetry";
 import { markBoot, beginLoad, endLoad, bootTimeline, hiddenMsTotal, scheduleSpanCensus } from "@/utils/bootTimeline";
@@ -43,11 +41,19 @@ interface Props {
   onFloorChange: (floor: number) => void;
   onRoomChange: (room: string | null) => void;
   onNeedModel: () => void;
-  onModelUploaded: () => void;
 }
 
-export default function BabylonCanvas({
-  onManager, onEntityPicked, onEntityLongPressed, onClusterPicked, onClusterTapped, onFloorChange, onRoomChange, onNeedModel, onModelUploaded,
+/** The villa's 3D view: one scene per model generation (modelLifecycle). A
+ *  replaced model raises the generation, and the key builds a fresh scene for
+ *  it: SceneManager has no "unload", so a second model cannot go into the old
+ *  one, and the old one's memory is freed with it. */
+export default function BabylonCanvas(props: Props) {
+  const { generation } = useModel();
+  return <VillaScene key={generation} {...props} />;
+}
+
+function VillaScene({
+  onManager, onEntityPicked, onEntityLongPressed, onClusterPicked, onClusterTapped, onFloorChange, onRoomChange, onNeedModel,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const managerRef = useRef<SceneManager | null>(null);
@@ -112,26 +118,19 @@ export default function BabylonCanvas({
   // Everything goes through `cbRef.current`.
   const cbRef = useRef({
     onManager, onEntityPicked, onEntityLongPressed, onClusterPicked,
-    onClusterTapped, onFloorChange, onRoomChange, onNeedModel, onModelUploaded,
+    onClusterTapped, onFloorChange, onRoomChange, onNeedModel,
   });
   cbRef.current = {
     onManager, onEntityPicked, onEntityLongPressed, onClusterPicked,
-    onClusterTapped, onFloorChange, onRoomChange, onNeedModel, onModelUploaded,
+    onClusterTapped, onFloorChange, onRoomChange, onNeedModel,
   };
-  const [status, setStatus] = useState<"loading" | "ready" | "no-model" | "error" | "crash-loop">("loading");
-  const [progress, setProgress] = useState(0); // 0..1 GLB download progress
-  // True while fetchModelWithRetry is riding through a transient network
-  // failure on the (public Cloudflare) model download — turns the plain
-  // loading spinner into an honest "reconnecting…" message instead of a
-  // frozen-looking bar, and (more importantly) means the load is SELF-HEALING
-  // rather than dead-ending on the terminal error screen. See fetchModelWithRetry.
-  const [reconnecting, setReconnecting] = useState(false);
-  const [errorMsg, setErrorMsg] = useState("");
+  // The MODEL's state (loading, reconnecting, ready, none, too heavy, its
+  // error) is modelLifecycle's; this scene only says what THIS DEVICE could not
+  // do: no WebGL, a lost GPU context, or a crash loop. Either wins the screen.
+  const model = useModel().state;
+  const [sceneFail, setSceneFail] = useState<null | "error" | "crash-loop">(null);
   // Full copyable diagnostics report shown on the error / crash-loop screens.
   const [report, setReport] = useState("");
-  // True when the error came from a failed addon-config model fetch — the user
-  // should fix their add-on settings, not upload a file.
-  const [addonError, setAddonError] = useState(false);
   // The central SH3D refresh below runs silently in the background by design
   // (so first paint isn't blocked on parsing a large SweetHome project) — but
   // "silent" also meant a genuine failure (bad path, unparsable file, no
@@ -159,7 +158,7 @@ export default function BabylonCanvas({
         "crash-loop-guard",
       );
       setReport(buildReport(cap));
-      setStatus("crash-loop");
+      setSceneFail("crash-loop");
       return;
     }
     // Every way out of this load ends it (diagnostics.startLoadAttempt): only a page killed mid-load leaves it open.
@@ -206,7 +205,7 @@ export default function BabylonCanvas({
       // WebGL unavailable/blocked — show a clear message, not a blank canvas.
       attempt.end("failed");
       setReport(buildReport(captureError("WEBGL_INIT_FAILED", err, "SceneManager")));
-      setStatus("error");
+      setSceneFail("error");
       return;
     }
     const tEngineDone = performance.now();
@@ -231,7 +230,7 @@ export default function BabylonCanvas({
           new Error("The GPU/WebGL context was lost (commonly from memory pressure)."),
           "webglcontextlost",
         )));
-        setStatus("error");
+        setSceneFail("error");
       }
     };
     canvasEl.addEventListener("webglcontextlost", onCtxLost as EventListener, false);
@@ -276,8 +275,6 @@ export default function BabylonCanvas({
     };
 
     (async () => {
-      let loadErrorCode = "MODEL_LOAD_FAILED";
-      let loadedBytes: ArrayBuffer | null = null; // for naming a missing image if the import fails
       try {
         noteLoadPhase("fetch-config");
         const tConfigStart = performance.now();
@@ -287,12 +284,75 @@ export default function BabylonCanvas({
         // A holder, not a `let`: tsc cannot see a callback assign a `let`.
         const roomsSync: { promise: Promise<RoomDataFetch> | null } = { promise: null };
         let tConfigDone = tConfigStart;
-        // WHICH model, and what a failure means — utils/modelSource. No answer
-        // from the add-on is retried with a "reconnecting" notice (never "no
-        // model"); an HTTP status for the model comes back at once, unretried.
-        const got = await acquireModel({
-          readAddonConfig, modelBytes, forgetBrowserModel,
-          wait: (ms) => new Promise((r) => setTimeout(r, ms)),
+        // Stamped inside the unpack step below, read after it (holders, as above).
+        const t = { fetchDone: 0, roomsDone: 0, parseDone: 0, meshNames: 0, statesPainted: 0 };
+        const names: { list: string[] } = { list: [] };
+        const sha: { promise: Promise<string> } = { promise: Promise.resolve("") };
+        // WHICH model, its download and how it ended: utils/modelLifecycle,
+        // whose state the screens below draw (loading, reconnecting, none, too
+        // heavy, its error). This scene supplies the one step it cannot do
+        // itself, unpacking the bytes into the 3D view.
+        const got = await modelLifecycle.load(async (data, url, cfg) => {
+          noteModel({ bytes: data.byteLength });
+          t.fetchDone = performance.now();
+          // Diagnostic-only (Settings' "which file is loaded" fingerprint) and
+          // needed by nothing downstream — started now, alongside the bytes
+          // it hashes, instead of after loadModel resolves, so it runs in the
+          // shadow of the decode rather than adding to it.
+          sha.promise = sha256Hex(data);
+
+          // ── Central room data goes in BEFORE the model, not after (2.203.0) ──
+          // This used to run in the reveal window, after loadModel had already
+          // indexed every mesh. Applying it there changes `sh3dRooms`/
+          // `sh3dEntities`, which SceneManager.updateConfig classes as
+          // structural — so on any load where the room data had moved, the
+          // villa was indexed TWICE: once by loadModel with the old data, then
+          // wholesale again behind the loading overlay (field: 55% of an iPhone
+          // load was that second pass). Here, updateConfig's heavy branch is
+          // still gated off (no meshes loaded yet), so loadModel indexes ONCE
+          // with the right data in hand. The sidecar fetch started back when
+          // the add-on answered, so this await is normally instant; a
+          // missing/hung sidecar never blocks (5s abort in fetchRoomData).
+          if (roomsSync.promise) await applyRoomsSync(roomsSync.promise, cfg.model_path);
+          t.roomsDone = performance.now();
+
+          // The heavy step and the usual iOS OOM point: Draco decode + texture
+          // decode + GPU upload of the whole villa.
+          noteLoadPhase("import-mesh");
+          let result;
+          try {
+            // The versioned URL is the geometry's identity: it changes the instant a
+            // different GLB is uploaded, so cached probes cannot outlive their model.
+            result = await manager.loadModel(data, url);
+          } catch (err) {
+            // the 3D view's own words for a texture without its image are an index ("/textures/364/source"): name
+            // the material instead, as the upload does (a model uploaded before it refused those can still be one)
+            const missing = missingImagesMessage(data);
+            throw missing
+              ? Object.assign(new Error(`${missing[0].toUpperCase()}${missing.slice(1)} (${(err as Error)?.message ?? err})`),
+                { stack: (err as Error)?.stack })
+              : err;
+          }
+          noteLoadPhase("post-process");
+          t.parseDone = performance.now();
+          // NOTHING from here to the end of this step (when the model's state
+          // turns "ready" and the overlay lifts) may be anything other than
+          // "the villa would be WRONG on screen without it". Field measurement
+          // (v2.94.0's revealMs) found this stretch the single largest phase of
+          // the load (5,655ms of 13,398ms on Android) because bookkeeping had
+          // accumulated here: a SHA-256 over the whole GLB, a mesh-catalog
+          // write, the auto-detect config write. All of that runs after the
+          // reveal, in `finishAfterReveal` below.
+          if (cancelled) return result;
+          names.list = manager.getBindableMeshNames();
+          t.meshNames = performance.now();
+          // Paint the current entity states (meshes + markers). Read a live
+          // snapshot, NOT a destructured `entities`: this effect has an empty
+          // dependency array, so `entities` would be frozen at MOUNT (almost
+          // always still {}) — see getEntitiesSnapshot's docstring.
+          Object.values(getEntitiesSnapshot()).forEach((e) => manager.applyEntityState(e));
+          t.statesPainted = performance.now();
+          return result;
         }, {
           onCentral: (cfg) => {
             tConfigDone = performance.now();
@@ -300,102 +360,30 @@ export default function BabylonCanvas({
             noteLoadPhase("fetch-model");
             roomsSync.promise = fetchRoomData(centralRoomsUrl(cfg));
           },
-          onProgress: (f) => {
-            if (cancelled) return;
-            setProgress(f);
-            // Real bytes flowing again (f > 0, not the 0 a retry resets to)
-            // means the blip is over — drop the reconnecting notice.
-            if (f > 0) setReconnecting(false);
-          },
-          onRetrying: () => { if (!cancelled) setReconnecting(true); },
           cancelled: () => cancelled,
         });
-        const tFetchStart = tConfigDone;
-        if (!got.ok && got.reason === "http") {
-          setAddonError(true);
-          loadErrorCode = got.code;
-          throw new Error(got.message);
-        }
         if (cancelled || (!got.ok && got.reason === "cancelled")) return; // unmounted mid-load
         if (!got.ok) {
-          // The add-on holds no model yet. Show an explanatory overlay (with
-          // the owner's upload) instead of a blank blue scene.
-          attempt.end("left");
-          setStatus("no-model");
+          if (got.reason === "error") {
+            console.error("[BabylonCanvas] model load failed", got.error);
+            attempt.end("failed");
+            setReport(buildReport(captureError(got.code, got.error, "loadModel")));
+          } else {
+            // No model yet, or one too heavy to load: their screens say so.
+            attempt.end("left");
+          }
           return;
         }
-        const { data, cfg: addonCfg, source: loadedSource, prefetched: usedPrefetch, kept: modelKept } = got;
-        noteModel({ bytes: data.byteLength });
-        loadedBytes = data;
-        // Bytes are in hand — clear any lingering reconnecting notice even if
-        // the successful fetch happened to report no progress fractions (a
-        // cache hit / no Content-Length skips readWithProgress's onProgress).
-        setReconnecting(false);
-        const tFetchDone = performance.now();
-        // Diagnostic-only (Settings' "which file is loaded" fingerprint) and
-        // needed by nothing downstream — started now, alongside the bytes
-        // it hashes, instead of after loadModel resolves, so it runs in the
-        // shadow of the decode rather than adding to it.
-        const sha256Promise = sha256Hex(data);
-
-        // ── Central room data goes in BEFORE the model, not after (2.203.0) ──
-        // This used to run in the reveal window, after loadModel had already
-        // indexed every mesh. Applying it there changes `sh3dRooms`/
-        // `sh3dEntities`, which SceneManager.updateConfig classes as
-        // structural — so on any load where the room data had moved, the
-        // villa was indexed TWICE: once by loadModel with the old data, then
-        // wholesale again behind the loading overlay.
-        //
-        // Field telemetry put a number on it. An iPhone load reported
-        // `rvRooms: 7243` of a `totalMs: 13196` — 55% of the entire load was
-        // that second pass — with the first one visible right next to it as
-        // `indexMeshes: 1977` inside `postMs`. Same shape on Android (3,870ms)
-        // and on an older build (11,480ms of 22,927ms). It fires whenever the
-        // GLB or its rooms sidecar changed since that device last opened,
-        // which is exactly the load a person is most likely to be watching.
-        //
-        // Moved here, the second pass cannot happen: updateConfig's heavy
-        // branch is gated on `this.loadedMeshes.length` (SceneManager), and
-        // that is still empty at this point, so the config change lands for
-        // free and loadModel then indexes ONCE with the right data already in
-        // hand. The deferred calibrateRooms() inside loadModel gets it right
-        // first time too, instead of re-fitting the plan→world transform.
-        //
-        // Placed after the GLB bytes rather than earlier on purpose: the
-        // sidecar fetch was started back when addonCfg resolved, so it has had
-        // the model's whole multi-megabyte download to complete in and this
-        // await is normally instant. Awaiting it any earlier would put its
-        // round-trip on the critical path serially instead of in the model's
-        // shadow. A missing/hung sidecar still never blocks (5s abort inside
-        // roomData.fetchRoomData, and a failure just proceeds without the refresh).
-        if (roomsSync.promise) {
-          await applyRoomsSync(roomsSync.promise, addonCfg.model_path);
-          if (cancelled) return;
-        }
-        const tRoomsDone = performance.now();
-
-        // The heavy step and the usual iOS OOM point: Draco decode + texture
-        // decode + GPU upload of the whole villa.
-        noteLoadPhase("import-mesh");
-        // The versioned URL is the geometry's identity: it changes the instant a
-        // different GLB is uploaded, so cached probes cannot outlive their model.
-        const { importMs, postMs, phases, notes } = await manager.loadModel(data, loadedSource);
-        if (cancelled) return;
-        noteLoadPhase("post-process");
-        const tParseDone = performance.now();
-
-        // NOTHING between here and setStatus("ready") may be anything other
-        // than "the villa would be WRONG on screen without it". Field
-        // measurement (v2.94.0's revealMs) found this stretch to be the single
-        // largest phase of the whole load — 5,655ms of 13,398ms on Android,
-        // larger than Babylon's own import — because it had accumulated
-        // bookkeeping that merely happened to be written here: a SHA-256 over
-        // the entire 17MB GLB (a diagnostic fingerprint for Settings, AWAITED
-        // before the reveal), a localStorage mesh-catalog write, and the
-        // auto-detect config write. All of that now runs after the reveal, in
-        // `finishAfterReveal` below.
-        const meshNames = manager.getBindableMeshNames();
-        const tMeshNames = performance.now();
+        const { data, url: loadedSource, prefetched: usedPrefetch, kept: modelKept } = got;
+        const { importMs, postMs, phases, notes } = got.result;
+        const tFetchStart = tConfigDone;
+        const tFetchDone = t.fetchDone;
+        const tRoomsDone = t.roomsDone;
+        const sha256Promise = sha.promise;
+        const tParseDone = t.parseDone;
+        const meshNames = names.list;
+        const tMeshNames = t.meshNames;
+        const tStatesPainted = t.statesPainted;
 
         // Ship the phase split to the add-on. This is the measurement that
         // turns "the app is slow" into an actionable number — and it's per
@@ -494,7 +482,7 @@ export default function BabylonCanvas({
           // could appear.
           void sha256Promise.then((sha256) => {
             if (cancelled) return;
-            setLoadedModelInfo({
+            modelLifecycle.noteLoaded({
               url: loadedSource,
               bytes: data.byteLength,
               sha256,
@@ -554,20 +542,8 @@ export default function BabylonCanvas({
           update(adoptDetected(detected, (id) => !!liveEntities[id]));
         }
         }
-        // Paint the current entity states immediately (meshes + markers). Read
-        // a live snapshot, NOT the `entities` destructured above — this effect
-        // has an empty dependency array (a one-shot "create the scene" run),
-        // so `entities` would be frozen at whatever it was at MOUNT (almost
-        // always still {}, since HA's initial hydrate is an async round-trip
-        // that hasn't resolved yet) — see getEntitiesSnapshot's docstring.
-        Object.values(getEntitiesSnapshot()).forEach((e) => manager.applyEntityState(e));
-        const tStatesPainted = performance.now();
-
-        // The central room data was applied BEFORE loadModel (see
-        // applyRoomsSync's call site) — there is nothing left to do here.
-        if (cancelled) return;
-
-        // Everything is applied and settled — reveal the interactive villa.
+        // The villa was revealed when the unpack step above ended (the model's
+        // state turned "ready").
         // NO shader pre-compilation here — 2.110.0 tried it and it was a
         // clear net loss, measured on the same villa:
         //   Android visibleMs 5,048 -> 9,096 (+4.0s), and stallMaxMs stayed at
@@ -583,14 +559,13 @@ export default function BabylonCanvas({
         // the shaders the visible set needs and nothing else. Leave it alone.
         // The real lever remains the material COUNT (371), which is a pipeline
         // change and shrinks both this and the primitive count behind parseMs.
-        setStatus("ready");
         // Reported HERE, not where it is built above: only at this point do
         // revealMs/totalMs exist, and this is also the first moment sending it
         // costs the user nothing (it is a fire-and-forget POST that used to sit
         // in front of the reveal).
         const tReady = performance.now();
         // ── The blind spot this closes ────────────────────────────────────
-        // `setStatus("ready")` is a REACT STATE UPDATE, not a picture. Every
+        // "ready" is a REACT STATE UPDATE, not a picture. Every
         // number above stops here, and the operator was right that they do not
         // match what a person actually waits for: still to come are React's
         // commit, the overlay clearing, the browser's paint, and — the one
@@ -735,19 +710,13 @@ export default function BabylonCanvas({
         reachedReady = true;
         attempt.end("ready");
       } catch (err) {
+        // The model's own failures are modelLifecycle's (above); this is the
+        // scene's work around them going wrong.
         if (cancelled) return;
-        console.error("[BabylonCanvas] model load failed", err);
+        console.error("[BabylonCanvas] scene setup failed", err);
         attempt.end("failed");
-        // the 3D view's own words for a texture without its image are an index ("/textures/364/source"): name the
-        // material instead, as the upload does (a model uploaded before it refused those can still be one)
-        const missing = loadedBytes ? missingImagesMessage(loadedBytes) : null;
-        const shown = missing
-          ? Object.assign(new Error(`${missing[0].toUpperCase()}${missing.slice(1)} (${(err as Error)?.message ?? err})`),
-            { stack: (err as Error)?.stack })
-          : err;
-        setReport(buildReport(captureError(loadErrorCode, shown, "loadModel")));
-        setErrorMsg((shown as Error).message);
-        setStatus("error");
+        setReport(buildReport(captureError("MODEL_LOAD_FAILED", err, "loadModel")));
+        setSceneFail("error");
       }
     })();
 
@@ -872,7 +841,7 @@ export default function BabylonCanvas({
   return (
     <>
       <canvas ref={canvasRef} className="babylon-canvas" />
-      {status === "loading" && (
+      {!sceneFail && (model.kind === "loading" || model.kind === "reconnecting") && (
         <div className="center-overlay center-overlay-loading">
           {/* aria-hidden: the spinner conveys nothing the status text below
               doesn't already say, and an unlabelled decorative element is
@@ -885,64 +854,41 @@ export default function BabylonCanvas({
               marks the region as in-flight for assistive tech that reports
               it. Progress is announced politely, so it never interrupts. */}
           <div className="muted" role="status" aria-live="polite" aria-busy="true">
-            {reconnecting
+            {model.kind === "reconnecting"
               ? "Connection to the villa is unstable, reconnecting…"
-              : `Loading the villa…${progress > 0 && progress < 1 ? ` ${Math.round(progress * 100)}%` : ""}`}
+              : `Loading the villa…${model.progress > 0 && model.progress < 1 ? ` ${Math.round(model.progress * 100)}%` : ""}`}
           </div>
         </div>
       )}
-      {status === "no-model" && (
+      {!sceneFail && model.kind === "none" && (
         <div className="center-overlay">
           <div className="body-text">No 3D model loaded yet.</div>
-          {!canManageModel ? (
-            <>
-              <div className="muted body-text">
-                Ask the owner to set up the villa's 3D model.
-              </div>
-              {/* ⚠️ THE WAY OUT, ON THE ONE SCREEN THAT HAS NO OTHER CONTENT.
-                  On a fresh install this is the FIRST thing anyone sees, and
-                  the person reading it is usually the owner who has not signed
-                  in as one yet — so telling them to "ask the owner" and
-                  offering nothing else reads as a dead end. Reported exactly
-                  that way from a clean instance.
-
-                  The HUD's own profile switcher is present and always was, but
-                  it is a small icon in the top bar (and behind the ⋯ overflow
-                  on a phone) on a screen that is otherwise empty black; being
-                  reachable is not the same as being findable.
-
-                  `beginSwitch`, not `logout`: it overlays the picker over the
-                  live session, so cancelling returns you exactly here rather
-                  than ending a session the user never asked to end. */}
-              <button
-                type="button"
-                className="btn primary"
-                onClick={beginSwitch}
-              >
-                Switch profile
-              </button>
-            </>
-          ) : (
-            <>
-              <div className="muted body-text">
-                Upload a villa GLB to start exploring.
-              </div>
-              <ModelUploader onUploaded={() => cbRef.current.onModelUploaded()} />
-            </>
-          )}
+          <ModelOffer canManageModel={canManageModel} beginSwitch={beginSwitch}
+            ask="Ask the owner to set up the villa's 3D model." offer="Upload a villa GLB to start exploring." />
         </div>
       )}
-      {status === "error" && (
+      {!sceneFail && model.kind === "too-heavy" && (
+        <div className="center-overlay" role="alert">
+          <div className="body-text">This 3D model is too heavy to load.</div>
+          <div className="muted body-text">{tooHeavyLine(model)}</div>
+          <ModelOffer canManageModel={canManageModel} beginSwitch={beginSwitch}
+            ask="Ask the owner to upload a lighter model."
+            offer="Export it again with its geometry compressed, then upload it here." />
+        </div>
+      )}
+      {(sceneFail === "error" || (!sceneFail && model.kind === "error")) && (
         <ErrorReport
           title="Failed to load the 3D model"
-          hint={<span style={{ whiteSpace: "pre-line" }}>{errorMsg}</span>}
+          hint={model.kind === "error" && !sceneFail
+            ? <span style={{ whiteSpace: "pre-line" }}>{model.message}</span>
+            : undefined}
           detail={report}
-          actions={!addonError && canManageModel
+          actions={!(model.kind === "error" && model.addon) && canManageModel
             ? <button className="btn" onClick={() => cbRef.current.onNeedModel()}>Upload Model</button>
             : undefined}
         />
       )}
-      {status === "crash-loop" && (
+      {sceneFail === "crash-loop" && (
         <ErrorReport
           title="The villa couldn't be displayed on this device"
           hint={
@@ -977,6 +923,45 @@ export default function BabylonCanvas({
           {sh3dSyncMsg}
         </Notice>
       )}
+    </>
+  );
+}
+
+/** What a screen without a villa offers, ONE definition for the no-model and
+ *  too-heavy screens: the upload for a profile that may manage the model, else
+ *  who to ask and the way to another profile. */
+function ModelOffer({ canManageModel, beginSwitch, ask, offer }: {
+  canManageModel: boolean; beginSwitch: () => void; ask: string; offer: string;
+}) {
+  if (canManageModel) {
+    return (
+      <>
+        <div className="muted body-text">{offer}</div>
+        <ModelUploader />
+      </>
+    );
+  }
+  return (
+    <>
+      <div className="muted body-text">{ask}</div>
+      {/* ⚠️ THE WAY OUT, ON THE ONE SCREEN THAT HAS NO OTHER CONTENT.
+          On a fresh install this is the FIRST thing anyone sees, and
+          the person reading it is usually the owner who has not signed
+          in as one yet — so telling them to "ask the owner" and
+          offering nothing else reads as a dead end. Reported exactly
+          that way from a clean instance.
+
+          The HUD's own profile switcher is present and always was, but
+          it is a small icon in the top bar (and behind the ⋯ overflow
+          on a phone) on a screen that is otherwise empty black; being
+          reachable is not the same as being findable.
+
+          `beginSwitch`, not `logout`: it overlays the picker over the
+          live session, so cancelling returns you exactly here rather
+          than ending a session the user never asked to end. */}
+      <button type="button" className="btn primary" onClick={beginSwitch}>
+        Switch profile
+      </button>
     </>
   );
 }

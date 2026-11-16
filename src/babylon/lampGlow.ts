@@ -161,9 +161,6 @@ export class LampGlowState {
     this.key = "";   // the lamps' rooms are re-read on the next set()
   }
 
-  /** Whether a room map is drawn (not the blank cell). */
-  get hasMask(): boolean { return this.maskKey !== ""; }
-
   /** The texture to bind: the map, or a blank cell. */
   boundMask(scene: Scene): RawTexture {
     if (!this.maskTexture) {

@@ -3,7 +3,7 @@
 //
 // Until 2.496.254 a model could be kept in this browser's IndexedDB — the
 // fallback before an add-on model existed, and where the no-model screen's
-// upload went. Every model now lives in the add-on (see modelSource), so a
+// upload went. Every model now lives in the add-on (see modelLifecycle), so a
 // copy found here is dead weight, often tens of MB on a tablet: deleted on
 // the next load. The `villa-kiosk:model-tag:*` keys are the version stamps
 // the HEAD probe used to remember (see centralModel.modelUrl).

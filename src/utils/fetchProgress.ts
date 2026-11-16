@@ -2,8 +2,8 @@
 import { devLog } from "./devLog";
 import { backendFetch } from "@/auth/sessionLost";
 // Read a fetch Response to an ArrayBuffer while reporting download progress
-// (0..1) — shared by BabylonCanvas's normal model load and modelPrefetch's
-// background download so both report progress identically. Falls back to a
+// (0..1) — the one read of the model, foreground or background (modelLifecycle),
+// so both report progress identically. Falls back to a
 // plain arrayBuffer() read when the stream or Content-Length isn't available
 // (e.g. a service-worker cache hit with no length header).
 export async function readWithProgress(
@@ -11,8 +11,11 @@ export async function readWithProgress(
   onProgress: (frac: number) => void,
   /** Abort the read if NO bytes arrive for this long. 0 disables. */
   stallMs = 0,
+  /** The length the response announced, before its body is read (modelLifecycle's "too heavy"). */
+  onSize?: (bytes: number) => void,
 ): Promise<ArrayBuffer> {
   const total = Number(resp.headers.get("Content-Length")) || 0;
+  if (total) onSize?.(total);
   if (!resp.body || !total) return resp.arrayBuffer();
   const reader = resp.body.getReader();
   const chunks: Uint8Array[] = [];
@@ -141,6 +144,7 @@ export async function fetchModelWithRetry(
   url: string,
   onProgress: (frac: number) => void,
   onRetrying?: (attempt: number, waitMs: number) => void,
+  onSize?: (bytes: number) => void,
 ): Promise<{ resp: Response; data: ArrayBuffer }> {
   const started = Date.now();
   let attempt = 0;
@@ -166,7 +170,7 @@ export async function fetchModelWithRetry(
       const resp = await backendFetch(attemptUrl, { signal: ctrl.signal });
       clearTimeout(headerTimer);
       if (!resp.ok) return { resp, data: new ArrayBuffer(0) }; // caller classifies + reports the status; no retry
-      const data = await readWithProgress(resp, onProgress, MODEL_FETCH_STALL_MS);
+      const data = await readWithProgress(resp, onProgress, MODEL_FETCH_STALL_MS, onSize);
       return { resp, data };
     } catch (err) {
       clearTimeout(headerTimer);
