@@ -1,3 +1,10 @@
+## 0.12.519
+
+- **A green rectangle shows who the AI found on the photo.** With the Presence Guard's Photo set to a Burst picked by
+  an AI (Haiku, Sonnet or Opus), the AI now also says where the person, vehicle or animal is on the photo it keeps,
+  and VESTA draws a green rectangle around it on the saved photo, so the Telegram message and the VESTA UI card show
+  it. When the AI sees nobody, or with Burst (Change detection), the photo stays as taken.
+
 ## 0.12.518
 
 - **Every photo the siren takes reaches the alert card in the VESTA UI.** When the siren was offered, the photos VESTA
