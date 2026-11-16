@@ -873,7 +873,7 @@ export default function BabylonCanvas({
     <>
       <canvas ref={canvasRef} className="babylon-canvas" />
       {status === "loading" && (
-        <div className="center-overlay">
+        <div className="center-overlay center-overlay-loading">
           {/* aria-hidden: the spinner conveys nothing the status text below
               doesn't already say, and an unlabelled decorative element is
               noise to a screen reader. */}
