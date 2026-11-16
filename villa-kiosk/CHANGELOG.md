@@ -1,3 +1,9 @@
+## 2.496.837
+
+- **The top bar stays while the villa loads.** "Loading the villa…" used to cover the whole screen, so a model that
+  never finished left no way to Settings and its Upload Model button. The top bar and the floor buttons now stay
+  visible above it: the round badge's menu, Settings and Upload Model work while a model loads.
+
 ## 2.496.836
 
 - **A switch to remove the 3D model, on the add-on's Configuration page.** "Remove the 3D model at the next start":
