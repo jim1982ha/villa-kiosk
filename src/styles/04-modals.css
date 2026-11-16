@@ -365,13 +365,17 @@
 /* On a phone, a choice of several (Map look, Villa lighting, the tablet's language) lies under its name as a slider does,
    the whole width: beside a name it was squeezed or pushed under it at some widths only. An On | Off stays at the right. */
 @media (max-width: 640px) {
-  .setting-row:not(.on-off):not(.setting-field) > .setting-row-control { flex-basis: 100%; }
+  .setting-row:not(.on-off):not(.setting-field):not(.icon-choice) > .setting-row-control { flex-basis: 100%; }
   /* two 44px targets, so "Full screen on this tablet" keeps its line beside it on a 360px phone (settings_grammar.mjs) */
   .modal { --on-off-width: 100px; }
 }
 /* THE on/off setting (common/OnOffToggle): On | Off at the right of its line, half as wide as when it filled the rest
    of the line (owner, 2026-11-03: "50% less wide"), still two thumb-sized targets; the same width on every line. */
 .setting-row.on-off > .setting-row-control { flex: 0 0 var(--on-off-width); margin-left: auto; }
+/* a choice of a few icons (Villa lighting): at the right of its name like an On | Off, its own width, as the Interface
+   theme sits in the header (owner, 2026-11-16: "on the same line as the title"); under the name only past the width */
+.setting-row.icon-choice > .setting-row-control { flex: 0 0 auto; margin-left: auto; }
+.setting-row.icon-choice > .setting-row-control > .segmented { flex: 0 0 auto; width: auto; }
 /* a short field (Days records are kept): at the right like an On | Off, at the joined-unit field's width */
 .setting-row.setting-field > .setting-row-control { flex: 0 0 var(--unit-field); margin-left: auto; }
 .setting-row-control > .segmented.on-off-switch { flex: 0 0 var(--on-off-width); width: var(--on-off-width); }

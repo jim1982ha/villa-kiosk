@@ -299,11 +299,13 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor, ta
           // Sunrise, not Sun, for "Day": the Interface theme in the header uses Sun for its Light option. ⚠️ Distinct
           // from that INTERFACE theme: this relights the VILLA, that one themes the panels; the written name keeps
           // them apart.
-          <SettingRow icon={<CloudSun size={16} />} label="Villa lighting" tip={<>
+          // ⚠️ AT THE RIGHT OF ITS NAME ON A PHONE TOO, AS THE INTERFACE THEME SITS IN THE HEADER (owner, 2026-11-16):
+          // three icons, their own width (`icon-choice`, 04-modals.css), never the whole line under the name.
+          <SettingRow className="icon-choice" icon={<CloudSun size={16} />} label="Villa lighting" tip={<>
             Forces this villa's baked day or night look, or follows the real cycle on Auto. It relights the 3D
             model, unlike the Interface theme in the header, which only recolours the panels.
           </>}>
-            <SegmentedGroup ariaLabel="Villa lighting"
+            <SegmentedGroup ariaLabel="Villa lighting" layout="natural"
               active={v.render.dayNightPreview ?? "auto"} onChange={(dayNightPreview) => applyRender({ dayNightPreview })} options={[
               { key: "day", title: "Light the villa as daytime", label: <Sunrise size={17} /> },
               { key: "night", title: "Light the villa as night", label: <Moon size={17} /> },
