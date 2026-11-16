@@ -1,3 +1,9 @@
+## 2.496.835
+
+- **Villa lighting's Night is night at every hour.** Set to Night around sunset (or Day around dawn), the villa stayed
+  in daylight or twilight: the setting followed how far the real sun was from the horizon, and at sunset that is
+  almost nothing. Night now always gives the full night look, and Day a clear daytime look; Auto still follows the sun.
+
 ## 2.496.834
 
 - **Villa lighting sits on its name's line on a phone.** In Settings, the three Villa lighting buttons (day, night,
