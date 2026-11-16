@@ -2,7 +2,8 @@
 // Fingerprint of the GLB that is ACTUALLY loaded into the scene right now, so the
 // UI can prove which file is in use — independent of entity state (you don't need
 // to toggle a light to check). Compare the SHA-256 / byte size shown in Settings
-// against the file on disk:  shasum -a 256 villa_1F.glb  /  ls -l.
+// against the file on disk:  shasum -a 256 <model>.glb  /  ls -l. The one on screen
+// is modelLifecycle's (snapshot().loaded).
 
 export interface LoadedModelInfo {
   /** Resolved fetch URL including the ?v=<etag/size> cache-busting tag (or a note). */
@@ -32,16 +33,6 @@ export interface LoadedModelInfo {
    *  the dominant cost, not this app's JS. */
   importMs: number;
   postMs: number;
-}
-
-let _info: LoadedModelInfo | null = null;
-
-export function setLoadedModelInfo(info: LoadedModelInfo): void {
-  _info = info;
-}
-
-export function getLoadedModelInfo(): LoadedModelInfo | null {
-  return _info;
 }
 
 /** SHA-256 of a buffer as lowercase hex. Returns "" if Web Crypto isn't available

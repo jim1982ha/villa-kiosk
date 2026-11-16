@@ -2734,7 +2734,7 @@ export class SceneManager {
     }
 
     // Everything above is a correct teardown, and the heap still does not come
-    // back: a remount (each model upload changes Dashboard's `modelKey`) costs
+    // back: a remount (each model upload raises modelLifecycle's generation) costs
     // ~95MB that is never returned, six of them reach ~950MB, and the iPad this
     // targets would be killed well before that. leakWatch is now measuring
     // WHICH object graph survives; this is the half that does not need to know.

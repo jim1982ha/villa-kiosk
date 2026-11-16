@@ -10,7 +10,7 @@ import { resolveSiteTitle } from "@/config/AppConfig";
 import { useProfile } from "@/auth/ProfileContext";
 import { ROLE_ORDER, ROLE_LABELS, ROLE_DESCRIPTIONS, type Role } from "@/auth/roles";
 import { profileAccess, verify, openSession, type ProfileAccess } from "@/auth/PinVerifier";
-import { startModelPrefetch } from "@/utils/modelPrefetch";
+import { modelLifecycle } from "@/utils/modelLifecycle";
 import { markBoot } from "@/utils/bootTimeline";
 import VestaMark from "@/components/VestaMark";
 import PinPad from "./PinPad";
@@ -46,9 +46,9 @@ export default function ProfileGate({ children }: { children: ReactNode }) {
   // signed in (a returning session, `role` restored from sessionStorage) —
   // `children` mounts immediately below and BabylonCanvas's own load effect
   // already covers that case; starting a second, redundant fetch of the
-  // exact same URL here would just race it. See utils/modelPrefetch.ts.
+  // exact same URL here would just race it. See utils/modelLifecycle.ts.
   useEffect(() => {
-    if (!role || switching) startModelPrefetch();
+    if (!role || switching) modelLifecycle.prefetch();
   }, [role, switching]);
 
   // Which profiles are gated — fetched once per visit to the select screen.

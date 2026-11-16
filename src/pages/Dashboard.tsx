@@ -179,10 +179,8 @@ export default function Dashboard() {
   // say) — connected-profile-aware from the start, not left to the shared
   // SummaryGroupPanel to somehow guess.
   // (the category's members: computed below, once the villa's hidden devices and its fold are known)
-  const [modelKey, setModelKey] = useState(0); // bump to force canvas remount
-  // A reload's effects may still call the old scene before onManager(null) arrives: that call does nothing
-  // (babylon/sceneHandle), so nothing here drops the manager by hand.
-  const reloadModel = useCallback(() => { setModelKey((k) => k + 1); }, []);
+  // A model reload (modelLifecycle's generation, the canvas builds a new scene) may still call the old scene before
+  // onManager(null) arrives: that call does nothing (babylon/sceneHandle), so nothing here drops the manager by hand.
   // Starts "overview" to match the actual landing view (see the one-shot
   // effect below): the HUD reads this to decide joystick vs. overview-help
   // in the bottom bar, and it used to default to "first-person" here, so the
@@ -748,7 +746,6 @@ export default function Dashboard() {
     {/* ...and on this profile's conversation with VESTA: the robot, Messages' pinned thread and "Ask VESTA" read it */}
     <ConversationProvider>
       <BabylonCanvas
-        key={modelKey}
         onManager={setManager}
         onEntityPicked={onEntityPicked}
         onEntityLongPressed={onEntityLongPressed}
@@ -758,7 +755,6 @@ export default function Dashboard() {
         onRoomChange={setRoom}
         // straight to where the upload button is (it opened Settings on General, which has none: UI scan, 2026-11-10)
         onNeedModel={() => openSurface("configEditor")}
-        onModelUploaded={reloadModel}
       />
 
       <RoomLabel room={room} />
@@ -970,7 +966,6 @@ export default function Dashboard() {
           onBack={() => closeSurface("configEditor")}
           // Over Settings, Settings' Save / Cancel own its changes; on its own (a device window's "edit"), its own do
           withinSettings={shown("settings")}
-          onModelChanged={reloadModel}
           viewHeadingDeg={manager ? () => manager.viewHeadingDeg() : undefined}
         />
       )}

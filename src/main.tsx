@@ -6,7 +6,7 @@ import { installGlobalErrorCapture } from "./utils/diagnostics";
 import { installLifecycleTelemetry } from "./utils/telemetry";
 import { markBoot, installStallObserver, installVisibilityTracker, currentLoadSeq } from "./utils/bootTimeline";
 import { installLeakConsole } from "./utils/leakWatch";
-import { startModelPrefetch } from "./utils/modelPrefetch";
+import { modelLifecycle } from "./utils/modelLifecycle";
 import "./styles.css";
 import { underIngress } from "@/ha/ingress";
 import { startServiceWorker } from "@/utils/swUpdate";
@@ -55,7 +55,7 @@ installLeakConsole(currentLoadSeq);
 // screen has decided whether a passcode is needed. It is a plain fetch(): no
 // DOM, no scene, no decode, so it cannot make anything on screen hesitate,
 // and the bytes are handed to the real loader when it gets there
-// (utils/modelPrefetch.claimPrefetch).
+// (utils/modelLifecycle, prefetch).
 //
 // ProfileGate already did this, but ONLY while its screen was showing — and
 // the common case is that it never shows. A returning device restores its
@@ -67,7 +67,7 @@ installLeakConsole(currentLoadSeq);
 // If nothing is authorised yet the call fails harmlessly and resets itself;
 // ProfileGate's own retry (on the gate screen, and again the moment a profile
 // is authorised) still covers that case.
-startModelPrefetch();
+modelLifecycle.prefetch();
 
 // Register the PWA service worker (best-effort). Skip it under HA Ingress: the
 // add-on is served from a per-session path (/api/hassio_ingress/<token>/), so a

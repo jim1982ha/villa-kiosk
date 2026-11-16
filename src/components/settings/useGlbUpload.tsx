@@ -1,17 +1,18 @@
 // src/components/settings/useGlbUpload.tsx
 // Central GLB/room-data upload — pushes straight into the add-on's /data
 // store via the supervisor-proxy (no SSH/Samba, no path to configure).
-// Used by ConfigEditorModal's header and by the no-model screen (Owner only).
+// Used by ConfigEditorModal's header and by the no-model and too-heavy screens (Owner only).
 //
 // The operation itself — what is checked, in what order it is written, what
 // the person is told — is utils/modelUpload's. This hook holds its progress
-// state and adopts the uploaded room data into this device's config.
+// state, adopts the uploaded room data into this device's config, and tells
+// modelLifecycle the model was replaced (which reloads the villa once).
 
 import { useEffect, useRef, useState } from "react";
 import { useConfig } from "@/config/ConfigContext";
 import { roomDataPatch } from "@/config/roomData";
-import { fetchAddonConfig, uploadCentralModel, clearAddonConfigCache, type AddonConfig } from "@/utils/centralModel";
-import { getLoadedModelInfo } from "@/utils/modelInfo";
+import { uploadCentralModel } from "@/utils/centralModel";
+import { modelLifecycle, useModel } from "@/utils/modelLifecycle";
 import { planModelUpload, runModelUpload, uploadReport, type UploadKind } from "@/utils/modelUpload";
 
 /** What an upload in flight says, ONCE for every screen that shows one (architecture review K, 2026-10-24: Advanced
@@ -25,11 +26,12 @@ export function uploadProgress(busy: boolean, pct: number | null, retry: { attem
   return { words: `Uploading… ${pct ?? 0}%`, mark: `${pct ?? 0}%` };
 }
 
-export function useGlbUpload(enabled: boolean, onModelChanged: () => void) {
+export function useGlbUpload(enabled: boolean) {
   const { config, update } = useConfig();
-
-  const [addonCfg, setAddonCfg] = useState<AddonConfig | null>(null);
-  useEffect(() => { if (enabled) fetchAddonConfig().then(setAddonCfg); }, [enabled]);
+  const model = useModel();
+  // The add-on's answer is modelLifecycle's; asked here only if the villa's
+  // load has not asked yet (cached once it answers).
+  useEffect(() => { if (enabled) void modelLifecycle.addonConfig(); }, [enabled]);
 
   const glbUploadRef = useRef<HTMLInputElement>(null);
   const [uploadBusy, setUploadBusy] = useState<null | UploadKind>(null);
@@ -92,16 +94,14 @@ export function useGlbUpload(enabled: boolean, onModelChanged: () => void) {
     const report = uploadReport(outcome);
     if (report.ok) setUploaded(true);
     else setUploadMsg({ text: report.text, ok: false });
-    if (outcome.written.length > 0) {
-      clearAddonConfigCache();
-      setAddonCfg(await fetchAddonConfig());
-    }
-    if (report.reload) setTimeout(() => onModelChanged(), 600);
+    // One call: the add-on is asked afresh (the upload has landed, so its
+    // answer already carries the new version) and the villa reloads once.
+    if (report.reload) await modelLifecycle.replaced();
   };
 
   return {
-    addonCfg,
-    loadedModel: getLoadedModelInfo(),
+    addonCfg: model.addon,
+    loadedModel: model.loaded,
     uploadBusy,
     uploadPct,
     uploadRetry,

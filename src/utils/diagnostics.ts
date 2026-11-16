@@ -20,7 +20,7 @@
 //      reached, and the error itself — that the user can copy with one tap and
 //      paste back for troubleshooting.
 
-import { getLoadedModelInfo } from "./modelInfo";
+import { modelLifecycle } from "./modelLifecycle";
 import { isStandalone, report } from "./telemetry";
 import { detectPointerClass } from "@/babylon/badgeMetrics";
 import { readJson, writeJson } from "@/utils/storedJson";
@@ -258,7 +258,7 @@ function probeSafeAreaInsets(): { top: number; right: number; bottom: number; le
 export function buildReport(primary: CapturedError | null): string {
   const d = read();
   const loop = crashLoopInfo();
-  const model = getLoadedModelInfo();
+  const model = modelLifecycle.snapshot().loaded;
   const nav = navigator as Navigator & { deviceMemory?: number };
   const perf = performance as Performance & {
     memory?: { usedJSHeapSize: number; totalJSHeapSize: number; jsHeapSizeLimit: number };
