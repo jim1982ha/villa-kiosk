@@ -25,7 +25,7 @@ export function nightLerp(nightDimming: number): (mild: number, deep: number) =>
 }
 
 /** Civil twilight: the night bake fades in as the sun sinks 0°→6° below. */
-const TWILIGHT = (6 * Math.PI) / 180;
+export const TWILIGHT = (6 * Math.PI) / 180;
 
 export interface SunGeometry {
   isDay: boolean;
