@@ -1163,6 +1163,21 @@ ck("a VESTA turn rewritten keeps the time it was first said, so it stays under i
 ck("  ...and a new turn keeps its own time",
    proxy._turns_with([_q1], _a1)[-1]["at"] == _a1["at"])
 
+# owner, 2026-11-16: each device's render report in one Home Assistant sensor, a device named by its browser
+_mac = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/157.0.0.0 Safari/537.36"
+_phone = ("Mozilla/5.0 (Linux; Android 10; K; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/157.0.0.0 "
+          "Mobile Safari/537.36 Home Assistant/2026.10.1-24906 (Android 17; SM-F971B)")
+ck("a Mac in Chrome and the phone's Home Assistant app are told apart, the phone by its model",
+   proxy._device_label(_mac, 1680, 1050) == "macOS · Chrome · 1680x1050"
+   and proxy._device_label(_phone, 476, 752) == "Android · HA app SM-F971B · 476x752")
+from datetime import datetime as _dt, timezone as _tz
+_now = _dt(2026, 11, 16, 12, 0, tzinfo=_tz.utc)
+_devs = proxy._render_devices({"old": {"at": "2026-10-01T00:00:00+00:00"}, "mac": {"at": "2026-11-15T00:00:00+00:00"}},
+                              "phone", {"v": "2.496.831", "lampsNoRoom": 55, "ua": "x", "role": "owner"}, _now)
+ck("a device's report replaces its last, a device silent for two weeks is dropped, only the render fields are kept",
+   set(_devs) == {"mac", "phone"} and _devs["phone"] == {"v": "2.496.831", "lampsNoRoom": 55,
+                                                        "at": "2026-11-16T12:00:00+00:00"})
+
 print()
 print("✅ the proxy's pure rules hold" if FAIL == 0
       else "❌ A PROXY RULE IS BROKEN")

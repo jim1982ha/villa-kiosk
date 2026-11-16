@@ -64,6 +64,7 @@ import type { SubMesh } from "@babylonjs/core/Meshes/subMesh";
 import { POOL_ALPHA_STOPS } from "./LightPools";
 import { BULB_REACH_M } from "./lightPlacement";
 import { MASK_FACING_M, type LampRoomBits, type RoomLightMask } from "./roomLightMask";
+import { uploadVec4Array } from "./shaderArrays";
 import { RawTexture } from "@babylonjs/core/Materials/Textures/rawTexture";
 import { Texture } from "@babylonjs/core/Materials/Textures/texture";
 
@@ -159,6 +160,9 @@ export class LampGlowState {
     old?.dispose();
     this.key = "";   // the lamps' rooms are re-read on the next set()
   }
+
+  /** Whether a room map is drawn (not the blank cell). */
+  get hasMask(): boolean { return this.maskKey !== ""; }
 
   /** The texture to bind: the map, or a blank cell. */
   boundMask(scene: Scene): RawTexture {
@@ -297,7 +301,7 @@ const GLOW_CAP_TOTAL = POOL_CENTRE * GLOW_CAP_ALL;
 const LAMP_GLOW_ROOM_LOOKUP = `#ifdef LAMPGLOW_ROOMS
 uniform sampler2D lampGlowMask;
 highp uint lampGlowCell(vec2 p, float band) {
-  ivec2 c = ivec2(floor((p - lampGlowMaskAt.xy) * lampGlowMaskAt.z));
+  highp ivec2 c = ivec2(floor((p - lampGlowMaskAt.xy) * lampGlowMaskAt.z));
   if (c.x < 0 || c.y < 0 || float(c.x) >= lampGlowMaskSize.x || float(c.y) >= lampGlowMaskSize.y) return 0u;
   highp uvec4 t = uvec4(texelFetch(lampGlowMask, ivec2(c.x, c.y + int(band + 0.5) * int(lampGlowMaskSize.y)), 0) * 255.0 + 0.5);
   return t.r | (t.g << 8u) | (t.b << 16u) | (t.a << 24u);
@@ -433,23 +437,12 @@ uniform vec4 lampGlowMaskSize;
     };
   }
 
-  // ⚠️ WITHOUT UNIFORM BUFFERS THE ARRAYS GO IN AS vec4 (owner's desktop,
-  // 2026-11-16). Babylon turns uniform buffers off for some browsers (its
-  // ThinEngine.ExceptionList: Chrome on macOS, Chrome 12x on Android), and
-  // then `updateFloatArray` uploads with uniform1fv, which WebGL refuses for
-  // a vec4[]: every lamp stayed at zero and the glow lit nothing there (the
-  // steps dark on a Mac, lit on a phone). setFloatArray4 is uniform4fv.
+  // The arrays through uploadVec4Array: without uniform buffers (Chrome on a
+  // Mac) updateFloatArray sent nothing a vec4[] accepts (shaderArrays.ts).
   override bindForSubMesh(ubo: UniformBuffer, _scene: Scene, _engine: AbstractEngine, subMesh: SubMesh): void {
-    const effect = ubo.useUbo ? null : subMesh.effect;
-    if (effect) {
-      effect.setFloatArray4("lampGlowPos", this.state.pos);
-      effect.setFloatArray4("lampGlowCol", this.state.col);
-      effect.setFloatArray4("lampGlowRoom", this.state.room);
-    } else {
-      ubo.updateFloatArray("lampGlowPos", this.state.pos);
-      ubo.updateFloatArray("lampGlowCol", this.state.col);
-      ubo.updateFloatArray("lampGlowRoom", this.state.room);
-    }
+    uploadVec4Array(ubo, subMesh, "lampGlowPos", this.state.pos);
+    uploadVec4Array(ubo, subMesh, "lampGlowCol", this.state.col);
+    uploadVec4Array(ubo, subMesh, "lampGlowRoom", this.state.room);
     ubo.updateFloat("lampGlowCount", this.state.count);
     if (isWebGL2(this._material.getScene())) {
       const mask = this.state.boundMask(this._material.getScene());

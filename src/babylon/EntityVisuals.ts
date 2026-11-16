@@ -1662,6 +1662,7 @@ export class EntityVisuals {
     // 2.496.829, while a fresh load on the Mac looked right). A plan already
     // known is handed straight back.
     if (this.plan.rooms.length) this.bulbs.setRooms(this.plan);
+    this.reportRender();
     scene.blockMaterialDirtyMechanism = false;
 
     this.buildLabelAnchors();
@@ -1992,8 +1993,29 @@ export class EntityVisuals {
     this.planRoomCache.clear();
     // The earliest moment the pools can take their rooms' shapes and floors.
     this.bulbs.setRooms(plan);
+    this.reportRender();
     this.markLayoutDirty();               // the layout reads the plan (walkExempt's plan rooms)
     this.requestRender();
+  }
+
+  /** The `render` telemetry: how this device draws the lights, sent when it
+   *  changes. The add-on keeps each device's latest as a Home Assistant sensor
+   *  (supervisor-proxy.py RENDER_SENSOR). */
+  private lastRender = "";
+  private reportRender(): void {
+    const engine = this.scene.getEngine() as { webGLVersion?: number; supportsUniformBuffers?: boolean;
+      getGlInfo?: () => { renderer?: string } };
+    const data = {
+      gpu: String(engine.getGlInfo?.()?.renderer ?? "").slice(0, 96),
+      webgl: engine.webGLVersion ?? 0,
+      ubo: !!engine.supportsUniformBuffers,
+      glow: this.lighting.furnitureLight,
+      ...this.bulbs.roomReport(),
+    };
+    const key = JSON.stringify(data);
+    if (key === this.lastRender) return;
+    this.lastRender = key;
+    reportTelemetry("render", data);
   }
 
   /** Replace the resolved entity->room map (see the field's own docstring) —

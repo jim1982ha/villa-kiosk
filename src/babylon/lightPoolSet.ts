@@ -205,6 +205,16 @@ export class LightPoolSet {
     return out;
   }
 
+  /** How many pools there are, and how many have no room yet. */
+  roomCounts(): { lamps: number; noRoom: number } {
+    let lamps = 0, noRoom = 0;
+    for (const pools of this.pools.values()) for (const pool of pools) {
+      lamps++;
+      if (!this.placements.get(pool)?.room) noRoom++;
+    }
+    return { lamps, noRoom };
+  }
+
   /** Which rooms a lamp of a room lights (roomLightMask.ts); null: any. */
   setRoomBits(fn: ((room: PoolRoom | null | undefined) => LampRoomBits | undefined) | null): void {
     this.roomBits = fn;

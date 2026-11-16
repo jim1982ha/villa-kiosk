@@ -309,6 +309,12 @@ export class BulbSet {
     this.holdToRooms(plan);
   }
 
+  /** How this device holds its lights to their rooms, for the `render` report. */
+  roomReport(): { roomMap: boolean; lamps: number; lampsNoRoom: number } {
+    const { lamps, noRoom } = this.pools.roomCounts();
+    return { roomMap: lampGlowFor(this.scene).hasMask, lamps, lampsNoRoom: noRoom };
+  }
+
   /** The versioned model URL the room map's wall answers are kept under;
    *  null keeps nothing. */
   setCacheKey(key: string | null): void { this.roomStore.setModel(key); }
