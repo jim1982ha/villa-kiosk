@@ -141,6 +141,7 @@ export function buildCardBadge(name: string, m: BadgeMetrics, glyphPx: number, g
   row.addControl(glyph);
   // the glyph's picture overhangs its box (its pills, badgeIcons.PICTURE_SCALE): never clipped by its row
   row.clipChildren = false;
+  row.clipContent = false;
 
   const valueWrap = new Rectangle(`lbl_valwrap_${name}`);
   valueWrap.thickness = 0;

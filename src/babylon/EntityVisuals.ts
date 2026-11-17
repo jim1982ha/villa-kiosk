@@ -3153,11 +3153,15 @@ export class EntityVisuals {
       badgeShadow(badge);
       // ⚠️ THE PILLS STAND OUTSIDE THE SQUARE (owner, 2026-10-22: "one corner per device"). The picture keeps a margin
       // for them (badgeIcons.PILL_MARGIN) and is drawn PICTURE_SCALE larger than its control — a render scale, so the
-      // layout and the tap box stay the square's — and nothing on the way up may clip what overhangs.
+      // layout and the tap box stay the square's — and nothing on the way up may clip what overhangs. Both flags:
+      // clipChildren only stops the rounded clip and the culling; clipContent (Babylon's default true) still clips a
+      // control's whole drawing, children included, to its own box — the top pill was cut flat (owner, 2026-11-18).
       glyph.scaleX = PICTURE_SCALE;
       glyph.scaleY = PICTURE_SCALE;
       badge.clipChildren = false;
+      badge.clipContent = false;
       container.clipChildren = false;
+      container.clipContent = false;
       container.addControl(badge);
       // Classic: the pill hangs below the badge, in the container's column.
       if (!card) container.addControl(valueWrap);
@@ -4975,7 +4979,11 @@ export class EntityVisuals {
     //     off at the host's edge. Safe to disable: the hit test calls
     //     Control.contains directly rather than going through Babylon's own
     //     picking, and isPointerBlocker is already false.
+    //   clipContent FALSE as well — clipChildren alone still leaves the host
+    //     clipping its whole drawing to its box, which cut the chips' pills
+    //     at the card's edge (owner, 2026-11-18).
     container.clipChildren = false;
+    container.clipContent = false;
     // The CARDS are squircles (see updateEntityGroups, which rounds each by
     // BADGE_CORNER_FRACTION — the same fraction the badge canvas uses, so a
     // summary is the badge shape at the badge size and only its CONTENT says

@@ -1,3 +1,9 @@
+## 2.496.840
+
+- **The small round marks on a badge's corners are no longer cut off.** The "?", "z" and linked-device circles stand
+  a little outside the badge's square, and on the map the badge or its group card cut away the part that stood
+  outside (a flat edge at the top or right). They are now drawn whole.
+
 ## 2.496.839
 
 - **A 3D model too heavy to load gets its own screen.** Instead of "Loading the villa…" for ever, the VESTA UI says
