@@ -764,6 +764,10 @@ export class EntityVisuals {
    *  the pulse clock the meshes use (animatePulse), amber like their mark (owner, 2026-11-15: urgency is a pulse, never a
    *  colour). An open fault's amber "!" is still. */
   private urgentBadges = new Set<string>();
+  /** The same urgent devices drawn as a cell of a group card (updateEntityGroups): the cell breathes like the lone
+   *  badge would (owner, 2026-11-19: it stood still inside a group). Rebuilt every pass, so a pooled chip that now
+   *  shows another device, or none, is whole again. */
+  private urgentChips = new Set<Image>();
   /** The viewer asked for less motion: an urgent badge stays still, its amber mark says it. */
   private readonly reducedMotion = typeof matchMedia === "function" ? matchMedia("(prefers-reduced-motion: reduce)") : null;
 
@@ -1962,6 +1966,7 @@ export class EntityVisuals {
     this.fans.clear();
     this.pulsing.clear();
     this.urgentBadges.clear();
+    this.urgentChips.clear();
     this.labels.clear();
     this.labelsNewestFirst.length = 0;
     this.lastState.clear();
@@ -4802,6 +4807,8 @@ export class EntityVisuals {
     const layer = this.labelLayer;
     if (!layer) return;
     const live = new Set<string>();
+    for (const chip of this.urgentChips) chip.alpha = 1;
+    this.urgentChips.clear();
     if (groups.length > 0) {
       // Floored like the room chip's, and for the same reason: a group badge
       // that shrinks with the badges it replaced would be unreadable at
@@ -4897,6 +4904,7 @@ export class EntityVisuals {
             const s2 = shown[g.members[k]];
             const st = this.lastState.get(s2.id) ?? phantomEntity(s2.id);
             const { face, mark, linkPill } = model.cells[k];
+            if (isUrgent({ mark, linkPill })) this.urgentChips.add(c.chips[k]);
             const subject = this.badgeSubject(s2.id, s2.lbl.type, st);
             const color = subject.color;
             c.chips[k].source = badgeImage({
@@ -5914,7 +5922,7 @@ export class EntityVisuals {
 
   private animatePulse(dtMs: number): void {
     // reduced motion: an urgent badge stays whole (updateLabel), so it asks for no frame of its own
-    const breathing = this.urgentBadges.size > 0 && !(this.reducedMotion?.matches ?? false);
+    const breathing = (this.urgentBadges.size > 0 || this.urgentChips.size > 0) && !(this.reducedMotion?.matches ?? false);
     if (this.pulsing.size === 0 && !breathing && !this.beams.hasActive()) return;
     this.pulseT += (dtMs / 1000) * PULSE_RAD_PER_SEC;
     const intensity = (Math.sin(this.pulseT) + 1) / 2; // 0..1
@@ -5931,6 +5939,7 @@ export class EntityVisuals {
       if (!lbl) { this.urgentBadges.delete(id); continue; }
       lbl.badge.alpha = breathing ? BADGE_PULSE_MIN + (1 - BADGE_PULSE_MIN) * intensity : 1;
     }
+    for (const chip of this.urgentChips) chip.alpha = breathing ? BADGE_PULSE_MIN + (1 - BADGE_PULSE_MIN) * intensity : 1;
     this.requestAnimationRender();
   }
 
