@@ -1,3 +1,8 @@
+## 2.496.841
+
+- **A device that needs attention now blinks inside a group too.** On its own, its badge fades in and out; drawn as
+  one of the icons in a group, it stood still. Its icon in the group now blinks the same way.
+
 ## 2.496.840
 
 - **The small round marks on a badge's corners are no longer cut off.** The "?", "z" and linked-device circles stand
