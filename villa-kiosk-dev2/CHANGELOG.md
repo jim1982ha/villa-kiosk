@@ -1,3 +1,8 @@
+## 2.496.843
+
+- **See-through pictures stay see-through in the villa.** A picture with clear parts (hanging plants, a leaf, a net)
+  was drawn as a solid panel. Its clear parts now show what is behind them, as in the plan the villa comes from.
+
 ## 2.496.842
 
 - **A notification's title and what happened now come first, its photos under them.** With many camera photos, the
