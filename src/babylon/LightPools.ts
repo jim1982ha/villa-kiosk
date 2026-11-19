@@ -127,19 +127,20 @@ export function resetLightPoolTextureCache(): void {
 export class LightPool {
   readonly mesh: Mesh;
   /** Per-pool brightness multiplier applied on top of the live intensity. 1 for
-   *  a normal single-fixture pool; <1 for a strip's END pools (a light "sitting
-   *  in" for the corner where two adjoining strips meet) — see
-   *  LightPoolSet.addFixture, where an elongated strip gets a full-intensity pool
-   *  at its centre plus two half-intensity pools at its ends, so two adjoining
-   *  strips' end-pools sum to roughly the centre's brightness at the shared
-   *  corner instead of leaving it dark (or, if both ends were left at 1,
-   *  doubling up into a hotspot there). */
+   *  a normal single-fixture pool; a strip's share for each pool of the even
+   *  row along it (LightPoolSet's stripSpots), so the strip as a whole gives
+   *  the light it always did. */
   intensityScale = 1;
   /** The Y the floor probe was cast FROM (the fixture's own height), kept so
    *  the pool can be re-probed later without the caller having to remember
    *  where its fixture was — see LightPoolSet.setRooms, which re-asks
    *  once calibration lets the probe answer per room instead of per 4m cell. */
   probeFromY = 0;
+  /** Where its fixture is, in x and z. The patch's centre (the mesh) may lie
+   *  a little into the fixture's room (lightPlacement.edgeRoom); the light
+   *  itself, and every placement asked again, start from here. */
+  fixtureX: number;
+  fixtureZ: number;
   /** The world radius its falloff is drawn across — the lamp glow projects
    *  the same falloff onto what stands under it. */
   radius = 0;
@@ -157,6 +158,8 @@ export class LightPool {
     this.mesh = new Mesh(`lightPool_${name}`, scene);
     this.radius = radius;
     this.mesh.position.copyFrom(floorPosition);
+    this.fixtureX = floorPosition.x;
+    this.fixtureZ = floorPosition.z;
     this.applyShape(shape, radius);
     this.mesh.isPickable = false;
     this.mesh.receiveShadows = false;
@@ -196,9 +199,10 @@ export class LightPool {
    * the same fix, applied in one pass so a pool is never briefly correct in
    * shape and wrong in height.
    */
-  reshape(shape: Pt2[] | undefined, radius: number, floorY?: number): void {
+  reshape(shape: Pt2[] | undefined, radius: number, floorY?: number, centre?: { x: number; z: number }): void {
     this.radius = radius;
     if (floorY !== undefined) this.mesh.position.y = floorY;
+    if (centre) { this.mesh.position.x = centre.x; this.mesh.position.z = centre.z; }
     this.applyShape(shape, radius);
   }
 

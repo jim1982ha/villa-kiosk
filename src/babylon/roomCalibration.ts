@@ -86,6 +86,44 @@ export function cameraBeamDir(
   return { x: wx * h, y: -Math.sin(pitch), z: wz * h };
 }
 
+/** A pair this far (world metres) from the fit, or three times the median
+ *  pair's error if that is more, does not mark its device's place on the plan:
+ *  it is dropped and the rest fitted again. Above the few centimetres a
+ *  device's mesh centre sits from its plan point; far below what moved the
+ *  rooms. */
+const OUTLIER_MIN_M = 0.3;
+const OUTLIER_MEDIAN_X = 3;
+
+/**
+ * The least-squares affine fit of the pairs that agree with it: fit, drop every
+ * pair farther than OUTLIER_MIN_M (or OUTLIER_MEDIAN_X × the median error) from
+ * it, fit again, until none is dropped. Null when fewer than three pairs, or
+ * pairs spanning no real area, are left.
+ *
+ * ⚠️ ONE PLAN POINT IS NOT ALWAYS WHERE ITS MESHES ARE (owner, 2026-11-19: the
+ * light on the floor sat beside the lamp, sometimes left, sometimes right). A
+ * device drawn as several meshes far apart (a row of garden globes, fans
+ * sharing one name) or a curtain's open pose has its mesh centre metres from
+ * its one plan point. The plain fit took them at their word: a 0.79 m residual,
+ * accepted, a scale 1.6% short and every room 0.1 to 0.4 m off along one axis,
+ * the sign depending on where it lay. A floor pool is cut by its room, so it
+ * stopped short of one wall and spilled past the other. Without those pairs
+ * the same villa fits to 6 cm.
+ */
+export function robustAffine(pairs: PlanWorldPair[]): { M: PlanToWorld; kept: PlanWorldPair[] } | null {
+  let kept = pairs;
+  for (;;) {
+    const M = kept.length >= 3 && spanArea(kept) > 1e4 ? fitAffine(kept) : null;
+    if (!M) return null;
+    const err = kept.map((p) => { const w = M(p.px, p.py); return Math.hypot(w.x - p.wx, w.z - p.wz); });
+    const median = [...err].sort((a, b) => a - b)[Math.floor(err.length / 2)];
+    const limit = Math.max(OUTLIER_MIN_M, OUTLIER_MEDIAN_X * median);
+    const next = kept.filter((_, i) => err[i] <= limit);
+    if (next.length === kept.length) return { M, kept };
+    kept = next;
+  }
+}
+
 /**
  * Build the plan→world transform. Three strategies, in order of accuracy:
  *   1. ≥3 well-spread entity meshes → full affine fit (exact; any rotation/mirror).
@@ -113,14 +151,16 @@ export function solvePlanToWorld(ctx: CalibrationContext): CalibrationSolution |
   // size; reject a fit whose RMS error exceeds this (ill-conditioned/mismatched).
   const residualLimit = 0.15 * Math.max(modelW, modelD, 1);
 
-  // Strategy 1: affine fit (only if points span real 2D area and fit is tight).
-  const M = pairs.length >= 3 && spanArea(pairs) > 1e4 ? fitAffine(pairs) : null;
-  if (M && affineResidual(pairs, M) <= residualLimit) {
+  // Strategy 1: affine fit (only if points span real 2D area and fit is tight),
+  // on the pairs that agree with it (robustAffine).
+  const fit = robustAffine(pairs);
+  if (fit && affineResidual(fit.kept, fit.M) <= residualLimit) {
+    const M = fit.M;
     return {
       planToWorld: (px, py) => M(px, py),
       strategy:
-        `affine fit from ${pairs.length} entity meshes ` +
-        `(residual ${affineResidual(pairs, M).toFixed(2)} m)`,
+        `affine fit from ${fit.kept.length} of ${pairs.length} entity meshes ` +
+        `(residual ${affineResidual(fit.kept, M).toFixed(2)} m)`,
     };
   }
 

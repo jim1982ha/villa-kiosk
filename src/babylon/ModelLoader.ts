@@ -38,6 +38,7 @@ import { isCeilingMesh, isStructureMesh, looksLikePane, structureRole, vertexLit
 import { attachLampGlow } from "./lampGlow";
 import { flavourOf, lightingModeFor, type LightingMode } from "./lightingMode";
 import "./babylonSideEffects";
+import { backOneFacedSheets } from "./glassSheets";
 
 // Point Babylon at the bundled decoder. Set once at module load; the decoder is
 // still only instantiated lazily, when a model actually uses Draco — so an
@@ -517,6 +518,10 @@ export async function loadModelInto(
       if (typeof a === "number" && a > 0 && a < GLASS_ALPHA_MAX) alphaGlass.add(mat);
     }
     const glassMats = new Set<string>();
+    /** Glass geometry already given its sheets' backs (one geometry may be
+     *  shared by several meshes), and how many sheet triangles were backed. */
+    const backedGeometry = new Set<unknown>();
+    let backedSheetTris = 0;
     /** Detected by transparency alone — no glass keyword in the name. */
     const alphaOnly = new Set<string>();
     // Material OBJECT refs (a Set — one material is shared by many meshes) so
@@ -615,7 +620,17 @@ export async function loadModelInto(
         // become invisible from behind; if that ever shows up, the fix is to
         // drop forceDepthWrite for glass instead, NOT to restore
         // double-siding, which is the half that breaks.
+        // ⚠️ IT SHOWED UP, AND THE FIX IS NEITHER (2026-11-19): a lone
+        // one-faced sheet gets a reversed copy of its own triangles
+        // (glassSheets.ts), so it shows one tinted face from either side and
+        // the culling stays. A pane drawn as two sheets facing away from each
+        // other is already two-faced and is left alone.
         mat.backFaceCulling = true;
+        const geometry = (m as { geometry?: unknown }).geometry;
+        if (geometry && !backedGeometry.has(geometry)) {
+          backedGeometry.add(geometry);
+          backedSheetTris += backOneFacedSheets(m);
+        }
         // Alpha-blended materials don't write depth by default, so Babylon
         // sorts them back-to-front by distance-from-camera each frame — as
         // the camera moves, that sort can flip relative to nearby OPAQUE
@@ -671,6 +686,7 @@ export async function loadModelInto(
       [...glassMats],
       "| all materials:",
       [...allMats].sort(),
+      `| one-faced pane triangles backed: ${backedSheetTris}`,
     );
     // The `lighting mode:` line — WHY the villa is lit the way it is — is
     // written once the flavour is known, at the return below. Every lighting

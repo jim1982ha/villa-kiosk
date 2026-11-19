@@ -40,7 +40,7 @@ import { RenderEnhancements } from "./RenderEnhancements";
 import { lightingModeFor, type LightingMode } from "./lightingMode";
 import { loadModelInto } from "./ModelLoader";
 import { resetLightPoolTextureCache } from "./LightPools";
-import { resolveMeshToMapping } from "@/config/EntityMap";
+import { hasVariantSuffix, resolveMeshToMapping } from "@/config/EntityMap";
 import { isIOS as detectIOS } from "@/utils/diagnostics";
 import { report as reportTelemetry } from "@/utils/telemetry";
 import { beginSpan } from "@/utils/perfSpans";
@@ -89,6 +89,10 @@ const SHARPEN_STILL_MS = 350;
  *  position is about to be STORED rather than only drawn — see the teleport
  *  points built in calibrateRooms for why the precision has to be dropped. */
 const mm = (v: number): number => Math.round(v * 1000) / 1000;
+/** A device whose meshes' centres spread wider than this (metres) is not one
+ *  point on the plan, so it does not calibrate the plan (calibrateRooms). A
+ *  lamp's parts, a curtain, a fan lie well inside it. */
+const CALIBRATION_SPREAD_M = 1;
 
 
 
@@ -1969,19 +1973,30 @@ export class SceneManager {
     // Only the calibration entities matter, and only their meshes need a world
     // matrix, so both the resolve and the recompute now touch a hundred-odd
     // meshes rather than all of them.
+    //
+    // ⚠️ ONLY MESHES THAT MARK ONE PLACE (owner, 2026-11-19: the light on the
+    // floor sat beside its lamp). A pose mesh ("__open") stands where the pose
+    // puts it, a curtain drawn aside, not at the device's plan point; a device
+    // drawn as meshes spread over metres (a row of globes, fans sharing a
+    // name) averages to a point the plan never marked. Both pulled the fit and
+    // moved every room; the robust fit (roomCalibration) drops what is left.
     const world = new Map<string, { x: number; z: number; n: number }>();
     for (const [entityId, list] of this.visuals.meshesByEntity()) {
-      if (!(entityId in entityCalib)) continue;
+      if (!(entityId in entityCalib) || hasVariantSuffix(entityId)) continue;
       const acc = { x: 0, z: 0, n: 0 };
+      let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
       for (const m of list) {
+        if (hasVariantSuffix(m.name)) continue;
         // Bounding-box centre (same reason as in normalizeScale above).
         m.computeWorldMatrix(true);
         const c = m.getBoundingInfo().boundingBox.centerWorld;
         acc.x += c.x;
         acc.z += c.z;
         acc.n += 1;
+        minX = Math.min(minX, c.x); maxX = Math.max(maxX, c.x);
+        minZ = Math.min(minZ, c.z); maxZ = Math.max(maxZ, c.z);
       }
-      if (acc.n > 0) world.set(entityId, acc);
+      if (acc.n > 0 && Math.hypot(maxX - minX, maxZ - minZ) <= CALIBRATION_SPREAD_M) world.set(entityId, acc);
     }
 
     const pairs: PlanWorldPair[] = [];
