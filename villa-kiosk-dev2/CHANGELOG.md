@@ -1,3 +1,17 @@
+## 2.496.844
+
+- **Lamp light lands where the lamp is.** The villa's rooms were placed up to 40 cm off their real walls, so a lamp's
+  light on the floor stopped short of one wall and spilled past another, sometimes through a doorway into the next
+  room. The rooms now sit on their real walls.
+- **A lamp made of several parts lights like one lamp.** Such a lamp shone two or three times brighter than its
+  neighbours.
+- **A wall light lights the room it faces**, not the room behind its wall.
+- **A lamp over a bath or a low step lights the floor**, not a sheet floating at the height of what is under it.
+- **LED strips light an even line.** A strip lit the floor as three spots, bright in the middle; its light is now
+  spread evenly along its whole length, and a longer strip gives more light.
+- **Every glass pane shows from both sides.** A pane drawn with one side only disappeared when seen from behind, so
+  some panes looked tinted and others empty.
+
 ## 2.496.843
 
 - **See-through pictures stay see-through in the villa.** A picture with clear parts (hanging plants, a leaf, a net)
