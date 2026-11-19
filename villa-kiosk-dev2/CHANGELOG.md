@@ -1,3 +1,9 @@
+## 2.496.842
+
+- **A notification's title and what happened now come first, its photos under them.** With many camera photos, the
+  title and the line saying what happened sat at the very bottom of the notification. They are now at its top, for
+  every notification that carries photos.
+
 ## 2.496.841
 
 - **A device that needs attention now blinks inside a group too.** On its own, its badge fades in and out; drawn as
