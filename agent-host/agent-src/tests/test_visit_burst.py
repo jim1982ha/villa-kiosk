@@ -204,3 +204,44 @@ def test_a_slow_model_lets_the_message_go_with_the_last_frame_then_puts_the_chos
     play(v, opened)
     assert kiosk.messages["incident:1"]["photos"][0]["path"] == f1, "and the tablet's card"
     assert os.path.exists(f1) and not os.path.exists(f3)
+
+
+def test_a_burst_where_nothing_moved_keeps_no_photo_and_asks_no_ai(tmp_path, kiosk, media, monkeypatch):
+    # owner, 2026-11-19 (#199): a room's noise rule, set off by people elsewhere, sent six photos of an empty room
+    models = sdk(monkeypatch, answer="2")
+    v = villa(tmp_path, kiosk)
+    vi = Visit(media=media)
+    vi.add("motion", PARKING, "18:20:16", photo=True)
+    play(v, send(vi.event("opened")))
+    s = vi.add("motion", PARKING, "18:34:10")
+    key = f"vesta_alert_example_183410_{s['seq']}"
+    still = []
+    for n in (1, 2, 3):
+        path = media / f"{key}_f{n}.jpg"
+        frame(path, (90 + n, 90, 90))           # the same empty scene, a level of noise apart
+        still.append(str(path))
+        vi.photos.append({"path": str(path), "camera": "camera.example_parking", "camera_name": "Parking",
+                          "entity_id": PARKING, "kind": "motion", "at": at("18:34:10"), "burst": key, "frame": n,
+                          "pick": "haiku"})
+    play(v, send(vi.event()))
+    assert models == [], "no AI asked to choose among photos of nothing"
+    assert not any(os.path.exists(p) for p in still), "every frame deleted"
+    paths = [p["path"] for p in v.visits.every_photo(1)]
+    assert len(paths) == 1 and not set(paths) & set(still), ("the step stays, without a photo", paths)
+    assert len(kiosk.messages["incident:1"]["photos"]) == 1, "the tablet's card shows no photo of it either"
+    dropped = [d["dropped_photos"] for d in told(v) if "dropped_photos" in d]
+    assert dropped == [still], ("the villa told to drop every frame", told(v))
+
+
+def test_someone_coming_into_a_small_part_of_the_view_still_keeps_a_photo(tmp_path, kiosk, media):
+    from PIL import Image, ImageDraw
+    v = villa(tmp_path, kiosk)
+    vi = Visit(media=media)
+    f1, f2, f3 = burst(vi, media, "18:20:16", "diff")
+    for n, p in enumerate((f1, f2, f3)):
+        im = Image.new("RGB", (640, 360), (90, 90, 90))
+        if n:                                    # a figure 1/40 of the width, 1/9 of the height, far off
+            ImageDraw.Draw(im).rectangle((300, 150, 300 + 16, 150 + 40), fill=(200, 180, 160))
+        im.save(p, "JPEG")
+    play(v, send(vi.event("opened")))
+    assert len(v.visits.every_photo(1)) == 1, "a photo kept"

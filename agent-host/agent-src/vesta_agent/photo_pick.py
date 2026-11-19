@@ -15,6 +15,10 @@ one (visit.Visits.kept), chosen here as the villa set it ("Picked by"):
 - `diff`, or a model that did not answer (failed, timed out, no skill declares it, or it saw none of them): change
   detection — the frame most different from the first (downscaled grey), the first never chosen while there are
   others. It never needs the AI.
+
+⚠️ NOTHING MOVED, NO PHOTO (owner, 2026-11-19, #199): the server room's noise rule, set off by people elsewhere in the
+villa, added six photos of an empty room to one alert. Before any choice, a burst whose frames show no change
+(`moved`) keeps none: `choose` answers NOTHING, the step stays in the story without a photo, and no AI is asked.
 """
 from __future__ import annotations
 
@@ -33,6 +37,14 @@ log = logging.getLogger("vesta.photo_pick")
 DIFF = "diff"
 #: The size each frame is compared at: enough to see a person come into view, small enough to be instant
 _GREY = (96, 54)
+#: choose(): nothing moved in the burst, no frame kept
+NOTHING = -1
+#: A pixel of the frame at _GREY that changed by more than this (of 255) moved: shrinking the frame averages a still
+#: scene's sensor and JPEG noise far under it
+_MOVED_LEVELS = 24
+#: The share of the frame at _GREY that must move for a burst to show something: about 16 of its 5,184 pixels, a
+#: person far off in a wide view still more
+_MOVED_SHARE = 0.003
 
 
 def timeout_s() -> int:
@@ -43,24 +55,46 @@ def timeout_s() -> int:
                  reached="The photo most different from the first is kept instead (no AI).", told="")
 
 
+def _grey(p):
+    """Frame `p` in grey at _GREY, None when it cannot be read."""
+    from PIL import Image
+    try:
+        with Image.open(p) as im:
+            return im.convert("L").resize(_GREY)
+    except Exception as e:  # noqa: BLE001 — a broken frame is never chosen
+        log.info("A burst frame could not be read (%s)", type(e).__name__)
+        return None
+
+
+def moved(paths: list[str]) -> bool:
+    """Whether any frame differs from the first by more than _MOVED_SHARE of its pixels; True when the first cannot be
+    read or no other can (a photo is kept rather than lost on a doubt)."""
+    from PIL import ImageChops
+    first = _grey(paths[0]) if paths else None
+    if first is None:
+        return True
+    seen = False
+    for p in paths[1:]:
+        g = _grey(p)
+        if g is None:
+            continue
+        seen = True
+        hist = ImageChops.difference(first, g).histogram()
+        if sum(hist[_MOVED_LEVELS + 1:]) >= _MOVED_SHARE * _GREY[0] * _GREY[1]:
+            return True
+    return not seen
+
+
 def changed_most(paths: list[str]) -> int:
     """The index of the frame most different from the first (mean difference of the downscaled grey pictures); 0 only
     when there is one frame, or none of the others can be read."""
     if len(paths) < 2:
         return 0
-    from PIL import Image, ImageChops, ImageStat
-
-    def grey(p):
-        try:
-            with Image.open(p) as im:
-                return im.convert("L").resize(_GREY)
-        except Exception as e:  # noqa: BLE001 — a broken frame is never chosen
-            log.info("A burst frame could not be read (%s)", type(e).__name__)
-            return None
-    first = grey(paths[0])
+    from PIL import ImageChops, ImageStat
+    first = _grey(paths[0])
     best, score = 0, -1.0
     for i, p in enumerate(paths[1:], start=1):
-        g = grey(p)
+        g = _grey(p)
         if g is None:
             continue
         d = ImageStat.Stat(ImageChops.difference(first, g)).mean[0] if first is not None else 0.0
@@ -134,7 +168,7 @@ def framed(path: str, box: tuple[float, float, float, float], colour: str) -> bo
 
 
 class Picker:
-    """`choose(paths, how)`: the index of the frame kept. Never raises."""
+    """`choose(paths, how)`: the index of the frame kept, NOTHING when nothing moved. Never raises."""
 
     def __init__(self, *, settings, state, skills):
         self.s, self.state, self.skills = settings, state, skills
@@ -149,6 +183,14 @@ class Picker:
     async def choose(self, paths: list[str], how: str) -> int:
         if len(paths) < 2:
             return 0
+        try:
+            still = not await asyncio.to_thread(moved, paths)
+        except Exception as e:  # noqa: BLE001 — a frame is chosen as before
+            log.warning("A burst could not be checked for movement (%s)", type(e).__name__)
+            still = False
+        if still:
+            log.info("Nothing moved in a burst of %d photos: no photo kept", len(paths))
+            return NOTHING
         if how and how != DIFF:
             try:
                 got = await asyncio.wait_for(self._ask(paths, how), timeout_s())

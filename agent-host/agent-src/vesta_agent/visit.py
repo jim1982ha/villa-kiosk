@@ -14,7 +14,7 @@ VESTA did with it, and its siren request told as a line of its story.
   expired on 18:50: nothing was done" a line of the visit's story (owner, 2026-11-06: six "Camera snapshot" messages and
   a separate request came beside the alert at 18:35);
 - the BURST of a step (owner, 2026-11-15: the Presence Guard's "Burst, best picked"): its frames' one kept
-  (photo_pick.Picker), the others deleted from the villa's media folder and the villa told, so the step has one photo
+  (photo_pick.Picker; none when nothing moved in them, owner 2026-11-19), the others deleted from the villa's media folder and the villa told, so the step has one photo
   everywhere — the sheet, "All photos", the tablet's card and the villa's record (Visits.kept).
 """
 from __future__ import annotations
@@ -217,7 +217,9 @@ class Visits:
             frames = sorted(frames, key=lambda f: int(f.get("frame") or 0))
             live = [f for f in frames if sheet._inside(f.get("path"), (sheet.MEDIA,))] or frames[-1:]
             got = self._picked.get((int(iid), key))
-            if isinstance(got, str):
+            if got == "":
+                chosen[key] = None                        # nothing moved: the step has no photo
+            elif isinstance(got, str):
                 chosen[key] = next((f for f in frames if f.get("path") == got), live[-1])
             elif isinstance(got, asyncio.Task) or len(live) < 2:
                 chosen[key] = live[-1]
@@ -229,7 +231,8 @@ class Visits:
             done, _ = await asyncio.wait([t for t, _ in running.values()], timeout=pick_wait_s())
             for key, (task, live) in running.items():
                 if task in done:
-                    chosen[key] = next((f for f in live if f.get("path") == task.result()), live[-1])
+                    chosen[key] = None if task.result() == "" else \
+                        next((f for f in live if f.get("path") == task.result()), live[-1])
                 else:
                     chosen[key] = live[-1]
                     task.add_done_callback(lambda t, key=key: self._then(int(iid), key, t))
@@ -240,17 +243,20 @@ class Visits:
                 out.append(p)
             elif key not in placed:
                 placed.add(key)
-                out.append(chosen[key])
+                if chosen[key] is not None:
+                    out.append(chosen[key])
         return out
 
     async def _choose(self, iid: int, key: str, live: list[dict], every: list[str], told) -> str:
         """The frame of burst `key` kept (its path), the others deleted from the villa's media folder — only there, a
         file already gone no error — and the villa told to drop them all (`every`: the burst's frames as its record
-        names them). The last frame, nothing deleted, when no choice could be made."""
+        names them). The last frame, nothing deleted, when no choice could be made; "" and every frame deleted when
+        nothing moved in them (photo_pick.NOTHING)."""
+        from .photo_pick import NOTHING
         paths = [str(f.get("path")) for f in live]
         try:
             i = await self._pick(paths, str(live[0].get("pick") or "")) if self._pick is not None else len(paths) - 1
-            keep = paths[i if 0 <= i < len(paths) else -1]
+            keep = "" if i == NOTHING else paths[i if 0 <= i < len(paths) else -1]
         except Exception:  # noqa: BLE001 — the last frame stays, every frame kept
             log.exception("Incident #%s: the best photo of a step could not be chosen", iid)
             self._picked[(iid, key)] = paths[-1]
@@ -267,8 +273,8 @@ class Visits:
                 pass
             except OSError as e:
                 log.warning("Incident #%s: a photo of a step could not be deleted (%s)", iid, type(e).__name__)
-        log.info("Incident #%s: of %d photos of one step, %s kept, %d deleted", iid, len(paths), os.path.basename(keep),
-                 len(gone))
+        log.info("Incident #%s: of %d photos of one step, %s kept, %d deleted", iid, len(paths),
+                 os.path.basename(keep) if keep else "none (nothing moved)", len(gone))
         self._picked[(iid, key)] = keep
         for old in [k for k, v in self._picked.items() if isinstance(v, str)][:-PICKS_KEPT]:
             self._picked.pop(old, None)
@@ -289,8 +295,9 @@ class Visits:
         and the tablet's card."""
         try:
             rec = self.state.visit_photos(iid)
-            photos = [{**p, "path": keep} if isinstance(p, dict) and str(p.get("burst") or "") == key else p
-                      for p in rec.get("photos") or []]
+            mine = [isinstance(p, dict) and str(p.get("burst") or "") == key for p in rec.get("photos") or []]
+            photos = [p for p, m in zip(rec.get("photos") or [], mine) if not m] if keep == "" else \
+                [{**p, "path": keep} if m else p for p, m in zip(rec.get("photos") or [], mine)]
             if photos == list(rec.get("photos") or []):
                 return
             self.state.set_visit_photos(iid, {**rec, "photos": visit_state.ordered(photos, int(rec.get("shown") or 1))})

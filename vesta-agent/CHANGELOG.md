@@ -1,3 +1,10 @@
+## 0.12.521
+
+- **No photo of an empty scene.** When none of the photos taken for one step of an alert shows anything moving, VESTA
+  keeps none of them: the step stays in the alert's story, without a picture of nothing. A room judged by its noise,
+  set off by people elsewhere in the villa, no longer adds photos of an empty room. The AI is not asked to choose among
+  such photos either.
+
 ## 0.12.520
 
 - **The AI's photo choice no longer runs out of time.** About half of today's burst choices were stopped after 15
