@@ -29,10 +29,11 @@ import { cardFace, type CardView } from "@/config/cockpitCard";
 import { RecordHead, stripTone } from "@/components/fm/RecordCard";
 import { cardLead } from "@/components/fm/sourceIcons";
 
-/** One announcement, drawn — pure (a check draws it): its photos above its words when it has some (a ring's snapshot,
- *  a visit's every camera: PhotoRow; the notice then square-cornered: 08-shared.css), its title and the first line of what it says, then `buttons` (its
+/** One announcement, drawn — pure (a check draws it): its title and the first line of what it says, then its photos
+ *  when it has some (a ring's snapshot, a visit's every camera: PhotoRow), then `buttons` (its
  *  RecordButtons: the doorbell's Unlock, an approval's Approve / Refuse). A rewrite of the same record replaces it in
- *  place (the add-on's key). Its ✕ (NoticeView: every notice's) closes it before its time (`onDismiss`: the notices'
+ *  place (the add-on's key). ⚠️ WORDS FIRST (owner, 2026-11-19: a visit's fifteen photos pushed the title and what
+ *  happened to the bottom; "make sure the title and the sub-title appear at the top"). Its ✕ (NoticeView: every notice's) closes it before its time (`onDismiss`: the notices'
  *  record, noticeModel "dismissed"). `card`: the Cockpit's card of it (an alert's): the notice is that card's head. */
 export function AnnouncementNoticeView({ announcement, onDismiss, buttons, step = false, card = null }: {
   announcement: Announcement;
@@ -51,11 +52,11 @@ export function AnnouncementNoticeView({ announcement, onDismiss, buttons, step 
   const strip = top ? stripTone(top.status, top.tone) : null;
   return (
     <NoticeView tone={strip ?? "info"} icon={strip ? null : <Bell size={16} />} onDismiss={onDismiss}>
-      <PhotoRow photos={announcement.photos} />
       {card && top && strip
         ? <RecordHead title={card.title} lead={cardLead(card)} number={top.number} when={top.when} status={top.status}
             statusTip={top.statusTip} tone={strip}>{cardWords(card, { step })}</RecordHead>
         : words}
+      <PhotoRow photos={announcement.photos} />
       {buttons}
     </NoticeView>
   );

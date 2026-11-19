@@ -234,8 +234,8 @@ const ringPhoto = [{ id: "x.jpg", label: "", at: "2026-11-06T18:30:05+00:00" }];
 const photoHtml = draw(h(AnnouncementNoticeView, { announcement: { ...a(1), title: "🔔 Visitor", photos: ringPhoto } }));
 // owner, 2026-10-28 (2.496.562): the pill's round ends around a photo read "pretty much wrong"; the photo keeps its size
 // (its squared corners are every notice's now: tests/oracles/notices.mjs); a ring's one photo is a row of one
-ck("  ...a ring's photo above its words, served by the add-on, its time under it; none drawn without one",
-   /<span class="vesta-notice-text"><div class="photo-row"><figure class="photo-tile"><button type="button" class="photo-tile-open"[^>]*><img src="\/announcement-photo\/x\.jpg" alt=""\/><\/button><figcaption>18:30<\/figcaption><\/figure><\/div>🔔 Visitor<\/span>/.test(photoHtml)
+ck("  ...a ring's photo under its words (owner, 2026-11-19), served by the add-on, its time under it; none drawn without one",
+   /<span class="vesta-notice-text">🔔 Visitor<div class="photo-row"><figure class="photo-tile"><button type="button" class="photo-tile-open"[^>]*><img src="\/announcement-photo\/x\.jpg" alt=""\/><\/button><figcaption>18:30<\/figcaption><\/figure><\/div><\/span>/.test(photoHtml)
    && !html.includes("<img") && !html.includes("photo-row"), photoHtml);
 
 console.log("\n  what a record says about itself:");
