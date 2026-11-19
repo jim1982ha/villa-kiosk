@@ -31,8 +31,8 @@
 //    enabled) — for every output, and again after every floor switch;
 //  * a bulb is a STRIP when its longest side is STRIP_MIN_LENGTH or more; a
 //    strip's light is lowered toward what is below (so it prints no hotspot
-//    on its own ceiling) and, when horizontal, its pools sit at its centre and
-//    both ends;
+//    on its own ceiling) and, when horizontal, its pools are an even row
+//    along it (LightPoolSet);
 //  * an entity whose every bulb is a strip shares ONE PointLight (a cove is
 //    one wash, not four hotspots);
 //  * a PointLight is one fixture's worth of light shared among the entity's
@@ -112,14 +112,48 @@ type BulbFloorProbe = PoolFloorProbe;
 
 interface StripShape { strip: boolean; horizontal: boolean }
 
-/** THE strip rule. */
-function stripShape(mesh: AbstractMesh): StripShape {
-  const bb = mesh.getBoundingInfo().boundingBox;
-  const size = bb.maximumWorld.subtract(bb.minimumWorld);
+/** THE strip rule, on a fixture's box (a mesh's, or its lamp's parts'). */
+function stripShape(mesh: AbstractMesh, box: { min: Vector3; max: Vector3 } = worldBox([mesh])): StripShape {
+  const size = box.max.subtract(box.min);
   return {
     strip: Math.max(size.x, size.y, size.z) >= STRIP_MIN_LENGTH,
     horizontal: Math.max(size.x, size.z) >= STRIP_MIN_LENGTH,
   };
+}
+
+/** A glTF node's mesh of several materials, as the loader names its pieces. */
+const PRIMITIVE_PART = /^(.*)_primitive\d+$/;
+
+/**
+ * The meshes one lamp is made of: the mesh itself, or every piece of its glTF
+ * node. A node drawn in three materials (a pendant's rod, canopy and shade)
+ * imports as three meshes, "<node>_primitive0..2", children of the node.
+ *
+ * ⚠️ ONE LAMP, ONE FIXTURE (owner, 2026-11-19: the bright patches on the
+ * balcony floor did not match the row of lamps). Each piece was a fixture of
+ * its own: three pools stacked on one spot, three PointLights and three lamps
+ * for the furniture light, so a pendant of three materials lit its floor three
+ * times as brightly as a plain bulb beside it.
+ */
+function lampParts(mesh: AbstractMesh): AbstractMesh[] {
+  const base = PRIMITIVE_PART.exec(mesh.name)?.[1];
+  const parent = mesh.parent;
+  if (base === undefined || !parent) return [mesh];
+  const parts = parent.getChildMeshes(true)
+    .filter((c) => c.getTotalVertices() > 0 && PRIMITIVE_PART.exec(c.name)?.[1] === base);
+  return parts.includes(mesh) ? parts : [mesh];
+}
+
+/** The world box around these meshes. */
+function worldBox(meshes: readonly AbstractMesh[]): { min: Vector3; max: Vector3 } {
+  let min: Vector3 | null = null, max: Vector3 | null = null;
+  for (const m of meshes) {
+    m.computeWorldMatrix(true);
+    const b = m.getBoundingInfo().boundingBox;
+    min = min ? Vector3.Minimize(min, b.minimumWorld) : b.minimumWorld.clone();
+    max = max ? Vector3.Maximize(max, b.maximumWorld) : b.maximumWorld.clone();
+  }
+  return { min: min!, max: max! };
 }
 
 /**
@@ -187,23 +221,32 @@ export class BulbSet {
   /** A fixture mesh found on the load path: its PointLight (off until a state
    *  turns it on) and, on a baked villa, its floor pools. */
   addFixture(mesh: AbstractMesh, withPools: boolean): void {
-    const bb = mesh.getBoundingInfo().boundingBox;
-    const shape = stripShape(mesh);
-    const pos = bb.centerWorld.clone();
+    // A further piece of a lamp already added shares its light; its pools
+    // and its lamp for the furniture light are the first piece's (lampParts).
+    const parts = lampParts(mesh);
+    const shared = parts.map((p) => this.lights.get(p.uniqueId)).find(Boolean);
+    if (shared) { this.lights.set(mesh.uniqueId, shared); return; }
+    const box = worldBox(parts);
+    const shape = stripShape(mesh, box);
+    const pos = Vector3.Center(box.min, box.max);
     if (shape.strip) this.lowerStripLight(pos, mesh);
     this.lights.set(mesh.uniqueId, this.newLight(`elight_${mesh.name}_${mesh.uniqueId}`, pos));
     if (withPools) {
-      this.pools.addFixture(mesh, { min: bb.minimumWorld, max: bb.maximumWorld, centerY: bb.centerWorld.y },
-        shape.strip && shape.horizontal);
+      this.pools.addFixture(mesh, { min: box.min, max: box.max, centerY: pos.y }, shape.strip && shape.horizontal);
       this.rooms.lampsChanged();
     }
   }
 
   /** Every light entity's bulbs, after the load: an entity whose every bulb is
    *  a strip shares ONE PointLight at the middle of them all. Pools stay per
-   *  bulb. */
+   *  bulb, and learn which bulbs are one light's. */
   mergeStrips(entities: Iterable<readonly AbstractMesh[]>): void {
-    for (const meshes of entities) {
+    const lights = [...entities];
+    // Which bulbs are one light's: a lamp on a room's edge lights the room
+    // its light's other lamps stand in (lightPlacement.edgeRoom).
+    this.pools.setGroups(lights);
+    this.rooms.lampsChanged();
+    for (const meshes of lights) {
       if (meshes.length < 2 || !meshes.every((m) => stripShape(m).strip)) continue;
       let min: Vector3 | null = null, max: Vector3 | null = null;
       for (const m of meshes) {

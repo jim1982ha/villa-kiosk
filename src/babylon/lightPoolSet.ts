@@ -26,7 +26,7 @@ import { Vector3 } from "@babylonjs/core/Maths/math.vector";
 import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
 import type { Color3 } from "@babylonjs/core/Maths/math.color";
 import type { Scene } from "@babylonjs/core/scene";
-import { LightPool, poolStrength } from "./LightPools";
+import { LightPool, POOL_ALPHA_STOPS, poolStrength } from "./LightPools";
 import type { Pt2 } from "@/utils/geometry";
 import { Storeys } from "./storeys";
 import { placeLight, LIGHT_POOL_RADIUS, POOL_FLOOR_LIFT, type LightPlacement } from "./lightPlacement";
@@ -62,10 +62,85 @@ interface FixtureBounds {
 
 interface PendingSpot { mesh: AbstractMesh; x: number; z: number; y: number; scale: number; i: number }
 
+/** Metres between the pools along an LED strip (stripSpots): close enough,
+ *  against a pool's 1.8 m reach, that the floor along the strip reads as one
+ *  even band. */
+export const STRIP_POOL_STEP_M = 0.6;
+/** A strip's light, in pools' worth per metre of strip: what a 3 m strip's
+ *  centre pool and two half-strength end pools gave before (2), so a strip of
+ *  that length is as bright as it was. Never under those 2 for a short one.
+ *
+ *  ⚠️ PER METRE, NOT PER STRIP (owner, 2026-11-20). One total for every strip,
+ *  spread evenly along a 7.7 m curtain-top strip, left its band at a third of
+ *  a pool's centre: the room went dark where the old middle spot had lit it.
+ *  A longer strip carries more LEDs, so it gives more light. */
+const STRIP_LIGHT_PER_M = 2 / 3;
+const STRIP_LIGHT_MIN = 2;
+
+/**
+ * Where a horizontal strip's pools lie: a row of equal pools along its length,
+ * about STRIP_POOL_STEP_M apart, the first and last half a step in from its
+ * ends, sharing the strip's light (evenShares).
+ *
+ * ⚠️ A STRIP IS A LINE OF LIGHT, NOT THREE SPOTS (owner, 2026-11-19: "100% in
+ * the middle, 50% at each end"). Its centre pool at full strength and one at
+ * half on each end lit the floor as three patches. Half a step in from each
+ * end, two strips meeting at a corner each stop short of it by as much as
+ * their own pools are apart, so the corner is lit like the rest of the band,
+ * never doubled.
+ */
+function stripSpots(box: FixtureBounds): { x: number; z: number; scale: number }[] {
+  const alongX = box.max.x - box.min.x >= box.max.z - box.min.z;
+  const from = alongX ? box.min.x : box.min.z, to = alongX ? box.max.x : box.max.z;
+  const across = alongX ? (box.min.z + box.max.z) / 2 : (box.min.x + box.max.x) / 2;
+  const n = Math.max(2, Math.round((to - from) / STRIP_POOL_STEP_M));
+  const step = (to - from) / n;
+  const at = Array.from({ length: n }, (_, i) => from + step * (i + 0.5));
+  const share = evenShares(at, Math.max(STRIP_LIGHT_MIN, STRIP_LIGHT_PER_M * (to - from)));
+  return at.map((t, i) => (alongX ? { x: t, z: across, scale: share[i] } : { x: across, z: t, scale: share[i] }));
+}
+
+/**
+ * How the strip's light (`total`, STRIP_LIGHT_PER_M) is shared among pools at these points
+ * along it, so the floor under every one of them is equally bright: equal
+ * shares leave the middle a third brighter than near the ends, where fewer
+ * neighbours overlap; the shares that solve "every pool's spot gets the same
+ * sum" give the ends a little more. Equal shares if that has no positive
+ * answer.
+ */
+function evenShares(at: number[], total: number): number[] {
+  const n = at.length;
+  const falloff = (d: number) => {
+    const t = d / LIGHT_POOL_RADIUS;
+    for (let i = 0; i < POOL_ALPHA_STOPS.length - 1; i++) {
+      const [t0, a0] = POOL_ALPHA_STOPS[i], [t1, a1] = POOL_ALPHA_STOPS[i + 1];
+      if (t <= t1) return a0 + ((a1 - a0) * (t - t0)) / (t1 - t0);
+    }
+    return 0;
+  };
+  // A w = 1 by Gaussian elimination (A is the pools' overlap: symmetric,
+  // its diagonal the largest in each row).
+  const m = at.map((a) => [...at.map((b) => falloff(Math.abs(a - b))), 1]);
+  for (let c = 0; c < n; c++) {
+    let p = c;
+    for (let r = c + 1; r < n; r++) if (Math.abs(m[r][c]) > Math.abs(m[p][c])) p = r;
+    [m[c], m[p]] = [m[p], m[c]];
+    if (Math.abs(m[c][c]) < 1e-12) return at.map(() => total / n);
+    for (let r = 0; r < n; r++) {
+      if (r === c) continue;
+      const f = m[r][c] / m[c][c];
+      for (let k = c; k <= n; k++) m[r][k] -= f * m[c][k];
+    }
+  }
+  const w = m.map((row, i) => row[n] / row[i]);
+  const sum = w.reduce((a, b) => a + b, 0);
+  if (!w.every((v) => v > 0) || !(sum > 0)) return at.map(() => total / n);
+  return w.map((v) => (v * total) / sum);
+}
+
 export class LightPoolSet {
   /** Keyed by fixture mesh uniqueId — a compact fixture has one pool, a strip
-   *  three (centre at full strength, both ends at half, so two strips meeting
-   *  at a corner light it without doubling into a hotspot). */
+   *  a row of equal ones along it (stripSpots). */
   private pools = new Map<number, LightPool[]>();
   /** Spots whose load-path probe missed, kept so calibration can ask again. */
   private pending = new Map<number, PendingSpot[]>();
@@ -74,6 +149,11 @@ export class LightPoolSet {
   /** Where each pool's light stands (lightPlacement) — read by the pool and
    *  by the glow alike. */
   private placements = new Map<LightPool, LightPlacement<PoolRoom>>();
+  /** Which light each fixture belongs to (setGroups): fixture mesh uniqueId
+   *  → its light's index. */
+  private groupOf = new Map<number, number>();
+  /** The room the other lamps of its light stand in, per pool (homes). */
+  private home = new Map<LightPool, PoolRoom>();
   /** Bumped by anything that changes what `glowLamps` would answer. */
   version = 0;
   private strength = 1;
@@ -102,8 +182,9 @@ export class LightPoolSet {
   }
 
   /**
-   * A fixture found on the load path. `isStrip` gives it three pools instead
-   * of one. A spot whose floor probe misses is NOT final: the load path's
+   * A fixture found on the load path. `isStrip` gives it a row of pools along
+   * its length (stripSpots) instead of one. A spot whose floor probe misses is
+   * NOT final: the load path's
    * probe is keyed by a 4-metre grid (no room resolver exists yet) that can
    * merge a void next door into this fixture's cell, so the spot waits for
    * `setRooms` to ask again, room-keyed. No mesh is allocated until then.
@@ -113,11 +194,7 @@ export class LightPoolSet {
    */
   addFixture(mesh: AbstractMesh, box: FixtureBounds, isStrip: boolean): void {
     const cx = (box.min.x + box.max.x) / 2, cz = (box.min.z + box.max.z) / 2;
-    const alongX = box.max.x - box.min.x >= box.max.z - box.min.z;
-    const spots = !isStrip ? [{ x: cx, z: cz, scale: 1 }]
-      : alongX
-        ? [{ x: cx, z: cz, scale: 1 }, { x: box.min.x, z: cz, scale: 0.5 }, { x: box.max.x, z: cz, scale: 0.5 }]
-        : [{ x: cx, z: cz, scale: 1 }, { x: cx, z: box.min.z, scale: 0.5 }, { x: cx, z: box.max.z, scale: 0.5 }];
+    const spots = isStrip ? stripSpots(box) : [{ x: cx, z: cz, scale: 1 }];
     const made: LightPool[] = [];
     spots.forEach(({ x, z, scale }, i) => {
       const spot = { mesh, x, z, y: box.centerY, scale, i };
@@ -145,8 +222,16 @@ export class LightPoolSet {
     // Owned HERE: a reshape against a stale memo is the whole defect.
     this.probe.clearMemo();
     const recovered = this.retryPending();
-    const n = { clipped: 0, whole: 0, bounded: 0, nofloor: 0, corrected: 0, nearFixture: 0, lowered: 0, crushed: 0, flight: 0, spread: 0 };
+    const n = { clipped: 0, whole: 0, bounded: 0, nofloor: 0, corrected: 0, nearFixture: 0, lowered: 0, crushed: 0, flight: 0, edge: 0, spread: 0 };
+    this.home.clear();
     for (const pools of this.pools.values()) for (const pool of pools) this.reshapeOne(pool, n);
+    // A lamp on its room's edge is placed again with the room its light's
+    // other lamps stand in (lightPlacement.edgeRoom).
+    const edge = [...this.placements].filter(([, at]) => at.notes.includes("edge")).map(([pool]) => pool);
+    if (edge.length) {
+      this.homes();
+      for (const pool of edge) if (this.home.has(pool)) this.reshapeOne(pool, {});
+    }
     // A patch alone in its room spreads as far as its lamp's light reaches
     // (lightPlacement), up to where the nearest other patch in that room
     // begins. Static: every pool counts, lit or not, so a patch never
@@ -160,11 +245,19 @@ export class LightPoolSet {
     if (recovered) this.resync();
     this.log(
       `light pools: clipped=${n.clipped} whole=${n.whole} bounded=${n.bounded} nofloor=${n.nofloor}`
-      + ` corrected=${n.corrected} nearFixture=${n.nearFixture} lowered=${n.lowered} crushed=${n.crushed} flight=${n.flight} spread=${n.spread}`
+      + ` corrected=${n.corrected} nearFixture=${n.nearFixture} lowered=${n.lowered} crushed=${n.crushed} flight=${n.flight} edge=${n.edge} spread=${n.spread}`
       + ` bucketAbove=${this.probe.stats.probeAbove}`
       + ` recovered=${recovered} stillNoFloor=${[...this.pending.values()].reduce((k, s) => k + s.length, 0)}`
       + ` rooms=${rooms.length} storeys=${new Set(rooms.map((r) => Math.round(r.floorY))).size}`,
     );
+  }
+
+  /** Which fixtures are one light's (its entity's meshes), after the load:
+   *  a lamp on a room's edge takes the room the others stand in. */
+  setGroups(lights: Iterable<readonly AbstractMesh[]>): void {
+    this.groupOf.clear();
+    let i = 0;
+    for (const meshes of lights) { for (const m of meshes) this.groupOf.set(m.uniqueId, i); i++; }
   }
 
   /** One fixture's light changed. */
@@ -195,7 +288,8 @@ export class LightPoolSet {
       for (const pool of this.pools.get(meshId) ?? []) {
         const p = pool.mesh.position;
         out.push({
-          x: p.x, y: pool.probeFromY, z: p.z,
+          // At the fixture, not the patch's centre (lightPlacement.edgeRoom).
+          x: pool.fixtureX, y: pool.probeFromY, z: pool.fixtureZ,
           r: r.colour.r, g: r.colour.g, b: r.colour.b,
           amount: poolStrength(r.frac * this.strength, pool.intensityScale),
           radius: pool.radius,
@@ -242,6 +336,8 @@ export class LightPoolSet {
     this.pools.forEach((arr) => arr.forEach((p) => p.dispose()));
     this.pools.clear();
     this.placements.clear();
+    this.home.clear();
+    this.groupOf.clear();
     this.version++;
     // Holds mesh references from the outgoing model — a reload's calibration
     // must not retry spots belonging to a scene that no longer exists.
@@ -279,6 +375,28 @@ export class LightPoolSet {
     return created;
   }
 
+  /** Each pool's home: the room most of its light's lamps that are on no
+   *  room's edge stand in. None for a light with no such lamp. */
+  private homes(): void {
+    const meshOf = new Map<LightPool, number>();
+    for (const [meshId, pools] of this.pools) for (const pool of pools) meshOf.set(pool, meshId);
+    const votes = new Map<number, Map<PoolRoom, number>>();
+    for (const [pool, at] of this.placements) {
+      const g = this.groupOf.get(meshOf.get(pool) ?? -1);
+      if (g === undefined || !at.room || at.floorless || at.notes.includes("edge")) continue;
+      const v = votes.get(g) ?? new Map<PoolRoom, number>();
+      v.set(at.room, (v.get(at.room) ?? 0) + 1);
+      votes.set(g, v);
+    }
+    for (const pool of this.placements.keys()) {
+      const v = votes.get(this.groupOf.get(meshOf.get(pool) ?? -1) ?? -1);
+      if (!v) continue;
+      let best: PoolRoom | null = null, most = 0;
+      for (const [room, k] of v) if (k > most) { best = room; most = k; }
+      if (best) this.home.set(pool, best);
+    }
+  }
+
   /** Each pool's free floor: the distance to the nearest other pool placed
    *  in the same room, less that pool's own reach (Infinity: alone). */
   private spreads(): Map<LightPool, number> {
@@ -298,12 +416,13 @@ export class LightPoolSet {
   }
 
   private reshapeOne(pool: LightPool, n: Record<string, number>, spread?: number): void {
-    const at = placeLight(pool.mesh.position.x, pool.mesh.position.z, pool.probeFromY,
-      pool.mesh.position.y - POOL_FLOOR_LIFT, this.probe, this.storeys, spread);
-    if (spread !== undefined) { this.placements.set(pool, at); pool.reshape(at.shape, at.radius, at.surfaceY === null ? undefined : at.surfaceY + POOL_FLOOR_LIFT); n.spread = (n.spread ?? 0) + 1; return; }
+    const at = placeLight(pool.fixtureX, pool.fixtureZ, pool.probeFromY,
+      pool.mesh.position.y - POOL_FLOOR_LIFT, this.probe, this.storeys, spread, this.home.get(pool) ?? null);
+    const centre = { x: at.cx, z: at.cz };
+    if (spread !== undefined) { this.placements.set(pool, at); pool.reshape(at.shape, at.radius, at.surfaceY === null ? undefined : at.surfaceY + POOL_FLOOR_LIFT, centre); n.spread = (n.spread ?? 0) + 1; return; }
     for (const k of at.notes) n[k] = (n[k] ?? 0) + 1;
     this.placements.set(pool, at);
     pool.setFloorless(at.floorless);   // the pool decides its visibility
-    pool.reshape(at.shape, at.radius, at.surfaceY === null ? undefined : at.surfaceY + POOL_FLOOR_LIFT);
+    pool.reshape(at.shape, at.radius, at.surfaceY === null ? undefined : at.surfaceY + POOL_FLOOR_LIFT, centre);
   }
 }
