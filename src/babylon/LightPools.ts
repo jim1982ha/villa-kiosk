@@ -150,11 +150,12 @@ export class LightPool {
    *  floor below the fixture, e.g. by raycast, and offset it clear of
    *  z-fighting — see LightPoolSet.build for that logic,
    *  shared with the strip-drop placement). `radius` — the pool's
-   *  world-space radius. `shape` — the world-space XZ polygon the pool should
-   *  cover, normally its room clipped to its own footprint; omitted (the load
+   *  world-space radius. `shape` — the world-space XZ polygons the pool should
+   *  cover, normally its room and the rooms open to it, each clipped to its
+   *  own footprint (lightPlacement); omitted (the load
    *  path, before calibration has produced any room polygons) it falls back to
    *  the plain footprint, which is what every pool looked like before 2.300.0. */
-  constructor(scene: Scene, name: string, floorPosition: Vector3, radius: number, shape?: Pt2[]) {
+  constructor(scene: Scene, name: string, floorPosition: Vector3, radius: number, shape?: Pt2[][]) {
     this.mesh = new Mesh(`lightPool_${name}`, scene);
     this.radius = radius;
     this.mesh.position.copyFrom(floorPosition);
@@ -199,7 +200,7 @@ export class LightPool {
    * the same fix, applied in one pass so a pool is never briefly correct in
    * shape and wrong in height.
    */
-  reshape(shape: Pt2[] | undefined, radius: number, floorY?: number, centre?: { x: number; z: number }): void {
+  reshape(shape: Pt2[][] | undefined, radius: number, floorY?: number, centre?: { x: number; z: number }): void {
     this.radius = radius;
     if (floorY !== undefined) this.mesh.position.y = floorY;
     if (centre) { this.mesh.position.x = centre.x; this.mesh.position.z = centre.z; }
@@ -218,22 +219,27 @@ export class LightPool {
    * pool, where the old `CreateDisc` had to spend 32 segments carrying that
    * shape in geometry — and could not be clipped to a room at all.
    */
-  private applyShape(shape: Pt2[] | undefined, radius: number): void {
-    const pts = shape && shape.length >= 3
-      ? shape
-      : poolFootprint(this.mesh.position.x, this.mesh.position.z, radius);
-    const tris = earClipTriangulate(pts);
-    if (tris.length === 0) return; // degenerate sliver — keep whatever it had
-
+  private applyShape(shape: Pt2[][] | undefined, radius: number): void {
+    // One piece per room it lies in (its own and those open to it,
+    // lightPlacement), all in one mesh: one draw, one material.
+    const pieces = shape?.filter((p) => p.length >= 3).length
+      ? shape.filter((p) => p.length >= 3)
+      : [poolFootprint(this.mesh.position.x, this.mesh.position.z, radius)];
     const cx = this.mesh.position.x, cz = this.mesh.position.z;
     const positions: number[] = [];
     const uvs: number[] = [];
-    for (const p of pts) {
-      positions.push(p.x - cx, 0, p.z - cz);
-      uvs.push((p.x - cx) / (2 * radius) + 0.5, (p.z - cz) / (2 * radius) + 0.5);
-    }
     const indices: number[] = [];
-    for (const [a, b, c] of tris) indices.push(a, b, c);
+    for (const pts of pieces) {
+      const tris = earClipTriangulate(pts);
+      if (tris.length === 0) continue; // degenerate sliver
+      const base = positions.length / 3;
+      for (const p of pts) {
+        positions.push(p.x - cx, 0, p.z - cz);
+        uvs.push((p.x - cx) / (2 * radius) + 0.5, (p.z - cz) / (2 * radius) + 0.5);
+      }
+      for (const [a, b, c] of tris) indices.push(base + a, base + b, base + c);
+    }
+    if (indices.length === 0) return; // nothing but slivers — keep whatever it had
 
     const vd = new VertexData();
     vd.positions = positions;

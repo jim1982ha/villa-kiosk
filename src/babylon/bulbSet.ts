@@ -202,7 +202,7 @@ export class BulbSet {
     // Each lamp lights its own room and the rooms open to it — only where the
     // glow is (a lightmapped villa).
     this.rooms = new LampRooms<PoolRoom>({
-      place: (plan) => this.pools.setRooms(plan),
+      place: (plan, openTo) => this.pools.setRooms(plan, openTo),
       walls: () => (this.glowMeshes.length ? structureTriangles(scene) : null),
       draw: (mask) => lampGlowFor(scene).setMask(scene, mask),
       log,

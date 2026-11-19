@@ -25,8 +25,9 @@ type LampRoom = { name: string; pts: Pt2[]; floorY: number; storey?: number };
 
 export interface LampRoomsPorts<R extends LampRoom> {
   /** Every lamp takes its place, its room among it, under the plan
-   *  (LightPoolSet.setRooms). */
-  place(plan: Storeys<R>): void;
+   *  (LightPoolSet.setRooms); `openTo`: the rooms open to a room, the map's
+   *  answer (none without a map). */
+  place(plan: Storeys<R>, openTo: (room: R) => readonly R[]): void;
   /** The model's opaque walls, read only when no stored answer exists; null
    *  where there is no glow to hold (an unlightmapped villa): no map. */
   walls(): TriangleVisitor | null;
@@ -66,9 +67,12 @@ export class LampRooms<R extends LampRoom> {
     if (!this.stale) return;
     this.stale = false;
     const plan = this.plan?.rooms.length ? this.plan : null;
-    if (plan) this.ports.place(plan);
+    // The map first: which rooms are open to each other is the lamps'
+    // answer too (a floor pool continues across an open border).
     const walls = plan ? this.ports.walls() : null;
     this.mask = plan && walls ? this.drawMap(plan, walls) : null;
+    const mask = this.mask;
+    if (plan) this.ports.place(plan, (room) => mask?.openTo(room) ?? []);
     this.ports.draw(this.mask);
   }
 

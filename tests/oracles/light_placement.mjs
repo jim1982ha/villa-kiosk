@@ -12,7 +12,7 @@
 import { register } from "node:module";
 register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
-const { placeLight } = await import("@/babylon/lightPlacement");
+const { placeLight, LIGHT_POOL_RADIUS } = await import("@/babylon/lightPlacement");
 const { Storeys } = await import("@/babylon/storeys");
 const { GLOW_TERM, POOL_CENTRE } = await import("@/babylon/lampGlow");
 const { pointInPolygon } = await import("@/utils/geometry");
@@ -126,7 +126,7 @@ console.log("\n  walls:");
   const hall = P.rooms.find((r) => r.name === "Hall");
   // A point ON the wall line counts as inside; nudged 1 mm in to ask.
   const inHall = (q) => pointInPolygon(Math.min(q.x, 10 - 1e-3), q.z, hall.pts);
-  ck("a lamp beside a wall: its patch stops at the wall line", !!w.at.shape && w.at.shape.every((q) => q.x <= 10 + 1e-9 && inHall(q)), w.at.shape);
+  ck("a lamp beside a wall: its patch stops at the wall line", !!w.at.shape && w.at.shape.flat().every((q) => q.x <= 10 + 1e-9 && inHall(q)), w.at.shape);
   const far = lit([w], [10.1, 1.0, 5], [1, 0, 0]);
   const near = lit([w], [9.95, 1.0, 5], [-1, 0, 0]);
   ck("  ...the far face of that wall, in the next room, gets nothing; the near face is lit", far === 0 && near > 0.1, { far, near });
@@ -147,13 +147,34 @@ console.log("\n  an outdoor light over a path along the house wall, alone in its
   const alone = placeLight(6, -1.2, 2.4, 0.06, path, P, Infinity);
   const crowded = placeLight(6, -1.2, 2.4, 0.06, path, P, 1.0);
   ck("the path under it and along it is lit as far as its light reaches the hedge beside it (2.5 m along: lit)",
-     patchAt(alone, 2.5) > 0.1 && pointInPolygon(8.5, -1.2, alone.shape), { radius: alone.radius, at25: patchAt(alone, 2.5) });
+     patchAt(alone, 2.5) > 0.1 && alone.shape.some((piece) => pointInPolygon(8.5, -1.2, piece)), { radius: alone.radius, at25: patchAt(alone, 2.5) });
   const plant = lit([{ x: 6, y: 2.4, z: -1.2, at: alone }], [8.5, 1.2, -1.2], [0, 1, 0]);
   ck("  ...where a hedge top beside the path (1.2 m), as far out, is lit by the same lamp", plant > 0.05, plant);
-  ck("  ...its patch stops at the house wall: nothing on the far side", alone.shape.every((q) => q.z <= 1e-9), alone.shape);
+  ck("  ...its patch stops at the house wall: nothing on the far side", alone.shape.flat().every((q) => q.z <= 1e-9), alone.shape);
   ck("a lamp among others in its room keeps its small patch (their patches overlap already)", crowded.radius < 2, crowded.radius);
   const inside = placeLight(6, 3, 2.4, 0, probe(() => 0), P, Infinity);
-  ck("  ...and a lamp alone in the house beyond the wall spreads only inside the house", inside.shape.every((q) => q.z >= -1e-9), inside.shape);
+  ck("  ...and a lamp alone in the house beyond the wall spreads only inside the house", inside.shape.flat().every((q) => q.z >= -1e-9), inside.shape);
+}
+
+console.log("\n  two rooms with no wall between them (an open border, the room map's answer):");
+{
+  const P = plan(0);
+  const hall = P.rooms.find((r) => r.name === "Hall"), next = P.rooms.find((r) => r.name === "Next");
+  const openTo = (r) => (r === hall ? [next] : r === next ? [hall] : []);
+  const o = placeLight(9, 5, 2.8, 0, probe(), P, LIGHT_POOL_RADIUS, null, openTo);
+  const reach = o.shape.flat().reduce((m, q) => Math.max(m, q.x), -Infinity);
+  ck("a lamp a metre from the border: its patch goes on into the next room, as far as it reaches (no line at the border)",
+     o.room === hall && reach > 10.5 && o.shape.some((piece) => pointInPolygon(10.4, 5, piece)), { reach, pieces: o.shape.length });
+  ck("  ...centred under the lamp, never pushed off the open edge", o.cx === 9 && o.cz === 5, { cx: o.cx, cz: o.cz });
+  const e = placeLight(9.9, 5, 2.8, 0, probe(), P, LIGHT_POOL_RADIUS, null, openTo);
+  ck("  ...a lamp right on that border stays where it is too", e.cx === 9.9 && e.shape.some((piece) => pointInPolygon(10.3, 5, piece)), { cx: e.cx });
+  const w = placeLight(9, 5, 2.8, 0, probe(), P);
+  ck("the same lamp with a wall on that border: its patch stops at the wall", w.shape.flat().every((q) => q.x <= 10 + 1e-9), w.shape);
+  const st = placeLight(3, 2.5, 2.8, 0, probe(), P, LIGHT_POOL_RADIUS, null,
+    (r) => (r === hall ? [P.rooms.find((q) => q.name === "Staircase" && q.storey === 1)] : []));
+  ck("a room open to the stairwell: its lamp's patch does not float over the flight", st.shape.flat().every((q) => q.z >= 2 - 1e-9), st.shape);
+  const up = placeLight(9, 5, 2.8, 0, probe(), P, LIGHT_POOL_RADIUS, null, (r) => (r === hall ? [P.rooms.find((q) => q.name === "Bedroom")] : []));
+  ck("never into a room on another storey", up.shape.flat().every((q) => q.x <= 10 + 1e-9), up.shape);
 }
 
 done("✅ a light lights its own room, and a stair light its steps");

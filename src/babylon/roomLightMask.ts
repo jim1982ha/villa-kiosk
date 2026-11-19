@@ -83,6 +83,9 @@ export interface RoomLightMask<R> {
   cell: number;
   /** The rooms each room's lamps may light (its own and those open to it). */
   bitsOf(room: R | null | undefined): LampRoomBits | undefined;
+  /** The rooms open to this one, the same answer as bitsOf: its floor pools
+   *  continue into them (lightPlacement). */
+  openTo(room: R): readonly R[];
   /** The open borders, as `name|name` keys. */
   open: string[];
   /** What to keep for the next load (RoomLightKnown). */
@@ -194,16 +197,20 @@ export function buildRoomLightMask<R extends MaskRoom>(
     : [];
   const openSet = new Set(open);
   const lampBits = new Map<R, LampRoomBits>();
+  const openRooms = new Map<R, R[]>();
   for (const [r, { band, bit }] of bitOf) {
     let mask = (1 << bit) >>> 0;
-    for (const [o, ob] of bitOf) if (ob.band === band && o !== r && openSet.has(borderKey(r.name, o.name))) mask = (mask | (1 << ob.bit)) >>> 0;
+    const opened: R[] = [];
+    for (const [o, ob] of bitOf) if (ob.band === band && o !== r && openSet.has(borderKey(r.name, o.name))) { mask = (mask | (1 << ob.bit)) >>> 0; opened.push(o); }
     lampBits.set(r, { band, lo: mask & 0xffffff, hi: mask >>> 24 });
+    openRooms.set(r, opened);
   }
   const data = new Uint8Array(words.buffer.slice(0));   // little-endian: byte 0 = bits 0..7
   return {
     data, width: grid.width, rows: grid.rows, bands: storeyKeys.length,
     originX: grid.originX, originZ: grid.originZ, cell,
     bitsOf: (room) => (room ? lampBits.get(room) : undefined),
+    openTo: (room) => openRooms.get(room) ?? [],
     open,
     known: { open, walls: walls.map(toRuns) },
   };
