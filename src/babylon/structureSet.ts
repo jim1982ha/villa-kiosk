@@ -155,12 +155,16 @@ function horizontalAreaInBand(
  * not reaching — the surface where a bled alpha means you look through it at
  * the sky. A rule that must apply to a mesh classified early has to be callable
  * from where that classification happens.
+ *
+ * A cut-out picture (glTF MASK: hanging vines, a leaf card, a net) is left
+ * alone too: its holes are its picture's alpha, not a bleed, and forcing it
+ * opaque turned the vines into a solid green panel (owner, 2026-11-19).
  */
 
 
 function forceOpaque(m: AbstractMesh): void {
   const mat = m.material;
-  if (!mat || mat.alpha <= 0.5) return;
+  if (!mat || mat.alpha <= 0.5 || mat.transparencyMode === Material.MATERIAL_ALPHATEST) return;
   mat.alpha = 1;
   mat.transparencyMode = Material.MATERIAL_OPAQUE;
   if (mat instanceof PBRMaterial) {
