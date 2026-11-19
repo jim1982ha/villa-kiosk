@@ -132,8 +132,9 @@
    the card on a phone */
 .photo-tile-strongest { --tile-w: 248px; max-width: 100%; }
 .photo-tile figcaption { font-size: var(--text-2xs); color: var(--text-secondary); text-align: center; overflow-wrap: anywhere; }
-/* in a notice: centred over the words (owner, 2026-10-29), smaller; one photo alone as it was (240px by 160px) */
-.vesta-notice .photo-row { justify-content: center; margin-bottom: 6px; }
+/* in a notice: centred, under the words (owner, 2026-11-19: title and description at the top; they were over them,
+   2026-10-29), smaller; one photo alone as it was (240px by 160px) */
+.vesta-notice .photo-row { justify-content: center; margin-top: 6px; }
 .vesta-notice .photo-tile, .vesta-notice .photo-tile-strongest { --tile-w: 88px; }
 .vesta-notice .photo-tile:only-child { max-width: min(240px, 100%); }
 .vesta-notice .photo-tile:only-child .photo-tile-open img { max-height: 160px; object-fit: cover; }
