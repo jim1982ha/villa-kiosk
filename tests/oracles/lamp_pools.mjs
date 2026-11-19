@@ -28,6 +28,7 @@ const { Scene } = await import("@babylonjs/core/scene.js");
 const { MeshBuilder } = await import("@babylonjs/core/Meshes/meshBuilder.js");
 const { TransformNode } = await import("@babylonjs/core/Meshes/transformNode.js");
 const { Color3 } = await import("@babylonjs/core/Maths/math.color.js");
+const { PBRMaterial } = await import("@babylonjs/core/Materials/PBR/pbrMaterial.js");
 const { BulbSet } = await import("@/babylon/bulbSet");
 const { Storeys } = await import("@/babylon/storeys");
 const { pointInPolygon } = await import("@/utils/geometry");
@@ -125,5 +126,38 @@ ck("  ...and its light still comes from the lamp itself", !!farLamp && Math.abs(
 const nearPool = pools.find((m) => m.name.includes("<light>_c"));
 ck("the near wall light, 40 cm in from its wall, keeps its patch under it",
    !!nearPool && Math.abs(nearPool.position.x - 0.4) < 1e-6, nearPool?.position);
+
+console.log("\n  where rooms meet with no wall, and where a wall with a doorway parts them (the room map reads the walls):");
+{
+  // Three rooms in a row: <room_a> and <room_b> share a 4 m border with no
+  // wall; a wall with a 0.9 m doorway parts <room_b> from <room_c>.
+  const sc = new Scene(new NullEngine());
+  const slab = MeshBuilder.CreateBox("slab", { width: 30, height: 0.1, depth: 10 }, sc);
+  slab.position.set(6, -0.05, 2);
+  slab.material = new PBRMaterial("slab", sc);
+  for (const [z0, z1] of [[0, 1.5], [2.4, 4]]) {
+    const w = MeshBuilder.CreateBox("wall", { width: 0.2, height: 3, depth: z1 - z0 }, sc);
+    w.position.set(8.1, 1.5, (z0 + z1) / 2);
+    w.metadata = { gltf: { extras: { vk_role: "structure" } } };
+    w.material = new PBRMaterial("wall", sc);
+  }
+  const a = sphere(sc, "<a>_lamp", 3.2, 2.5, 2), b = sphere(sc, "<b>_lamp", 7.3, 2.5, 2);
+  const set = new BulbSet(sc, floor, () => [{ meshes: [a], reading: on }, { meshes: [b], reading: on }]);
+  for (const m of [a, b]) set.addFixture(m, true);
+  set.mergeStrips([[a], [b]]);
+  set.glowEverythingLit();
+  set.setRooms(new Storeys([room("<room_a>", sq(0, 4, 0, 4)), room("<room_b>", sq(4, 8, 0, 4)), room("<room_c>", sq(8.2, 12, 0, 4))]));
+  set.resync();
+  set.syncGlow();
+  const xsOf = (lamp) => {
+    const pool = sc.meshes.find((m) => m.name.startsWith("lightPool_") && m.name.includes(lamp));
+    const v = pool.getVerticesData("position");
+    return Array.from({ length: v.length / 3 }, (_, i) => v[3 * i] + pool.position.x);
+  };
+  const ax = xsOf("<a>_lamp"), bx = xsOf("<b>_lamp");
+  ck("a lamp 0.8 m from the open border: its patch goes on into the next room, no line where the rooms meet",
+     Math.max(...ax) > 4.5, Math.max(...ax));
+  ck("a lamp 0.7 m from the wall with a doorway: its patch stops at the wall, the doorway too", Math.max(...bx) <= 8 + 1e-6, Math.max(...bx));
+}
 
 done("✅ one lamp, one patch, under it and in its own room");

@@ -109,9 +109,10 @@ export interface LightPlacement<R extends PlacementRoom = PlacementRoom> {
    *  edge moved POOL_EDGE_M into its room (edgeRoom). */
   cx: number;
   cz: number;
-  /** The pool's reach, and its room-clipped outline when it has a room. */
+  /** The pool's reach, and when it has a room its outline: one piece in its
+   *  room and one in each room open to it, each cut to the reach. */
   radius: number;
-  shape: Pt2[] | undefined;
+  shape: Pt2[][] | undefined;
   /** How each answer was reached — the load log's counters. */
   notes: string[];
 }
@@ -130,6 +131,9 @@ export function placeLight<R extends PlacementRoom>(
   /** The room the other lamps of its light stand in (LightPoolSet), the
    *  answer for one on that room's edge. */
   home: R | null = null,
+  /** The rooms open to a room: no wall along their border, the room map's
+   *  answer (roomLightMask). Left out, a patch stays in its own room. */
+  openTo: (room: R) => readonly R[] = () => [],
 ): LightPlacement<R> {
   const notes: string[] = [];
   // PROBE FIRST, then resolve the room — the order is the correctness
@@ -186,7 +190,7 @@ export function placeLight<R extends PlacementRoom>(
   // stairwell, whose rules are above and below.
   let cx = x, cz = z;
   if (!flight && surfaceY !== null && !(room && isStairwell(room.name))) {
-    const edge = edgeRoom(x, z, surfaceY, room, storeys, home);
+    const edge = edgeRoom(x, z, surfaceY, room, storeys, home, openTo);
     if (edge) { room = edge.room; cx = edge.x; cz = edge.z; notes.push("edge"); }
   }
   // ⚠️ A STAIRCASE HAS NO FLOOR TO LAY A POOL ON (2.496.116). A disc at the
@@ -230,11 +234,23 @@ export function placeLight<R extends PlacementRoom>(
   const drop = surfaceY !== null && !floorless ? fromY - surfaceY : null;
   const reach = drop !== null && drop < BULB_REACH_M ? Math.sqrt(BULB_REACH_M * BULB_REACH_M - drop * drop) : 0;
   let radius = Math.max(LIGHT_POOL_RADIUS, Math.min(reach, spreadM));
-  let shape: Pt2[] | undefined;
+  let shape: Pt2[][] | undefined;
   if (room) {
     // Room = SUBJECT (may be L-shaped), footprint = CLIP (convex).
-    const cut = clipPolygonToConvex(room.pts, poolFootprint(cx, cz, radius));
-    if (cut.length >= 3) { shape = cut; notes.push("clipped"); } else notes.push("whole");
+    //
+    // ⚠️ AND EVERY ROOM OPEN TO IT (owner, 2026-11-20: the terrace light
+    // stopped at a straight line across the deck, where the terrace meets the
+    // patio with no wall between). A room's outline is a line on a plan, not
+    // a wall: where the room map finds no wall along a border (the same
+    // answer the furniture light reads), the patch goes on into the next
+    // room. Not into a stairwell (no disc on a flight), nor onto a floor at
+    // another height, which would float or sink under it.
+    const footprint = poolFootprint(cx, cz, radius);
+    const opened = flight || floorless ? [] : openTo(room).filter((r) => !isStairwell(r.name)
+      && storeys.storeyOf(r) === storeyOfRoom && Math.abs(r.floorY - room.floorY) <= POOL_RAISED_M);
+    const pieces = [room, ...opened]
+      .map((r) => clipPolygonToConvex(r.pts, footprint)).filter((cut) => cut.length >= 3);
+    if (pieces.length) { shape = pieces; notes.push("clipped"); } else notes.push("whole");
   } else {
     // Outside every polygon on this storey: bound the radius by the nearest
     // SAME-STOREY room boundary, so it still cannot cross a wall. Measuring
@@ -268,6 +284,7 @@ export function placeLight<R extends PlacementRoom>(
  */
 function edgeRoom<R extends PlacementRoom>(
   x: number, z: number, surfaceY: number, room: R | null, storeys: Storeys<R>, home: R | null,
+  openTo: (room: R) => readonly R[],
 ): { room: R; x: number; z: number } | null {
   const near = storeys.roomsOn(storeys.storeyStandingOn(surfaceY))
     .filter((r) => !isStairwell(r.name) && (r === room || distanceToPolygonBoundary(x, z, r.pts) < POOL_EDGE_M));
@@ -277,7 +294,13 @@ function edgeRoom<R extends PlacementRoom>(
     : room && near.includes(room) ? room
     : near.reduce<R | null>((best, r) => (!best || area(r) > area(best) ? r : best), null);
   if (!pick) return null;
-  return { room: pick, ...intoRoom(x, z, pick.pts, POOL_EDGE_M) };
+  // An edge with no wall along it is no edge: the patch goes on across it
+  // (placeLight), so it stays under the lamp. Only a lamp by a room behind a
+  // wall, or in a wall, has its patch laid into its own room.
+  const open = new Set(openTo(pick));
+  const walled = near.some((r) => r !== pick && !open.has(r))
+    || ![pick, ...open].some((r) => pointInPolygon(x, z, r.pts));
+  return { room: pick, ...(walled ? intoRoom(x, z, pick.pts, POOL_EDGE_M) : { x, z }) };
 }
 
 /** (x, z) moved to at least `depth` inside the polygon, along the line from

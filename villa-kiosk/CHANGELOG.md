@@ -1,3 +1,9 @@
+## 2.496.845
+
+- **Lamp light crosses into an area with no wall in between.** Where the plan draws two areas side by side with no
+  wall (a terrace and its patio, a kitchen and the living room), a lamp's light on the floor stopped at a straight
+  line between them. It now carries on into the next area, and still stops at walls and doorways.
+
 ## 2.496.844
 
 - **Lamp light lands where the lamp is.** The villa's rooms were placed up to 40 cm off their real walls, so a lamp's

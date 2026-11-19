@@ -154,6 +154,9 @@ export class LightPoolSet {
   private groupOf = new Map<number, number>();
   /** The room the other lamps of its light stand in, per pool (homes). */
   private home = new Map<LightPool, PoolRoom>();
+  /** The rooms open to a room (the room map's answer, lampRooms.ts): a pool
+   *  continues into them. */
+  private openTo: (room: PoolRoom) => readonly PoolRoom[] = () => [];
   /** Bumped by anything that changes what `glowLamps` would answer. */
   version = 0;
   private strength = 1;
@@ -211,7 +214,8 @@ export class LightPoolSet {
    * its real floor height. Called by lampRooms.ts once per change of either,
    * before the next frame — never on a state change.
    */
-  setRooms(plan: Storeys<PoolRoom>): void {
+  setRooms(plan: Storeys<PoolRoom>, openTo: (room: PoolRoom) => readonly PoolRoom[] = () => []): void {
+    this.openTo = openTo;
     // The plan SceneManager built — the same object the badges and the
     // camera read, never one of its own.
     this.storeys = plan;
@@ -417,7 +421,7 @@ export class LightPoolSet {
 
   private reshapeOne(pool: LightPool, n: Record<string, number>, spread?: number): void {
     const at = placeLight(pool.fixtureX, pool.fixtureZ, pool.probeFromY,
-      pool.mesh.position.y - POOL_FLOOR_LIFT, this.probe, this.storeys, spread, this.home.get(pool) ?? null);
+      pool.mesh.position.y - POOL_FLOOR_LIFT, this.probe, this.storeys, spread, this.home.get(pool) ?? null, this.openTo);
     const centre = { x: at.cx, z: at.cz };
     if (spread !== undefined) { this.placements.set(pool, at); pool.reshape(at.shape, at.radius, at.surfaceY === null ? undefined : at.surfaceY + POOL_FLOOR_LIFT, centre); n.spread = (n.spread ?? 0) + 1; return; }
     for (const k of at.notes) n[k] = (n[k] ?? 0) + 1;
