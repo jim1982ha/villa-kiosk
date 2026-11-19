@@ -1,3 +1,10 @@
+## 2.496.846
+
+- **Lamp light reaches the lawn beside a terrace.** The light on the floor stopped in a straight line where a deck
+  meets the garden around it. It now carries on over the grass.
+- **Every room is drawn whole when it is highlighted.** A room whose outline repeats a corner, or has a corner in the
+  middle of a straight wall, lost part of its highlight (a small room could lose almost all of it).
+
 ## 2.496.845
 
 - **Lamp light crosses into an area with no wall in between.** Where the plan draws two areas side by side with no

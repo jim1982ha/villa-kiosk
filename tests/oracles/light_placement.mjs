@@ -15,7 +15,7 @@ import { ck, done } from "../consistency/check.mjs";
 const { placeLight, LIGHT_POOL_RADIUS } = await import("@/babylon/lightPlacement");
 const { Storeys } = await import("@/babylon/storeys");
 const { GLOW_TERM, POOL_CENTRE } = await import("@/babylon/lampGlow");
-const { pointInPolygon } = await import("@/utils/geometry");
+const { pointInPolygon, earClipTriangulate } = await import("@/utils/geometry");
 const { POOL_ALPHA_STOPS } = await import("@/babylon/LightPools");
 /** What a patch gives the floor at distance d from its centre (its gradient). */
 const patchAt = (at, d) => {
@@ -175,6 +175,52 @@ console.log("\n  two rooms with no wall between them (an open border, the room m
   ck("a room open to the stairwell: its lamp's patch does not float over the flight", st.shape.flat().every((q) => q.z >= 2 - 1e-9), st.shape);
   const up = placeLight(9, 5, 2.8, 0, probe(), P, LIGHT_POOL_RADIUS, null, (r) => (r === hall ? [P.rooms.find((q) => q.name === "Bedroom")] : []));
   ck("never into a room on another storey", up.shape.flat().every((q) => q.x <= 10 + 1e-9), up.shape);
+}
+
+console.log("\n  a terrace set into a garden drawn round it (the garden's outline has the terrace as a notch), no wall between:");
+{
+  // Terrace x 0..6.6, z -2..4 against the house (z < -2); the garden wraps its
+  // three open sides. The lamp hangs mid-terrace, 0.4 m from its front edge:
+  // its reach crosses that edge only.
+  const terrace = room("Terrace", 0, 1, sq(0, 6.6, -2, 4));
+  const garden = room("Garden", 0, 1, [{ x: -6, z: -2 }, { x: 0, z: -2 }, { x: 0, z: 4 }, { x: 6.6, z: 4 }, { x: 6.6, z: -2 },
+    { x: 12, z: -2 }, { x: 12, z: 10 }, { x: -6, z: 10 }]);
+  const P = new Storeys([terrace, garden]);
+  const openTo = (r) => (r === terrace ? [garden] : r === garden ? [terrace] : []);
+  const LX = 3.3, LZ = 3.6;
+  const t = placeLight(LX, LZ, 2.2, 0, probe(() => 0), P, LIGHT_POOL_RADIUS, null, openTo);
+  // Every bit of floor within the lamp's reach, terrace or garden, is under its patch, exactly once: as
+  // drawn, each piece in triangles (LightPools.applyShape).
+  const drawn = t.shape.flatMap((piece) => earClipTriangulate(piece).map(([a, b, c]) => [piece[a], piece[b], piece[c]]));
+  let missing = 0, twice = 0, n = 0;
+  for (let x = LX - t.radius; x <= LX + t.radius; x += 0.1) for (let z = LZ - t.radius; z <= LZ + t.radius; z += 0.1) {
+    if (Math.hypot(x - LX, z - LZ) > t.radius * 0.95) continue;
+    n++;
+    const k = drawn.filter((tri) => pointInPolygon(x, z, tri)).length;
+    if (k === 0) missing++; else if (k > 1) twice++;
+  }
+  ck("a lamp 0.4 m from the terrace's front edge: its light goes on over the lawn beyond, none missing, none doubled",
+     missing <= n * 0.01 && twice <= n * 0.01, { points: n, missing, twice });
+}
+
+console.log("\n  a room outline drawn with a repeated corner and points along a straight wall:");
+{
+  // An L-shaped room as a drawing tool traces it: (4, 0) twice, (2, 0), (4, 1.5) and (0, 2.5) on straight runs.
+  const L = room("L", 0, 1, [{ x: 0, z: 0 }, { x: 2, z: 0 }, { x: 4, z: 0 }, { x: 4, z: 0 }, { x: 4, z: 1.5 }, { x: 4, z: 3 },
+    { x: 2, z: 3 }, { x: 2, z: 5 }, { x: 0, z: 5 }, { x: 0, z: 2.5 }]);
+  const P = new Storeys([L]);
+  const c = placeLight(2, 2, 2.6, 0, probe(() => 0), P, 4);
+  const drawn = c.shape.flatMap((piece) => earClipTriangulate(piece).map(([a, b, cc]) => [piece[a], piece[b], piece[cc]]));
+  let missing = 0, n = 0;
+  for (let x = 0.05; x < 4; x += 0.1) for (let z = 0.05; z < 5; z += 0.1) {
+    if (!pointInPolygon(x, z, L.pts) || Math.hypot(x - 2, z - 2) > c.radius * 0.95) continue;
+    n++;
+    if (!drawn.some((tri) => pointInPolygon(x, z, tri))) missing++;
+  }
+  ck("its lamp's patch covers all of the floor it reaches", missing === 0 && n > 100, { points: n, missing });
+  const whole = earClipTriangulate(L.pts);
+  const area = whole.reduce((a, [i, j, k]) => a + Math.abs((L.pts[j].x - L.pts[i].x) * (L.pts[k].z - L.pts[i].z) - (L.pts[k].x - L.pts[i].x) * (L.pts[j].z - L.pts[i].z)) / 2, 0);
+  ck("  ...and the room's highlight, drawn from the same triangles, fills it", Math.abs(area - 16) < 1e-9, area);
 }
 
 done("✅ a light lights its own room, and a stair light its steps");

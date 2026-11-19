@@ -80,6 +80,20 @@ export function earClipTriangulate(poly: Pt2[]): [number, number, number][] {
   const ccw = signedArea2(poly) > 0;
   const remaining = poly.map((_, i) => i);
   if (!ccw) remaining.reverse();
+  // ⚠️ NO CORNER THAT IS NOT A CORNER (2026-11-20, measured on the villa's
+  // plan): an outline traced in a drawing tool repeats a point, or puts one on
+  // a straight run. Such a vertex is never an ear and blocks its neighbours'
+  // test (it lies on their triangle's edge), so the clipping stopped early: a
+  // garden drawn round the house lost 16 m², an outdoor bath half its floor,
+  // a storeroom nearly all of it. Dropping them changes no area.
+  const size = Math.sqrt(Math.abs(signedArea2(poly))) || 1;
+  for (let i = 0; remaining.length > 3 && i < remaining.length;) {
+    const a = poly[remaining[(i - 1 + remaining.length) % remaining.length]];
+    const b = poly[remaining[i]];
+    const c = poly[remaining[(i + 1) % remaining.length]];
+    const same = Math.hypot(b.x - c.x, b.z - c.z) <= 1e-9 * size;
+    if (same || Math.abs(cross2(a, b, c)) <= 1e-12 * size * size) { remaining.splice(i, 1); i = Math.max(0, i - 1); } else i++;
+  }
 
   const tris: [number, number, number][] = [];
   let guard = 0;

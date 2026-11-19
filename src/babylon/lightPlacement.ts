@@ -15,7 +15,7 @@
 // PURE: the floor probe is a port (FloorProbe in the app, a script in the
 // oracle), the plan is Storeys. tests/oracles/light_placement.mjs.
 
-import { clipPolygonToConvex, distanceToPolygonBoundary, pointInPolygon, regularPolygon, type Pt2 } from "@/utils/geometry";
+import { clipPolygonToConvex, distanceToPolygonBoundary, earClipTriangulate, pointInPolygon, regularPolygon, type Pt2 } from "@/utils/geometry";
 import { isStairwell, type Storeys } from "./storeys";
 
 /** How far a bulb's light reaches before it has faded out: the furniture
@@ -109,8 +109,8 @@ export interface LightPlacement<R extends PlacementRoom = PlacementRoom> {
    *  edge moved POOL_EDGE_M into its room (edgeRoom). */
   cx: number;
   cz: number;
-  /** The pool's reach, and when it has a room its outline: one piece in its
-   *  room and one in each room open to it, each cut to the reach. */
+  /** The pool's reach, and when it has a room its outline: convex pieces
+   *  covering its room and each room open to it, cut to the reach. */
   radius: number;
   shape: Pt2[][] | undefined;
   /** How each answer was reached — the load log's counters. */
@@ -248,8 +248,7 @@ export function placeLight<R extends PlacementRoom>(
     const footprint = poolFootprint(cx, cz, radius);
     const opened = flight || floorless ? [] : openTo(room).filter((r) => !isStairwell(r.name)
       && storeys.storeyOf(r) === storeyOfRoom && Math.abs(r.floorY - room.floorY) <= POOL_RAISED_M);
-    const pieces = [room, ...opened]
-      .map((r) => clipPolygonToConvex(r.pts, footprint)).filter((cut) => cut.length >= 3);
+    const pieces = [room, ...opened].flatMap((r) => roomInside(r.pts, footprint));
     if (pieces.length) { shape = pieces; notes.push("clipped"); } else notes.push("whole");
   } else {
     // Outside every polygon on this storey: bound the radius by the nearest
@@ -328,6 +327,30 @@ function intoRoom(x: number, z: number, poly: Pt2[], depth: number): { x: number
   }
   const tx = nx + (ux / len) * depth, tz = nz + (uz / len) * depth;
   return pointInPolygon(tx, tz, poly) ? { x: tx, z: tz } : { x, z };
+}
+
+/** Each room outline's triangles, kept: a room is cut once per pool. */
+const roomTriangles = new WeakMap<Pt2[], Pt2[][]>();
+
+/**
+ * The part of a room inside a convex region, as convex pieces: the room's own
+ * triangles, each cut to the region.
+ *
+ * ⚠️ NOT THE ROOM CUT WHOLE (owner, 2026-11-20: the terrace's light stopped in
+ * a hard line at the deck's edge, though the lawn beyond is open to it).
+ * Cutting a concave outline to a convex region in one pass returns its parts
+ * joined by zero-width seams along the region's edge; a garden drawn round
+ * the house, with the terrace as a notch, came back as such a ring, and the
+ * triangulation gave up on it partway: the lawn piece was mostly missing. A
+ * triangle cut to a convex region is always one convex piece.
+ */
+function roomInside(pts: Pt2[], clip: Pt2[]): Pt2[][] {
+  let tris = roomTriangles.get(pts);
+  if (!tris) {
+    tris = earClipTriangulate(pts).map(([a, b, c]) => [pts[a], pts[b], pts[c]]);
+    roomTriangles.set(pts, tris);
+  }
+  return tris.map((t) => clipPolygonToConvex(t, clip)).filter((cut) => cut.length >= 3 && polygonArea(cut) > 1e-6);
 }
 
 /** A polygon's area (shoelace). */
