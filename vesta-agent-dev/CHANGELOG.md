@@ -1,3 +1,9 @@
+## 0.12.530
+
+- **An alert closed by an older version while it was still there is under watch again.** At its next repeat, its card
+  (#208 tonight) no longer says "(closed)" and is no longer struck: it reads "(watch)", "✅ Not a problem …" and the
+  repeat times under it, until the villa says the problem is over.
+
 ## 0.12.529
 
 - **An alert marked "Not a problem" is never closed while it is still there.** The door left unlocked: its card stays
