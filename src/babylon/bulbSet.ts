@@ -185,6 +185,8 @@ export class BulbSet {
   private readonly readings: () => Iterable<BulbReading>;
   private readonly casters: () => readonly AbstractMesh[];
   private readonly rooms: LampRooms<PoolRoom>;
+  /** The closed curtains' meshes: walls for the room map. */
+  private closed: readonly AbstractMesh[] = [];
 
   constructor(
     scene: Scene,
@@ -204,6 +206,7 @@ export class BulbSet {
     this.rooms = new LampRooms<PoolRoom>({
       place: (plan, openTo) => this.pools.setRooms(plan, openTo),
       walls: () => (this.glowMeshes.length ? structureTriangles(scene) : null),
+      shut: () => (this.closed.length ? meshTriangles(this.closed) : null),
       draw: (mask) => lampGlowFor(scene).setMask(scene, mask),
       log,
     });
@@ -330,6 +333,14 @@ export class BulbSet {
     for (const gen of this.shadows.values()) gen.getShadowMap()?.resetRefreshCounter();
   }
 
+  /** The curtains now closed (their shown closed pose): lamp light stops at
+   *  them as at a wall. Only a change redraws the room map. */
+  setClosedCurtains(meshes: readonly AbstractMesh[]): void {
+    if (meshes.length === this.closed.length && meshes.every((m, i) => m === this.closed[i])) return;
+    this.closed = meshes;
+    this.rooms.curtainsMoved();
+  }
+
   /** Settings' "Light effect strength". Returns whether it changed. */
   setStrength(value: number): boolean {
     if (value === this.strength) return false;
@@ -399,6 +410,7 @@ export class BulbSet {
     this.lights.clear();
     this.pools.clear();
     this.glowMeshes = [];
+    this.closed = [];
     this.rooms.lampsChanged();
   }
 
@@ -487,14 +499,20 @@ export class BulbSet {
 /** The villa's opaque walls and slabs as world-space triangles: what the room
  *  map reads the walls from. Never a ceiling, glass, furniture or a helper. */
 function structureTriangles(scene: Scene): TriangleVisitor {
+  return meshTriangles(scene.meshes.filter((m) => {
+    if (isHelperMesh(m)) return false;
+    const role = structureRole(m);
+    if (!role.isStructure || role.isCeiling) return false;
+    const mat = m.material;
+    return !(mat && (mat.alpha < 1 || mat.transparencyMode === Material.MATERIAL_ALPHABLEND));
+  }));
+}
+
+/** These meshes as world-space triangles. */
+function meshTriangles(meshes: readonly AbstractMesh[]): TriangleVisitor {
   return (visit) => {
     const world = new Matrix();
-    for (const m of scene.meshes) {
-      if (isHelperMesh(m)) continue;
-      const role = structureRole(m);
-      if (!role.isStructure || role.isCeiling) continue;
-      const mat = m.material;
-      if (mat && (mat.alpha < 1 || mat.transparencyMode === Material.MATERIAL_ALPHABLEND)) continue;
+    for (const m of meshes) {
       const pos = m.getVerticesData(VertexBuffer.PositionKind);
       const idx = m.getIndices();
       if (!pos || !idx) continue;

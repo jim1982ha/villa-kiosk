@@ -2497,6 +2497,16 @@ export class EntityVisuals {
     return this.applyMeshVariant(entityId, resolved.order, desiredVariantWord(entity));
   }
 
+  /** Every cover's closed pose that is shown: a curtain drawn, a shutter down. */
+  private closedCovers(): AbstractMesh[] {
+    const out: AbstractMesh[] = [];
+    for (const [entityId, byWord] of this.meshVariants) {
+      if (!entityId.startsWith("cover.")) continue;
+      for (const m of byWord.get("closed") ?? []) if (m.isVisible) out.push(m);
+    }
+    return out;
+  }
+
   private applyMeshVariant(entityId: string, order: string[], active: string): boolean {
     const byWord = this.meshVariants.get(entityId);
     if (!byWord || byWord.size < 2) {
@@ -2535,7 +2545,8 @@ export class EntityVisuals {
     // be redrawn. Gated on an ACTUAL change: this function runs for every
     // state event on every pose-capable entity, and re-arming on a no-op
     // would put the per-frame cost straight back.
-    if (poseChanged) { this.bulbs.invalidateShadows(); this.requestRender(); }
+    // A closed cover is a wall for the lamps' light, an open one is not.
+    if (poseChanged) { this.bulbs.invalidateShadows(); this.bulbs.setClosedCurtains(this.closedCovers()); this.requestRender(); }
     // Read the flags straight back off the mesh objects (not just "what we
     // just set") so this answers "is __open ACTUALLY hidden right now" with
     // zero ambiguity — a mesh only renders if BOTH isVisible AND isEnabled()

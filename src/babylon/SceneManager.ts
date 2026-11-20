@@ -51,7 +51,7 @@ import { cameraBeamDir, solvePlanToWorld } from "./roomCalibration";
 import { WalkerView } from "./walkerView";
 import { rayTargets } from "./meshRoles";
 import type { PlanWorldPair } from "@/utils/affineFit";
-import { pointInPolygon, type Pt2, boundsXZ } from "@/utils/geometry";
+import { pointInPolygon, pointInside, type Pt2, boundsXZ } from "@/utils/geometry";
 import { devLog } from "@/utils/devLog";
 import { tapDebug } from "@/utils/tapDebug";
 import { loadOverviewView, saveOverviewView } from "@/utils/viewPrefs";
@@ -2061,7 +2061,8 @@ export class SceneManager {
       // three-storey villa had its top floor's rooms filed under the second.
       const floor = room.floor ?? 1;
       const c = polygonCentroid(room.points);
-      const wc = planToWorld(c.x, c.y);
+      // Its viewpoint and its floor: in the room, even where its middle is not.
+      const wc = pointInside(pts, planToWorld(c.x, c.y));
       const floorY = this.estimateFloorY(wc.x, wc.z, floor);
       // Surface-hug the glow ONLY for staircase rooms (matched by name). The
       // grid-probe raycasts the whole fused structure, so running it on every

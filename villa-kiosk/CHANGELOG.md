@@ -1,3 +1,11 @@
+## 2.496.847
+
+- **Lamp light reaches the garden on every device.** An area's floor height was measured at the middle of its
+  outline; a garden drawn round the house has its middle on the house, and read 2.1 m up. The lamps of a terrace then
+  stopped at the edge of the lawn. The height is now measured inside the area.
+- **A closed curtain stops the lamps' light.** With a curtain closed, the room's light no longer falls on the terrace
+  or garden through the window; open it, and the light passes again. Half-open counts as open.
+
 ## 2.496.846
 
 - **Lamp light reaches the lawn beside a terrace.** The light on the floor stopped in a straight line where a deck

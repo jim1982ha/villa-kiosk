@@ -31,6 +31,9 @@ export interface LampRoomsPorts<R extends LampRoom> {
   /** The model's opaque walls, read only when no stored answer exists; null
    *  where there is no glow to hold (an unlightmapped villa): no map. */
   walls(): TriangleVisitor | null;
+  /** The curtains that are closed, a wall each (roomLightMask.ts); null:
+   *  none. Read on every settle, never stored. */
+  shut(): TriangleVisitor | null;
   /** The map the shader reads (LampGlowState.setMask); null clears it. */
   draw(mask: RoomLightMask<R> | null): void;
   log?(line: string): void;
@@ -45,6 +48,9 @@ export class LampRooms<R extends LampRoom> {
    *  reading the walls off the model is the one slow step of the room map. */
   private readonly store = new ModelKeyedStore<RoomLightKnown>("vk.roomlight2.", /^vk\.roomlight\d*\./);
   private readonly ports: LampRoomsPorts<R>;
+  /** The last answer, kept here too: a curtain moving never reads the walls
+   *  again, whether or not this device can store. */
+  private last: { sig: string; known: RoomLightKnown } | null = null;
 
   constructor(ports: LampRoomsPorts<R>) { this.ports = ports; }
 
@@ -53,10 +59,14 @@ export class LampRooms<R extends LampRoom> {
 
   /** The versioned model URL the wall answers are kept under; null keeps
    *  nothing. */
-  setCacheKey(key: string | null): void { this.store.setModel(key); this.stale = true; }
+  setCacheKey(key: string | null): void { this.store.setModel(key); this.last = null; this.stale = true; }
 
   /** A lamp was added, the lamps were cleared, or the glow came or went. */
   lampsChanged(): void { this.stale = true; }
+
+  /** A curtain closed or opened: the map is drawn again with it, and the
+   *  lamps placed again (their pools stop at a closed curtain). */
+  curtainsMoved(): void { this.stale = true; }
 
   /**
    * Bring every lamp's room up to date: a no-op unless something changed.
@@ -91,9 +101,10 @@ export class LampRooms<R extends LampRoom> {
   private drawMap(plan: Storeys<R>, walls: TriangleVisitor): RoomLightMask<R> | null {
     const t0 = performance.now();
     const sig = plan.rooms.map((r) => `${r.name}@${r.storey ?? ""}:${r.pts.map((p) => `${p.x.toFixed(2)},${p.z.toFixed(2)}`).join(" ")}`).join("/");
-    const known = this.store.load().get(sig);
-    const mask = buildRoomLightMask(plan, known ? null : walls, known);
+    const known = this.last?.sig === sig ? this.last.known : this.store.load().get(sig);
+    const mask = buildRoomLightMask(plan, known ? null : walls, known, this.ports.shut());
     if (mask && !known) this.store.save(new Map([[sig, mask.known]]));
+    this.last = mask ? { sig, known: mask.known } : null;
     this.ports.log?.(`room light: ${mask ? `${mask.width}x${mask.rows}x${mask.bands}` : "none"} open=[${mask?.open.join(", ") ?? ""}]`
       + ` ${known ? "stored" : "walls read"} ${(performance.now() - t0).toFixed(0)}ms`);
     return mask;
