@@ -17,7 +17,8 @@ from datetime import datetime, timedelta, timezone
 from villa_timeline import TimelineVilla
 from helpers import STARTER_SKILLS, make_agent
 from kiosk_fake import FakeKiosk
-from vesta_agent.kiosk import Kiosk, holding, monitoring, retitled
+from vesta_agent.fault_card import write
+from vesta_agent.kiosk import Kiosk, retitled
 from vesta_shared.problems import Problems
 from vesta_shared.store import Store
 from vesta_agent.roster import Roster
@@ -429,17 +430,17 @@ def test_a_fault_waiting_to_close_tells_the_kiosk_when_and_stops_when_it_holds_a
 def test_a_fault_brought_up_to_date_is_written_once_whatever_it_needs():
     # architecture review scan 2, 2026-10-19: a new title, its tags and its Telegram lines were three reads and three
     # writes of the whole Facility record — three revisions, each one more chance a person's save is refused
-    from vesta_agent.kiosk import noted, retitled, tagged
+    from vesta_agent.kiosk import noted, retitled
     k, doc = kiosk_holding({"id": "va-1", "title": "Pump weak", "status": "open", "openedAt": "2026-10-19T00:00:00Z",
                             "photoIds": [], "updates": [{"at": "2026-10-19T00:00:00Z", "status": "open", "photoIds": [],
                                                         "title": "Pump weak"}]})
     rev = doc["rev"]
-    n = run(k.amend("va-1", retitled("Pump very weak"), tagged(5, "alert", "minutes"),
+    n = run(k.amend("va-1", retitled("Pump very weak"), write({"alertNumber": 5, "origin": "alert", "check": "minutes"}),
                     noted([{"at": "2026-10-19T00:05:00Z", "note": "Reminder sent (to: FM)"}])))
     t = ticket(doc)
     assert n == 3 and doc["rev"] == rev + 1, (n, doc["rev"])
     assert t["title"] == "Pump very weak" and t["alertNumber"] == 5 and t["updates"][-1]["kind"] == "noted"
-    assert run(k.amend("va-1", retitled("Pump very weak"), tagged(5, "alert", "minutes"))) == 0 and doc["rev"] == rev + 1
+    assert run(k.amend("va-1", retitled("Pump very weak"), write({"alertNumber": 5, "origin": "alert", "check": "minutes"}))) == 0 and doc["rev"] == rev + 1
 
 
 def test_what_a_person_did_to_a_fault_is_read_from_its_steps_alone():
@@ -466,33 +467,31 @@ def test_what_a_person_did_to_a_fault_is_read_from_its_steps_alone():
 def test_a_faults_note_follows_what_to_do_unless_a_person_wrote_it():
     # architecture review, 2026-10-19: the note was written at the fault's making only; the route's check edited, or a
     # finding's check rewritten by the night, never reached the Cockpit
-    from vesta_agent.kiosk import todo
     k, doc = kiosk_holding(
         {"id": "va-1", "title": "Pump offline", "status": "open", "note": "Check: the breaker", "updates": []},
         {"id": "va-2", "title": "Pump offline", "status": "open", "note": "Part ordered, due Monday", "updates": []},
         {"id": "va-3", "title": "Pump offline", "status": "open", "updates": []},
         {"id": "va-4", "title": "Pump offline", "status": "resolved", "note": "What to do: the breaker", "updates": []})
-    amend = todo("What to do: the breaker and the supply")
+    amend = write({"note": "What to do: the breaker and the supply"})
     assert run(k.amend("va-1", amend)) == 1 and ticket(doc, "va-1")["note"] == "What to do: the breaker and the supply"
     assert run(k.amend("va-1", amend)) == 0                                             # says it: nothing written
     assert run(k.amend("va-2", amend)) == 0 and ticket(doc, "va-2")["note"] == "Part ordered, due Monday"   # theirs
     assert run(k.amend("va-3", amend)) == 1 and ticket(doc, "va-3")["note"].startswith("What to do: ")
     assert run(k.amend("va-4", amend)) == 0                                             # closed: as it was
-    assert run(k.held_tickets())["va-1"]["note"] == "What to do: the breaker and the supply"
+    assert run(k.held_tickets())["va-1"]["todo"] == "What to do: the breaker and the supply"
 
 
 # ---------------------------------------------------------------------- 8 · the Kiosk-version gate, the only door
 def _every_write(k: Kiosk) -> dict:
     """Every write the agent makes to a fault, on Kiosk `k`: a new fault with every field, then each amend, a resolve
     (the agent's clearing, then a person's Done) and a reopening. Returns the fault as the Kiosk holds it."""
-    from vesta_agent.kiosk import closing, noted, retitled, tagged, todo
+    from vesta_agent.kiosk import noted, retitled
     tid = run(k.add_ticket("Pump offline for 2h", entity_id="switch.pump", note="What to do: power", document_ids=["d1"],
                            number=5, origin="alert", check="minutes", priority="P2",
                            pattern={"titlePattern": "Pump offline for {since}", "since": "2026-10-19T00:00:00Z"}))
-    run(k.amend(tid, retitled("Pump offline for 3h"), tagged(6, "night", "nightly", {"titlePattern": "P {since}",
-                                                                                         "since": "2026-10-19T01:00:00Z"}),
-                noted([{"at": "2026-10-19T00:05:00Z", "note": "Reminder sent (to: FM)"}]), todo("What to do: the plug"),
-                closing("2026-10-19T00:20:00Z")))
+    run(k.amend(tid, retitled("Pump offline for 3h"), write({"alertNumber": 6, "origin": "night", "check": "nightly",
+                                                                  "titlePattern": "P {since}", "since": "2026-10-19T01:00:00Z"}),
+                noted([{"at": "2026-10-19T00:05:00Z", "note": "Reminder sent (to: FM)"}]), write({"note": "What to do: the plug", "closesAt": "2026-10-19T00:20:00Z"})))
     k.person_renames(tid, "Pump — Wayan on it")
     run(k.amend(tid, retitled("Pump offline for 4h")))                       # under a person's title: a reading step
     run(k.resolve_ticket(tid, note="Cleared: back online."))
@@ -515,11 +514,11 @@ def test_a_kiosk_that_lists_everything_gets_every_kind_and_field_the_agent_write
     fields |= _kinds_and_fields(k.ticket(tid))[1]
     # an open visit's fault says until when it is monitored (owner, 2026-11-07)
     vid = run(k.add_ticket("Door opened while the villa is empty", entity_id="lock.example", number=8))
-    run(k.amend(vid, monitoring("2026-11-07T07:02:00+00:00")))
+    run(k.amend(vid, write({"monitoredUntil": "2026-11-07T07:02:00+00:00"})))
     fields |= _kinds_and_fields(k.ticket(vid))[1]
     # a held alert's fault says why it is expected (owner, 2026-11-12)
     hid = run(k.add_ticket("Pump has not run", entity_id="sensor.example_power", number=9))
-    run(k.amend(hid, holding("Expected: Pump runs only when people are in.")))
+    run(k.amend(hid, write({"expected": "Expected: Pump runs only when people are in."})))
     fields |= _kinds_and_fields(k.ticket(hid))[1]
     agreed = json.load(open(CONTRACT))
     # every kind but a person's own (Need help: the Kiosk's card writes it, the agent reads it)

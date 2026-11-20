@@ -20,7 +20,7 @@ through `close` — who closed it, whether it can come back — and every reader
 Cockpit's confirmsBy, the "(watch)" title, the watch's last word) asks the length that close wrote.
 
 The words stay the desk's (words.yaml); nothing here holds a setting: the terms are the desk's, the late days a limit.
-Every moment compared here is read aware (`_at`, timeutil.moment_key): the villa writes some in UTC, some in its zone.
+Every moment compared here is read aware (timeutil.moment): the villa writes some in UTC, some in its zone.
 ⚠️ FORMATS OUTLIVE THEIR WRITER: every note keeps the name and shape the releases before this one wrote.
 """
 from __future__ import annotations
@@ -30,7 +30,7 @@ from datetime import datetime, timedelta, timezone
 
 from .limits import limit
 from .store import Notes, Store, alerted_states, notes_of
-from .timeutil import moment_key
+from .timeutil import moment
 
 #: The read-again a person's close waits for (the desk's quiet_after_done): who closed it and how, as it says it
 CHECK = "check_quiet"
@@ -45,18 +45,6 @@ ABANDONED = "abandoned"
 RUN_NOTES = (CLEAR_SINCE, SILENT_TOLD, Notes.LASTING, CHECK)
 #: What an alert back brings to its new run: Home Assistant's latest words, states and run
 BACK_FIELDS = ("mode", "bad_states", "state", "ha_incident", "message", "summary", "entities")
-
-_NEVER = datetime.min.replace(tzinfo=timezone.utc)
-
-
-def _at(value) -> datetime | None:
-    """A moment, aware (a stored one without a zone is UTC) — the ONE reading every comparison here makes. None: none,
-    or no moment."""
-    if value is None or value == "":
-        return None
-    t, text = moment_key(value)
-    return None if text or t == _NEVER else t
-
 
 def late_close_days() -> float:
     """How long after an alert closed it is still matched: the villa's late all-clear, a watch nobody ended."""
@@ -92,9 +80,9 @@ def closed_of_run(store: Store, run: str | None, now: datetime) -> dict | None:
     giving up, after the desk or a person closed it."""
     if not run:
         return None
-    now, window = _at(now), timedelta(days=late_close_days())
+    now, window = moment(now), timedelta(days=late_close_days())
     for inc in store.incidents(open_only=False):
-        closed = _at(inc.get("closed_at"))
+        closed = moment(inc.get("closed_at"))
         if closed is not None and now - closed <= window and notes_of(inc).get("ha_incident") == run:
             return inc
     return None
@@ -235,10 +223,10 @@ def clearing(store: Store, inc, now: datetime, minutes: float) -> tuple[str, boo
     """Read again, what open alert `inc` claims reads over: since the first look that saw it (CLEAR_SINCE), it closes
     `minutes` on end. Returns (when it closes, as Notes.CLOSES_AT holds it; whether that is now)."""
     since = notes_of(inc).get(CLEAR_SINCE) or now.isoformat()
-    start = _at(since) or _at(now)
+    start = moment(since) or moment(now)
     closes = (start + timedelta(minutes=minutes)).isoformat()
     store.note(dict(inc)["id"], {CLEAR_SINCE: since, Notes.CLOSES_AT: closes}, drop=(SILENT_TOLD,))
-    return closes, _at(now) - start >= timedelta(minutes=minutes)
+    return closes, moment(now) - start >= timedelta(minutes=minutes)
 
 
 def clears_at(store: Store, iid: int, closes: str | None) -> None:
@@ -340,7 +328,7 @@ def until(inc) -> datetime | None:
     its last word all read it here."""
     inc = dict(inc) if inc is not None else {}
     watch = notes_of(inc).get(Notes.WATCH_MINUTES)
-    closed = _at(inc.get("closed_at"))
+    closed = moment(inc.get("closed_at"))
     if closed is None or not watch:
         return None
     try:
@@ -352,7 +340,7 @@ def until(inc) -> datetime | None:
 def reopens(inc, at: datetime) -> bool:
     """Does an alert at `at` reopen closed incident `inc` under its own number? Within its watch."""
     end = until(inc)
-    return end is not None and _at(at) <= end
+    return end is not None and moment(at) <= end
 
 
 # ---------------------------------------------------------------------------------------- a person's close, read again
@@ -369,8 +357,8 @@ def awaiting(store: Store) -> list[dict]:
 
 def read_due(inc, now: datetime, wait_minutes: float) -> bool:
     """Has closed `inc` waited `wait_minutes` since its close: its read-again is due."""
-    closed = _at(dict(inc).get("closed_at"))
-    return closed is not None and _at(now) - closed >= timedelta(minutes=wait_minutes)
+    closed = moment(dict(inc).get("closed_at"))
+    return closed is not None and moment(now) - closed >= timedelta(minutes=wait_minutes)
 
 
 def read_again(store: Store, inc):
@@ -392,8 +380,8 @@ def lasting(inc, at: datetime) -> bool:
     held = notes_of(inc).get(Notes.LASTING)
     if not inc.get("closed_at") or not isinstance(held, dict):
         return False
-    seen = _at(held.get("seen") or held.get("since"))
-    return seen is not None and _at(at) - seen <= timedelta(days=late_close_days())
+    seen = moment(held.get("seen") or held.get("since"))
+    return seen is not None and moment(at) - seen <= timedelta(days=late_close_days())
 
 
 def lasted_again(store: Store, inc, at: datetime) -> None:
@@ -444,7 +432,7 @@ def watching(inc, now: datetime | None = None) -> bool:
     end = until(inc)
     if end is None or notes_of(inc).get(Notes.WATCH_OVER) == dict(inc).get("closed_at"):
         return False
-    return _at(now or datetime.now(timezone.utc)) < end + timedelta(days=late_close_days())
+    return moment(now or datetime.now(timezone.utc)) < end + timedelta(days=late_close_days())
 
 
 #: What `over` answers: the watch ended and the alert did not come back — its last word is said
@@ -463,13 +451,13 @@ def over(inc, now: datetime, later=()) -> str | None:
     end = until(inc)
     if end is None or p.get(Notes.WATCH_OVER) == inc.get("closed_at") or p.get(CHECK):
         return None
-    now = _at(now)
+    now = moment(now)
     if now < end or now - end > timedelta(days=late_close_days()):
         return None
-    closed = _at(inc["closed_at"])
+    closed = moment(inc["closed_at"])
     for o in later:
         o = dict(o)
-        at = _at(o.get("opened_at"))
+        at = moment(o.get("opened_at"))
         if o.get("id") != inc.get("id") and o.get("key") == inc.get("key") and at is not None and closed <= at <= end:
             return CAME_BACK_AS_NEW
     return ENDED

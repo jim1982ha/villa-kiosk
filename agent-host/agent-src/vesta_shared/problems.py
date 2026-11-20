@@ -31,6 +31,7 @@ from .store import Incident, Notes, Store, notes_of
 from . import alert_watch, kiosk_words, maintenance, visit_state
 from . import message_format as mf
 from .help_link import HelpLink
+from .timeutil import moment
 
 DONE = "done"                          # a person answered Done (a button, or "#N done")
 CLEARED = "cleared"                    # its source is gone: the night check no longer sees it, HA cleared it
@@ -269,7 +270,7 @@ class Problems:
         when (now when not said)."""
         if status not in STATUSES:
             raise ValueError(f"a task closes as one of {', '.join(STATUSES)}, not {status!r}")
-        when = _moment(at)                              # the store's own way of writing a moment
+        when = moment(at)                              # the store's own way of writing a moment
         self.store.close_task(task_id, status, note, who, when.isoformat() if when else None)
 
     # ⚠️ CLOSING A SOURCE CLOSES WHAT IT OWES (architecture review 6, 2026-10-07). The alert desk and the night check
@@ -318,7 +319,7 @@ class Problems:
         ⚠️ ONE DONE, ONE ENTRY (architecture review, 2026-10-30 evening: three closes of an alert each wrote their own
         words — the reports read "Done", "Done (Closed in the Cockpit)" and "Done (Done in the Cockpit)" for one press)."""
         words = mf.done_in(place, who, lasting=not read_again)
-        when = _moment(at)
+        when = moment(at)
         now_iso = when.isoformat() if when else self.store.now()
         if place == mf.IN_COCKPIT:
             alert_watch.close(self.store, iid, Incident.DONE, now_iso, t=terms, lasting=not read_again,
@@ -360,7 +361,7 @@ class Problems:
 
     def _card_words(self, source: str) -> str:
         """What the card of `source` says is wrong (current_title), its finding's last words even once it closed."""
-        kind, sid = self._source({"source": source})
+        kind, sid = self.source_of({"source": source})
         row = self.store.finding(sid) if kind == "finding" else None
         if row and row.get("summary"):
             return problem_name(row["summary"], len(occurrences(row)) - 1)["headline"]
@@ -606,7 +607,7 @@ class Problems:
         # a night-check fault read still bad after it said "Done in the Cockpit on <the read's time>, but still there"
         # with no one, and its wait counted from when the agent read the close
         self.close(task_id, NOT_A_PROBLEM if lasting else CLOSED_IN_KIOSK, str(said or ""), who, at)
-        kind, sid = self._source(task)
+        kind, sid = self.source_of(task)
         # a Done in the Kiosk on a fault whose Need help the owner was asked about: the alert standing for it closes too
         if kind != "incident" and (standing := self.help.standing(HelpLink.of_task(task_id))):
             kind, sid = "incident", standing
@@ -634,7 +635,7 @@ class Problems:
         ⚠️ A PERSON'S REOPENING IS NEVER UNDONE (architecture review 25): the agent resolved it again within 5 minutes."""
         task = self.store.task(task_id)
         self.store.reopen_task(task_id, task.get("summary") or "", by=by or "a person", at=at)
-        kind, sid = self._source(task)
+        kind, sid = self.source_of(task)
         if kind == "incident" and sid:
             inc = self.store.incident(sid)
             if inc and inc.get("closed_at"):
@@ -654,7 +655,7 @@ class Problems:
         yes"). It stays open and ends as before. Returns the incident's id while it is open (every copy then says the take-on,
         owner 2026-11-05: an alert escalated by a Need help, then taken on, said nothing), else None.
         `said`: who and when, as kiosk_words.taken writes it."""
-        kind, sid = self._source(self.store.task(task_id))
+        kind, sid = self.source_of(self.store.task(task_id))
         if kind != "incident" or not sid:
             return None
         inc = self.store.incident(sid)
@@ -692,7 +693,7 @@ class Problems:
 
     def source_gone(self, task: dict) -> bool:
         """True when the finding or incident a task is about is closed — the task outlived it."""
-        kind, sid = self._source(task)
+        kind, sid = self.source_of(task)
         if kind == "finding":
             row = self.store.finding(sid)
             return bool(row) and row["status"] != "open"
@@ -722,7 +723,7 @@ class Problems:
         lasts — a finding at a severity that earns a task — unless a person closed it since the problem's latest return
         (closed_by_person) and its source has not been read still bad since (a finding: still_there_after_close). A
         task a person REOPENED is theirs (in_persons_hands): settle closes it only on a person's Done."""
-        kind, sid = self._source({"source": source})
+        kind, sid = self.source_of({"source": source})
         if kind == "finding":
             row = self.store.finding(sid)
             if not row or row["status"] != "open" or row["severity"] not in TASK_SEVERITIES:
@@ -762,13 +763,13 @@ class Problems:
         its `settle_minutes` or more after that close. False when either is missing: a skill that names no settle time
         leaves a person's close as it is."""
         from datetime import timedelta
-        kind, sid = self._source({"source": source})
+        kind, sid = self.source_of({"source": source})
         row = self.store.finding(sid) if kind == "finding" else None
         last = self.store.last_task(source)
         # "Not a problem while it lasts" is never read again (NOT_A_PROBLEM): only a Done or a plain close
         if not (row and last and last.get("status") in (DONE, CLOSED_IN_KIOSK)):
             return False
-        seen, done, wait = _moment(row.get("seen_at")), _moment(last.get("done_at")), row.get("settle_minutes")
+        seen, done, wait = moment(row.get("seen_at")), moment(last.get("done_at")), row.get("settle_minutes")
         try:
             return bool(seen and done and wait is not None and seen >= done + timedelta(minutes=float(wait)))
         except ValueError:
@@ -782,7 +783,7 @@ class Problems:
         says otherwise); closed by a person and read still bad since (still_there_after_close) — open again, STILL_THERE;
         a finding still there that never had a task — a new one. An incident's first task is the desk's to open (only
         some alerts ask for one)."""
-        kind, sid = self._source({"source": source})
+        kind, sid = self.source_of({"source": source})
         if kind not in ("finding", "incident"):
             return []                                    # no source of its own: it waits for a person
         self._may_write()
@@ -861,7 +862,7 @@ class Problems:
         ⚠️ A REOPENING SAYS WHY, LIKE A CLOSE (architecture review, 2026-10-18): the desk wrote "Still there after the close."
         on an action nothing read, and the Kiosk wrote its own "Back again" — a door never locked after a Done read as if
         it had come back (review 25 forbade exactly that). The words travel on the task, as the close's do."""
-        kind, sid = self._source(task)
+        kind, sid = self.source_of(task)
         title = self.current_title(task)
         # the alert standing for its Need help (owner, 2026-10-30): its number and its Telegram story on the card
         standing = self.help.standing(HelpLink.of_task(task["id"])) if kind != "incident" and task.get("id") else None
@@ -938,7 +939,7 @@ class Problems:
         see it back (owner, 2026-10-25). None for a task open, an older task of the same problem, a close nothing
         watches (no watch carried, no night schedule), or a watch over."""
         from datetime import timezone
-        kind, sid = self._source(task)
+        kind, sid = self.source_of(task)
         if task.get("status") not in STATUSES:
             return None
         last = self.store.last_task(str(task.get("source")))
@@ -955,7 +956,7 @@ class Problems:
         elif kind == "finding":
             if task.get("status") == NOT_A_PROBLEM:
                 return None                      # known to last: nothing is watched, the card goes to Closed
-            closed = _moment(task.get("done_at"))
+            closed = moment(task.get("done_at"))
             row = self.store.finding(sid)
             # ⚠️ A DAY RULE'S WATCH ENDS WITH THE FIRST WHOLE DAY AFTER THE CLOSE (architecture review 25): the next night
             # judges the day the pump was fixed on, mostly from before the fix — it answers nothing (Finding.seen_at)
@@ -988,7 +989,7 @@ class Problems:
         (Notes.FAULT_CLOSED, a visit the villa closed while VESTA was away), the task its last."""
         out = []
         for t in self.store.tasks(None):
-            kind, sid = self._source(t)
+            kind, sid = self.source_of(t)
             if t.get("status") == "open" or t.get("todo_uid") or kind != "incident":
                 continue
             if visit_state.fault_made_closed(notes_of(self.store.incident(sid))) \
@@ -1003,7 +1004,7 @@ class Problems:
     def current_title(self, task: dict) -> str:
         """What is wrong NOW: the finding's summary as the night check last wrote it (a battery's 5 % became 0 %),
         else the task's own words. The task is written once; its finding is updated every night."""
-        kind, sid = self._source(task)
+        kind, sid = self.source_of(task)
         if kind == "finding":
             row = self.store.finding(sid)
             if row and row.get("status") == "open" and row.get("summary"):
@@ -1029,7 +1030,7 @@ class Problems:
         ⚠️ ONE OWNER OF "WHAT TO DO" (architecture review, 2026-10-19): the task froze the check at its opening — the
         Kiosk fault's note and the digest kept the first words while Telegram read the route live, and a finding's
         check rewritten by the night (a pump's draw lower, then higher) never reached its card."""
-        kind, sid = self._source(task)
+        kind, sid = self.source_of(task)
         said = None
         if kind == "incident":
             inc = self.store.incident(sid)
@@ -1090,7 +1091,8 @@ class Problems:
 
     # ---------------------------------------------------------------- inside
     @staticmethod
-    def _source(task: dict | None) -> tuple[str | None, int | None]:
+    def source_of(task: dict | None) -> tuple[str | None, int | None]:
+        """(kind, id) of the problem task `task` is about — ("incident", 5), ("finding", 12) — or (None, None)."""
         src = (task or {}).get("source") or ""
         kind, _, sid = src.partition(":")
         return (kind, int(sid)) if sid.isdigit() else (None, None)
@@ -1116,16 +1118,6 @@ def _day_after_next(t: datetime) -> datetime:
     except Exception:  # noqa: BLE001 — a zone this machine does not know: UTC
         z = ZoneInfo("UTC")
     return datetime.combine(t.astimezone(z).date() + timedelta(days=2), time(0, 0), tzinfo=z)
-
-
-def _moment(iso):
-    """A stored moment ("…+00:00", or the Kiosk's "…Z") as an aware datetime; None when it cannot be read."""
-    from datetime import datetime, timezone
-    try:
-        t = datetime.fromisoformat(str(iso).replace("Z", "+00:00")) if iso else None
-    except ValueError:
-        return None
-    return t.replace(tzinfo=timezone.utc) if t and t.tzinfo is None else t
 
 
 def held_words(inc: dict | None) -> str | None:

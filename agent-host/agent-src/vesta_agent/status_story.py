@@ -26,12 +26,12 @@ everyone's: every line (`roles` None).
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
+from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
 from vesta_shared import status_words
 from vesta_shared.message_format import MARK_ICONS, ON_PLACE, ON_TELEGRAM, PRESSED_STAGE, STEPS
-from vesta_shared.timeutil import moment_label, status_moment
+from vesta_shared.timeutil import moment, moment_label, status_moment
 
 #: Where a line's moment goes in its words: filled when it is shown (`shown`), taken out for the fault (`fault`).
 SLOT = "⁣"
@@ -63,14 +63,6 @@ def line_id(h: dict) -> str:
         return "dropped"
     first = (h.get("ats") or [h.get("at")])[0]
     return f"{h.get('stage') or 'note'}@{first}"
-
-
-def _moment(at) -> datetime | None:
-    try:
-        m = datetime.fromisoformat(str(at))
-    except (TypeError, ValueError):
-        return None
-    return m if m.tzinfo else m.replace(tzinfo=timezone.utc)
 
 
 def lines(notices, incident: int, lang: str = "en", latest_excluded: int = 0, bottom: bool = True,
@@ -112,7 +104,7 @@ def lines(notices, incident: int, lang: str = "en", latest_excluded: int = 0, bo
             continue
         if i in resent:
             words = status_words.resent(words, notices._who(resent[i], lang=lang), lang)
-        at = None if h.get("dropped") else _moment(h.get("at"))
+        at = None if h.get("dropped") else moment(h.get("at"))
         out.append(Line(line_id(h), at, words, frozenset(notices._roles(h) | resent.get(i, set())), h.get("stage"),
                         tuple(h.get("ats") or ())))
     # "+3 more photos on the tablet": a count of the card, never a moment, after every other line (owner, 2026-11-07)
@@ -179,7 +171,7 @@ def _words(notices, h: dict, lang: str) -> str | None:
         return (h.get("note_in") or {}).get(lang) or h["note"]
     if h.get("stage") == PRESSED_STAGE:
         return _pressed(h, lang)
-    since = _moment(h.get("from")) if h.get("from") else None
+    since = moment(h.get("from")) if h.get("from") else None
     return status_words.step(h.get("stage"), SLOT, status_words.times(h.get("run"), _again(), lang),
                              notices._who(notices._roles(h), h.get("reach"), lang=lang), lang, h.get("times"),
                              since=moment_label(since, notices.tz) if since else None)
@@ -225,7 +217,7 @@ def text(x, day: date | None = None, lang: str = "en") -> str:
     """A heading's Status line as shown: one kept as facts (`as_head`), drawn from them; one kept as text (a copy
     drawn before 0.12.481, a line the desk wrote) with its moments written by the alert's day (status_words.moments)."""
     if isinstance(x, dict):
-        return f"- {shown(Line(str(x.get('id') or ''), _moment(x['at']) if x.get('at') else None, str(x.get('words') or '')), day, None, lang)}"
+        return f"- {shown(Line(str(x.get('id') or ''), moment(x['at']) if x.get('at') else None, str(x.get('words') or '')), day, None, lang)}"
     return status_words.moments(str(x), day, lang)
 
 
@@ -332,9 +324,9 @@ def resent_into(history: list[dict]) -> dict[int, int]:
     for i, h in enumerate(history):
         if h.get("stage") != STRONGER_STAGE:
             continue
-        at, best = _moment(h.get("at")), None
+        at, best = moment(h.get("at")), None
         for j, x in enumerate(history):
-            began = _moment(x.get("since")) if observed(x) else None
+            began = moment(x.get("since")) if observed(x) else None
             if began is not None and at is not None and began <= at and (best is None or began >= best[0]):
                 best = (began, j)
         if best is not None:

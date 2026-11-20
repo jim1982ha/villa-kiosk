@@ -17,6 +17,8 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import NamedTuple
 
+from .timeutil import moment
+
 
 def unread(what: str, when: str) -> str:
     """THE sentence for a read stopped short, every reader's (it was /investigate's first): "<what> could not be read
@@ -30,11 +32,10 @@ def until(end: datetime, now: datetime | None = None) -> datetime:
     return min(end, now or datetime.now(timezone.utc))
 
 
-def _when(row: dict) -> datetime | None:
-    try:
-        return datetime.fromisoformat(str(row.get("last_changed") or row.get("last_updated")))
-    except (TypeError, ValueError):
-        return None
+def changed_at(row: dict) -> datetime | None:
+    """A Home Assistant state row's moment (its last_changed, else last_updated), aware (timeutil.moment); None when it
+    has none."""
+    return moment(row.get("last_changed") or row.get("last_updated"))
 
 
 # ---------------------------------------------------------------- an automation's run, read off a logbook row
@@ -73,9 +74,8 @@ def automation_run(row: dict) -> Run | None:
     message = str(row.get("message") or "")
     if not message.startswith(TRIGGERED):
         return None
-    try:
-        at = datetime.fromisoformat(str(row.get("when") or row.get("last_changed") or ""))
-    except ValueError:
+    at = moment(row.get("when") or row.get("last_changed"))
+    if at is None:
         return None
     started_by = str(row.get("source") or "") or (message[len(TRIGGERED_BY):] if message.startswith(TRIGGERED_BY) else "")
     return Run(at, started_by, system_run(started_by) is not None)
@@ -109,7 +109,7 @@ class History:
     def changes(self, entity_id: str) -> list[tuple[datetime, str]]:
         """(moment, state) of each row read, oldest first; a row without a readable moment is left out."""
         out = [(t, "" if r.get("state") is None else str(r.get("state")))
-               for r in self.rows.get(entity_id) or [] if (t := _when(r)) is not None]
+               for r in self.rows.get(entity_id) or [] if (t := changed_at(r)) is not None]
         return sorted(out, key=lambda x: x[0])
 
     def state_at(self, entity_id: str, moment: datetime) -> str | None:

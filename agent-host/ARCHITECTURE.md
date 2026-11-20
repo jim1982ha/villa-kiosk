@@ -1468,3 +1468,21 @@ copy.
   `meant` reads it first and asks Home Assistant's search only for what the pack does not name (no pack, an entity the
   pack leaves out), then adds its own neighbours (same physical device, powered devices in the same room).
   tests/test_device_meant.py holds the two skills to the same answer.
+
+## A fault card's fields in one table; one reader of a stored moment (architecture review part three, 2026-11-20)
+
+`vesta_agent/fault_card.py` owns `FIELDS`, one row per field of a Cockpit fault the agent keeps current: its
+`Problems.card` name, the agreement's name (`ticket.fields`), the state it is written on (open, closed, any), and what a
+missing wanted value does (kept, or taken away); a row may say how the value is worked out (the alert's priority only
+with its number, the title's pattern only on the agent's title) and which held value is a person's (a note not labelled
+"What to do:"). `held(ticket)` is what `kiosk.fault_of` reads under the card's names (`number`, `priority`, `pattern`,
+`todo` for the note…); `changes(want, held)` the fields that differ, of those written on the fault's state;
+`write(changes)` the single Amend, which reads the ticket again as it stands. `tickets._converge` keeps the repair's
+order (reopen, bring up to date, resolve, the closed fault's watch) and adds the title and the Telegram lines
+(`kiosk.retitled`, `kiosk.noted`: steps, not fields); `kiosk` keeps the HTTP. A new field is one row.
+
+`timeutil.moment(value)` is the one reader of a stored moment (aware; "Z" read; zone-less is UTC; None when none) and
+`timeutil.before(a, b, or_same=)` the one comparison; `past.changed_at(row)` is a state row's moment through it. The
+private `_moment` / `_when` / `_instant` / `_epoch` / `_at` copies went (tickets, problems, kiosk, notice, status_story,
+missed_at_start, past, history_memory, ha_client, demand, alert_watch, visit_state, the alert desk, the reports'
+playbook, the recheck); chat_facts, tickets, status and the store compare moments with `before`, never their text.

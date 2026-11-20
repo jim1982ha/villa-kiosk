@@ -23,7 +23,6 @@ import json
 import logging
 import secrets
 from datetime import datetime, timedelta, timezone
-from typing import Callable
 
 import aiohttp
 
@@ -31,6 +30,10 @@ from vesta_shared import agreement, profiles
 from vesta_shared.ha_client import error_short_chars
 from vesta_shared.messaging import problem_title_chars
 from vesta_shared.limits import limit
+from vesta_shared.timeutil import NEVER, moment
+
+from . import fault_card
+from .fault_card import Amend, fault_note_chars  # noqa: F401 — fault_note_chars: tools, fault_offers read it here
 
 log = logging.getLogger("vesta.kiosk")
 
@@ -63,12 +66,6 @@ def fault_title_chars() -> int:
     """The longest title of a fault sent to the VESTA Kiosk: a problem's name, as long as every page's
     (vesta_shared.messaging.problem_title_chars — architecture review P: it was its own setting)."""
     return problem_title_chars()
-
-
-def fault_note_chars() -> int:
-    return limit("kiosk.fault_note_chars", 2000, unit="characters", group="text", lo=200, hi=20000,
-                 says="The longest note a fault keeps in the VESTA UI (what the Facility Manager reads).",
-                 reached="The rest of the note is cut, with no mark.", told="")
 
 
 def update_note_chars() -> int:
@@ -208,14 +205,6 @@ def person_titled(t: dict) -> bool:
     return mine is None or str(t.get("title") or "") != mine
 
 
-def _epoch(iso) -> float | None:
-    """A step's moment as a number; None when it cannot be read."""
-    try:
-        return datetime.fromisoformat(str(iso).replace("Z", "+00:00")).timestamp()
-    except (TypeError, ValueError):
-        return None
-
-
 def status_changes(ups: list[dict]) -> list[dict]:
     """The steps that CHANGED the fault's status, in time order — the agreement's `ticketUpdate.histories` rule, as the
     Kiosk's own two readers follow it (fmEngine.statusChanges, the proxy's _fm_last_resolution): a step without a kind
@@ -224,7 +213,7 @@ def status_changes(ups: list[dict]) -> list[dict]:
     a step whose time cannot be read sorts FIRST (it never outranks a dated close)."""
     skip = set(agreement.section("ticketUpdate").get("notStatusChanges") or ())
     steps = [(i, u) for i, u in enumerate(ups) if u.get("status") and u.get("kind") not in skip]
-    steps.sort(key=lambda p: (_epoch(p[1].get("at")) or 0.0, p[0]))
+    steps.sort(key=lambda p: (moment(p[1].get("at")) or NEVER, p[0]))
     return [u for _, u in steps]
 
 
@@ -278,7 +267,7 @@ def gestures(ups: list[dict]) -> list[dict]:
         by = str((profiles.step_by(u) or u.get("who")) if kind == ASK_HELP else (u.get("who") or profiles.step_by(u)) or "")
         lasting = bool(u.get("lasting")) and kind == CLOSE
         # `nothing`: "No action needed", a person's close with no work done (the agreement's cleared step)
-        out.append((_epoch(u.get("at")) or 0.0, i, {"kind": kind, "at": str(u.get("at") or ""), "by": by,
+        out.append((moment(u.get("at")) or NEVER, i, {"kind": kind, "at": str(u.get("at") or ""), "by": by,
                                                     "lasting": lasting,
                                                     "nothing": kind == CLOSE and not lasting and cleared_step(u)}))
     return [g for *_, g in sorted(out, key=lambda x: (x[0], x[1]))]
@@ -286,7 +275,7 @@ def gestures(ups: list[dict]) -> list[dict]:
 
 def fault_of(t: dict) -> dict:
     """One Facility fault as the agent reads it: {status, title, agent_title, resolved_at, by, cleared, gestures, noted,
-    note, …} — `by` who closed it, on a closed fault ("Facility manager"; its last
+    the card's fields (fault_card.held: number, closes_at, todo …), …} — `by` who closed it, on a closed fault ("Facility manager"; its last
     close's step), on an open one who last moved it (its last step), `agent_title` the title the agent last gave it (None: never said),
     `cleared` whether its last close was one with no work done — the agent's own clearing — (None: no step closed it),
     `gestures` every press of a PERSON on it, oldest first (gestures). Pure: what a person did is
@@ -313,21 +302,13 @@ def fault_of(t: dict) -> dict:
             # who: on a closed fault, the person of its last close; on an open one, of its last step (taken on, moved)
             "by": (str(close.get("who") or profiles.step_by(close)) if close and t.get("status") == "resolved"
                    else last("who") or (profiles.step_by(ups[-1]) if ups else "")),
-            "entity_id": str(t.get("entityId") or ""),
-            "alert_number": t.get("alertNumber"), "alert_priority": t.get("alertPriority"), "origin": t.get("origin"),
-            "check": t.get("check"), "title_pattern": t.get("titlePattern"), "since": t.get("since"),
-            "closes_at": t.get("closesAt"), "confirms_by": t.get("confirmsBy"), "not_watched": t.get("notWatched") is True,
-            "monitored_until": t.get("monitoredUntil"), "expected": t.get("expected"),
-            "note": str(t.get("note") or ""),                     # what to do on site (the agreement's ticket.fields)
+            # its card's fields, under Problems.card's names (fault_card.FIELDS: entity_id, number, priority, origin,
+            # check, pattern, since, closes_at, monitored_until, expected, confirms_by, not_watched, todo — its note)
+            **fault_card.held(t),
             "person_titled": person_titled(t), "cleared": cleared_step(close) if close else None,
             "noted": [(str(u.get("at") or ""), str(u.get("note") or "")) for u in ups if u.get("kind") == NOTED],
             # what a person did on it, each press (owner, 2026-10-30: Done · Need help · Open Ticket on every card)
             "gestures": gestures(ups)}
-
-
-#: One change the agent makes to an open fault: the ticket as it stands → the ticket changed, None when it has nothing
-#: to change (Kiosk.amend applies several in one write).
-Amend = Callable[[dict], "dict | None"]
 
 
 def retitled(title: str) -> Amend:
@@ -344,16 +325,6 @@ def retitled(title: str) -> Amend:
             return dict(t, updates=list(t.get("updates") or []) + [{**step, "kind": READING}])
         return dict(t, title=title, updates=list(t.get("updates") or [])
                     + [{**step, "kind": RETITLED, "was": str(t.get("title") or "")}])
-    return amend
-
-
-def placed(entity_id: str) -> Amend:
-    """An open fault is about the device its problem names NOW (a visit's strongest step: its card's name follows, as
-    Telegram's title does). Nothing when it is closed or already says it."""
-    def amend(t: dict) -> dict | None:
-        if t.get("status") == "resolved" or not entity_id or t.get("entityId") == entity_id:
-            return None
-        return dict(t, entityId=entity_id)
     return amend
 
 
@@ -379,16 +350,16 @@ def noted(lines: list[dict]) -> Amend:
             lid = str(x.get("id") or x["at"])
             step = {"at": x["at"], "status": t.get("status") or "open", "photoIds": [], "kind": NOTED,
                     "note": str(x["note"])[:update_note_chars()], "line": lid}
-            moments = {_instant(a) for a in [*(x.get("ats") or ()), x["at"]]} - {None}
+            moments = {moment(a) for a in [*(x.get("ats") or ()), x["at"]]} - {None}
             # a line of the fault no longer told (kept by moment before 0.12.481, or a repeat folded since) at one of
             # this line's moments is this line
             loose = [i for i in mine if ups[i] is not None and ups[i].get("line") not in told]
             have = [i for i in mine if ups[i] is not None and ups[i].get("line") == lid]
-            have += [i for i in loose if i not in have and _instant(ups[i].get("at")) in moments]
+            have += [i for i in loose if i not in have and moment(ups[i].get("at")) in moments]
             if not have:
                 # the old nudge's moment only when none is its own (two lines of one second)
                 have = [i for i in loose if not ups[i].get("line")
-                        and _near(_instant(ups[i].get("at")), moments)][:1]
+                        and _near(moment(ups[i].get("at")), moments)][:1]
             if not have:
                 ups.append(step); mine.append(len(ups) - 1); changed = True
                 continue
@@ -403,99 +374,9 @@ def noted(lines: list[dict]) -> Amend:
     return amend
 
 
-def _instant(at) -> datetime | None:
-    try:
-        m = datetime.fromisoformat(str(at).replace("Z", "+00:00"))
-    except (TypeError, ValueError):
-        return None
-    return m if m.tzinfo else m.replace(tzinfo=timezone.utc)
-
-
 def _near(m: datetime | None, moments: set) -> bool:
     """Is `m` one of `moments`, or the old nudge after one (a few microseconds: kept before 0.12.481)?"""
     return m is not None and any(timedelta(0) <= m - x < timedelta(milliseconds=1) for x in moments)
-
-
-#: How this agent labels a fault's note ("What to do: …"; "Check: …" until review 29): a note so labelled is the agent's
-#: to bring up to date; any other note on a fault is a person's and stays theirs, as a person's title does.
-TODO_LABELS = ("What to do: ", "Check: ")
-
-
-def todo(note: str) -> Amend:
-    """An open fault's note says what to do on site NOW — its problem's words as they stand (Problems.card `todo`,
-    result.fault_note): the route's check edited in the alert desk's rules.yaml, a finding's check the night rewrote.
-    Only a note this agent wrote (TODO_LABELS), or none; nothing when it is closed, says it, or a person wrote it."""
-    def amend(t: dict) -> dict | None:
-        cur = str(t.get("note") or "")
-        if t.get("status") == "resolved" or cur == note or (cur and not cur.startswith(TODO_LABELS)):
-            return None
-        return dict(t, note=note[:fault_note_chars()])
-    return amend
-
-
-def tagged(number: int | None = None, origin: str | None = None, check: str | None = None,
-           pattern: dict | None = None, priority: str | None = None) -> Amend:
-    """A fault made before it carried them gets its alert's number ("#5"), where it came from and how it is read again
-    (add_ticket). `pattern`: {"titlePattern", "since"} — both None takes them away (a person retitled it)."""
-    tags = {**({"alertNumber": int(number)} if number else {}),
-            **({"alertPriority": priority} if number and priority else {}), **({"origin": origin} if origin else {}),
-            **({"check": check} if check else {}), **(pattern or {})}
-
-    def amend(t: dict) -> dict | None:
-        if all(t.get(k) == v for k, v in tags.items()):
-            return None
-        return {k: v for k, v in dict(t, **tags).items() if not (k in tags and v is None)}
-    return amend
-
-
-def closing(at: str | None) -> Amend:
-    """An open fault says when the VESTA Agent closes it if what it reported stays over (`closesAt`, owner 2026-10-21:
-    "Locked since 14:38 · closes at about 14:49 if it stays locked"), or no longer says it (`at` None: it holds again)."""
-    def amend(t: dict) -> dict | None:
-        if t.get("status") == "resolved" or t.get("closesAt") == at:
-            return None
-        return {k: v for k, v in dict(t, closesAt=at).items() if not (k == "closesAt" and v is None)}
-    return amend
-
-
-def holding(words: str | None) -> Amend:
-    """An open alert's fault says why the VESTA Agent holds it (`expected`, owner 2026-11-12: a pump that runs only when
-    people are in, silent while nobody is — on the tablet's Watch with these words), or no longer says it (None)."""
-    def amend(t: dict) -> dict | None:
-        if t.get("status") == "resolved" or t.get("expected") == words:
-            return None
-        return {k: v for k, v in dict(t, expected=words).items() if not (k == "expected" and v is None)}
-    return amend
-
-
-def monitoring(at: str | None) -> Amend:
-    """An open visit's fault says until when it is monitored (`monitoredUntil`, the villa's record's closes_at: its pill
-    "monitoring until 06:40", owner 2026-11-07), or no longer says it (`at` None)."""
-    def amend(t: dict) -> dict | None:
-        if t.get("monitoredUntil") == at:
-            return None
-        return {k: v for k, v in dict(t, monitoredUntil=at).items() if not (k == "monitoredUntil" and v is None)}
-    return amend
-
-
-def unwatched() -> Amend:
-    """A closed fault nothing watches says so (`notWatched`, the agreement's ticket.fields): Closed on the tablet at
-    once, never "about to be watched" — a person's close too, not only the agent's (resolve_ticket not_watched)."""
-    def amend(t: dict) -> dict | None:
-        return None if t.get("notWatched") is True or t.get("status") != "resolved" or t.get("confirmsBy") \
-            else dict(t, notWatched=True)
-    return amend
-
-
-def confirming(at: str | None) -> Amend:
-    """A fault a person closed says when the VESTA Agent reads it again to confirm the close (`confirmsBy`, owner
-    2026-10-23: the Cockpit keeps it, apart, until then), or no longer says it (`at` None: read, or never watched). Its
-    status and steps are left as they are."""
-    def amend(t: dict) -> dict | None:
-        if t.get("confirmsBy") == at:
-            return None
-        return {k: v for k, v in dict(t, confirmsBy=at).items() if not (k == "confirmsBy" and v is None)}
-    return amend
 
 
 def _resolved(data: dict, t: dict, *, note: str | None = None, who: str | None = None, confirms_by: str | None = None,
@@ -776,7 +657,7 @@ class Kiosk:
         return {t["id"]: fault_of(t) for t in data.get("tickets") or [] if isinstance(t, dict) and isinstance(t.get("id"), str)}
 
     async def amend(self, tid: str, *amends: "Amend") -> int:
-        """Ticket `tid` changed by each of `amends` in turn (retitled, tagged, noted, todo: what the agent puts right on
+        """Ticket `tid` changed by each of `amends` in turn (retitled, fault_card.write, noted: what the agent puts right on
         an open fault), in ONE write. How many changed it; 0 when it is gone or none did.
 
         ⚠️ ONE WRITE PER FAULT (architecture review scan 2, 2026-10-19): bringing a fault up to date wrote the whole

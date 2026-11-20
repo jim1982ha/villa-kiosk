@@ -23,6 +23,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from .limits import limit
+from .timeutil import before, moment
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS features (
@@ -460,8 +461,8 @@ class Store:
         ⚠️ A RUN COUNTS ITS OWN (owner, 2026-11-06, #125-P1: "6 times since 18:20" in a run reopened at 18:34): the count
         went on from the run that ended, and the reopening counted itself once more on top."""
         inc = self.incident(iid)
-        cutoff = (datetime.fromisoformat(at) - timedelta(days=self.runs_kept_days())).isoformat()
-        past = [o for o in json.loads(inc.get("occurrences") or "[]") if o["opened_at"] >= cutoff] + [
+        cutoff = moment(at) - timedelta(days=self.runs_kept_days())
+        past = [o for o in json.loads(inc.get("occurrences") or "[]") if before(cutoff, o["opened_at"], or_same=True)] + [
             {"opened_at": inc.get("reopened_at") or inc["opened_at"], "closed_at": inc.get("closed_at"), "state": inc.get("state"),
              "count": inc.get("count"), **({"message": message} if message else {})}]
         self.update_incident(iid, closed_at=None, reply=None, reopened_at=at, occurrences=json.dumps(past), count=1,

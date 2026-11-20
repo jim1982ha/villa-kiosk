@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 
 from .store import Notes
+from .timeutil import NEVER, moment
 
 #: What the villa's record says NOW of a visit it still holds as this visit: who holds it, each chat's card and the
 #: villa's replies, a person's answer, the villa's own reminder, the step it acknowledged, its close, its latest step.
@@ -40,15 +41,6 @@ NEW = "new"              # no incident yet: VESTA opens it (closed already: AWAY
 STEP = "step"            # its open incident: told anew
 LATE = "late"            # its incident closed already (a person's close crossed the villa's): nothing more to tell
 CLOSE = "close"          # its all-clear, or the record read over at a tick: closed as the villa closed it
-
-
-def when(iso) -> datetime | None:
-    """A record's moment (ISO), aware; None when it is none."""
-    try:
-        t = datetime.fromisoformat(str(iso))
-    except (TypeError, ValueError):
-        return None
-    return t if t.tzinfo else t.replace(tzinfo=timezone.utc)
 
 
 def now_of(row, vid: str) -> dict | None:
@@ -155,7 +147,7 @@ def ending(v: dict) -> Ending:
     """How visit `v` ended, as its record says: its close's moment (an answer's, when the answer closed it)."""
     home = v.get("closed") if isinstance(v.get("closed"), dict) else {}
     ans = v.get("answered") if isinstance(v.get("answered"), dict) else {}
-    at = when(home.get("at")) or (when(ans.get("at")) if home.get("why") == ANSWERED else None)
+    at = moment(home.get("at")) or (moment(ans.get("at")) if home.get("why") == ANSWERED else None)
     return Ending(at if home else None, str(home.get("why") or ""), str(home.get("who") or ""), ans)
 
 
@@ -174,20 +166,16 @@ def photos_of(v: dict) -> list[dict]:
     top = (v.get("strongest") or {}).get("entity_id")
     out = []
     for ph in v.get("photos") or []:
-        if not isinstance(ph, dict) or not ph.get("path") or not when(ph.get("at")):
+        if not isinstance(ph, dict) or not ph.get("path") or not moment(ph.get("at")):
             continue
         # its moment in UTC, as VESTA's own snapshots: one form for every reader that compares them as text (the
         # tablet's photo row orders by it; owner, 2026-11-20, #204); its camera, which a late look snaps again
         out.append({"path": str(ph["path"]), "label": str(ph.get("camera_name") or ph.get("camera") or ""),
-                    "at": when(ph["at"]).astimezone(timezone.utc).isoformat(),
+                    "at": moment(ph["at"]).astimezone(timezone.utc).isoformat(),
                     **({"camera": str(ph["camera"])} if str(ph.get("camera") or "").startswith("camera.") else {}), **({"strongest": True} if top and ph.get("entity_id") == top else {}),
                     **({"burst": str(ph["burst"]), "frame": int(ph.get("frame") or 0), "pick": str(ph.get("pick") or "")}
                        if ph.get("burst") else {})})
     return ordered(out)
-
-
-#: where a photo with no moment sorts: first
-_NEVER = datetime.min.replace(tzinfo=timezone.utc)
 
 
 def ordered(photos, shown: int | None = None) -> list[dict]:
@@ -200,7 +188,7 @@ def ordered(photos, shown: int | None = None) -> list[dict]:
     # ⚠️ BY THE MOMENT, NEVER ITS TEXT (owner, 2026-11-20, #204): the villa writes a lock's or a camera's moment in UTC
     # ("…T04:20:12+00:00") and a room's in its own time ("…T12:19:31+08:00"); sorted as text, Parking 12:20 came
     # before Staircase 2F 12:19 on the sheet
-    by_time = sorted(photos, key=lambda p: when(p.get("at")) or _NEVER)
+    by_time = sorted(photos, key=lambda p: moment(p.get("at")) or NEVER)
     lead = next((p for p in by_time if p.get("strongest")), by_time[0])
     rest = [p for p in by_time if p is not lead]
     out = [{**lead, "lead": True}, *rest]

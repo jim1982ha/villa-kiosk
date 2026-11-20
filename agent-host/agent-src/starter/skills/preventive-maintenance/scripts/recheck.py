@@ -61,7 +61,7 @@ sys.path.insert(0, HERE)
 
 from vesta_shared import kiosk_words, result, script  # noqa: E402
 from vesta_shared.problems import Problems, Resting  # noqa: E402
-from vesta_shared.timeutil import moment_label  # noqa: E402  (a moment as every notice and the agreement write it)
+from vesta_shared.timeutil import before, moment_label  # noqa: E402  (a moment as every notice and the agreement write it)
 import nightly as N  # noqa: E402  (what is offline: the night's one reading of it)
 import endings as E  # noqa: E402  (how a fault ends: one table, the night's too)
 from vesta_shared.problems import STILL_THERE  # noqa: E402
@@ -383,18 +383,11 @@ def loopbook(store, client, now: datetime, days: int):
     else:
         book = client.logbook_read(since_at, now, now=now)
         rows = list(kept.get("rows") or []) + list(book.rows)
-    rows = [r for r in rows if _at(r) is not None and _at(r) >= start]
+    rows = [r for r in rows if before(start, r.get("when"), or_same=True)]
     went = {r.get("entity_id") for r in rows if is_offline(r.get("state"))}
     rows = [r for r in rows if r.get("domain") == "homeassistant" or r.get("entity_id") in went]
     store.cache_put(LOOPBOOK, {"end": book.reach.isoformat(), "rows": rows})
     return Logbook(rows, start, now, None if book.whole else book.reach)
-
-
-def _at(row: dict) -> datetime | None:
-    try:
-        return datetime.fromisoformat(str(row.get("when")))
-    except ValueError:
-        return None
 
 
 def recheck_open(store, pack, client, now: datetime, params, zone: str, settle_minutes: float | None = None) -> dict:

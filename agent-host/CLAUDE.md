@@ -24,4 +24,5 @@ its manifest. Commands and release: the repository's `CLAUDE.md`. Module map and
 - A working tree may hold other agents' unsaved work: compare with `git diff` or `git show HEAD:<path>`, and leave the
   tree's state as found (stash, checkout and reset change it for everyone in it). Agents editing code at the same time
   each get their own worktree.
-- Sort moments with `timeutil.moment_key`, never by their text: the villa writes some in UTC, some in its own zone.
+- A stored moment is read with `timeutil.moment`, compared with `timeutil.before` and sorted with
+  `timeutil.moment_key`, never by its text: the villa writes some in UTC, some in its own zone.

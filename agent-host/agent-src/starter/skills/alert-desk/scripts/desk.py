@@ -40,7 +40,7 @@ from vesta_shared import alert_watch as W  # noqa: E402  (a closed alert's watch
 from vesta_shared.params import VillaParams  # noqa: E402
 from vesta_shared import occupancy as occupancy_now  # noqa: E402  (the villa's "empty" sensor: the Kiosk's pick)
 from vesta_shared.maintenance import takes_up  # noqa: E402  (the villa's maintenance mode: the Kiosk's; the one gate)
-from vesta_shared.timeutil import clock, day_time_label, moment_key, moment_label, villa_time  # noqa: E402
+from vesta_shared.timeutil import clock, day_time_label, moment, moment_key, moment_label, villa_time  # noqa: E402
 from vesta_shared.problems import AGAIN_DAYS, Problems, again_days, incident_runs, problem_name  # noqa: E402  (a problem's lifecycle: one owner)
 from vesta_shared import result as R  # noqa: E402  (what the engine is asked to do: its shape)
 from vesta_shared import script  # noqa: E402  (client, store, settings, zone: one set-up)
@@ -1323,14 +1323,6 @@ def _replies(v: dict) -> list[list[int]]:
             and str(m.get("message_id", "")).isdigit()]
 
 
-def _when(iso) -> datetime | None:
-    try:
-        t = datetime.fromisoformat(str(iso))
-    except (TypeError, ValueError):
-        return None
-    return t if t.tzinfo else t.replace(tzinfo=timezone.utc)
-
-
 def visit_steps(v: dict) -> list[dict]:
     """The visit's steps, oldest first: its list, and the step this event is about when the list (capped by the villa)
     no longer holds it."""
@@ -1338,7 +1330,7 @@ def visit_steps(v: dict) -> list[dict]:
     st = v.get("step")
     if isinstance(st, dict) and str(st.get("seq", "")).isdigit():
         steps.setdefault(int(st["seq"]), st)
-    return [s for _n, s in sorted(steps.items()) if _when(s.get("at"))]
+    return [s for _n, s in sorted(steps.items()) if moment(s.get("at"))]
 
 
 def _place(s: dict) -> str:
@@ -1374,12 +1366,12 @@ def visit_fold(v: dict, kept: dict | None = None, legacy: bool = False) -> dict:
         seq = int(s["seq"])
         if seq <= int(f["upto"] or 0):
             continue
-        at, kind, eid = _when(s["at"]), str(s.get("kind") or MOTION), str(s.get("entity_id") or "")
+        at, kind, eid = moment(s["at"]), str(s.get("kind") or MOTION), str(s.get("entity_id") or "")
         iso = at.isoformat()
         kinds.setdefault(kind, seq)
         if kind == MOTION:
             cur = lines.get(f.get("pass") or "")
-            if cur is None or at - _when(cur["last"]) > gap:
+            if cur is None or at - moment(cur["last"]) > gap:
                 key = f"seen:{seq}" if legacy else f"seen:{_place(s)}@{iso}"
                 cur = lines[key] = {"kind": MOTION, "places": [], "first": iso, "last": iso}
                 f["pass"] = key
@@ -1390,7 +1382,7 @@ def visit_fold(v: dict, kept: dict | None = None, legacy: bool = False) -> dict:
             # the same lock opened again once locked again (or after the siren's window): a line of its own, the
             # earlier one kept as it was
             ln = lines.get(locks.get(eid) or "")
-            if ln is None or ln.get("again") or at - _when(ln["last"]) > gap:
+            if ln is None or ln.get("again") or at - moment(ln["last"]) > gap:
                 key = f"lock:{eid}" if f"lock:{eid}" not in lines else f"lock:{eid}@{iso}"
                 lines[key] = {"kind": LOCK, "s": _step_kept(s), "first": iso, "last": iso}
                 locks[eid] = key
@@ -1408,7 +1400,7 @@ def visit_fold(v: dict, kept: dict | None = None, legacy: bool = False) -> dict:
                 key = "inside" if legacy and kind == INSIDE and not any(k.startswith("inside") for k in lines) \
                     else f"{kind}:{eid}"
                 lines[key] = {"kind": kind, "s": _step_kept(s), "first": iso, "last": iso}
-            if at > _when(lines[key]["last"]):
+            if at > moment(lines[key]["last"]):
                 lines[key]["last"] = iso
         f["upto"] = seq
     return f
@@ -1427,12 +1419,12 @@ def visit_lines(v: dict, zone: str, fold: dict | None = None) -> list[tuple[str,
       when; a room's sound, the room and when it was first heard (never "someone is inside")."""
     gap = timedelta(minutes=float(RULES["siren"]["window_min"]))
     fold = fold if fold is not None else visit_fold(v)
-    lines = {k: {**ln, "first": _when(ln["first"]), "last": _when(ln["last"]), "again": _when(ln.get("again"))}
+    lines = {k: {**ln, "first": moment(ln["first"]), "last": moment(ln["last"]), "again": moment(ln.get("again"))}
              for k, ln in fold["lines"].items()}
     # ⚠️ THE DETECTION THAT OPENED THE VISIT IS SEEN TOO (owner, 2026-11-07, drill #135: "Seen at Test motion, 05:13"
     # while the villa opened the visit at its second detection, 05:14): the villa keeps one step per device in a row, so
     # the opening's own moment (`opened_at`) ends the pass it falls in when no step says it
-    opened = _when(v.get("opened_at"))
+    opened = moment(v.get("opened_at"))
     for cur in sorted((ln for ln in lines.values() if ln["kind"] == MOTION), key=lambda ln: moment_key(ln["first"])):
         if opened is not None and cur["first"] <= opened and cur["last"] < opened <= cur["last"] + gap:
             cur["last"] = opened
@@ -1541,7 +1533,7 @@ def stronger(v: dict, fold: dict | None = None) -> bool:
 def visit_quiet(v: dict) -> Said | str:
     """Why a visit ended, after "Cleared on …:": no further signal for its window (closes_at - last_at), or nothing
     more when the villa did not say."""
-    a, b = _when((v or {}).get("last_at")), _when((v or {}).get("closes_at"))
+    a, b = moment((v or {}).get("last_at")), moment((v or {}).get("closes_at"))
     return say("visit_ended", quiet=lasting_in((b - a).total_seconds())) if a and b and b > a else ""
 
 
@@ -1573,7 +1565,7 @@ def visit_reminder(asked: Said, p: dict, zone: str | None) -> Said:
     parts = [Said(f"{asked}{SW.stop('en')}", {k: f"{t}{SW.stop(k)}" for k, t in asked.langs.items()})]
     if changed:
         s = changed[-1]
-        hm = clock(_when(s["at"]), zone or "UTC", days=False)
+        hm = clock(moment(s["at"]), zone or "UTC", days=False)
         parts.append(say(f"visit_changed_{s.get('kind')}", name=_place(s), place=_place(s),
                          room=str(s.get("area") or _place(s)), time=hm))
     parts.append(say("visit_expected"))
@@ -1592,8 +1584,8 @@ def visit_siren(store: Store, iid: int, v: dict, ev: dict) -> dict | None:
     steps = [s for s in visit_steps(v) if s.get("kind") not in NOT_A_REASON]
     if not steps:
         return None
-    since = max(_when(s["at"]) for s in steps) - timedelta(minutes=cfg["window_min"])
-    recent = [s for s in steps if _when(s["at"]) >= since]
+    since = max(moment(s["at"]) for s in steps) - timedelta(minutes=cfg["window_min"])
+    recent = [s for s in steps if moment(s["at"]) >= since]
     signals = {str(s.get("entity_id")) for s in recent}
     mode = (ev.get("occupancy") or UNKNOWN).lower()
     armed = len(signals) >= cfg["min_signals"] and mode in ASKED_WHILE
@@ -1606,8 +1598,8 @@ def visit_siren(store: Store, iid: int, v: dict, ev: dict) -> dict | None:
               f"{ASKED_WHILE[mode]}: {', '.join(names)}. Approving sounds the siren for "
               f"{lasting(siren_minutes() * 60)}.")
     # the cameras whose picture the visit lacks for that window: snapped into its sheet before the question
-    pictured = {str(ph.get("camera")) for ph in v.get("photos") or [] if isinstance(ph, dict) and _when(ph.get("at"))
-                and _when(ph.get("at")) >= since}
+    pictured = {str(ph.get("camera")) for ph in v.get("photos") or [] if isinstance(ph, dict) and moment(ph.get("at"))
+                and moment(ph.get("at")) >= since}
     cams = [c for c in cameras_near([{"entity_id": s.get("entity_id"), "payload": "{}"} for s in recent]) if c not in pictured]
     offered = say("visit_siren", role=role_in("owner"), time="{time}")
     # ⚠️ THE QUESTION ON THE ALERT ITSELF (owner, 2026-11-08, visit #154: the card, then a separate "Approval request"
@@ -1660,7 +1652,7 @@ def visit_intake(store: Store, ev: dict, now: datetime, params: VillaParams | No
         key = alert_keys({**ev, "entity_id": VISIT})[0]
         # opened when the villa sent it, whenever VESTA takes it over (a restart in between: owner's drill #134, its
         # fault's time 04:12 while the villa's alert went at 04:10): the fault's time and every report's
-        iid = store.new_incident(key, rule_id, ev["entity_id"], sev, ev, (_when(v.get("opened_at")) or now).isoformat())
+        iid = store.new_incident(key, rule_id, ev["entity_id"], sev, ev, (moment(v.get("opened_at")) or now).isoformat())
         carry_check(store, iid, route, ev)
         carry_to(store, iid, sev, ev)
         W.carry(store, iid, W.terms(0, 0))                 # a visit is never watched after its close
@@ -1675,14 +1667,14 @@ def visit_intake(store: Store, ev: dict, now: datetime, params: VillaParams | No
         inc = store.incident(iid)
         out["decision"] = "visit_away" if away else "new"
         lines = visit_story(store, iid, v, zone)
-        told = same_time(store, inc, _when(v.get("opened_at")) or now, params, zone)
+        told = same_time(store, inc, moment(v.get("opened_at")) or now, params, zone)
         if told:
             lines.append(("same_time", told, now.isoformat(), None))
         text = details(ev, rule_id)
         # its card in each chat is the one the villa sent (its record names it), taken over in place: its number,
         # heading and buttons; a chat with none gets VESTA's own
         # "Alert sent" when the villa sent it, whenever VESTA takes it over (a restart in between: owner's drill #129)
-        sent = (_when(v.get("opened_at")) or now).isoformat()
+        sent = (moment(v.get("opened_at")) or now).isoformat()
         out["ha_messages"] = [R.ha_message(iid, text, ev.get("_context_id"), stage="new",
                                            messages=[] if away else _cards(v),
                                            takes=[f"{VISIT}:{vid}"], at=sent, alone=away)]
@@ -1707,7 +1699,7 @@ def visit_intake(store: Store, ev: dict, now: datetime, params: VillaParams | No
             # said on the step's own line, "…, 18:35: alert sent again (to: Owner & FM)" (notice.resent_into), the
             # card's state "New alert" (message_format.STEPS "stronger": listed); the step itself is the card's title
             # at the step's own moment: the line it is said on is the step's that began then
-            rang = (_when((v.get("step") or {}).get("at")) or now).isoformat()
+            rang = (moment((v.get("step") or {}).get("at")) or now).isoformat()
             out["send"] += [{**m, "at": rang} for m in tell(inc["severity"], "stronger", incident=iid,
                                                              ladder=route.get("ladder", True), **about(inc, Said("")))]
         elif not away:
@@ -1733,7 +1725,7 @@ def visit_intake(store: Store, ev: dict, now: datetime, params: VillaParams | No
     if ans and ans.get("option") in BUTTONS and (v.get("closed") or {}).get("why") != "answered":
         # (an answer that closed the visit is said by its close: visit_close)
         # the answer the villa applied, a line of the story ("Not a problem on … (Wayan)"), never answered again
-        t = _when(ans.get("at")) or now
+        t = moment(ans.get("at")) or now
         lines.append(("answered", answer_said(ans, moment_label(t, zone), str(ans.get("by") or "") or str(role_said("fm"))),
                       t.isoformat(), t.isoformat()))
     news = [ln for ln in lines if was.get(ln[0]) != str(ln[1])]
@@ -1970,9 +1962,9 @@ def reminded(p: dict) -> tuple[datetime | None, bool]:
     record's (the villa reminded while it held the visit: VESTA away at its start, or silent mid-visit). ⚠️ ONE
     REMINDER, WHOEVER SENT IT (architecture review 2026-11-09, card 5): the visit's was read at intake, the desk's at
     the tick, two records of one fact."""
-    if _when(p.get(REMINDED)):
-        return _when(p.get(REMINDED)), False
-    villa = _when((p.get(VISIT) or {}).get("reminded_at"))
+    if moment(p.get(REMINDED)):
+        return moment(p.get(REMINDED)), False
+    villa = moment((p.get(VISIT) or {}).get("reminded_at"))
     return villa, villa is not None
 
 
@@ -2020,7 +2012,7 @@ def chase(store: Store, inc: dict, now: datetime, out: dict, params: VillaParams
         out["reasked"].append(inc["id"])
     # a reminder that waited for the alert to go quiet (quiet_since) keeps its escalation as long after it as before
     elif inc["state"] == Incident.REASKED and now - asked >= timedelta(minutes=escal) and \
-            now - (_when(inc.get("reasked_at")) or asked) >= timedelta(minutes=max(escal - reask, 0)) and \
+            now - (moment(inc.get("reasked_at")) or asked) >= timedelta(minutes=max(escal - reask, 0)) and \
             store.move(inc["id"], (Incident.REASKED,), Incident.ESCALATED, escalated_at=now.isoformat(),
                        assignee=CHASE["escalates_to"]):
         # ⚠️ WHAT THE SETTINGS WAITED, SAID AS THEY WAIT IT (owner's screenshot, 2026-11-15, live #177): "No answer from
@@ -2037,7 +2029,7 @@ def quiet_since(inc: dict, p: dict) -> datetime:
     """When incident `inc` (its notes `p`) last changed: asked, or its latest step since — a repeat of its alert, a
     visit's step. ⚠️ ONE REMINDER, ONLY WHEN QUIET (owner, 2026-11-08, visit #154: the reminder rang at 15 minutes while
     the visit was still growing step by step): the reminder waits until reask_minutes passed with no new step."""
-    times = [_when(t) for t in (inc.get("asked_at"), inc.get("last_seen_at"), (p.get(VISIT) or {}).get("last_at"))]
+    times = [moment(t) for t in (inc.get("asked_at"), inc.get("last_seen_at"), (p.get(VISIT) or {}).get("last_at"))]
     return max(t for t in times if t)
 
 

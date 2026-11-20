@@ -16,10 +16,11 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from vesta_shared import kiosk_words, result
 from vesta_shared.problems import Problems
+from vesta_shared.timeutil import before, moment
 from vesta_shared.when import Spec
 
-from .kiosk import ASK_HELP, CLOSE, MINE, REOPEN, TAKE, KioskError, closing, confirming, noted, placed, retitled, tagged, \
-    monitoring, holding, todo, unwatched
+from . import fault_card
+from .kiosk import ASK_HELP, CLOSE, MINE, REOPEN, TAKE, KioskError, noted, retitled
 from .kiosk import fault_title_chars
 from vesta_shared.messaging import headline, incident_tag
 from vesta_shared.message_format import IN_COCKPIT, ON_TELEGRAM, STEPS
@@ -83,7 +84,7 @@ class Tickets:
                                           **({"priority": want.get("priority")} if want["number"] and want.get("priority") else {}),
                                           **({"origin": want["origin"]} if want["origin"] else {}),
                                           **({"check": want["check"]} if want["check"] else {}),
-                                          **({"pattern": self._pattern(want)} if self._pattern(want) else {}),
+                                          **({"pattern": fault_card.pattern(want)} if fault_card.pattern(want) else {}),
                                           **({"opened_at": want["began"]} if want.get("began") else {}),
                                           **(self._closed_at_birth(task, want) if closed and task else {}))
         log.info("Kiosk fault %s created: %s", tid, headline(title)[:80])
@@ -96,8 +97,8 @@ class Tickets:
         """add_ticket's `amends` and `resolved` for a fault made closed: its whole short story, then its close."""
         story = self.story(want["number"]) if want["number"] else []
         # its whole story: an incident closed at its first event has one run (a reopening's own lines only)
-        since = _moment(task.get("reopened_at"))
-        lines = [x for x in story if since is None or (_moment(x["at"]) or since) >= since]
+        since = moment(task.get("reopened_at"))
+        lines = [x for x in story if since is None or (moment(x["at"]) or since) >= since]
         return {"amends": (noted(lines),) if lines else (),
                 "resolved": {"note": want["note"], "who": want["who"], "confirms_by": want["confirms_by"],
                              "lasting": want["lasting"], "not_watched": not want["confirms_by"]}}
@@ -117,13 +118,6 @@ class Tickets:
         except (ZoneInfoNotFoundError, ValueError):
             zone = ZoneInfo("UTC")
         return Spec.parse(spec).next_after(after.astimezone(zone))
-
-    def _pattern(self, want: dict, card: dict | None = None) -> dict | None:
-        """{"titlePattern", "since"} for a fault the agent titles (a Kiosk that does not read them never gets them: its
-        gate, Kiosk._gated); None for a title a person wrote, or nothing to word."""
-        if not want.get("pattern") or (card or {}).get("person_titled"):
-            return None
-        return {"titlePattern": headline(want["pattern"])[:fault_title_chars()], "since": want["since"]}
 
     async def reopen(self, a: dict) -> bool:
         """{task_id, title, note}: the task's fault open again in the Kiosk under its new title — or, when it
@@ -267,11 +261,11 @@ class Tickets:
                 by_number[str(n)] = t["todo_uid"]
         closed = 0
         for uid, card in held.items():
-            n = card.get("alert_number")
+            n = card.get("number")
             if uid in mine or card.get("status") == "resolved" or n is None or not uid.startswith(MINE):
                 continue
             if by_number.get(str(n)) and by_number[str(n)] != uid:
-                if await self.kiosk.resolve_ticket(uid, note=f"A second copy of {incident_tag(n, card.get('alert_priority'))}'s fault: closed, the other one says it."):
+                if await self.kiosk.resolve_ticket(uid, note=f"A second copy of {incident_tag(n, card.get('priority'))}'s fault: closed, the other one says it."):
                     closed += 1
         if closed:
             log.info("Closed %d double Kiosk fault(s) of an alert that already had one", closed)
@@ -298,10 +292,10 @@ class Tickets:
             task = tasks.get(uid)
             # the last press read: its moment, and how many presses of that very moment were read (two can share one)
             mark = read.get(uid) if isinstance(read.get(uid), list) and len(read[uid]) == 2 else None
-            after, seen = (_moment(mark[0]), int(mark[1])) if mark else (_last_moved(task), 0)
+            after, seen = (moment(mark[0]), int(mark[1])) if mark else (_last_moved(task), 0)
             same = 0
             for g in card.get("gestures") or ():
-                at = _moment(g["at"])
+                at = moment(g["at"])
                 if after is not None and at is not None and at == after:
                     same += 1
                     if same <= seen:
@@ -333,7 +327,7 @@ class Tickets:
             # by the alert desk in each chat's language with the watch it wrote (Notes.KIOSK_CLOSED; architecture review
             # 23, card 1: told here, it said no watch and read "(closed)")
             said = kiosk_words.closed(by, at, self.timezone, lasting=g["lasting"], nothing=bool(g.get("nothing")))
-            if task and task["status"] == "open" and not _before(at, task.get("reopened_at")):
+            if task and task["status"] == "open" and not before(at, task.get("reopened_at")):
                 iid = problems.closed_in_kiosk(task["id"], said, at=at, who=by or None, lasting=g["lasting"])
                 log.info("Kiosk fault %s closed by a person: its task closed with it", uid)
                 return int(bool(iid))
@@ -347,7 +341,7 @@ class Tickets:
             # ⚠️ A PERSON'S REOPENING IS THEIRS (architecture review 25), WHATEVER THE FAULT'S AGE (review 29): its task
             # opens again and someone is told — an alert's by the desk (Problems.reopened_in_kiosk), a night check's by
             # its skill's recheck, from the task's untold mark (round 2, 2026-10-19)
-            if task and task["status"] != "open" and _before(task.get("done_at"), at):
+            if task and task["status"] != "open" and before(task.get("done_at"), at):
                 problems.reopened_in_kiosk(task["id"], by, kiosk_words.reopened(by, at, self.timezone), at=at)
                 log.info("Kiosk fault %s reopened by a person: its task is open again", uid)
         elif kind == TAKE:
@@ -402,10 +396,10 @@ class Tickets:
         """Step 3: each fault says what its task says (Problems.card). A close is redone for two days (a resolve that did
         not land: the Kiosk down a moment); past them, a fault a person moved since is theirs. `only`: the faults of
         these incidents alone (`follow`)."""
-        recent = (datetime.now(timezone.utc) - timedelta(days=2)).isoformat()
+        recent = datetime.now(timezone.utc) - timedelta(days=2)
         fixed, reopened, resolved = 0, 0, 0
         for t in problems.store.tasks(None):
-            if only is not None and problems._source(t) not in {("incident", i) for i in only}:
+            if only is not None and Problems.source_of(t) not in {("incident", i) for i in only}:
                 continue
             uid = t.get("todo_uid")
             card = held.get(uid) if uid else None
@@ -420,42 +414,16 @@ class Tickets:
                                            "note": want["reopen_note"]})
                     fixed += n; reopened += n
                 elif want["open"]:
-                    # what the fault must say now, put right in ONE write (Kiosk.amend: retitled, tagged, noted)
+                    # what the fault must say now, put right in ONE write (Kiosk.amend: retitled, its fields, noted)
                     amends = []
                     title = headline(want["title"])[:fault_title_chars()]
                     # the title the agent last gave it, not the one it has: a title a person wrote stays (kiosk.retitled)
                     if title and (card.get("agent_title") or card.get("title")) != title:
                         amends.append(retitled(title))
-                    # the device it is about now: its card's name (a visit's strongest step)
-                    if want.get("entity_id") and card.get("entity_id") != want["entity_id"]:
-                        amends.append(placed(want["entity_id"]))
-                    # the alert's number, as every chat writes it, and where it came from (owner, 2026-10-14)
-                    # its duration worded when shown — never on a title a person wrote: theirs, as it is
-                    pattern = self._pattern(want, card) or (
-                        {"titlePattern": None, "since": None} if card.get("title_pattern") else None)
-                    if (want["number"] and card.get("alert_number") != want["number"]) \
-                            or (want["number"] and want.get("priority") and card.get("alert_priority") != want["priority"]) \
-                            or (want["origin"] and card.get("origin") != want["origin"]) \
-                            or (want["check"] and card.get("check") != want["check"]) \
-                            or (pattern and (card.get("title_pattern"), card.get("since")) != (pattern["titlePattern"], pattern["since"])):
-                        amends.append(tagged(want["number"], want["origin"], want["check"], pattern, want.get("priority")))
-                    # when the agent closes it if it stays over (owner, 2026-10-21), or that line gone when it holds again
-                    if card.get("closes_at") != want["closes_at"]:
-                        amends.append(closing(want["closes_at"]))
-                    # an open visit: until when it is monitored, moved later at each step (owner, 2026-11-07)
-                    if card.get("monitored_until") != want["monitored_until"]:
-                        amends.append(monitoring(want["monitored_until"]))
-                    # a held alert: why it is expected, on the tablet's Watch until it is no longer (owner, 2026-11-12)
-                    if card.get("expected") != want.get("expected"):
-                        amends.append(holding(want.get("expected")))
-                    # an open fault is never being confirmed (a field left by a reopening that did not take it away)
-                    if card.get("confirms_by"):
-                        amends.append(confirming(None))
-                    # what to do on site, as its problem says it NOW (Problems.card todo): the route's check edited, a
-                    # finding's check rewritten by the night — written at the fault's making only until 0.12.263
-                    said = result.fault_note(want["todo"])
-                    if said and card.get("note") != said:
-                        amends.append(todo(said))
+                    # its card's fields: the device, the alert's number, its "closes at", "monitoring until", what to
+                    # do on site… — each as its problem says it NOW (fault_card.FIELDS)
+                    if changed := fault_card.changes(want, card):
+                        amends.append(fault_card.write(changed))
                     # what happened on Telegram, its whole short story (owner, 2026-10-14; ticket 19 of "One inbox",
                     # 2026-10-28) — from this task's run on (an earlier run's lines belong to the fault as it was
                     # then); a Kiosk that shows no such line gets none (its gate, Kiosk._gated)
@@ -464,24 +432,22 @@ class Tickets:
                         since = _run_start(story, t)
                         # every line of this run: the fault keeps each by its id, writing only what changed
                         # (kiosk.noted)
-                        lines = [x for x in story if since is None or (_moment(x["at"]) or since) >= since]
+                        lines = [x for x in story if since is None or (moment(x["at"]) or since) >= since]
                         if lines:
                             amends.append(noted(lines))
                     fixed += await self.kiosk.amend(uid, *amends)
-                elif card["status"] != "resolved" and (t.get("done_at") or "") >= recent:
+                elif card["status"] != "resolved" and before(recent, t.get("done_at"), or_same=True):
                     # nothing watched after it (no watch, no read-again): Closed at once on the tablet
                     n = await self.kiosk.resolve_ticket(uid, note=want["note"], **({"who": want["who"]} if want["who"] else {}),
                                                         confirms_by=want["confirms_by"], lasting=want["lasting"],
                                                         not_watched=not want["confirms_by"])
                     fixed += n; resolved += n
-                elif card["status"] == "resolved" and (card.get("confirms_by") != want["confirms_by"]
-                                                       or (want["not_watched"] and not card.get("not_watched")
-                                                           and (t.get("done_at") or "") >= recent)):
+                elif card["status"] == "resolved" and ("confirmsBy" in (changed := fault_card.changes(want, card))
+                                                       or ("notWatched" in changed and before(recent, t.get("done_at"), or_same=True))):
                     # a person's close being confirmed (owner, 2026-10-23): "VESTA confirms by …" while the alert desk
                     # watches it, taken away once it has read it again (Problems.card confirms_by); one nothing watches
                     # says so (a visit closed in the Cockpit, drill #136-P1: on the tablet's Watch list with no state)
-                    fixed += await self.kiosk.amend(uid, confirming(want["confirms_by"]),
-                                                    *((unwatched(),) if want["not_watched"] else ()))
+                    fixed += await self.kiosk.amend(uid, fault_card.write(changed))
             except KioskError as e:
                 # a refusal of this fault is this fault's: the next one is tried (see the repair's own loop above)
                 log.warning("Kiosk fault %s could not be brought up to date: %s", uid, e)
@@ -500,19 +466,11 @@ def _run_start(story: list[dict], task: dict) -> datetime | None:
     in, so the alert sent just before the fault was made is told too (ticket 19 of "One inbox": the card read from
     the first reminder on)."""
     if task.get("reopened_at"):
-        return _moment(task["reopened_at"])
-    made = _moment(task.get("created_at"))
+        return moment(task["reopened_at"])
+    made = moment(task.get("created_at"))
     starts = [m for x in story if (s := STEPS.get(x.get("stage") or "")) and s.starts_run
-              and (m := _moment(x["at"])) and (made is None or m <= made)]
+              and (m := moment(x["at"])) and (made is None or m <= made)]
     return max(starts) if starts else made
-
-
-def _moment(iso: str | None) -> datetime | None:
-    """A moment as the Kiosk ("…Z") or the store ("…+00:00") writes it; None when it cannot be read."""
-    try:
-        return datetime.fromisoformat(str(iso).replace("Z", "+00:00")) if iso else None
-    except ValueError:
-        return None
 
 
 #: The skills' store's line of the last press taken in on each Kiosk fault ({fault id: [its `at`, how many presses of
@@ -523,15 +481,5 @@ PRESSES = "cockpit:presses"
 def _last_moved(task: dict | None) -> datetime | None:
     """When a task was last closed or reopened: a press before it is already in it (its making is not: a fault's
     presses all come after it). None without a task, or one never moved since it was made."""
-    moments = [m for m in (_moment((task or {}).get(k)) for k in ("done_at", "reopened_at")) if m]
+    moments = [m for m in (moment((task or {}).get(k)) for k in ("done_at", "reopened_at")) if m]
     return max(moments) if moments else None
-
-
-def _before(resolved_at: str | None, reopened_at: str | None) -> bool:
-    """Is the first moment before the second? Moments as the Kiosk ("…Z") and the store ("…+00:00") write them."""
-    if not (resolved_at and reopened_at):
-        return False
-    try:
-        return datetime.fromisoformat(resolved_at.replace("Z", "+00:00")) < datetime.fromisoformat(reopened_at.replace("Z", "+00:00"))
-    except ValueError:
-        return False
