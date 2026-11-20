@@ -135,6 +135,11 @@ class Notes:
     # the close whose watch the desk has ended (its closed_at): every copy said "Closed on …", its alert struck (owner,
     # 2026-10-25); written by the desk's watch_over, read by Incidents.watching — a later close is watched again
     WATCH_OVER = "watch_over"
+    # ⚠️ "NOT A PROBLEM" HOLDS WHILE IT LASTS (owner, 2026-11-20, #201: a door left unlocked on purpose, "Not a problem"
+    # pressed at 01:36, reopened "Back" by its rule's repeat at 01:59, and again at 02:29): a person's "Not a problem",
+    # {"since": its close, "seen": the rule's latest repeat}. Written by THE close (alert_watch.close), read by
+    # alert_watch.lasting, gone with the villa's all-clear for it (alert_watch.lasted) or when the alert opens again
+    LASTING = "lasting_close"
     KIOSK_REOPENED = "kiosk_reopened"                            # mail: who reopened its fault in the Kiosk, and when
     # who took it on as a ticket and when ("Ticket opened by JM on …", kiosk_words.taken), in the Kiosk or from Telegram:
     # written by Problems.taken_in_kiosk, read by Incidents.taken — its buttons offered `until: taken` go (owner,

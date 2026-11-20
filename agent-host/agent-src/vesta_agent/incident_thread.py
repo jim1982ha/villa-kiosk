@@ -117,6 +117,7 @@ class IncidentThread:
         # again as a photo when it is a text message (delivery.Delivery.send): a visit's sheet (`picture`)
         self.media, self.send = media, send
         self._locks: dict[str, asyncio.Lock] = {}
+        self._flying: set[tuple[str, int, int]] = set()   # (incident, chat, id): sent, its `post` on the way
 
     def _lock(self, iid: int | str) -> asyncio.Lock:
         """Incident `iid`'s lock: its copies change one at a time (see the module's note)."""
@@ -127,8 +128,55 @@ class IncidentThread:
         """Message `mid`, just sent to `chat` with these `parts` (layout.py), is now incident `iid`'s message there: the
         earlier one goes. `photo`: the picture it carries ((base64, mime)), kept for the tablet; `sheet`:
         the visit's sheet it carries (its fingerprint: `picture` leaves it as it is)."""
-        async with self._lock(iid):
-            await self._post(iid, chat, mid, parts, buttons=buttons, keyboard=keyboard, photo=photo, sheet=sheet)
+        flying = (str(iid), int(chat), int(mid))
+        self._flying.add(flying)
+        try:
+            async with self._lock(iid):
+                await self._post(iid, chat, mid, parts, buttons=buttons, keyboard=keyboard, photo=photo, sheet=sheet)
+        finally:
+            self._flying.discard(flying)
+
+    def sent(self, iid: int | str, chat: int, mid: int) -> None:
+        """Message `mid` of incident `iid` was just taken by Telegram in `chat`: known at once, before `post` records it
+        (it waits for the incident's lock). One never recorded (the work stopped in between) goes at the next post,
+        close or housekeeping pass (`_strays`), as a replaced copy does.
+
+        ⚠️ A COPY SENT IS KNOWN AT ONCE (owner, 2026-11-20, #199): a copy sent at 17:23 was never recorded, the agent
+        stopped for an update while its post waited for the lock; it kept "monitoring until 17:53" and live buttons."""
+        self.state.set_incident_sent(iid, chat, [*self.state.incident_sent(iid, chat), int(mid)])
+
+    async def _strays(self, iid: int | str, only: int | None = None) -> int:
+        """Under the incident's lock: every copy of `iid` sent but never recorded (`sent`), in chat `only` or every
+        chat, deleted, or past Telegram's 48 hours made a pointer to the recorded one (its buttons gone), then
+        remembered as replaced. A copy whose `post` is still on the way is left to it; one in a chat that holds no
+        record is the chat's only copy and stays. How many went."""
+        n = 0
+        for chat_iid, chat, mids in self.state.incidents_sent():
+            if str(chat_iid) != str(iid) or (only is not None and int(chat) != int(only)):
+                continue
+            rec = self.state.incident_message(iid, chat)
+            if not rec or not rec.get("mid"):
+                continue
+            done = [m for m in mids if m == int(rec["mid"])]
+            for m in mids:
+                if m == int(rec["mid"]) or (str(iid), int(chat), m) in self._flying:
+                    continue
+                gone = bool(self.delete and await self.delete(chat, m))
+                if not gone and self.edit:
+                    await self.edit(chat, m, f"{self.name(iid)} · see the newer message below.")
+                log.info("%s in chat %s: message %s sent but never recorded %s (its message is %s)", iid, chat, m,
+                         "deleted" if gone else "now a pointer" if self.edit else "kept", rec.get("mid"))
+                done.append(m)
+                n += 1
+            if done:
+                # read again: a copy sent meanwhile (`sent` needs no lock) is kept for its own post
+                self.state.set_incident_sent(iid, chat, [m for m in self.state.incident_sent(iid, chat) if m not in done])
+                rec = self.state.incident_message(iid, chat) or rec
+                gone = [m for m in done if m != int(rec["mid"]) and m not in (rec.get("replaced") or [])]
+                if gone:
+                    self.state.set_incident_message(iid, chat, {**rec, "replaced": [*(rec.get("replaced") or []),
+                                                                                     *gone][-REPLACED_KEPT:]})
+        return n
 
     def taken(self, iid: int | str, run: str) -> None:
         """The villa's automation run `run` (its context id) is incident `iid`'s: its announcement on the tablet gives way
@@ -152,7 +200,7 @@ class IncidentThread:
         one a later copy does not carry (agent-contract.json vestaMessage.keptOnRewrite)."""
         if self.mirror is None:
             return
-        parts = self._for_everyone(parts, iid)
+        parts = self._for_everyone(self._latest_step(iid, parts), iid)
         keyboard = self._card_keyboard(iid, keyboard)
         self.state.set_incident_card(iid, {"parts": parts, "keyboard": keyboard})
         # ⚠️ THE VILLA'S OWN MESSAGES IT STANDS FOR (tickets 26-27 of "One inbox", owner 2026-10-28: "update the existing
@@ -166,6 +214,25 @@ class IncidentThread:
                                             step=self.words.split(said) if isinstance(said, dict) else None,
                                             takes=self.state.incident_runs(iid),
                                             photos=photos(self.state, iid) if str(iid).isdigit() else None))
+
+    def _latest_step(self, iid: int | str, parts: dict) -> dict:
+        """A chat's copy with the bottom line of the incident's latest step: its own, else the card's when the card
+        already says a later one.
+
+        ⚠️ EACH CHAT ITS OWN BOTTOM LINE, THE TABLET THE LATEST (owner, 2026-11-20, live #201): a chat's copy says its
+        own latest step now (the facility manager's never the owner's escalation), and the card was told from whichever
+        chat was drawn last — a visit's line seen after the escalation, drawn in the FM's chat last, gave the tablet
+        the reminder back."""
+        card = self.state.incident_card(iid) or {}
+        old = card.get("parts") or {}
+        mine, kept = parts.get("said"), old.get("said")
+        if not (isinstance(mine, dict) and isinstance(kept, dict) and mine.get("stage") and kept.get("stage")):
+            return parts
+        try:
+            later = datetime.fromisoformat(str(kept["at"])) > datetime.fromisoformat(str(mine["at"]))
+        except (KeyError, TypeError, ValueError):
+            return parts
+        return {**parts, "status": old.get("status") or "", "said": kept, "mark": old.get("mark")} if later else parts
 
     def _for_everyone(self, parts: dict, iid=None) -> dict:
         """A chat's copy as the tablet's card: in English, the languages it was said in carried beside it
@@ -242,6 +309,9 @@ class IncidentThread:
         want, tr = self._wanted.pop((str(iid), int(chat)), None), self._translations()
         if want and tr is not None:
             tr.later(int(iid), chat, want)      # recorded now: its translation redraws this very copy
+        # recorded now; a copy sent before it and never recorded (a stop in between: `sent`) goes
+        self.state.set_incident_sent(iid, chat, [m for m in self.state.incident_sent(iid, chat) if m != int(mid)])
+        await self._strays(iid, chat)
 
     def own_words(self, iid: int | str, chat: int, p: dict) -> dict:
         """A card of incident `iid` about to go to `chat` (Poster.post, Outcome's take-over), its alert words in the chat's
@@ -323,12 +393,13 @@ class IncidentThread:
         if final:
             return await self._finish(iid, note, note_in)
         async with self._lock(iid):
+            await self._strays(iid)             # a copy sent and never recorded keeps no buttons past the close
             now = datetime.now(timezone.utc)
             n = 0
             for chat, rec in self.state.incident_chats(iid):
                 said = pick(note, note_in, self._lang(chat))
                 said = layout.fill_time(said, now, self.tz) if said else said           # 10/10/2026 17:13, as every notice
-                if rec.get("settled") and not rec.get("interim"):
+                if rec.get("settled") and not rec.get("interim") and not rec.get("reopened"):
                     # ⚠️ SETTLED BEFORE ITS INCIDENT CLOSED (owner, 2026-10-11): a press settles every copy at once, the desk
                     # closes the incident just after — the group's copy kept "New" above "Done pressed by Fabien"
                     p = layout.of(rec)
@@ -347,7 +418,8 @@ class IncidentThread:
                     p["said"] = layout.note_said(note, note_in, now, self.tz)
                 p = {**p, "head": self._head_now(iid, chat, p.get("head") or "")}      # "Closed" once its incident is (notice.py)
                 p = self._own_words(iid, chat, p)
-                kept = {k: v for k, v in rec.items() if k != "interim"}
+                # a copy settled by an earlier close, left as it was while the alert came back (`sync`), says this one
+                kept = {k: v for k, v in rec.items() if k not in ("interim", "reopened")}
                 n += await self._show(iid, chat, {**kept, "settled": True, **({"interim": True} if interim else {})}, p)
             if note and not interim and str(iid).isdigit() and (closed or self.words.closed_now(int(iid))):
                 # the close's own line in its story (notice.close_step), whoever settled it: the desk, the Cockpit
@@ -465,16 +537,26 @@ class IncidentThread:
         whole = self.words.heading(chat, int(iid)) if str(iid).isdigit() and head else None
         return whole or self.words.retitle(iid, head, chat)
 
-    async def sync(self, iid: int | str, parts: dict, skip=(), keyboard=None, head_for=None) -> int:
-        """Every copy of incident `iid` outside `skip` (the chats just sent it) shows `parts` too — the same title,
-        "To:", history and status in every chat, edited quietly (an edit makes no sound) (owner, 2026-10-11: "this should
-        be exactly the same, since we are speaking about the same incident"; 2026-11-07, live #146-P2: every copy at
-        every change, whichever chat the step was sent to). A copy still asked to answer keeps its buttons
-        (`keyboard(chat)`). Returns how many changed."""
+    async def sync(self, iid: int | str, parts: dict, skip=(), keyboard=None, head_for=None, only=None) -> int:
+        """Every copy of incident `iid` outside `skip` (the chats just sent it) that the change is meant for
+        (`only(chat)`; none: every copy) shows `parts` too — the same title, "To:" and status, the chat's own history,
+        edited quietly (an edit makes no sound) (owner, 2026-10-11: "this should be exactly the same, since we are
+        speaking about the same incident"). A copy still asked to answer keeps its buttons (`keyboard(chat)`). Returns
+        how many changed.
+
+        ⚠️ ONLY THE CHATS IT IS MEANT FOR (owner, 2026-11-20, live #201, reversing 2026-11-07 #146-P2 "every copy at every
+        change"): the owner's group, joined at the escalation, was edited at every still-there alert to the facility
+        manager, its bottom line "Still-there alert sent 11:29 (to: FM)". A copy left out stays as it was; one settled
+        while the alert opens again is marked `reopened`, so its close still reaches it (`close`)."""
         async with self._lock(iid):
             n = 0
             for chat, rec in self.state.incident_chats(iid):
                 if chat in skip or not rec.get("mid"):
+                    continue
+                # a press's receipt (`interim`) is replaced by what the press did, whichever chat that was meant for
+                if only is not None and not rec.get("interim") and not only(chat):
+                    if rec.get("settled") and keyboard is not None and not rec.get("reopened"):
+                        self.state.set_incident_message(iid, chat, {**rec, "reopened": True})
                     continue
                 own = layout.of(rec)
                 p = {**parts, "limit": own.get("limit")}
@@ -570,6 +652,7 @@ class IncidentThread:
                                   **({"photo": (base64.b64encode(sheet[0]).decode(), "image/jpeg")} if sheet else {}))
             if not mid:
                 return False
+            self.sent(iid, chat, mid)
             await self._post(iid, chat, mid, p, buttons=bool(kb), keyboard=kb, sheet=sheet[1] if sheet else None)
             return True
 
@@ -602,6 +685,7 @@ class IncidentThread:
                     mid = await self.send(chat, text, keyboard=kb, photo=(base64.b64encode(jpeg).decode(), "image/jpeg"),
                                           **({"silent": True} if ringing.PICTURE != ringing.RING_NEW else {}))
                     if mid:
+                        self.sent(iid, chat, mid)
                         await self._post(iid, chat, mid, p, buttons=bool(kb), keyboard=kb, sheet=made)
                         n += 1
             return n
@@ -677,6 +761,10 @@ class IncidentThread:
                 rec = self.state.incident_message(iid, chat)        # as it stands now, under its lock
                 if rec and rec.get("owed"):
                     n += await self._show(iid, chat, rec, layout.of(rec), tell=False)       # a retry, not a new step
+        # a copy sent and never recorded (`sent`: a stop in between), whatever its incident's state, a closed one too
+        for iid in {i for i, _chat, _mids in self.state.incidents_sent()}:
+            async with self._lock(iid):
+                await self._strays(iid)
         return n
 
     def shown(self, iid: int | str) -> dict[int, dict]:

@@ -829,3 +829,36 @@ def test_the_escalations_words_stay_on_its_own_line_and_say_what_the_settings_wa
     assert re.fullmatch(rf"- Escalation sent {TICKET_RE}: No answer from FM, 30min after the reminder \(to: Owner\)",
                         status[escalation[0]]), status
     assert not [x for x in status if x.startswith("- No answer")], status
+
+
+def capped(vi, keep=5, **more):
+    """The visit's event as the villa sends a long one: its first step and its last `keep` only."""
+    ev = vi.event(**more)
+    ev["visit"]["steps"] = vi.steps[:1] + vi.steps[-keep:]
+    return ev
+
+
+def test_a_long_visit_keeps_one_line_per_place_in_time_order_and_a_second_lock_never_rings_again(tmp_path, kiosk, media):
+    # owner, 2026-11-20, #199: hundreds of steps, the villa keeping only its first and its last ones; the Status showed
+    # duplicated lines out of order, and a lock at 17:52 rang again as "new, stronger" after the one at 17:20
+    v = villa(tmp_path, kiosk)
+    vi = Visit(media=media)
+    vi.add("motion", PARKING, "17:00:00")
+    vi.add("motion", ENTRANCE, "17:01:00")
+    play(v, send(capped(vi, phase="opened")))
+    for kind, eid, hms, extra in (("lock", LOCK, "17:20:00", {"how": "lock"}), ("relock", LOCK, "17:21:00", {}),
+                                  ("inside", LIVING, "17:22:00", {"area": "Living Room"}),
+                                  *(("motion", WATERWALL, f"17:{m}:00", {}) for m in range(23, 31)),
+                                  ("inside", LIVING, "17:50:00", {"area": "Living Room"})):
+        vi.add(kind, eid, hms, **extra)
+        play(v, send(capped(vi)))
+    rang = len([s for s in v.tg.sent if s[0] == FM])
+    vi.add("lock", LOCK, "17:52:00", how="lock")
+    play(v, send(capped(vi)))
+    assert len([s for s in v.tg.sent if s[0] == FM]) == rang, "the lock at 17:52 is no new, stronger step"
+    st = [ln for ln in lines(copy(v, FM)["text"]) if not ln.startswith(("- Alert sent", "- Siren", "⚠️"))]
+    assert [ln.split(",")[0] if "Seen at" in ln else ln.split(" (")[0] if "inside" in ln else ln[:30] for ln in st] == [
+        "- Seen at Parking → Entrance Left", "- Outdoor entrance Lock opened", "- Someone is inside",
+        "- Seen at Waterwall Buddha", "- Outdoor entrance Lock opened"], st
+    assert "17:00–17:01" in st[0] and "17:20" in st[1] and "locked again 17:21" in st[1], st
+    assert "17:22–17:50" in st[2] and "17:23–17:30" in st[3] and "17:52" in st[4], st

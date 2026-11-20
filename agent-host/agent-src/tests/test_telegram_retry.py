@@ -83,10 +83,35 @@ def test_a_long_message_cut_by_a_blip_goes_on_from_the_part_that_failed(waits):
     assert waits == [T.retry_pause_s()]
 
 
-def test_a_network_error_is_tried_once_more_then_said(waits):
-    tg, s = bot([aiohttp.ClientConnectionError(), aiohttp.ClientConnectionError()])
+def refused_connection() -> aiohttp.ClientConnectorError:
+    return aiohttp.ClientConnectorError(None, ConnectionRefusedError(111, "Connection refused"))
+
+
+def test_a_message_that_never_left_is_tried_once_more_then_said(waits):
+    tg, s = bot([refused_connection(), refused_connection()])
     with pytest.raises(TelegramError):
         asyncio.run(tg.send(100, "Hello"))
+    assert len(s.posts) == 2
+
+
+def test_a_message_that_never_left_arrives_at_the_second_try(waits):
+    tg, s = bot([refused_connection(), ok(7)])
+    assert asyncio.run(tg.send(100, "Hello")) == [7]
+
+
+@pytest.mark.parametrize("lost", [asyncio.TimeoutError(), aiohttp.ServerDisconnectedError(),
+                                  aiohttp.ClientConnectionError()])
+def test_no_answer_after_sending_never_makes_a_second_message(waits, lost):
+    # owner, 2026-11-20, #199: a timeout after Telegram took the message, sent again, left two copies in the chat
+    tg, s = bot([lost, ok(8)])
+    with pytest.raises(TelegramError):
+        asyncio.run(tg.send(100, "Hello"))
+    assert [m for m, _ in s.posts] == ["sendMessage"] and waits == []
+
+
+def test_an_edit_without_an_answer_is_tried_again(waits):
+    tg, s = bot([asyncio.TimeoutError(), {"ok": True, "result": True}])
+    assert asyncio.run(tg.api("editMessageText", chat_id=100, message_id=5, text="Hello")) is True
     assert len(s.posts) == 2
 
 

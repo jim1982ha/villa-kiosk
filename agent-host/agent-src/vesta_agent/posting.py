@@ -122,6 +122,9 @@ class Poster:
                               origin=origin, **({"reply_to": reply_to} if reply_to else {}),
                               **({"silent": True} if how != ringing.RING_NEW else {}))
         if mid and thread is not None and self.thread is not None:
+            # ⚠️ KNOWN BEFORE IT IS RECORDED (owner, 2026-11-20, #199): the post waits for the incident's lock; a stop in
+            # between left a copy no record named, its buttons live for good. Its id is kept the moment it arrives
+            self.thread.sent(thread, chat, mid)
             await self.thread.post(thread, chat, mid, {**p, "limit": limit}, buttons=bool(keyboard), keyboard=keyboard,
                                    photo=None if sheet else photo, sheet=sheet)
         elif thread is not None and self.thread is not None:

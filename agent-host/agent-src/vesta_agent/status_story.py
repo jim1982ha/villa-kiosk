@@ -1,7 +1,8 @@
 """An alert's Status, written ONCE for every reader (architecture review of visits, 2026-11-07, card 2).
 
 The same story was written three times — Telegram's "Status:" (notice.Notices.history_lines), the tablet's message
-(kiosk_messages.of_parts, its lines read back from Telegram's heading) and the Kiosk fault's short story
+(kiosk_messages.of_parts, its lines then read back from Telegram's heading: now its heading's `story`, everyone's,
+drawn here for no chat) and the Kiosk fault's short story
 (notice.Notices.story, its own wording, kept by moment with a microsecond nudge) — and the copies drifted: the fault
 lacked "Alert sent" and ": alert sent again", wrote dates where Telegram wrote times. Here an incident's history becomes
 ONE ordered list of lines (`lines`): each with a stable id, its moment as data, its words with a slot where the moment
@@ -14,10 +15,13 @@ again said on its step's line, a press its answer says, "+N more photos" last. T
 - the Kiosk fault: `fault` — the same English words without the moment (the Kiosk writes the line's own time beside
   it), kept by the line's id (kiosk.noted).
 
-⚠️ EVERY COPY THE SAME LINES (owner, 2026-11-07, live #146-P2): the owner's group, joined at the escalation, read
-"Still-there alert sent 11:29 (to: Owner) / ✅ Cleared … Watch 1h" while the facility manager's chat told the whole
-story: each chat listed only the steps sent to its roles (owner, 2026-10-18, #55, now reversed). The viewer is everyone,
-for every chat: "(to: …)" says who was told; a chat keeps only its language.
+⚠️ EACH CHAT ITS OWN LINES (owner, 2026-11-20, live #201, reversing 2026-11-07 #146-P2 "every copy the same lines"):
+the owner's group, joined at the escalation, listed every reminder and still-there alert sent to the facility manager.
+A Telegram chat lists a line sent to roles only when they include one of its own (`seen_by`); a line of no roles (a
+close, a press, a note, a visit's story line) only in the chats of the alert's first recipients, its closes and presses
+also in a chat its escalation brought in, from then on; and the alert's first "Alert sent" in every chat, the one line
+that says when the fault began. The tablet's message and the Kiosk fault are
+everyone's: every line (`roles` None).
 """
 from __future__ import annotations
 
@@ -69,10 +73,12 @@ def _moment(at) -> datetime | None:
     return m if m.tzinfo else m.replace(tzinfo=timezone.utc)
 
 
-def lines(notices, incident: int, lang: str = "en", latest_excluded: int = 0, bottom: bool = True) -> list[Line]:
-    """Incident `incident`'s Status lines, for everyone, in `lang`. `bottom`: the reader shows a bottom line under them
-    (Telegram, the tablet's message) — the last `latest_excluded` notices it says are left out, a close standing is it,
-    and a press its answer says is that answer while only its escalation came after; the fault has no bottom line."""
+def lines(notices, incident: int, lang: str = "en", latest_excluded: int = 0, bottom: bool = True,
+          roles=None, chat: int | None = None) -> list[Line]:
+    """Incident `incident`'s Status lines in `lang`, for Telegram chat `chat` of `roles` (`seen_by`; None: everyone's,
+    the tablet's and the fault's). `bottom`: the reader shows a bottom line under them (Telegram, the tablet's message) — the last
+    `latest_excluded` notices it says are left out, a close standing is it, and a press its answer says is that answer
+    while only its escalation came after; the fault has no bottom line."""
     from .notice import CLOSED_STEP, ESCALATED_STAGE
     history = notices.state.incident_history(incident)
     gone = _cut(history, latest_excluded)[1] if bottom and latest_excluded else set()
@@ -91,6 +97,8 @@ def lines(notices, incident: int, lang: str = "en", latest_excluded: int = 0, bo
     for i, h in enumerate(history):
         if i in gone or i in into:
             continue
+        if roles is not None and not seen_by(notices, h, roles, history, resent.get(i, set()), chat):
+            continue
         # ⚠️ ONE LINE PER PRESS (architecture review 23, card 4): a press whose answer says it (skill.yaml `tells`:
         # "🆘 Need help on … (Luc): Owner is asked to act.") is that answer while nothing but the escalation it made
         # came after it — its own line once something did
@@ -108,6 +116,55 @@ def lines(notices, incident: int, lang: str = "en", latest_excluded: int = 0, bo
     # "+3 more photos on the tablet": a count of the card, never a moment, after every other line (owner, 2026-11-07)
     last = {line_id(h) for h in history if h.get("last")}
     return [x for x in out if x.id not in last] + [x for x in out if x.id in last]
+
+
+def first_alert(notices, history: list[dict]) -> dict | None:
+    """The alert's first "Alert sent" (its first notice when none says so: a history begun by a later step): every chat
+    lists it, and whom it went to are the alert's first recipients (`seen_by`)."""
+    return next((h for h in history if h.get("stage") == "new" and not observed(h)), None) or \
+        next((h for h in history if notices._roles(h)), None)
+
+
+def seen_by(notices, h: dict, roles, history: list[dict], resent=frozenset(), chat: int | None = None) -> bool:
+    """Does Telegram chat `chat` of `roles` list line `h` of `history` (`resent`: the roles of a visit's card sent
+    again said on it)? The alert's first alert (`first_alert`), always; a line sent to roles when they include one of
+    the chat's, or sent to the chat itself (the villa's own message posted there, taken over); a line of none (a
+    close, a press, a note, a visit's story line) when the alert's first recipients do, the chat among them. A chat of
+    no role is told everything (owner, 2026-11-20, #201).
+
+    ⚠️ HOW IT ENDS, ONCE ESCALATED THERE (owner, 2026-11-20, #201): an alert sent to the facility manager and escalated
+    to the owner lists in the owner's group, from that escalation on, its closes ("Cleared", "Done", "Not a problem")
+    and its presses (`ending`) — never the facility manager's reminders, still-there alerts and returns. In the
+    history's order (the moments of two steps of one result can be the same)."""
+    roles = set(roles or ())
+    first = first_alert(notices, history)
+    if not roles or h is first:
+        return True
+    def mine(x: dict) -> bool:
+        return bool(notices._roles(x) & roles) or (chat is not None and any(
+            str(c) == str(chat) for c, _r in x.get("chats") or []))
+    went = notices._roles(h) | set(resent)
+    if went & roles or mine(h):
+        return True
+    if ending(h):
+        # brought in later (an escalation): the ends from the chat's first own step on, and the press that brought
+        # it in ("Need help", right before the escalation it made: who asked for help is never lost)
+        joined = next((j for j, x in enumerate(history) if mine(x)), None)
+        at = next((i for i, x in enumerate(history) if x is h), None)
+        if joined is not None and at is not None and (at >= joined or (
+                at == joined - 1 and h.get("stage") == PRESSED_STAGE)):
+            return True
+    if went:
+        return False
+    told = notices._roles(first) if first is not None else set()       # the alert's first recipients
+    return not told or bool(told & roles) or (first is not None and mine(first))
+
+
+def ending(h: dict) -> bool:
+    """Is history line `h` one that says how an alert ends or is handed over: a close (its message, its words, its
+    watch over), someone taking it on in the Kiosk, a press?"""
+    from .notice import CLEARED_STAGE, CLOSED_STEP, TAKEN_STAGE
+    return h.get("stage") in (CLOSED_STEP, CLEARED_STAGE, TAKEN_STAGE, PRESSED_STAGE)
 
 
 def _words(notices, h: dict, lang: str) -> str | None:

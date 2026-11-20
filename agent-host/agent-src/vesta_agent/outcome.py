@@ -355,9 +355,10 @@ class Outcome:
         for iid, shown_in in posted.items():
             last_chat, last_stage, last_also = shown_in[-1]
             latest = (self.thread.shown(iid).get(last_chat) or {})
-            # ⚠️ EVERY COPY AT EVERY CHANGE (owner, 2026-11-07, live #146-P2, reversing 2026-10-18 #55 "each chat its
-            # own steps"): a step to the facility manager alone left the owner's group copy as it was — at the return
-            # and at the Done it still read "Cleared … Watch 1h". Every copy shows the step just sent, quietly
+            # ⚠️ EVERY COPY THE STEP IS MEANT FOR (owner, 2026-11-20, live #201, reversing 2026-11-07 #146-P2 "every
+            # copy at every change"): the owner's group, joined at the escalation, was edited at every still-there
+            # alert to the facility manager. Every copy of a chat the step is for shows it, quietly; the others stay
+            # as they were (notice.Notices.meant), a close still reaching them (IncidentThread.close)
             # this result's own steps of the incident: its bottom line says them, the history above them never.
             # ⚠️ COUNTED AS RECORDED (architecture review 22, card 1): counted here by its own rule, the villa's late
             # all-clear of an alert closed and watched out was 1 step that Notices.record never added, and every other
@@ -373,7 +374,8 @@ class Outcome:
             listed = any(stays({"stage": st}, hist) for (i, st) in noticed if i == iid)
             if latest.get("parts"):
                 await self.thread.sync(iid, layout.of(latest), skip=set() if listed else {c for c, _s, _a in shown_in},
-                                       head_for=head_for, keyboard=(
+                                       head_for=head_for, only=(lambda c, i=iid, n=steps_now: self.notices.meant(i, c, n))
+                                       if self.notices else None, keyboard=(
                     lambda c, i=iid: self.buttons.keyboard(i, c, skill_name)) if skill_name and self.buttons.open(iid) else None)
         # the tablet's card told again once this result's steps are recorded: its "To:" names whom they went to, even
         # when no other chat's copy was redrawn (the one chat it went to refused it: its card was told before the record)

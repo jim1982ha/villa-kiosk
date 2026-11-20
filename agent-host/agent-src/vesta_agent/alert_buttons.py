@@ -133,7 +133,12 @@ class AlertButtons:
         settled_everywhere = anywhere and bool(shown) and all((c or {}).get("settled") for c in shown.values())
         if key in self._pressing or (shown.get(int(chat)) or {}).get("settled") or settled_everywhere:
             self.state.log("press_refused", {"incident": iid, "by": person.telegram_id, "reason": "already answered"})
-            return await toast("Already answered.")
+            # ⚠️ A STRAY COPY OF AN ALERT ALREADY ANSWERED GOES TOO (owner, 2026-11-20, #199): one no record names kept
+            # its buttons after the close, each press only "Already answered."
+            said = await toast("Already answered.")
+            if pressed is not None and key not in self._pressing:
+                await self.thread.stray(int(iid), int(chat), int(pressed))
+            return said
         self._pressing.add(key)
         try:
             await self._answer(iid, buttons[opt], skill, chat, person, toast, name or person.name,

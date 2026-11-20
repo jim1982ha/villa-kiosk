@@ -65,12 +65,13 @@ def length(t: dict | None, read_again: bool) -> float:
 
 
 def close(store: Store, iid: int, state: str, now_iso: str, *, person: str | None = None,
-          can_come_back: bool = True, t: dict | None = None, **fields) -> None:
+          can_come_back: bool = True, t: dict | None = None, lasting: bool = False, **fields) -> None:
     """THE close of an alert (Problems.close_incident, Problems.closed_in_kiosk): incident `iid` ends in `state` at
     `now_iso`, its other columns `fields`, and carries the watch that follows — or none. `person`: a person closed it
     (a Done, the Cockpit's Close), said as the desk's read-again says it ("Done (JM)"): the desk reads it again after its
     wait. `can_come_back`: False for an end that cannot come back as this number (its automation gone; the villa back
     online, whose next outage is a new alert) — no watch. `t`: the terms (the desk's); else those carried on it.
+    `lasting`: a person's "Not a problem", which holds while the problem lasts (Notes.LASTING: `lasting`).
 
     ⚠️ FORMATS OUTLIVE THEIR WRITER: an incident an older desk carried only a length for (Notes.WATCH_MINUTES, before
     0.6.350) keeps that length."""
@@ -81,8 +82,10 @@ def close(store: Store, iid: int, state: str, now_iso: str, *, person: str | Non
         minutes = length(t, person is not None and can_read_again(store.incident(iid))) if t \
             else p.get(Notes.WATCH_MINUTES)
     keep = {Notes.WATCH_MINUTES: minutes} if minutes else {}
-    store.note(iid, {**keep, **({CHECK: person} if person is not None else {})},
-               drop=() if minutes else (Notes.WATCH_MINUTES,), state=state, closed_at=now_iso, **fields)
+    held = {Notes.LASTING: {"since": now_iso, "seen": now_iso}} if lasting else {}
+    store.note(iid, {**keep, **held, **({CHECK: person} if person is not None else {})},
+               drop=(() if minutes else (Notes.WATCH_MINUTES,)) + (() if lasting else (Notes.LASTING,)),
+               state=state, closed_at=now_iso, **fields)
 
 
 def rewatch(store: Store, inc, t: dict) -> bool:
@@ -138,6 +141,37 @@ def reopens(inc, at: datetime) -> bool:
 def awaiting_read(inc) -> bool:
     """A person's close the desk has not read again yet."""
     return bool(notes_of(inc).get(CHECK))
+
+
+def lasting(inc, at: datetime) -> bool:
+    """Does closed `inc`'s "Not a problem" (Notes.LASTING) still hold at `at`: its alert repeated now is the same
+    problem lasting, recorded and nothing more, inside its watch or after it. Until the villa's all-clear for it
+    (lasted), or the alert opening again.
+
+    ⚠️ NEVER FOREVER: an all-clear that never comes (its automation removed or renamed, or it gave up) would hide the
+    next real alert. It holds while its rule keeps repeating it: silent for `late_close_days` since its latest repeat
+    (the window the villa's late all-clear is matched in), it no longer holds and the next alert opens as usual."""
+    inc = dict(inc) if inc is not None else {}
+    held = notes_of(inc).get(Notes.LASTING)
+    if not inc.get("closed_at") or not isinstance(held, dict):
+        return False
+    try:
+        seen = datetime.fromisoformat(str(held.get("seen") or held.get("since")).replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return False
+    seen = seen if seen.tzinfo else seen.replace(tzinfo=timezone.utc)
+    return at - seen <= timedelta(days=late_close_days())
+
+
+def lasted_again(store: Store, inc, at: datetime) -> None:
+    """Its rule repeated the alert closed "Not a problem" at `at`: the problem still lasts (lasting counts from here)."""
+    held = notes_of(inc).get(Notes.LASTING) or {}
+    store.note(dict(inc)["id"], {Notes.LASTING: {**held, "seen": at.isoformat()}})
+
+
+def lasted(store: Store, inc) -> None:
+    """The problem closed "Not a problem" ended (the villa's all-clear for it): its next alert is a new occurrence."""
+    store.note(dict(inc)["id"], drop=(Notes.LASTING,))
 
 
 def watching(inc, now: datetime | None = None) -> bool:

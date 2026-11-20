@@ -49,6 +49,12 @@ def _failed(method: str, body: dict) -> TelegramError:
     return TelegramError(f"{method}: {code} {words}", refused=refused)
 
 
+def _sends(method: str) -> bool:
+    """Does `method` make a new message (sendMessage, sendPhoto, sendMediaGroup…)? Sent twice, it is two messages; an
+    edit or a delete made twice is the same one."""
+    return method.startswith(("send", "copyMessage", "forwardMessage")) and method != "sendChatAction"
+
+
 #: Telegram's words when an edit changes nothing (it already shows this), or targets a photo's or a file's caption.
 NOT_MODIFIED, NO_TEXT = "message is not modified", "no text in the message to edit"
 #: Telegram's words for a message no longer in its chat (deleted there, by anyone): an edit or a delete of it can never
@@ -145,7 +151,8 @@ class Telegram:
         requests, retry in 3s" stopped an answer with four pictures after the second, and a report was never sent
         again; only the alert cards and the tablet's copies had a retry of their own). A 429 is waited out for the
         time Telegram names, when it is within telegram.retry_wait_max_s; a 5xx, a timeout or a network error is
-        tried once more after telegram.retry_pause_s. A 4xx refusal is never tried again: the same call would be
+        tried once more after telegram.retry_pause_s (a new message, after a timeout or a network error, only when no
+        connection was made: it may have arrived). A 4xx refusal is never tried again: the same call would be
         refused the same way. A long message is sent part by part through here, so a part tried again never sends
         the parts before it a second time."""
         assert self.http is not None
@@ -157,6 +164,14 @@ class Telegram:
                     body = await r.json(content_type=None)
             except Exception as e:  # never log the URL: it holds the token
                 error, wait = TelegramError(f"{method}: {type(e).__name__}"), retry_pause_s()
+                if _sends(method) and not isinstance(e, aiohttp.ClientConnectorError):
+                    # ⚠️ A MESSAGE IS NEVER SENT TWICE (owner, 2026-11-20, #199): a timeout or a connection lost after the
+                    # request went out may come after Telegram took it, and sending again made a second copy nobody
+                    # recorded. Tried again only when no connection was ever made; else said, and the caller takes it
+                    # as any failed send, not arrived (the tablet still gets the card: Poster.post). A copy that did
+                    # arrive is then one nobody knows the id of: its buttons are not taken (not the agent's message)
+                    log.warning("%s: no answer from Telegram, it may have arrived: not sent again", error)
+                    raise error
             else:
                 if not isinstance(body, dict):
                     body = {"ok": False, "error_code": status, "description": f"HTTP {status}"}

@@ -498,6 +498,32 @@ def back_alert(store: Store, ev: dict, now: datetime) -> dict | None:
     return store.incident(back["id"])
 
 
+def lasting_alert(store: Store, ev: dict) -> dict | None:
+    """The latest incident of `ev`'s alert (its permanent number's, else its rule's name's) when a person closed it "Not
+    a problem" while it lasts (Notes.LASTING, still written: alert_watch.lasting says whether it still holds). Its
+    alert, never its run: Home Assistant restarted, the rule's run has another id for the same problem."""
+    for key in filter(None, alert_keys(ev)):
+        rows = store.incidents_of_key(key)
+        if rows:
+            last = rows[-1]
+            return last if last.get("closed_at") and notes_of(last).get(Notes.LASTING) else None
+    return None
+
+
+def still_lasting(store: Store, inc: dict, ev: dict, now: datetime, out: dict) -> dict:
+    """The rule repeated alert `inc`, closed "Not a problem" while it lasts: the problem lasts, as the person said.
+    Recorded, and nothing more: never reopened, never a new number, nobody reminded or told; the villa's own message of
+    it stays as the villa sent it.
+
+    ⚠️ NOT A PROBLEM IS NOT BACK (owner, 2026-11-20, #201): the door left unlocked on purpose, its rule repeating every
+    30 minutes, reopened "Back" at each repeat after the press, its reminders and escalation started again."""
+    W.lasted_again(store, inc, now)
+    store.audit("alert-desk", "lasting", {"incident": inc["id"], "rule": ev.get("rule_id"),
+                                          "run": ev.get("ha_incident")})
+    out["incident_id"], out["decision"] = inc["id"], "lasting"
+    return out
+
+
 #: The phases of a rule's event this desk acts on (a missing phase is "opened": rules saved before phases existed).
 PHASES = ("opened", "resolved", "abandoned", "restated", "step")
 
@@ -532,6 +558,9 @@ def intake(store: Store, ev: dict, now: datetime, params: VillaParams | None = N
     key = alert_keys(ev)[0]
     out = {"send": [], "actions": [], "incident_id": None, "decision": None}
     cur = open_alert(store, ev)
+    accepted = lasting_alert(store, ev) if cur is None else None
+    if accepted and W.lasting(accepted, now):
+        return still_lasting(store, accepted, ev, now, out)
     # ⚠️ THE KIOSK'S SWITCH (owner, 2026-10-29; vesta_shared.maintenance.takes_up, the gate every door asks): no longer
     # a villa helper no screen showed. Only a NEW alert is held: one already open carries on as before (its promise)
     if cur is None and not takes_up(sev):
@@ -776,7 +805,7 @@ def reopen(store: Store, inc: dict, ev: dict, now: datetime, sev: str, route: di
     ⚠️ A RUN'S "CLEAR SINCE" ENDS WITH IT (villa's #54, 2026-10-18): main power back at 11:30:15 was closed at
     11:30:17 — the "back to normal since 10:40" of the run closed at 10:50 was still on the incident, so the new run
     read as 50 minutes clear. Either way it reopens, it is bad now: seen_again counts its clear_minutes afresh."""
-    store.note(inc["id"], drop=("clear_since", "silent_told"))
+    store.note(inc["id"], drop=("clear_since", "silent_told", Notes.LASTING))
     came_back_now = status is None
     if came_back_now:
         ended = notes_of(store.incident(inc["id"])).get(Notes.MESSAGE)   # the run that ended keeps its own words
@@ -816,6 +845,11 @@ def resolved(store: Store, ev: dict, now: datetime, params: VillaParams | None =
     out = {"send": [], "actions": [], "incident_id": None, "decision": "resolved_unknown"}
     inc = _find_by_ha_incident(store, ev.get("ha_incident")) or open_alert(store, ev)
     if not inc:
+        # the problem a person said was "Not a problem" while it lasts is over: its next alert is a new occurrence
+        accepted = lasting_alert(store, ev)
+        if accepted:
+            W.lasted(store, accepted)
+            store.audit("alert-desk", "lasting_over", {"incident": accepted["id"]})
         # ⚠️ ALREADY CLOSED HERE, STILL ITS MESSAGE (architecture review 22): the desk saw it over first (seen_again, a
         # Done) — Home Assistant's all-clear then stayed a second message in the group, without its incident's number
         late = _find_by_ha_incident(store, ev.get("ha_incident"), closed_within=timedelta(days=W.late_close_days()), now=now)
@@ -1156,8 +1190,9 @@ def watch_over(store: Store, now: datetime, out: dict, zone: str | None = None) 
             store.audit("alert-desk", "watch_over", {"incident": inc["id"], "came_back_as_new": True})
             continue
         until = W.until(inc)
-        said = say("watch_over", time=moment_label(until, zone) if zone else "{time}",
-                   watch=lasting_in(W.minutes(inc) * 60))
+        # closed "Not a problem" and its rule still repeating it: still there, never "it did not come back"
+        said = say("watch_over_lasting" if W.lasting(inc, now) else "watch_over",
+                   time=moment_label(until, zone) if zone else "{time}", watch=lasting_in(W.minutes(inc) * 60))
         out.setdefault("settle", []).append(R.settle(inc["id"], str(said), note_in=said.langs, final=True))
         store.audit("alert-desk", "watch_over", {"incident": inc["id"]})
         told.append(inc["id"])
@@ -1272,6 +1307,10 @@ def abandoned(store: Store, ev: dict, now: datetime, params: VillaParams | None 
     out = {"send": [], "actions": [], "incident_id": None, "decision": "abandoned_unknown"}
     inc = _find_by_ha_incident(store, ev.get("ha_incident")) or open_alert(store, ev)
     if not inc:
+        accepted = lasting_alert(store, ev)
+        if accepted and str(ev.get("still_true")).lower() == "false":
+            W.lasted(store, accepted)            # back to normal as its rule gave up: the problem accepted is over
+            store.audit("alert-desk", "lasting_over", {"incident": accepted["id"]})
         # ⚠️ ALREADY CLOSED BY A PERSON, STILL ITS MESSAGE (owner, 2026-11-04, #117: "Not a problem" pressed at 15:11,
         # then the rule's own "Still not clear after 30min: no longer tracking this incident" at 15:34, a message with no
         # number and no priority): the rule gave up on a run a person had already closed. Its message becomes the
@@ -1320,6 +1359,8 @@ def abandoned(store: Store, ev: dict, now: datetime, params: VillaParams | None 
 VISIT = Notes.VISIT
 #: The visit's story lines as last told ({key: English}): only a line that changed is told again (result.seen).
 VISIT_LINES = "visit_lines"
+#: What the desk has seen of the visit, line by line (visit_fold): its story never rebuilt from the villa's capped list.
+VISIT_FOLD = "visit_fold"
 #: The visit's siren request already asked: never twice in one visit.
 VISIT_SIREN = "visit_siren"
 #: A press the villa recorded while VESTA was away, already applied (its moment).
@@ -1396,9 +1437,73 @@ def _span(first: datetime, last: datetime, zone: str) -> str:
     return a if a == b else f"{a}–{b}"
 
 
-def visit_lines(v: dict, zone: str) -> list[tuple[str, Said, str, str]]:
+def _step_kept(s: dict) -> dict:
+    """What a story line keeps of the step that began it: what its words name."""
+    return {k: s[k] for k in ("entity_id", "name", "area", "how") if s.get(k) is not None}
+
+
+def visit_fold(v: dict, kept: dict | None = None, legacy: bool = False) -> dict:
+    """What the desk has seen of the visit (the incident's note VISIT_FOLD), `kept` brought up to this event: every step
+    after the last one folded (`upto`) added to its line, each line's first and latest moment kept; `kinds`, each kind
+    of step and the first step of it seen (stronger). `legacy`: an incident whose lines were told before this record
+    existed, its lines keyed as they were then (a pass by its first step's number, the first room "inside").
+
+    ⚠️ THE STORY IS THE DESK'S, NOT THE VILLA'S CAPPED LIST (owner, 2026-11-20, #199): the villa keeps a visit's first
+    step and its last 39; rebuilt from that list at each step, a pass came back under a new key once its first step
+    dropped out, the plain "inside" line moved to another sensor, the lines' order followed a first moment that moved,
+    and the 17:20 lock, gone from the list, let a 17:52 lock ring again as a "new, stronger" step."""
+    gap = timedelta(minutes=float(RULES["siren"]["window_min"]))
+    f = json.loads(json.dumps(kept)) if isinstance(kept, dict) and isinstance(kept.get("lines"), dict) else {}
+    f.setdefault("upto", 0)
+    lines, kinds, locks = f.setdefault("lines", {}), f.setdefault("kinds", {}), f.setdefault("locks", {})
+    for s in visit_steps(v):
+        seq = int(s["seq"])
+        if seq <= int(f["upto"] or 0):
+            continue
+        at, kind, eid = _when(s["at"]), str(s.get("kind") or MOTION), str(s.get("entity_id") or "")
+        iso = at.isoformat()
+        kinds.setdefault(kind, seq)
+        if kind == MOTION:
+            cur = lines.get(f.get("pass") or "")
+            if cur is None or at - _when(cur["last"]) > gap:
+                key = f"seen:{seq}" if legacy else f"seen:{_place(s)}@{iso}"
+                cur = lines[key] = {"kind": MOTION, "places": [], "first": iso, "last": iso}
+                f["pass"] = key
+            if not cur["places"] or cur["places"][-1] != _place(s):
+                cur["places"].append(_place(s))
+            cur["last"] = iso
+        elif kind == LOCK:
+            # the same lock opened again once locked again (or after the siren's window): a line of its own, the
+            # earlier one kept as it was
+            ln = lines.get(locks.get(eid) or "")
+            if ln is None or ln.get("again") or at - _when(ln["last"]) > gap:
+                key = f"lock:{eid}" if f"lock:{eid}" not in lines else f"lock:{eid}@{iso}"
+                lines[key] = {"kind": LOCK, "s": _step_kept(s), "first": iso, "last": iso}
+                locks[eid] = key
+        elif kind == RELOCK and locks.get(eid) in lines:
+            lines[locks[eid]]["again"] = iso
+            lines[locks[eid]]["last"] = iso
+        elif kind == DOOR and f"door:{eid}" not in lines:
+            lines[f"door:{eid}"] = {"kind": DOOR, "s": _step_kept(s), "first": iso, "last": iso}
+        elif kind in (INSIDE, PERSON, NOISE):
+            # ⚠️ THE SAME PLACE AGAIN IS ITS LINE, ITS SPAN WIDENED (owner, 2026-11-07, real visit #148: the living room
+            # at 11:24 and again at 11:28 read "Someone is inside (Living Room) at 11:24", its second moment lost, and a
+            # third room's never said), as the cameras' "Seen at …, 11:24–11:28"
+            key = next((k for k, x in lines.items() if x.get("kind") == kind and x["s"].get("entity_id") == eid), None)
+            if key is None:
+                key = "inside" if legacy and kind == INSIDE and not any(k.startswith("inside") for k in lines) \
+                    else f"{kind}:{eid}"
+                lines[key] = {"kind": kind, "s": _step_kept(s), "first": iso, "last": iso}
+            if at > _when(lines[key]["last"]):
+                lines[key]["last"] = iso
+        f["upto"] = seq
+    return f
+
+
+def visit_lines(v: dict, zone: str, fold: dict | None = None) -> list[tuple[str, Said, str, str]]:
     """The visit's story, one line per kind of step, in the order they began: (key, words, its latest moment, the
     moment it began — where it stands among the Status lines: owner's drill #129, its lines out of time order).
+    `fold`: what the desk kept of the visit (visit_fold); none, read from this event's steps alone.
 
     - the cameras seen in a row, one line per pass ("Seen at Parking → Entrance Left, 18:34–18:35"): a pass ends when
       no camera saw anything for the siren's window (rules.yaml siren.window_min — what the siren counts together),
@@ -1407,48 +1512,22 @@ def visit_lines(v: dict, zone: str) -> list[tuple[str, Said, str, str]]:
     - each door opened; someone inside, the room and when they went in; a person a room's camera saw, the room and
       when; a room's sound, the room and when it was first heard (never "someone is inside")."""
     gap = timedelta(minutes=float(RULES["siren"]["window_min"]))
-    lines: dict[str, dict] = {}
-    passes: list[dict] = []
-    for s in visit_steps(v):
-        at, kind, eid = _when(s["at"]), str(s.get("kind") or MOTION), str(s.get("entity_id") or "")
-        if kind == MOTION:
-            cur = passes[-1] if passes else None
-            if cur is None or at - cur["last"] > gap:
-                cur = {"key": f"seen:{s['seq']}", "places": [], "first": at, "last": at}
-                passes.append(cur)
-                lines[cur["key"]] = cur
-            if not cur["places"] or cur["places"][-1] != _place(s):
-                cur["places"].append(_place(s))
-            cur["last"] = at
-        elif kind == LOCK and f"lock:{eid}" not in lines:
-            lines[f"lock:{eid}"] = {"kind": LOCK, "s": s, "first": at, "last": at}
-        elif kind == RELOCK and f"lock:{eid}" in lines:
-            lines[f"lock:{eid}"]["again"] = at
-            lines[f"lock:{eid}"]["last"] = at
-        elif kind == DOOR and f"door:{eid}" not in lines:
-            lines[f"door:{eid}"] = {"kind": DOOR, "s": s, "first": at, "last": at}
-        elif kind in (INSIDE, PERSON, NOISE):
-            # ⚠️ THE SAME PLACE AGAIN IS ITS LINE, ITS SPAN WIDENED (owner, 2026-11-07, real visit #148: the living room
-            # at 11:24 and again at 11:28 read "Someone is inside (Living Room) at 11:24", its second moment lost, and a
-            # third room's never said), as the cameras' "Seen at …, 11:24–11:28"
-            key = "inside" if kind == INSIDE and not any(k.startswith("inside") for k in lines) else f"{kind}:{eid}"
-            key = next((k for k, x in lines.items() if x.get("kind") == kind and x["s"].get("entity_id") == eid), key)
-            if key in lines:
-                lines[key]["last"] = at
-            else:
-                lines[key] = {"kind": kind, "s": s, "first": at, "last": at}
+    fold = fold if fold is not None else visit_fold(v)
+    lines = {k: {**ln, "first": _when(ln["first"]), "last": _when(ln["last"]), "again": _when(ln.get("again"))}
+             for k, ln in fold["lines"].items()}
     # ⚠️ THE DETECTION THAT OPENED THE VISIT IS SEEN TOO (owner, 2026-11-07, drill #135: "Seen at Test motion, 05:13"
     # while the villa opened the visit at its second detection, 05:14): the villa keeps one step per device in a row, so
     # the opening's own moment (`opened_at`) ends the pass it falls in when no step says it
     opened = _when(v.get("opened_at"))
-    for cur in passes:
+    for cur in sorted((ln for ln in lines.values() if ln["kind"] == MOTION), key=lambda ln: ln["first"]):
         if opened is not None and cur["first"] <= opened and cur["last"] < opened <= cur["last"] + gap:
             cur["last"] = opened
             break
     out = []
-    for key, ln in lines.items():
+    # in the order they began, by the moment each line kept (never one the villa's list has since dropped)
+    for key, ln in sorted(lines.items(), key=lambda kv: kv[1]["first"]):
         hm = lambda t: clock(t, zone, days=False)   # noqa: E731
-        if key.startswith("seen:"):
+        if ln["kind"] == MOTION:
             said = say("visit_seen", places=" → ".join(ln["places"]), span=_span(ln["first"], ln["last"], zone))
         elif ln["kind"] == LOCK:
             s, how = ln["s"], str(ln["s"].get("how") or "")
@@ -1472,6 +1551,16 @@ def visit_lines(v: dict, zone: str) -> list[tuple[str, Said, str, str]]:
                        time=_span(ln["first"], ln["last"], zone))
         out.append((key, said, ln["last"].isoformat(), ln["first"].isoformat()))
     return out
+
+
+def visit_story(store: Store, iid: int, v: dict, zone: str) -> list[tuple[str, Said, str, str]]:
+    """Incident `iid`'s visit story (visit_lines) from what the desk kept of it (VISIT_FOLD), brought up to this event
+    and kept. An incident told before that record existed starts it from this event's steps, its lines keyed as
+    they were (`legacy`)."""
+    notes = notes_of(store.incident(iid))
+    fold = visit_fold(v, notes.get(VISIT_FOLD), legacy=VISIT_FOLD not in notes and bool(notes.get(VISIT_LINES)))
+    store.note(iid, {VISIT_FOLD: fold})
+    return visit_lines(v, zone, fold)
 
 
 def _part_of_day(t: datetime) -> str:
@@ -1520,13 +1609,19 @@ def _cards(v: dict) -> list[tuple[int, int]]:
     return out
 
 
-def stronger(v: dict) -> bool:
+def stronger(v: dict, fold: dict | None = None) -> bool:
     """Is this event's step stronger than every one before it — the villa's strongest so far, of a kind no earlier step
-    had? Then the card is sent again and rings: an edit makes no sound, and a break-in is never folded quietly."""
+    had? Then the card is sent again and rings: an edit makes no sound, and a break-in is never folded quietly.
+    `fold`: what the desk kept of the visit before this event (visit_fold): a kind it saw earlier counts too, whether or
+    not the villa's capped list still holds that step (owner, 2026-11-20, #199: a lock at 17:20, another at 17:52)."""
     st, top = v.get("step") or {}, v.get("strongest") or {}
     if not st or not top or st.get("kind") != top.get("kind") or st.get("entity_id") != top.get("entity_id"):
         return False
-    return not any(s.get("kind") == st.get("kind") for s in visit_steps(v) if int(s["seq"]) < int(st.get("seq") or 0))
+    seq = int(st.get("seq") or 0)
+    first = ((fold or {}).get("kinds") or {}).get(str(st.get("kind")))
+    if first is not None and int(first) < seq:
+        return False
+    return not any(s.get("kind") == st.get("kind") for s in visit_steps(v) if int(s["seq"]) < seq)
 
 
 def visit_quiet(v: dict) -> Said | str:
@@ -1666,7 +1761,7 @@ def visit_intake(store: Store, ev: dict, now: datetime, params: VillaParams | No
             store.note(iid, VS.away_notes())
         inc = store.incident(iid)
         out["decision"] = "visit_away" if away else "new"
-        lines = visit_lines(v, zone)
+        lines = visit_story(store, iid, v, zone)
         told = same_time(store, inc, _when(v.get("opened_at")) or now, params, zone)
         if told:
             lines.append(("same_time", told, now.isoformat(), None))
@@ -1687,12 +1782,13 @@ def visit_intake(store: Store, ev: dict, now: datetime, params: VillaParams | No
         out["decision"] = "visit_step"
         # the villa rang itself while it holds the visit, and every step it told while it held it (villa_told)
         held = villa_told(store, iid, ev)
-        ring = stronger(v) and v.get("owner") != "villa" and int(_seq(v) or 0) > held and not away
+        ring = stronger(v, notes_of(inc).get(VISIT_FOLD)) and v.get("owner") != "villa" and int(_seq(v) or 0) > held \
+            and not away
         p = store.note(iid, {k: ev[k] for k in ("message", "label", "entities", "claim", "summary") if ev.get(k) is not None})
         if ev["entity_id"] and ev["entity_id"] != inc["entity_id"]:
             store.update_incident(iid, entity_id=ev["entity_id"])
         inc = store.incident(iid)
-        lines = visit_lines(v, zone)
+        lines = visit_story(store, iid, v, zone)
         if ring:
             out["decision"] = "visit_stronger"
             # said on the step's own line, "…, 18:35: alert sent again (to: Owner & FM)" (notice.resent_into), the

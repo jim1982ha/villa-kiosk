@@ -286,7 +286,7 @@ class Problems:
         "resolved … by VESTA Agent" on the card). Returns a script's `actions` for it: [result.faults_changed()] when a
         task moved (result.moved)."""
         alert_watch.close(self.store, iid, state, now_iso, person=person, can_come_back=can_come_back, t=terms,
-                          **fields)
+                          lasting=lasting, **fields)
         last = self.store.last_task(f"incident:{int(iid)}") if lasting else None
         if last and last["status"] == "open":
             # "Not a problem while it lasts" (`lasting`) pressed on Telegram or the tablet: its task closes as the
@@ -313,7 +313,7 @@ class Problems:
         (JM)"). From Telegram or the tablet its task closes as a Done (close_incident); in the Cockpit the task closed
         already (closed_in_kiosk), and the desk tells it (Notes.KIOSK_CLOSED: every chat's line, with its watch).
         `read_again` False: "Not a problem while it lasts", the desk does not read it again (its watch for the alert
-        coming back stays). Returns a script's `actions` (result.moved).
+        coming back stays), and its rule's repeats while it lasts are recorded only (alert_watch.lasting). Returns a script's `actions` (result.moved).
 
         ⚠️ ONE DONE, ONE ENTRY (architecture review, 2026-10-30 evening: three closes of an alert each wrote their own
         words — the reports read "Done", "Done (Closed in the Cockpit)" and "Done (Done in the Cockpit)" for one press)."""
@@ -321,7 +321,7 @@ class Problems:
         when = _moment(at)
         now_iso = when.isoformat() if when else self.store.now()
         if place == mf.IN_COCKPIT:
-            alert_watch.close(self.store, iid, Incident.DONE, now_iso, t=terms,
+            alert_watch.close(self.store, iid, Incident.DONE, now_iso, t=terms, lasting=not read_again,
                               person=kiosk_words.stored(said or words) if read_again else None, reply=words)
             # told by the desk, with the watch this close wrote (Notes.KIOSK_CLOSED: architecture review 23, card 1)
             self.store.note(iid, {Notes.KIOSK_CLOSED: kiosk_words.stored(said or words)})
@@ -641,7 +641,7 @@ class Problems:
                 # kiosk_words.reopened: who and when, said once — mail to the alert desk (store.Notes), which names who
                 # is asked (its chase.asks: a skill's setting, never the engine's)
                 self.store.note(sid, {Notes.KIOSK_REOPENED: kiosk_words.stored(said) if said else by or "a person"},
-                                drop=(alert_watch.CHECK,),
+                                drop=(alert_watch.CHECK, Notes.LASTING),
                                 closed_at=None, reply=None, state=Incident.ASKED, asked_at=self.store.now())
                 self.store.reopening_told(task_id)
                 return sid

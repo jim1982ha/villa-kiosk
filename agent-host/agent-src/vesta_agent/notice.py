@@ -26,8 +26,9 @@ went to and its priority reaches, each escalated one said so. A priority that re
 instead, in the desk's words ("To: digest", "To: log") — never the roles of the chat the villa's rule posted in (a
 P3's own message in the owner's group read "To: Owner"). A message about no incident is for
 its role (`to`), else the roles its chat is listed with. The title says "new" for an incident's first notice, "closed"
-for the one that ends it, "existing" otherwise; then one line per earlier notice — what, when, to whom — whatever chat
-it went to (each chat keeps only an incident's latest message: incident_thread.py). A reply to a person in a chat
+for the one that ends it, "existing" otherwise; then one line per earlier notice — what, when, to whom — meant for
+the chat's roles, the first alert in every chat (status_story.seen_by; each chat keeps only an incident's latest
+message: incident_thread.py). A reply to a person in a chat
 carries none: it answers them.
 
 ⚠️ ONE PLACE (owner, 2026-10-10: "coded in the simplest possible way, DRY"). The incident's line was written by the
@@ -427,16 +428,38 @@ class Notices:
                                   self.lang(chat))
 
     def kept(self, incident: int, chat: int = 0, latest_excluded: int = 0) -> list[dict]:
-        """Incident `incident`'s "Status:" lines as chat `chat`'s copy keeps them (status_story.lines: every step, for
-        everyone, in the chat's language), each its id, its moment and its words — drawn when shown
-        (layout.status_shown). `latest_excluded`: the last steps recorded, left out — a copy whose own bottom line says
-        them (Outcome's refresh of the other chats).
+        """Incident `incident`'s "Status:" lines as chat `chat`'s copy keeps them (status_story.lines: the lines meant
+        for the chat's roles, in its language; chat 0, the tablet's card: every line), each its id, its moment and its
+        words — drawn when shown (layout.status_shown). `latest_excluded`: the last steps recorded, left out — a copy
+        whose own bottom line says them (Outcome's refresh of the other chats).
 
-        ⚠️ EVERY COPY THE SAME LINES (owner, 2026-11-07, live #146-P2, reversing 2026-10-18 #55 "each chat its own
-        steps"): the owner's group, joined at the escalation, listed only the steps sent to the owner. "(to: …)" says
-        who was told; a chat keeps only its language."""
+        ⚠️ EACH CHAT ITS OWN LINES (owner, 2026-11-20, live #201, reversing 2026-11-07 #146-P2 "every copy the same
+        lines"): the owner's group, joined at the escalation, listed every reminder and still-there alert sent to the
+        facility manager. The alert's first "Alert sent" stays in every chat: the only line saying when it began."""
         return [status_story.as_head(x, self.tz)
-                for x in status_story.lines(self, incident, self.lang(chat), latest_excluded)]
+                for x in status_story.lines(self, incident, self.lang(chat), latest_excluded,
+                                            roles=self.chat_roles(chat), chat=chat or None)]
+
+    def chat_roles(self, chat: int) -> set[str] | None:
+        """The roles whose lines Telegram chat `chat` lists (roles_for); None for the tablet's card (chat 0), a chat of
+        no role or a list that cannot be read: every line."""
+        if not chat:
+            return None
+        try:
+            return self.roles_for(chat) or None
+        except Exception:  # noqa: BLE001 — every line, as the tablet's, never none
+            return None
+
+    def meant(self, incident: int, chat: int, steps: int) -> bool:
+        """Is incident `incident`'s latest change meant for chat `chat`: one of its last `steps` notices (none: its last
+        line) is one the chat lists (status_story.seen_by)? A copy it is not meant for is left as it is, its bottom line
+        its own latest step (owner, 2026-11-20, #201: the owner's group read "Still-there alert sent 11:29 (to: FM)")."""
+        roles = self.chat_roles(chat)
+        history = self.state.incident_history(incident)
+        if roles is None or not history:
+            return True
+        latest = [i for i in range(len(history)) if not observed(history[i])][-steps:] if steps else [len(history) - 1]
+        return any(status_story.seen_by(self, history[i], roles, history, chat=chat) for i in latest)
 
     def closed_now(self, incident: int) -> bool:
         """Is incident `incident` closed now (False when that cannot be read)?"""

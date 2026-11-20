@@ -368,6 +368,70 @@ def test_the_rules_give_up_after_not_a_problem_joins_the_incident_it_closed(stor
     assert not res["send"] and not res["actions"]                       # nobody told again, nothing reopened
 
 
+def _quiet(res) -> bool:
+    """Nothing seen by anyone: no message, no Kiosk fault moved, the villa's own message left as it sent it."""
+    return not res["send"] and not res["actions"] and not res.get("ha_messages") and not res.get("settle")
+
+
+def test_not_a_problem_holds_while_the_rule_repeats_it_then_its_all_clear_ends_it(store):
+    # owner, 2026-11-20 (#201): "Not a problem" on a door left unlocked on purpose; the rule repeating it every 30
+    # minutes reopened it "Back" each time, its reminders and escalation started again
+    iid = desk.intake(store, event(), T0, occupancy_reader=lambda: "occupied")["incident_id"]
+    desk.reply(store, iid, "not_a_problem", "owner", T0 + timedelta(minutes=7), name="Owner")
+    task = store.last_task(f"incident:{iid}")
+    for minutes in (30, 60, 6 * 60, 20 * 60):                        # inside its watch (4h) and after it
+        res = desk.intake(store, event(), T0 + timedelta(minutes=minutes), occupancy_reader=lambda: "occupied")
+        assert res["decision"] == "lasting" and res["incident_id"] == iid and _quiet(res), res
+        assert store.incident(iid)["closed_at"] and len(store.incidents(open_only=False)) == 1
+        tick = desk.tick(store, T0 + timedelta(minutes=minutes + 5))
+        assert not tick["send"] and not tick["reasked"] and not tick["escalated"]
+    # Home Assistant restarted: the same door, a new run of its rule, still the problem the owner accepted
+    res = desk.intake(store, event(started=1790009999), T0 + timedelta(hours=21), occupancy_reader=lambda: "occupied")
+    assert res["decision"] == "lasting" and _quiet(res)
+    assert store.last_task(f"incident:{iid}")["id"] == task["id"] and store.last_task(f"incident:{iid}")["status"] == "not_a_problem"
+    # locked at last: the rule's all-clear. Unlocked again, it is an alert as any other: a new number past the watch
+    desk.intake(store, event(phase="resolved", started=1790009999), T0 + timedelta(hours=22))
+    res = desk.intake(store, event(started=1790020000), T0 + timedelta(hours=23), occupancy_reader=lambda: "occupied")
+    assert res["decision"] == "new" and res["incident_id"] != iid and res["send"]
+    assert store.last_task(f"incident:{res['incident_id']}")["status"] == "open"
+
+
+def test_after_the_all_clear_of_a_problem_accepted_it_comes_back_within_its_watch(store):
+    iid = desk.intake(store, event(), T0, occupancy_reader=lambda: "occupied")["incident_id"]
+    desk.reply(store, iid, "not_a_problem", "owner", T0 + timedelta(minutes=7), name="Owner")
+    desk.intake(store, event(phase="resolved"), T0 + timedelta(minutes=40))
+    res = desk.intake(store, event(started=1790000500), T0 + timedelta(minutes=60), occupancy_reader=lambda: "occupied")
+    assert res["decision"] == "reopened" and res["incident_id"] == iid and res["send"]
+    assert store.last_task(f"incident:{iid}")["status"] == "open"            # its Kiosk fault open again
+    # pressed again, it holds again until its next all-clear
+    desk.reply(store, iid, "not_a_problem", "owner", T0 + timedelta(minutes=65), name="Owner")
+    assert desk.intake(store, event(started=1790000500), T0 + timedelta(minutes=90))["decision"] == "lasting"
+
+
+def test_not_a_problem_in_the_cockpit_holds_while_it_lasts_too(store):
+    iid = desk.intake(store, event(), T0, occupancy_reader=lambda: "occupied")["incident_id"]
+    Problems(store).closed_in_kiosk(store.last_task(f"incident:{iid}")["id"], lasting=True,
+                                    at=(T0 + timedelta(minutes=7)).isoformat(), who="Owner")
+    res = desk.intake(store, event(), T0 + timedelta(minutes=30), occupancy_reader=lambda: "occupied")
+    assert res["decision"] == "lasting" and _quiet(res)
+
+
+def test_a_done_on_a_problem_still_there_is_not_held(store):
+    iid = desk.intake(store, event(), T0, occupancy_reader=lambda: "occupied")["incident_id"]
+    desk.reply(store, iid, "done", "owner", T0 + timedelta(minutes=7), name="Owner")
+    res = desk.intake(store, event(), T0 + timedelta(minutes=30), occupancy_reader=lambda: "occupied")
+    assert res["decision"] == "reopened" and res["incident_id"] == iid
+
+
+def test_a_problem_accepted_whose_rule_fell_silent_does_not_hide_the_next_alert_forever(store):
+    # no all-clear ever came (its automation removed, or it gave up): a day of silence and the next alert opens
+    iid = desk.intake(store, event(), T0, occupancy_reader=lambda: "occupied")["incident_id"]
+    desk.reply(store, iid, "not_a_problem", "owner", T0 + timedelta(minutes=7), name="Owner")
+    desk.intake(store, event(), T0 + timedelta(minutes=30))
+    res = desk.intake(store, event(started=1790100000), T0 + timedelta(days=2), occupancy_reader=lambda: "occupied")
+    assert res["decision"] == "new" and res["incident_id"] != iid and res["send"]
+
+
 def test_the_ticks_cli_reads_home_assistant_again(tmp_path):
     # the engine runs "desk.py tick" every 5 minutes: it must be given Home Assistant, or nothing is read again
     import subprocess

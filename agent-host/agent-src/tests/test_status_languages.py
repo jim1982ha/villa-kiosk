@@ -107,8 +107,8 @@ def test_a_press_is_told_in_each_chats_language(agent):
 
 def test_a_copy_recorded_before_is_drawn_again_whole_at_the_next_step(agent):
     # a copy stored by an earlier release (its heading as text, its lines English, no step kept with its status) was
-    # only retitled at a step to another chat; every copy now takes every change (owner, 2026-11-07, live #146-P2):
-    # drawn again whole, every line in its chat's language
+    # only retitled at a step to another chat; drawn again whole, every line in its chat's language, and only the lines
+    # meant for its chat (owner, 2026-11-20, #201): the owner's escalation is not one of the facility manager's
     rule(agent, "opened", 500)
     tick(agent, 20)
     rec = agent.thread.shown(1)[FM_FR]
@@ -120,7 +120,8 @@ def test_a_copy_recorded_before_is_drawn_again_whole_at_the_next_step(agent):
     fr = card(agent, FM_FR)
     assert fr.split("\n")[1] == "To: FM", fr                # whom this copy went to (owner, 2026-11-12)
     lines = status(fr, "Statut")
-    assert [ln.split(" ")[1] for ln in lines] == ["Alerte", "Rappel", "⚙️"] and "Escalade envoyée" in lines[-1], lines
+    assert [ln.split(" ")[1] for ln in lines] == ["Alerte", "⚙️"] and "Rappel envoyé" in lines[-1], lines
+    assert "Escalade" not in fr, fr
 
 
 def test_every_language_of_the_people_list_has_its_words():

@@ -115,6 +115,9 @@ def pack_needs_build(path: str) -> bool:
 KIOSK_EVERY_S = 300
 #: A person's presses on the Kiosk's cards this close together are read as one (the wake, Vesta.records_changed)
 RECORDS_GROUP_S = 10.0
+#: How long a stop waits for the work already running to finish before cutting it (main): well inside the host's
+#: 20 s grace (vesta-agent.yaml stop_grace_seconds) and the Supervisor's 30 s.
+STOP_FINISH_S = 5.0
 
 
 def photo_max_bytes() -> int:
@@ -1211,6 +1214,25 @@ class Vesta:
         except Exception:  # noqa: BLE001
             log.exception("task failed")
 
+    async def finish_running(self, also=()) -> int:
+        """At a stop: the work already running (what answers a Home Assistant event, `also`; the villa's messages, a
+        tablet question, a scheduled job) given STOP_FINISH_S to finish, then cut. How many finished.
+
+        ⚠️ WORK RUNNING IS GIVEN A FEW SECONDS (owner, 2026-11-20, #199): an update stopped the agent between Telegram
+        taking a copy and its record, cancelled at once. Well inside the host's grace (vesta-agent.yaml
+        stop_grace_seconds); what is still running then is cut as before."""
+        sched = getattr(self, "scheduler", None)
+        running = [t for t in (*also, *self._villa_tasks, *getattr(self.tablet, "_tasks", ()),
+                               *(sched._running.values() if sched is not None else ())) if not t.done()]
+        if not running:
+            return 0
+        _done, left = await asyncio.wait(running, timeout=STOP_FINISH_S)
+        log.info("Stopping: %d of %d running task(s) finished", len(running) - len(left), len(running))
+        for t in left:
+            t.cancel()
+        await asyncio.gather(*left, return_exceptions=True)
+        return len(running) - len(left)
+
     # ------------------------------------------------------------------ main
     async def main(self, stop: asyncio.Event):
         await self.start()
@@ -1234,6 +1256,7 @@ class Vesta:
         tasks.append(asyncio.create_task(self.siren.watch(stop)))     # stops the siren on time, after a restart too
         await stop.wait()
         log.info("Stopping")
+        await self.finish_running(getattr(events, "_tasks", ()) if self.s.ha_url and self.s.ha_token else ())
         for t in tasks:
             t.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)

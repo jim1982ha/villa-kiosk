@@ -93,6 +93,7 @@ RECORDS, CURRENT, BOUNDED = "records", "current", "bounded"
 KV_FAMILIES: dict[str, str] = {
     "inc:": RECORDS,                # which skill answers an alert's buttons in a chat
     "incthread:": RECORDS,          # what a chat shows of an incident (incident_thread.py)
+    "incsent:": RECORDS,            # a copy Telegram took that the thread has not recorded yet (incident_thread.sent)
     "inchist:": RECORDS,            # when each notice of an incident was sent, of what kind, to whom (notice.py)
     "incruns:": RECORDS,            # the villa's automation runs an incident took over (incident_thread.taken)
     "inccard:": RECORDS,            # an incident's or a request's card as the tablet keeps it (incident_thread.tell)
@@ -587,6 +588,27 @@ class State:
 
     def set_incident_message(self, incident: int | str, chat: int | str, record: dict) -> None:
         self.put(f"incthread:{incident}:{chat}", json.dumps(record))
+
+    # The copies of an incident Telegram took in a chat that the thread has not recorded yet (incident_thread.sent):
+    # written the moment Telegram gives their id, so a stop before the record never leaves one unknown.
+    def incident_sent(self, incident: int | str, chat: int | str) -> list[int]:
+        v = self.get(f"incsent:{incident}:{chat}")
+        return [int(m) for m in json.loads(v)] if v else []
+
+    def set_incident_sent(self, incident: int | str, chat: int | str, mids: list[int]) -> None:
+        """The copies still unrecorded in `chat` (none: the row goes)."""
+        if mids:
+            self.put(f"incsent:{incident}:{chat}", json.dumps(sorted({int(m) for m in mids})))
+        else:
+            self.drop(f"incsent:{incident}:{chat}")
+
+    def incidents_sent(self) -> list[tuple[int | str, int, list[int]]]:
+        """(incident, chat, ids) of every chat holding a copy not recorded yet."""
+        out = []
+        for k, v in self.kv_prefix("incsent:").items():
+            iid, chat = k[len("incsent:"):].rsplit(":", 1)
+            out.append((int(iid) if iid.isdigit() else iid, int(chat), [int(m) for m in json.loads(v)]))
+        return out
 
     def incident_card(self, thread: int | str) -> dict | None:
         """The card of a thread (an incident, an approval request) as the tablet was last told it: {parts, keyboard}."""

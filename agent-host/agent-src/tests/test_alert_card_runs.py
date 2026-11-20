@@ -133,6 +133,19 @@ def test_not_a_problem_then_the_rules_late_all_clear_then_its_watch_tell_the_pre
     assert not any("Cleared" in ln or "Closing note" in ln for ln in lines), lines
 
 
+def test_not_a_problem_still_repeated_by_its_rule_ends_its_watch_still_there(agent):
+    # owner, 2026-11-20 (#201): the door still unlocked, its rule repeating it; "it did not come back" would be false
+    rule(agent, "opened", 1, 500, priority="P1")
+    run(agent.on_ha_event("telegram_callback", {"id": "cb", "data": "i:1:not_a_problem", "chat_id": GROUP,
+                                                "user_id": OWNER, "message": {"message_id": 500, "chat": {"id": GROUP}},
+                                                "bot": BOT}))
+    rule(agent, "opened", 1, 501)                                          # its rule's repeat: recorded, nothing said
+    tick(agent, 5 * 60)                                                    # its watch (4h) is over
+    lines = status_lines(card(agent, GROUP))
+    assert re.fullmatch(rf"✅ Closed (?:on|at) {T}: still there, accepted as not a problem\.", lines[-1]), lines
+    assert not any("did not come back" in ln or ln.startswith("- Back") for ln in lines), lines
+
+
 def test_a_run_that_came_back_starts_at_a_back_at_line_and_a_reminder_carries_its_own_time(agent):
     rule(agent, "opened", 1, 500)
     rule(agent, "resolved", 1, 501)
@@ -144,9 +157,9 @@ def test_a_run_that_came_back_starts_at_a_back_at_line_and_a_reminder_carries_it
                         status(back).removeprefix("⚠️ ⚙️ ")), status(back)
     before = card(agent, GROUP)
     tick(agent, 20)                                     # the reminder: to the FM alone
-    # owner, 2026-11-07, live #146-P2 (reversing 2026-10-18 #55 "each chat its own steps"): a step to the FM is shown
-    # on the owner's group copy too — every copy the same
-    assert card(agent, GROUP) != before and card(agent, GROUP) == card(agent, FM_CHAT)
+    # owner, 2026-11-20, live #201 (reversing 2026-11-07 #146-P2 "every copy the same"): a step to the FM alone
+    # leaves the owner's group copy as it was
+    assert card(agent, GROUP) == before and card(agent, FM_CHAT) != before
     group = card(agent, FM_CHAT)                        # the FM's copy tells it
     # point 1: the bottom line says its own step — never "Reminder: no answer after 15min" alone under 18:03
     assert re.fullmatch(rf"⚠️ ⚙️ Reminder sent {T}, No answer after 15min \(to: FM\)", status_lines(group)[-1]), group
@@ -167,11 +180,11 @@ def test_a_run_that_came_back_starts_at_a_back_at_line_and_a_reminder_carries_it
     esc = card(agent, GROUP)
     lines = status_lines(esc)
     assert re.fullmatch(rf"⚠️ ⚙️ Escalation sent {T}, No answer from FM, 30min after the reminder \(to: Owner\)", lines[-1]), lines
-    assert any("(to: FM)" in ln for ln in lines), lines         # every step, the FM's too, "(to: …)" says whom
-    # and the owner's step is shown on the FM's copy too, its "To:" still whom that copy went to (owner, 2026-11-12)
-    fm_now = card(agent, FM_CHAT)
-    assert status_lines(fm_now) == lines and fm_now != fm_before
-    assert fm_before.split("\n")[1] == "To: FM" and fm_now.split("\n")[1] == "To: FM", fm_now
+    # the group lists the steps posted there (the villa's own alert, its all-clear, its return) and its own, never the
+    # FM's reminder (owner, 2026-11-20, live #201); the escalation leaves the FM's copy as it was
+    assert re.fullmatch(rf"- Alert sent {T} \(to: FM\)", lines[0]) and lines[2].startswith("- Back at "), lines
+    assert not any("Reminder" in ln for ln in lines), lines
+    assert card(agent, FM_CHAT) == fm_before and fm_before.split("\n")[1] == "To: FM", fm_before
 
 
 def test_the_back_line_counts_the_runs_and_an_older_record_has_none():

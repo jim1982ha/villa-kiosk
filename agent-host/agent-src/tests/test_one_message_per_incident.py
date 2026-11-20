@@ -167,14 +167,15 @@ def test_need_help_reaches_the_owner_with_the_buttons_to_answer(agent):
     notes = [x["note"] for x in agent.tickets.story(int(iid))]
     assert notes == ["Alert sent (to: FM)", "Reminder sent (to: FM)",
                      "🆘 Need help on Telegram (Wayan)", "Escalation sent (to: Owner)"], notes
-    # owner, 2026-10-18, #55 "each chat its own steps" (reversing part of 2026-10-11 "one incident, one picture"): the
-    # every chat lists every step, "(to: …)" saying who was told (owner, 2026-11-07, live #146-P2) — the press said by
-    # the answer below them while nothing but its escalation follows it (architecture review 23, card 4: said twice)
+    # each chat lists the steps meant for it (owner, 2026-11-20, live #201): the FM's never the owner's escalation, the
+    # owner's never the FM's reminder — the press said by the answer below them while nothing but its escalation
+    # follows it (architecture review 23, card 4: said twice)
     def kinds(chat):
         lines = head_text(agent.notices.heading(chat, int(iid))).split("\n")[2:]
         return [next((k for k in ("Alert sent", "Reminder sent", "🆘 Need help on", "Escalation sent")
                       if l.startswith("- " + k)), l) for l in lines]
-    assert kinds(FM_CHAT) == kinds(GROUP) == ["Alert sent", "Reminder sent", "Escalation sent"], kinds(FM_CHAT)
+    assert kinds(FM_CHAT) == ["Alert sent", "Reminder sent"], kinds(FM_CHAT)
+    assert kinds(GROUP) == ["Alert sent", "Escalation sent"], kinds(GROUP)
 
 
 def test_a_second_close_changes_nothing_and_the_records_are_pruned_with_the_others(agent):
@@ -213,12 +214,12 @@ def test_every_notice_has_one_heading_with_the_incidents_history(agent):
     run(agent.outcome.carry_out({"send": [R.message("owner", "Still stopped", incident=7, buttons=True,
                                                     stage="escalated")]}, "alert-desk"))
     later = agent.tg.sent[-1][1]
-    # in the owner's chat: "To:" names whom this copy went to (owner, 2026-11-12); its "Status:" every step, the FM's too
-    # (owner, 2026-11-07, live #146-P2: every copy the same lines)
+    # in the owner's chat: "To:" names whom this copy went to (owner, 2026-11-12); its "Status:" the first alert, the
+    # FM's, and its own steps (owner, 2026-11-20, live #201: each chat its own lines)
     assert re.fullmatch(r"#7 \(existing\)\nTo: Owner\nStill stopped\nStatus:\n"
                         r"- Alert sent (?:\d\d/\d\d(?:/\d{4})? )?\d\d:\d\d \(to: FM\)\n⚠️ ⚙️ Escalation sent (?:\d\d/\d\d(?:/\d{4})? )?\d\d:\d\d \(to: Owner\)", later), later
     fm_lines = head_text(agent.notices.heading(FM_CHAT, 7)).split("\n")[2:]
-    assert [ln.split(" ")[1] for ln in fm_lines] == ["Alert", "Escalation"] and fm_lines[0].endswith("(to: FM)"), fm_lines
+    assert [ln.split(" ")[1] for ln in fm_lines] == ["Alert"] and fm_lines[0].endswith("(to: FM)"), fm_lines
 
 
 def test_a_fault_closed_in_the_kiosk_says_who_and_when_on_telegram():
@@ -424,15 +425,17 @@ def test_every_copy_carries_the_incidents_word_and_its_own_status_lines(agent):
     st = Store(agent.s.store_path)
     st.note(iid, {Notes.KIOSK_REOPENED: "Reopened in the Cockpit on 19/10/2026 10:00 (JM)"})
     st.update_incident(iid, closed_at=None, state="asked")
+    group = agent.thread.shown(iid)[GROUP]["text"]
     tick(agent, 5)
-    assert words() == {GROUP: "#1-P2 (existing)", FM_CHAT: "#1-P2 (existing)"}, words()
-    group, fm = (agent.thread.shown(iid)[c]["text"] for c in (GROUP, FM_CHAT))
-    # ⚠️ A REOPENING UNDOES AN ENDING (owner, 2026-11-05): every chat that read the close reads the reopening — the
-    # owner's group kept "Done on … (Wayan). Watch 4h." under "(existing)", an alert open again it read as ended
-    for text in (group, fm):
-        assert status(text).startswith("Reopen request sent ") and "Reopened in the Cockpit" in status(text), text
-        assert "Done at" in text and "Done at" not in text.rsplit("\n", 1)[1], text   # the close kept above it
-    assert group.split("\n")[1] == fm.split("\n")[1] == "To: FM"
+    # the reopening is asked of the FM alone: the owner's group is left as it was (owner, 2026-11-20, live #201: each
+    # chat only the steps meant for it), its close still reaching it (test_every_copy_alike)
+    assert words() == {GROUP: "#1-P2 (watch)", FM_CHAT: "#1-P2 (existing)"}, words()
+    assert agent.thread.shown(iid)[GROUP]["text"] == group
+    fm = agent.thread.shown(iid)[FM_CHAT]["text"]
+    # ⚠️ A REOPENING UNDOES AN ENDING (owner, 2026-11-05): the chat that is asked again reads the reopening
+    assert status(fm).startswith("Reopen request sent ") and "Reopened in the Cockpit" in status(fm), fm
+    assert "Done at" in fm and "Done at" not in fm.rsplit("\n", 1)[1], fm   # the close kept above it
+    assert fm.split("\n")[1] == "To: FM"
 
 
 def test_a_cleared_alert_is_watched_then_closed_struck_with_the_time_it_ended(agent):
@@ -470,3 +473,85 @@ def test_a_cleared_alert_is_watched_then_closed_struck_with_the_time_it_ended(ag
     edits = len(agent.tg.edits)
     tick(agent, int((until - datetime.now(timezone.utc)).total_seconds() // 60) + 7)      # said once
     assert len(agent.tg.edits) == edits
+
+
+def _reminder_cut_before_its_record(v):
+    """The reminder sent to the FM's chat, then the work stopped (an update) while its post waited for the incident's
+    lock: Telegram took the copy, no record names it."""
+    sk = v.skills.get("alert-desk")
+    at = (datetime.now(timezone.utc) + timedelta(minutes=20)).isoformat()
+
+    async def go():
+        lock = v.thread._lock(1)
+        await lock.acquire()                         # another change of #1 under way
+        n = len(v.tg.sent)
+        work = asyncio.create_task(v.run_code_job(sk, f"desk.py tick --now {at}", 60))
+        for _ in range(600):
+            if [c for c, _t, _k in v.tg.sent[n:] if c == FM_CHAT]:
+                break
+            await asyncio.sleep(0.05)
+        work.cancel()                                # the stop
+        await asyncio.gather(work, return_exceptions=True)
+        lock.release()
+    run(go())
+
+
+def test_a_copy_sent_but_never_recorded_goes_at_the_close(agent):
+    # owner, 2026-11-20, #199: a copy sent at 17:23 was never recorded (VESTA stopped for an update in between); it kept
+    # "monitoring until 17:53" and its buttons for good
+    ha_alert(agent)
+    _reminder_cut_before_its_record(agent)
+    assert len(shown(agent, FM_CHAT)) == 2, "the stop left a second copy in the chat"
+    recorded = agent.state.incident_message(1, FM_CHAT)["mid"]
+    run(agent.on_ha_event("telegram_callback", {"id": "cb", "data": "i:1:done", "chat_id": FM_CHAT, "user_id": FM,
+                                                "message": {"message_id": recorded, "chat": {"id": FM_CHAT}}, "bot": BOT}))
+    (fm,) = shown(agent, FM_CHAT)
+    assert "Done" in status(fm)
+
+
+def test_a_copy_sent_but_never_recorded_goes_at_the_first_housekeeping_after_a_restart(agent):
+    from helpers import restarted
+    ha_alert(agent)
+    _reminder_cut_before_its_record(agent)
+    after = restarted(agent)
+    run(after.housekeeping())
+    assert len(shown(after, FM_CHAT)) == 1
+
+
+def test_a_stray_copy_of_an_alert_already_answered_goes_at_its_press(agent):
+    # #199's copy of 17:23, left before this was fixed: the agent's own message, but no record names it; pressed once
+    # the alert is answered, it goes instead of answering "Already answered." for good
+    ha_alert(agent)
+    recorded = agent.state.incident_message(1, FM_CHAT)["mid"]
+    kb = {"inline_keyboard": [[{"text": "Done", "callback_data": "i:1:done"}]]}
+    unknown = run(agent.delivery.telegram.send(FM_CHAT, "#1-P2 (new)", keyboard=kb))
+    press = lambda mid: run(agent.on_ha_event("telegram_callback", {   # noqa: E731
+        "id": f"cb{mid}", "data": "i:1:done", "chat_id": FM_CHAT, "user_id": FM,
+        "message": {"message_id": mid, "chat": {"id": FM_CHAT}}, "bot": BOT}))
+    run(agent.thread.close(1, "Closed {time}."))                     # every copy on record settled
+    assert agent.state.incident_message(1, FM_CHAT)["mid"] == recorded and len(shown(agent, FM_CHAT)) == 2
+    press(unknown)
+    assert (FM_CHAT, unknown) in agent.tg.deleted and len(shown(agent, FM_CHAT)) == 1
+
+
+def test_a_stop_lets_an_alert_being_carried_out_finish(agent):
+    # owner, 2026-11-20, #199: an update stopped the agent between Telegram taking a copy and its record
+    sent = agent.tg.send
+
+    async def slow(*a, **k):
+        await asyncio.sleep(0.3)                     # Telegram answering slowly
+        return await sent(*a, **k)
+    agent.tg.send = slow
+
+    async def go():
+        await agent.on_ha_event("telegram_sent", {"chat_id": GROUP, "message_id": 500, "bot": BOT, CONTEXT_KEY: "RUN-1"})
+        work = asyncio.create_task(agent.on_ha_event("vesta_critical_event", {
+            "blueprint": "critical_condition", "rule_id": "automation.critical_condition_laundry",
+            "incident_id": "automation.critical_condition_laundry-1", "phase": "opened", "severity": "critical",
+            "label": "Laundry door unlocked", "entities": ["lock.laundry"], "summary": SUMMARY,
+            "timestamp": datetime.now(timezone.utc).isoformat(), CONTEXT_KEY: "RUN-1"}))
+        await asyncio.sleep(0)
+        return await agent.finish_running([work])    # the stop, the alert still on its way
+    assert run(go()) == 1
+    (fm,) = shown(agent, FM_CHAT)
+    assert agent.state.incident_message(1, FM_CHAT)["mid"] and SUMMARY in fm
