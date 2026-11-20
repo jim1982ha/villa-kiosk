@@ -451,12 +451,6 @@ def over(inc, now: datetime, later=()) -> str | None:
     end = until(inc)
     if end is None or p.get(Notes.WATCH_OVER) == inc.get("closed_at") or p.get(CHECK):
         return None
-    if lasting(inc, now):
-        # ⚠️ NEVER CLOSED WHILE IT IS STILL THERE (owner, 2026-11-20, #208: "It can't be closed if an issue is still
-        # here, right?"): its watch of 1h over at 22:31, the card read "(closed)", struck, "Closed at 22:31: still there,
-        # accepted as not a problem." while the door stayed unlocked and its rule posted it again every 30 minutes. A
-        # "Not a problem" problem is watched while it lasts; the villa's all-clear for it ends it (desk.resolved)
-        return None
     now = moment(now)
     if now < end or now - end > timedelta(days=late_close_days()):
         return None
@@ -467,17 +461,6 @@ def over(inc, now: datetime, later=()) -> str | None:
         if o.get("id") != inc.get("id") and o.get("key") == inc.get("key") and at is not None and closed <= at <= end:
             return CAME_BACK_AS_NEW
     return ENDED
-
-
-def watch_ended_while_lasting(store: Store, inc) -> bool:
-    """Closed `inc`'s watch was said over while its "Not a problem" problem lasts (an engine before 0.12.529 did, #208):
-    its end taken back (Notes.WATCH_OVER), watched again while it lasts (`over`). Whether it was."""
-    inc = dict(inc)
-    if not (inc.get("closed_at") and notes_of(inc).get(Notes.WATCH_OVER) == inc["closed_at"]
-            and notes_of(inc).get(Notes.LASTING)):
-        return False
-    store.note(inc["id"], drop=(Notes.WATCH_OVER,))
-    return True
 
 
 def told_over(store: Store, inc) -> None:

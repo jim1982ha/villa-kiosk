@@ -390,18 +390,12 @@ def test_not_a_problem_holds_while_the_rule_repeats_it_then_its_all_clear_ends_i
         assert store.incident(iid)["closed_at"] and len(store.incidents(open_only=False)) == 1
         tick = desk.tick(store, T0 + timedelta(minutes=minutes + 5))
         assert not tick["send"] and not tick["reasked"] and not tick["escalated"]
-        # never closed while it is still there (owner, 2026-11-20, #208): its watch holds past its 4h
-        assert not tick["watch_over"] and not tick.get("settle"), tick
     # Home Assistant restarted: the same door, a new run of its rule, still the problem the owner accepted
     res = desk.intake(store, event(started=1790009999), T0 + timedelta(hours=21), occupancy_reader=lambda: "occupied")
     assert res["decision"] == "lasting" and _quiet(res)
     assert store.last_task(f"incident:{iid}")["id"] == task["id"] and store.last_task(f"incident:{iid}")["status"] == "not_a_problem"
-    # locked at last: the rule's all-clear ends it, its watch long past: closed now, "Cleared" its last word, said once
-    res = desk.intake(store, event(phase="resolved", started=1790009999), T0 + timedelta(hours=22))
-    final = [x for x in res.get("settle") or () if x.get("final")]
-    assert len(final) == 1 and final[0]["incident_id"] == iid and "Cleared" in str(final[0]), res
-    assert not desk.tick(store, T0 + timedelta(hours=22, minutes=5))["watch_over"]
-    # Unlocked again, it is an alert as any other: a new number past the watch
+    # locked at last: the rule's all-clear. Unlocked again, it is an alert as any other: a new number past the watch
+    desk.intake(store, event(phase="resolved", started=1790009999), T0 + timedelta(hours=22))
     res = desk.intake(store, event(started=1790020000), T0 + timedelta(hours=23), occupancy_reader=lambda: "occupied")
     assert res["decision"] == "new" and res["incident_id"] != iid and res["send"]
     assert store.last_task(f"incident:{res['incident_id']}")["status"] == "open"

@@ -454,14 +454,10 @@ def still_lasting(store: Store, inc: dict, ev: dict, now: datetime, out: dict) -
     W.lasted_again(store, inc, now)
     store.audit("alert-desk", "lasting", {"incident": inc["id"], "rule": ev.get("rule_id"),
                                           "run": ev.get("ha_incident")})
-    # ⚠️ ITS WATCH'S END TAKEN BACK (owner, 2026-11-20, #208: "the notification says the fault is already closed, which
-    # is not right"): an older desk ended its watch while it lasted; watched again (alert_watch.over), its card too
-    again = W.watch_ended_while_lasting(store, store.incident(inc["id"]))
     # ⚠️ ...AND EACH REPEAT IN ITS STATUS (owner, 2026-11-20, #201: "the message needs to reflect the timings of
     # reminders in the status section"): posted again every 30 minutes, the card's Status said nothing new. Its
     # message is a "lasting" step: ONE line, "Still there at 18:46, 11 times since 13:30", counted from the close
-    _said_again(store.incident(inc["id"]), ev, out, "lasting", stage="lasting", since=W.lasting_since(inc),
-                unfinish=again)
+    _said_again(store.incident(inc["id"]), ev, out, "lasting", stage="lasting", since=W.lasting_since(inc))
     return out
 
 
@@ -772,7 +768,7 @@ def resolved(store: Store, ev: dict, now: datetime, params: VillaParams | None =
     if not inc:
         # ⚠️ ALREADY CLOSED HERE, STILL ITS MESSAGE (architecture review 22): the desk saw it over first (seen_again, a
         # Done) — Home Assistant's all-clear then stayed a second message in the group, without its incident's number
-        late = _closed_already(store, st, now, out, ended())
+        late = _closed_already(store, st)
         if late and not VS.transition(visit_of(ev), None, notes_of(late), "resolved").tell:
             # a visit the villa closed while VESTA was away, closed at its first event (visit_intake): its replayed
             # close changes nothing seen (owner's drills, 2026-11-07, #141, #143)
@@ -856,33 +852,24 @@ def answer_said(ans: dict, when: str, who: str, end: bool = False) -> Said:
                  for lang, lab in (b.get("labels") or {}).items() if lang in SW.LANGS})
 
 
-def _closed_already(store: Store, st, now: datetime, out: dict, last: Said) -> dict | None:
+def _closed_already(store: Store, st) -> dict | None:
     """An all-clear (or a rule giving up) of no open alert (`st`: its alert_watch.standing): the problem a person said
     was "Not a problem" while it lasts is over when it says so (alert_watch.lasted: its next alert is a new
-    occurrence), and the incident of its run closed lately (LATE), read as it stands now — or None.
-
-    Its watch already past (alert_watch.over: watched while it lasted), it ends now: `last` its last word ("Cleared on
-    23:58."), every copy titled "(closed)" and struck, as a watch's end (watch_over). Only an all-clear ends it (`ends`):
-    a rule giving up while it is still there leaves it watched while it repeats."""
+    occurrence), and the incident of its run closed lately (LATE), read as it stands now — or None."""
     if st.ends is not None:
         W.lasted(store, st.ends)
         store.audit("alert-desk", "lasting_over", {"incident": st.ends["id"]})
-        ends = store.incident(st.ends["id"])
-        if W.over(ends, now) == W.ENDED:
-            W.told_over(store, ends)
-            out.setdefault("settle", []).append(R.settle(ends["id"], str(last), note_in=last.langs, final=True))
     return store.incident(st.incident["id"]) if st.verdict == W.LATE else None
 
 
-def _said_again(late: dict, ev: dict, out: dict, decision: str, stage: str = "closed", since: str | None = None,
-                unfinish: bool = False) -> None:
+def _said_again(late: dict, ev: dict, out: dict, decision: str, stage: str = "closed", since: str | None = None) -> None:
     """Closed `late`'s run ended on the villa's side after its close here: its message takes the incident's number and
     says its close again, as it stands (`decision`: what the desk did). `stage` "lasting": its problem repeated while it
     lasts, since `since` (its close), a line of the card's Status."""
     out["incident_id"], out["decision"] = late["id"], decision
     out["ha_messages"] = [R.ha_message(late["id"], context=ev.get("_context_id"), stage=stage,
                                        **about(late, watched(_close_again(late), W.minutes(late))), as_it_stands=True,
-                                       since=since, unfinish=unfinish)]
+                                       since=since)]
 
 
 def _close_again(inc: dict):
@@ -1122,8 +1109,8 @@ def watch_over(store: Store, now: datetime, out: dict, zone: str | None = None) 
             store.audit("alert-desk", "watch_over", {"incident": inc["id"], "came_back_as_new": True})
             continue
         until = W.until(inc)
-        # closed "Not a problem" and its rule still repeating it, its watch holds (alert_watch.over): never said here
-        said = say("watch_over",
+        # closed "Not a problem" and its rule still repeating it: still there, never "it did not come back"
+        said = say("watch_over_lasting" if W.lasting(inc, now) else "watch_over",
                    time=moment_label(until, zone) if zone else "{time}", watch=lasting_in(W.minutes(inc) * 60))
         out.setdefault("settle", []).append(R.settle(inc["id"], str(said), note_in=said.langs, final=True))
         store.audit("alert-desk", "watch_over", {"incident": inc["id"]})
@@ -1245,7 +1232,7 @@ def abandoned(store: Store, ev: dict, now: datetime, params: VillaParams | None 
         # then the rule's own "Still not clear after 30min: no longer tracking this incident" at 15:34, a message with no
         # number and no priority): the rule gave up on a run a person had already closed. Its message becomes the
         # incident's card again, as it stands (its close said once more), never a second, nameless alert
-        late = _closed_already(store, st, now, out, ended())
+        late = _closed_already(store, st)
         if late:
             _said_again(late, ev, out, "abandoned_late")
         return out

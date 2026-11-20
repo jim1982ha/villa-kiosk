@@ -536,36 +536,6 @@ class IncidentThread:
                 n += await self._show(iid, chat, {**rec, "settled": True, "finished": True}, p)
             return n
 
-    def unfinish(self, iid: int) -> int:
-        """Incident `iid`'s last word (`_finish`) taken back: its problem, closed "Not a problem", still repeats — its watch
-        holds while it lasts (alert_watch.over). Where it stood (the close `_finish` kept as a line of its story) is its
-        close again, each copy's bottom line, no longer finished; the next drawing titles it "(watch)", nothing struck.
-        Returns how many copies it changed.
-
-        ⚠️ CLOSED BY AN OLDER ENGINE WHILE STILL THERE (owner, 2026-11-20, #208: "the notification says the fault is
-        already closed, which is not right"): its watch ended at 22:31 before 0.12.529 kept it, the door still unlocked."""
-        from .notice import CLEARED_STAGE, CLOSED_STEP
-        from .status_story import standing
-        history = self.state.incident_history(iid)
-        at = standing(history)
-        if at is None or history[at].get("stage") != CLEARED_STAGE or not history[at].get("note"):
-            return 0
-        stood = history[at]
-        history[at] = {**stood, "stage": CLOSED_STEP}
-        self.state.set_incident_history(iid, history)
-        now, n = datetime.now(timezone.utc), 0
-        for chat, rec in self.state.incident_chats(iid):
-            if not rec.get("finished"):
-                continue
-            words = pick(stood["note"], stood.get("note_in") or {}, self._lang(chat))
-            p = layout.changed(layout.of(rec), status=f"{words.rstrip('.')}.")
-            p["said"] = layout.note_said(f"{stood['note']}.", {k: f"{v}." for k, v in (stood.get("note_in") or {}).items()},
-                                         now, self.tz)
-            self.state.set_incident_message(iid, chat, {**{k: v for k, v in rec.items() if k != "finished"},
-                                                        "parts": p, "text": layout.render(p)})
-            n += 1
-        return n
-
     async def restate(self, iid: int | str, note: str, note_in: dict | None = None,
                       keyboard: Callable[[int], dict | None] | None = None) -> int:
         """Every copy of incident `iid` shows `note` as where it stands, WITHOUT settling: the incident is open and ends

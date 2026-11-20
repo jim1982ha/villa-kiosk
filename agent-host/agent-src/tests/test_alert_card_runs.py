@@ -133,7 +133,7 @@ def test_not_a_problem_then_the_rules_late_all_clear_then_its_watch_tell_the_pre
     assert not any("Cleared" in ln or "Closing note" in ln for ln in lines), lines
 
 
-def test_not_a_problem_still_repeated_by_its_rule_stays_watched_until_its_all_clear(agent):
+def test_not_a_problem_still_repeated_by_its_rule_ends_its_watch_still_there(agent):
     # owner, 2026-11-20 (#201): the door still unlocked, its rule repeating it; "it did not come back" would be false
     rule(agent, "opened", 1, 500, priority="P1")
     run(agent.on_ha_event("telegram_callback", {"id": "cb", "data": "i:1:not_a_problem", "chat_id": GROUP,
@@ -155,41 +155,15 @@ def test_not_a_problem_still_repeated_by_its_rule_stays_watched_until_its_all_cl
     assert sum(ln.startswith("- Still there") for ln in lines) == 1, lines
     # the tablet's card and the Kiosk fault's story tell it too
     assert any(x["note"].startswith("Still there, 3 times since ") for x in agent.notices.story(1))
-    # never closed while it is still there (owner, 2026-11-20, #208: "It can't be closed if an issue is still here")
-    tick(agent, 5 * 60)                                                    # its watch (4h) is past
-    text = card(agent, GROUP)
-    assert "(watch)" in text.split("\n")[0] and "Closed" not in text, text
-    # the villa's all-clear (the door locked) ends it (the desk's own test: past its watch, "Cleared" its last word):
-    # closed, its story struck, the repeats a line of it above its last word
-    rule(agent, "resolved", 1, 504)
-    tick(agent, 5 * 60 + 10)
+    # its watch over, closed as every watched alert is, when the Kiosk's watch list lets it go (owner, 2026-11-21: "as
+    # soon as an issue is in watch stage", no exception), its last word saying it is still there
+    tick(agent, 5 * 60)                                                    # its watch (4h) is over
     text = card(agent, GROUP)
     assert "(closed)" in text.split("\n")[0], text
     lines = status_lines(text)
-    assert lines[-1].startswith("✅ Closed ") and lines[-2].startswith("- Still there at "), lines
-    assert not any(ln.startswith("- Back") for ln in lines), lines
-
-
-def test_a_card_closed_by_an_older_engine_while_still_there_is_watched_again_at_its_next_repeat(agent):
-    # owner, 2026-11-20 (#208: "the notification says the fault is already closed, which is not right"): before
-    # 0.12.529 its watch ended while the door stayed unlocked — "(closed)", struck, "Closed at 22:31: still there"
-    from vesta_shared.store import Notes, Store
-    rule(agent, "opened", 1, 500, priority="P1")
-    run(agent.on_ha_event("telegram_callback", {"id": "cb", "data": "i:1:not_a_problem", "chat_id": GROUP,
-                                                "user_id": OWNER, "message": {"message_id": 500, "chat": {"id": GROUP}},
-                                                "bot": BOT}))
-    rule(agent, "opened", 1, 501)
-    st = Store(agent.s.store_path)                                        # the older engine's watch end, as it left it
-    st.note(1, {Notes.WATCH_OVER: st.incident(1)["closed_at"]})
-    run(agent.thread.close(1, "Closed on {time}: still there, accepted as not a problem.", final=True))
-    assert "(closed)" in card(agent, GROUP).split("\n")[0]
-    rule(agent, "opened", 1, 502)                                         # the door still unlocked: its next repeat
-    text = card(agent, GROUP)
-    assert "(watch)" in text.split("\n")[0] and "Closed" not in text, text
-    lines = status_lines(text)
-    assert re.fullmatch(rf"✅ Not a problem (?:on|at) {T} \(Owner\)\. Watch .+", lines[-2]), lines
-    assert re.fullmatch(rf"- Still there at {T}, {T} since {T}", lines[-1]), lines
-    assert not any(ln.startswith("- Not a problem") for ln in lines), lines   # its close once, its bottom line
+    assert re.fullmatch(rf"✅ Closed (?:on|at) {T}: still there, accepted as not a problem\.", lines[-1]), lines
+    assert lines[-2].startswith("- Still there at ") and lines[-3].startswith("- Not a problem "), lines
+    assert not any("did not come back" in ln or ln.startswith("- Back") for ln in lines), lines
 
 
 def test_a_lasting_repeat_is_a_line_of_the_chats_first_told_never_of_the_owner_escalated_to(agent):
