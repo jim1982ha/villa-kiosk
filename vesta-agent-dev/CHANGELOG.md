@@ -1,3 +1,19 @@
+## 0.12.522
+
+- **Each Telegram chat lists only its own steps.** Under "Status:", the facility manager's chat no longer lists the
+  owner's escalations, and the owner's chat shows when the alert first started, its own escalations and, once it was
+  escalated, how the alert ended. The owner's chat is no longer edited for the facility manager's reminders and
+  still-there alerts. The tablet and the VESTA UI still show every step.
+- **"Not a problem" holds while the problem lasts.** If the villa keeps repeating the same alert (a door left unlocked
+  on purpose), VESTA records it quietly: no "Back", no reminder, no new message. Once the villa says it is over (the
+  door locked), the next time is a new alert as usual. If the villa goes a whole day without repeating it, the next
+  alert also opens as usual.
+- **No more old copies of an alert left with live buttons.** A message sent just as VESTA stopped for an update is now
+  removed or turned into a link to the newer one; VESTA lets work already under way finish for a few seconds before
+  stopping; and when Telegram does not answer, a message is no longer sent twice.
+- **A long visit keeps a clean story.** Each place and room keeps one line, in time order, however many steps the
+  visit has; a lock opened again shows on its own line and no longer rings as a new, stronger alert.
+
 ## 0.12.521
 
 - **No photo of an empty scene.** When none of the photos taken for one step of an alert shows anything moving, VESTA
