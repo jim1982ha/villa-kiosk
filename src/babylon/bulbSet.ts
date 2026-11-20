@@ -375,6 +375,12 @@ export class BulbSet {
     return { roomMap: this.rooms.hasMap, lamps, lampsNoRoom: noRoom };
   }
 
+  /** Where every lamp's light stands, settled first: the render rig's read. */
+  placements(): ReturnType<LightPoolSet["placed"]> {
+    this.rooms.settle();
+    return this.pools.placed();
+  }
+
   /** The versioned model URL the room map's wall answers are kept under;
    *  null keeps nothing. */
   setCacheKey(key: string | null): void { this.rooms.setCacheKey(key); }

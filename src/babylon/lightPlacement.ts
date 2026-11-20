@@ -12,6 +12,8 @@
 // and the glow reconstructing its floor from a pool-only map. The stair
 // defect lived exactly there.
 //
+// Interface: `placeLights` places every lamp of the villa at once (what the
+// lamps decide for each other included); `placeLight` is one lamp, given that.
 // PURE: the floor probe is a port (FloorProbe in the app, a script in the
 // oracle), the plan is Storeys. tests/oracles/light_placement.mjs.
 
@@ -120,24 +122,33 @@ export interface LightPlacement<R extends PlacementRoom = PlacementRoom> {
   notes: string[];
 }
 
-/**
- * Where the light at (x, z), mounted at `fromY`, stands. `currentFloorY` is
- * the floor its pool was first put on (the load path's probe), the glow's
- * floor when nothing better is known.
- */
+/** A lamp to place: its fixture's x, z and height, and the floor its pool
+ *  was last put on (the load path's probe), the glow's floor when nothing
+ *  better is known. */
+export interface LampAt { x: number; z: number; fromY: number; floorY: number }
+
+/** What every lamp is placed in: the floor below (FloorProbe), the plan, and
+ *  the rooms open to a room (no wall along their border, the room map's
+ *  answer, roomLightMask; left out, a patch stays in its own room). */
+export interface PlacementWorld<R extends PlacementRoom> {
+  probe: PlacementProbe;
+  storeys: Storeys<R>;
+  openTo?: (room: R) => readonly R[];
+}
+
+/** What the other lamps decide for one (placeLights): how far its patch may
+ *  spread before it meets another patch in its room (left out, it keeps
+ *  LIGHT_POOL_RADIUS), and the room the other lamps of its light stand in,
+ *  the answer for one on that room's edge. */
+interface FromOthers<R> { spreadM?: number; home?: R | null }
+
+/** Where one light stands, given what the other lamps decide for it. */
 export function placeLight<R extends PlacementRoom>(
-  x: number, z: number, fromY: number, currentFloorY: number,
-  probe: PlacementProbe, storeys: Storeys<R>,
-  /** How far its patch may spread before it meets another patch in its room
-   *  (LightPoolSet). Left out, the patch keeps LIGHT_POOL_RADIUS. */
-  spreadM = LIGHT_POOL_RADIUS,
-  /** The room the other lamps of its light stand in (LightPoolSet), the
-   *  answer for one on that room's edge. */
-  home: R | null = null,
-  /** The rooms open to a room: no wall along their border, the room map's
-   *  answer (roomLightMask). Left out, a patch stays in its own room. */
-  openTo: (room: R) => readonly R[] = () => [],
+  lamp: LampAt, world: PlacementWorld<R>, others: FromOthers<R> = {},
 ): LightPlacement<R> {
+  const { x, z, fromY, floorY: currentFloorY } = lamp;
+  const { probe, storeys, openTo = () => [] } = world;
+  const { spreadM = LIGHT_POOL_RADIUS, home = null } = others;
   const notes: string[] = [];
   // PROBE FIRST, then resolve the room — the order is the correctness
   // argument. A ceiling lamp hangs within centimetres of the slab overhead,
@@ -240,7 +251,7 @@ export function placeLight<R extends PlacementRoom>(
   // floor takes only the patch, and a fixed LIGHT_POOL_RADIUS patch left it
   // dark where a kerb or a plant a hand higher was lit. So the patch reaches
   // where the lamp's light meets the floor, but only over floor no other
-  // patch in its room lies on (`spreadM`, LightPoolSet): where lamps stand
+  // patch in its room lies on (`spreadM`, placeLights): where lamps stand
   // close, as in a room of ceiling spots, their patches already overlap, and
   // widening them washed the floor out to white (render, 2026-11-16). Never
   // less than LIGHT_POOL_RADIUS, and still clipped to its room below, so
@@ -277,6 +288,98 @@ export function placeLight<R extends PlacementRoom>(
     if (radius <= POOL_MIN_RADIUS + 1e-3) notes.push("crushed");
   }
   return { surfaceY, room, floorless, glowFloorY, ceilingY, cx, cz, radius, shape, notes };
+}
+
+/** A lamp among all the villa's: `light` says which lamps are one light's
+ *  (its entity's fixtures), undefined: a light of its own. */
+export interface VillaLamp extends LampAt { light?: number }
+
+/**
+ * WHERE EVERY LAMP'S LIGHT STANDS, in one step: each lamp placed (placeLight),
+ * then what the lamps decide for each other. In the lamps' order, so every
+ * cached answer is asked in the order it always was.
+ *   1. Each lamp on its own.
+ *   2. A lamp on its room's edge again, with the room its light's other
+ *      lamps stand in (homes, edgeRoom).
+ *   3. A patch alone in its room spreads as far as its lamp's light reaches,
+ *      up to where the nearest other patch in that room begins (spreads).
+ *      Static: every lamp counts, lit or not, so a patch never changes size
+ *      when a neighbour is switched.
+ * Returns each lamp's placement, in its order, and the load log's counters
+ * (the first pass's notes, and how many spread).
+ *
+ * ⚠️ THIS SEQUENCE LIVED IN THE POOLS' MESHES (LightPoolSet, until
+ * 2026-11-20): three placeLight calls a pool, the "floor it was last put on"
+ * and the spread distances read back off the pool mesh's position between
+ * them, and the rig reached into private maps to see the result. It is a
+ * question about lamps and the plan, so it is answered here, testable
+ * without an engine; the pools only show the answer.
+ */
+export function placeLights<R extends PlacementRoom>(
+  lamps: readonly VillaLamp[], world: PlacementWorld<R>,
+): { placements: LightPlacement<R>[]; counts: Record<string, number> } {
+  const counts: Record<string, number> = {};
+  const floorY = lamps.map((l) => l.floorY);
+  const place = (i: number, others: FromOthers<R> = {}) => {
+    const at = placeLight({ ...lamps[i], floorY: floorY[i] }, world, others);
+    // A pool with a floor is moved onto it; without, it stays where it was.
+    if (at.surfaceY !== null) floorY[i] = at.surfaceY;
+    return at;
+  };
+  const placements = lamps.map((_, i) => {
+    const at = place(i);
+    for (const k of at.notes) counts[k] = (counts[k] ?? 0) + 1;
+    return at;
+  });
+  // A lamp on its room's edge is placed again with the room its light's
+  // other lamps stand in (edgeRoom).
+  const edge = placements.flatMap((at, i) => (at.notes.includes("edge") ? [i] : []));
+  const home = edge.length ? homes(lamps, placements) : new Map<number, R>();
+  for (const i of edge) if (home.has(i)) placements[i] = place(i, { home: home.get(i) });
+  for (const [i, spread] of spreads(placements)) {
+    if (spread <= LIGHT_POOL_RADIUS) continue;
+    placements[i] = place(i, { spreadM: spread, home: home.get(i) ?? null });
+    counts.spread = (counts.spread ?? 0) + 1;
+  }
+  return { placements, counts };
+}
+
+/** Each lamp's home: the room most of its light's lamps that are on no
+ *  room's edge stand in. None for a light with no such lamp. */
+function homes<R extends PlacementRoom>(lamps: readonly VillaLamp[], placements: readonly LightPlacement<R>[]): Map<number, R> {
+  const votes = new Map<number, Map<R, number>>();
+  placements.forEach((at, i) => {
+    const g = lamps[i].light;
+    if (g === undefined || !at.room || at.floorless || at.notes.includes("edge")) return;
+    const v = votes.get(g) ?? new Map<R, number>();
+    v.set(at.room, (v.get(at.room) ?? 0) + 1);
+    votes.set(g, v);
+  });
+  const out = new Map<number, R>();
+  lamps.forEach((lamp, i) => {
+    const v = lamp.light === undefined ? undefined : votes.get(lamp.light);
+    if (!v) return;
+    let best: R | null = null, most = 0;
+    for (const [room, k] of v) if (k > most) { best = room; most = k; }
+    if (best) out.set(i, best);
+  });
+  return out;
+}
+
+/** Each lamp's free floor: the distance from its patch's centre to the
+ *  nearest other patch's placed in the same room, less that patch's least
+ *  reach (Infinity: alone). */
+function spreads<R extends PlacementRoom>(placements: readonly LightPlacement<R>[]): Map<number, number> {
+  const out = new Map<number, number>();
+  placements.forEach((at, i) => {
+    if (!at.room || at.floorless) return;
+    let nearest = Infinity;
+    placements.forEach((ot, j) => {
+      if (j !== i && ot.room === at.room) nearest = Math.min(nearest, Math.hypot(ot.cx - at.cx, ot.cz - at.cz));
+    });
+    out.set(i, nearest - LIGHT_POOL_RADIUS);
+  });
+  return out;
 }
 
 /**
