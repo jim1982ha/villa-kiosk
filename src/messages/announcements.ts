@@ -101,7 +101,10 @@ export function photoOrder(photos: readonly AnnouncementPhoto[]): { photos: Anno
   const top = photos.findIndex((p) => p.strongest === true);
   if (top < 0 || photos.length < 2) return { photos: [...photos], big: false };
   const rest = photos.filter((_, i) => i !== top)
-    .map((p, i) => ({ p, i })).sort((a, b) => (a.p.at && b.p.at ? a.p.at.localeCompare(b.p.at) : 0) || a.i - b.i)
+    // ⚠️ BY THE MOMENT, NOT ITS TEXT (owner, 2026-11-20, #204): the villa writes some times in UTC, some in its own
+    // zone, and "04:20+00:00" sorted before "12:19+08:00": a 12:20 photo stood before two of 12:19
+    .map((p, i) => ({ p, i, t: p.at ? Date.parse(p.at) : NaN }))
+    .sort((a, b) => (Number.isFinite(a.t) && Number.isFinite(b.t) ? a.t - b.t : 0) || a.i - b.i)
     .map(({ p }) => p);
   return { photos: [photos[top], ...rest], big: true };
 }

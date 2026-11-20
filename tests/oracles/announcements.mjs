@@ -308,6 +308,10 @@ ck("a photo's words: its camera and its time, the time alone when no camera is n
        ["photo-tile", ID("a")], ["photo-tile", ID("d")]]), [tiles, card]);
   const later = photoOrder([visitPhotos[0], { ...visitPhotos[3], strongest: true }, visitPhotos[1]]);
   ck("  ...a flagged photo not first is put first", later.big && later.photos.map((p) => p.id).join() === [ID("d"), ID("b"), ID("a")].join());
+  const zones = photoOrder([{ id: ID("m"), label: "Waterwall", at: "2026-11-20T12:18:30+08:00", strongest: true },
+    { id: ID("p"), label: "Parking", at: "2026-11-20T04:20:12+00:00" }, { id: ID("s"), label: "Staircase", at: "2026-11-20T12:19:32+08:00" }]);
+  ck("  ...in time order whatever zone a time is written in (owner, 2026-11-20, #204: Parking 12:20 before Staircase 12:19)",
+     zones.photos.map((p) => p.id).join() === [ID("m"), ID("s"), ID("p")].join(), zones.photos.map((p) => p.label));
   const plain = photoOrder(visitPhotos);
   ck("  ...none flagged: the record's order, every tile alike; one photo alone, even flagged: as today",
      !plain.big && plain.photos.map((p) => p.id).join() === visitPhotos.map((p) => p.id).join()
