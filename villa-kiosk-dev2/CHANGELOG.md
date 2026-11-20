@@ -1,3 +1,8 @@
+## 2.496.849
+
+- **A visit's photos in time order.** A photo whose time the villa wrote in another time zone no longer jumps ahead of
+  earlier ones: a Parking photo of 12:20 stood before two of 12:19.
+
 ## 2.496.848
 
 - **A visit's photos fill the space beside the large one.** On a card in the Messages and the Cockpit, the small
