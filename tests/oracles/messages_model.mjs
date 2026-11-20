@@ -1,7 +1,7 @@
 // The Cockpit's Messages tab (ticket 17 of "One inbox", owner 2026-10-28): one pure model turns the open issues, the
 // watched faults and the villa's announcements into what the tab lists, its filters' counts and the item open on the
 // right. Every Messages screen reads it. Driven by value; placeholder titles.
-import { ck, done } from "../consistency/check.mjs";
+import { ck, done, hasClass } from "../consistency/check.mjs";
 import { h, draw, inside, text } from "../consistency/screen.mjs";
 import { readFileSync } from "node:fs";
 const { messagesView, mergeAnnouncements, FILTERS, messagePlaces, readAtOpening, openingFilter, followingFilter, shownTogether,
@@ -874,7 +874,7 @@ ck("  ...a report under Reports, an open alert a notification, a closed one in C
      text(inside(notice, "fm-record-state")) === "|New alert| · Stopped for 20min|"
      && text(inside(cardHtml, "fm-record-state")).startsWith("|New alert|"), [text(inside(notice, "fm-record-state")), text(inside(cardHtml, "fm-record-state"))]);
   ck("  ...in its strip's colour (red: act now), no bell; its ✕ kept",
-     /class="vesta-notice strip-danger( closable)?"/.test(notice) && notice.includes("--tone:var(--strip)") && !notice.includes("lucide-bell")
+     hasClass(notice, "vesta-notice", "strip-danger") && notice.includes("--tone:var(--strip)") && !notice.includes("lucide-bell")
      && notice.includes('aria-label="Dismiss"'), notice);
   // one problem of a card of several: the alert's own head, never "2 problems"
   const two = card("device:pump", { title: "Device pump", tone: "danger", lead: alertLead,
@@ -885,7 +885,7 @@ ck("  ...a report under Reports, an open alert a notification, a closed one in C
   const noticeOfTwo = draw(h(AnnouncementNoticeView, { announcement: told, card: one }));
   ck("  ...the alert of a device with another problem: its own state and colour, not \"2 problems\"",
      one?.lines.length === 1 && text(inside(noticeOfTwo, "fm-record-state")) === "|New alert| · Stopped for 20min|"
-     && /class="vesta-notice strip-danger( closable)?"/.test(noticeOfTwo), noticeOfTwo);
+     && hasClass(noticeOfTwo, "vesta-notice", "strip-danger"), noticeOfTwo);
   // a reminder on a ticket someone took on: the state is the ticket's, the words say what changed
   const reminded = parseVestaMessage({ seq: 82, at: "2026-11-10T14:25:00+08:00", key: "incident:91", title: "#91-P2 (existing)", to: "FM",
     body: "Stopped for 20min", status: ["- Alert sent 14:05", "⏰ Reminder sent 14:25"], stage: "existing" });

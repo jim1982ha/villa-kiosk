@@ -48,6 +48,10 @@ export const POOL_FLOOR_LIFT = 0.02;
  *  them. What stands under a lamp is the furniture light's; the pool is the
  *  floor's. */
 const POOL_RAISED_M = 0.2;
+/** A pool raised a little above its room's floor asks this many points round it, this far out (a share of its
+ *  radius), what they lie on. */
+const RING_POINTS = 8;
+const RING_AT = 0.6;
 /** How far below the tread under it a light over a flight still lights: the
  *  step or two below its own. Below that is the next lamp's, or the room
  *  built under the flight, whose ceiling is the flight's underside a riser
@@ -179,6 +183,23 @@ export function placeLight<R extends PlacementRoom>(
     // room's floor is already known, and re-asking cost ~20 ms a pool.
     const roomFloor = storeys.floorUnder(x, surfaceY, z);
     if (roomFloor !== null && surfaceY - roomFloor > POOL_RAISED_M) { surfaceY = roomFloor; notes.push("lowered"); }
+    // ⚠️ WHAT MOST OF THE POOL LIES ON, NOT THE SPOT UNDER THE LAMP (owner, 2026-11-20: the onsen lamp moved over
+    // the tub's end in a new model, and its pool lay at the water's 0.18 m, a disc floating over the pebbles and
+    // glowing inside the tub). Raised a little above the room's floor (a step, or a tub's water), the pool asks a
+    // few points around it: when most of them lie lower, it was an object under the lamp, and the pool goes on the
+    // room's floor; a lamp over a step, the step all round, keeps the step. Only these lamps pay the rays.
+    else if (roomFloor !== null && surfaceY - roomFloor > 2 * POOL_FLOOR_LIFT) {
+      const ring = Math.min(spreadM, LIGHT_POOL_RADIUS) * RING_AT;
+      let lower = 0, seen = 0;
+      for (let k = 0; k < RING_POINTS; k++) {
+        const a = (2 * Math.PI * k) / RING_POINTS;
+        const hit = probe.describeBelow(x + ring * Math.cos(a), fromY, z + ring * Math.sin(a));
+        if (!hit || hit.y > surfaceY + POOL_RAISED_M) continue;   // a wall or a fence: no floor there
+        seen++;
+        if (hit.y < surfaceY - 2 * POOL_FLOOR_LIFT) lower++;
+      }
+      if (seen > 0 && lower * 2 > seen) { surfaceY = roomFloor; notes.push("aside"); }
+    }
   }
   // ⚠️ TWO RULES, AND WHAT WE KNOW PICKS ONE (2.477.0). A probed surface is
   // a floor being stood ON — nearest-floor. A fixture height is an unknown
