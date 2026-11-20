@@ -102,6 +102,7 @@ import base64
 import hashlib
 import hmac
 import json
+import math
 import os
 import re
 import secrets
@@ -3805,13 +3806,73 @@ def _asleep_ids(raw) -> list[str]:
 CHAT_LANGUAGES: dict = (AGENT_CONTRACT_TABLE.get("recipients") or {}).get("languages") or {}
 
 
-def _chat_languages(raw) -> dict[str, str]:
-    """Each chat's language (Settings › Messages › Who gets the messages): a notify entity id → a code of
-    CHAT_LANGUAGES, sorted by id; any other entry left out; not stored or another shape: none (every chat English)."""
+def _kept_chat_languages(raw):
+    """Each chat's language as it is kept (the app's recipients parseChatLanguages): a notify entity id → a code of
+    CHAT_LANGUAGES, in their order, any other entry left out; another shape: NOT_STORED."""
     if not isinstance(raw, dict):
-        return {}
-    return {k: v for k, v in sorted(raw.items()) if isinstance(k, str) and k.startswith("notify.")
+        return NOT_STORED
+    return {k: v for k, v in raw.items() if isinstance(k, str) and k.startswith("notify.")
             and AGENT_ENTITY_RE.fullmatch(k) and isinstance(v, str) and v in CHAT_LANGUAGES}
+
+
+def _chat_languages(raw) -> dict[str, str]:
+    """Each chat's language (Settings › Messages › Who gets the messages), sorted by id; not stored or another shape:
+    none (every chat English)."""
+    kept = _kept_chat_languages(raw)
+    return dict(sorted(kept.items())) if kept is not NOT_STORED else {}
+
+
+def _entity_ids(raw):
+    """A villa list of devices as it is kept (villa-settings.json `lists`, the app's keptEntityIds): entity ids
+    (AGENT_ENTITY_RE), each once, in their order; no list: NOT_STORED."""
+    if not isinstance(raw, list):
+        return NOT_STORED
+    return list(dict.fromkeys(e for e in raw if isinstance(e, str) and AGENT_ENTITY_RE.fullmatch(e)))
+
+
+def _villa_keep(name: str, raw):
+    """⚠️ THE ONE RULE FOR A VILLA SETTING'S VALUE (architecture review, owner approved 2026-11-20): what is kept of a
+    value sent or stored for the row `name` (villa-settings.json `settings`), by its kind; NOT_STORED: not kept (the
+    setting reads its default). The app's own copy is kept by the same rule (src/config/villaSettings.ts
+    keptVillaValue), through the same examples. A number out of range is kept at the nearest bound and a fraction as
+    its whole part, as this server always read one: an owner's "keep 99999 days" keeps the most allowed, never the
+    default's one year, which would delete more. Before, the Kiosk dropped such a number and this server clamped it,
+    and the file held whatever was sent."""
+    row = _villa_row(name)
+    kind = row.get("kind")
+    is_number = isinstance(raw, (int, float)) and not isinstance(raw, bool) and math.isfinite(raw)
+    if kind == "number":
+        return raw if is_number else NOT_STORED
+    if kind == "int":
+        lo, hi = row.get("min"), row.get("max")
+        if not is_number or not all(isinstance(b, int) and not isinstance(b, bool) for b in (lo, hi)):
+            return NOT_STORED
+        return max(lo, min(hi, int(raw)))
+    if kind == "text":
+        return raw if isinstance(raw, str) else NOT_STORED
+    if kind == "entity":
+        return raw if isinstance(raw, str) and (raw == "" or AGENT_ENTITY_RE.fullmatch(raw)) else NOT_STORED
+    if kind == "switch":
+        return raw if isinstance(raw, bool) else NOT_STORED
+    if kind == "record":
+        return raw if isinstance(raw, dict) else NOT_STORED
+    return raw                               # a row this server cannot read: kept as sent (nothing dropped on a guess)
+
+
+def _villa_kept(doc: dict) -> dict:
+    """`doc` with every villa setting it holds as its rule keeps it (_villa_keep for each row, _entity_ids for each
+    list, _kept_chat_languages); a value not kept is dropped."""
+    table = VILLA_SETTINGS_TABLE if isinstance(VILLA_SETTINGS_TABLE, dict) else {}
+    rules = {**{name: (lambda raw, n=name: _villa_keep(n, raw)) for name in (table.get("settings") or {})},
+             **{name: _entity_ids for name in (table.get("lists") or ())},
+             "chatLanguages": _kept_chat_languages}
+    out = dict(doc)
+    for name, keep in rules.items():
+        if name in out and (kept := keep(out[name])) is not NOT_STORED:
+            out[name] = kept
+        else:
+            out.pop(name, None)
+    return out
 
 
 def _villa_empty_sensor(raw) -> str:
@@ -3849,8 +3910,10 @@ def _full_screen_items(raw: list) -> list:
 
 def _device_config_today(doc):
     """The villa's settings (device-config.json) in today's shape: what an older Kiosk stored read into it, then the
-    keys it retired dropped (villa-settings.json `retired`). The app's own copy is read the same way
-    (src/config/migrations.ts), through the same examples (villa-settings.json `examples`: tests/store-doors.py).
+    keys it retired dropped (villa-settings.json `retired`), then each villa setting as its rule keeps it (_villa_kept):
+    the PUT door's write goes through this (JsonStore migrate), so the file only ever holds kept values. The app's own
+    copy is read the same way (src/config/migrations.ts), through the same examples (villa-settings.json `examples`:
+    tests/store-doors.py).
 
     ⚠️ ONE PLACE, AND THIS SERVER'S (architecture review round 17): the file is this server's, so it migrates it on
     every read and every write, and writes it back once at start (JsonStore.settle). Each tablet migrated its copy by
@@ -3868,7 +3931,7 @@ def _device_config_today(doc):
     elif isinstance(doc.get("fullScreenFor"), list):
         seconds = doc.get("ringShownForS") if _seconds_ok(doc.get("ringShownForS")) else bounds[0]
         out["fullScreen"] = _full_screen_items([{"title": t, "seconds": seconds} for t in doc["fullScreenFor"]])
-    return out
+    return _villa_kept(out)
 
 
 def _full_screen_longest(raw) -> int:

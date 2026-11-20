@@ -14,6 +14,7 @@
 // through the agreement's examples.
 
 import AGENT_CONTRACT from "../../rootfs/usr/share/vesta/agent-contract.json" with { type: "json" };
+import { ENTITY_PATTERN } from "@/config/villaSettings";
 
 const AGREED = AGENT_CONTRACT.recipients;
 
@@ -45,7 +46,8 @@ export const CHAT_LANGUAGES: Readonly<Record<string, string>> = AGREED.languages
 export function parseChatLanguages(raw: unknown): Record<string, string> | undefined {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
   return Object.fromEntries(Object.entries(raw as Record<string, unknown>).filter(
-    (e): e is [string, string] => e[0].startsWith(`${AGREED.domain}.`) && typeof e[1] === "string" && e[1] in CHAT_LANGUAGES));
+    (e): e is [string, string] => e[0].startsWith(`${AGREED.domain}.`) && ENTITY_PATTERN.test(e[0])
+      && typeof e[1] === "string" && e[1] in CHAT_LANGUAGES));
 }
 
 /** What choosing `code` for chat `entity` writes: that chat's language, English (the default) kept as no entry. */

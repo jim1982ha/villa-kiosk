@@ -10,7 +10,8 @@ import Window, { WindowHeader } from "@/components/common/Window";
 import { roleCan } from "@/auth/permissions";
 import { useState, type ReactNode } from "react";
 import { FIELD_COMMIT_MS, PendingFields, typedNumber, usePendingField, type PendingField } from "@/hooks/usePendingField";
-import { RECORDS_KEPT_DAYS_MAX, type AppConfig } from "@/config/AppConfig";
+import type { AppConfig } from "@/config/AppConfig";
+import { villaBounds } from "@/config/villaSettings";
 import { Boxes, CalendarClock, Home, LogOut, Upload, Wrench } from "lucide-react";
 import SettingRow, { SettingSlider, settingValue } from "@/components/common/SettingRow";
 import ToolGroup from "@/components/common/ToolGroup";
@@ -170,6 +171,10 @@ function PresenceSensor() {
   );
 }
 
+/** The days the field takes: the bounds of the setting's row (villa-settings.json `recordsKeptDays`), the ones the
+ *  server keeps a saved value within. */
+const DAYS_KEPT = villaBounds("recordsKeptDays");
+
 /** How long the Facility record is kept (config/recordsKeptDays): the villa's, applied by the server. Commits on
  *  blur/Enter or after a pause, like the coordinates; a value that is not a whole number of days in range commits
  *  nothing, the field falls back to the stored one and says so (typedNumber). */
@@ -178,7 +183,7 @@ function RecordsKept() {
   const field = usePendingField<string>("recordsKeptDays", FIELD_COMMIT_MS);
   const write = (text: string) => {
     const n = Number(text);
-    return text.trim() !== "" && Number.isInteger(n) && n >= 0 && n <= RECORDS_KEPT_DAYS_MAX ? { recordsKeptDays: n } : null;
+    return text.trim() !== "" && Number.isInteger(n) && n >= DAYS_KEPT.min && n <= DAYS_KEPT.max ? { recordsKeptDays: n } : null;
   };
   // label and field on one line, the field on the right (owner, 2026-10-22): a setting line like every other, its name
   // one line at every width (owner, 2026-11-06), the owner's whole sentence in the section's (i)
@@ -186,7 +191,7 @@ function RecordsKept() {
     <SettingRow className="setting-field" icon={<CalendarClock size={16} />} label={<label htmlFor="records-kept">Days records are kept</label>}>
       <input id="records-kept" inputMode="numeric" className="field-narrow"
         {...typedNumber(field, String(config.recordsKeptDays), write, "Days records are kept",
-          `a whole number from 0 to ${RECORDS_KEPT_DAYS_MAX}`)} />
+          `a whole number from ${DAYS_KEPT.min} to ${DAYS_KEPT.max}`)} />
     </SettingRow>
   );
 }
@@ -375,7 +380,7 @@ export default function ConfigEditorModal({ onBack, withinSettings, focusEntityI
           <>
             <TipTitle title="Maintenance records" tip={<>
               How many days faults, tickets, attachments and messages are kept: photos, repaired faults, work done, money
-              spent and messages older than this are deleted. 0 keeps them for ever, up to {RECORDS_KEPT_DAYS_MAX} days
+              spent and messages older than this are deleted. 0 keeps them for ever, up to {DAYS_KEPT.max} days
               otherwise; a task's latest completion is always kept.
             </>} />
             <RecordsKept />
