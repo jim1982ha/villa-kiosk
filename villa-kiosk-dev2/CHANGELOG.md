@@ -1,3 +1,12 @@
+## 2.496.852
+
+- **One upload button.** It reads "Upload Model" on the no-model screen and in Advanced Settings, and a failed upload
+  shows one red line in both places.
+- **Buttons answer the mouse the same way.** "Unlock door…" and a blind's Open/Close brighten in their own colour; a
+  few icon buttons (a task's pencil, the photo viewer's ✕ and arrows, the rooms menu's ✕) now show their name.
+- **The villa's shared settings are checked when saved**: a number out of range is kept at the nearest allowed value.
+- Behind the scenes: every door of the VESTA UI's server is checked in one place, and every button is one definition.
+
 ## 2.496.851
 
 - **The upper terrace's highlight sits on its deck.** Its floor was read 12 cm low, on a surface under the deck.
