@@ -265,7 +265,7 @@ export class LightPool {
    *  above 1 genuinely brightens/saturates the pool further rather than just
    *  "more opaque", so the slider keeps working past that point. */
   /**
-   * A pool over a STAIRCASE draws no disc (LightPoolSet.reshapeOne): a flight
+   * A pool over a STAIRCASE draws no disc (LightPoolSet.apply): a flight
    * has no one floor, and a flat disc at the height of the tread under the
    * lamp floated over every lower step and lit them from the air — a bright
    * block on the stairs next to the living room that read as light pouring
@@ -278,7 +278,7 @@ export class LightPool {
   private lit = false;
 
   /**
-   * Whether there is a floor to draw on here (LightPoolSet.reshapeOne).
+   * Whether there is a floor to draw on here (LightPoolSet.apply).
    *
    * ⚠️ VISIBILITY IS THIS CLASS'S (2.496.185). The pool set flipped
    * `floorless` and called `mesh.setEnabled(false)` itself — only ever OFF —

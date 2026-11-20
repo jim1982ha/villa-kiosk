@@ -12,11 +12,12 @@
 import { register } from "node:module";
 register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
-const { placeLight, LIGHT_POOL_RADIUS } = await import("@/babylon/lightPlacement");
+const { placeLight, placeLights, LIGHT_POOL_RADIUS, POOL_EDGE_M } = await import("@/babylon/lightPlacement");
 const { Storeys } = await import("@/babylon/storeys");
 const { GLOW_TERM, POOL_CENTRE } = await import("@/babylon/lampGlow");
 const { pointInPolygon, earClipTriangulate, pointInside } = await import("@/utils/geometry");
 const { POOL_ALPHA_STOPS } = await import("@/babylon/LightPools");
+const { floorOfArea } = await import("@/babylon/floorProbe");
 /** What a patch gives the floor at distance d from its centre (its gradient). */
 const patchAt = (at, d) => {
   const t = d / at.radius;
@@ -48,7 +49,14 @@ const floorBelow = (x, y, z) => {
   if (onFlight(x, z) && tread(x) <= y) return tread(x);
   return y >= UP ? UP : 0;
 };
-const probe = (below = floorBelow) => ({ below, describeBelow: (x, y, z) => ({ y: floorBelow(x, y, z) }) });
+/** Every surface a storey has over (x, z), as the probe's column: its floor, and a tread over it. */
+const columnOf = (x, z, storey) => (storey >= 2 ? [UP] : onFlight(x, z) ? [0, tread(x)] : [0]);
+/** The scripted probe: `below` its memo (stale, when a test says so), `fresh` the ray today, `column` what lies on
+ *  the floor; the vote is the probe's own (floorOfArea). */
+const probe = (below = floorBelow, column = columnOf, fresh = floorBelow) => ({
+  below, describeBelow: (x, y, z) => ({ y: fresh(x, y, z) }),
+  areaFloorY: (area, storey) => floorOfArea(area, (x, z) => column(x, z, storey)),
+});
 
 // THE glow's own formula (GLOW_TERM), summed over lamps as the shader does.
 const term = new Function("min", "max", "clamp", "smoothstep", "step", "inversesqrt", "pX", "pY", "pZ", "nX", "nY", "nZ",
@@ -58,7 +66,7 @@ const H = [Math.min, Math.max, (v, a, b) => Math.min(b, Math.max(a, v)),
   (e, v) => (v < e ? 0 : 1), (v) => 1 / Math.sqrt(v)];
 /** How lit a surface is by these lamps, as a fraction of a pool's centre. */
 const lit = (lamps, p, n) => lamps.reduce((a, l) => a + term(...H, ...p, ...n, l.x, l.y, l.z, l.at.glowFloorY, Math.min(l.at.ceilingY, 1e6)), 0) / POOL_CENTRE;
-const lamp = (x, z, y, storeys, pr = probe()) => ({ x, y, z, at: placeLight(x, z, y, floorBelow(x, y, z), pr, storeys) });
+const lamp = (x, z, y, storeys, pr = probe()) => ({ x, y, z, at: placeLight({ x, z, fromY: y, floorY: floorBelow(x, y, z) }, { probe: pr, storeys }) });
 
 for (const [label, stairFloor] of [["its floor measured at the slab under it", 0], ["its floor measured on a tread", 0.85]]) {
   console.log(`\n  step lights on the wall beside a flight (the staircase ${label}):`);
@@ -113,7 +121,7 @@ console.log("\n  ordinary room lights, as they were:");
   const c = lamp(3, 5, 2.8, P);
   ck("a ceiling lamp: its patch on its room's floor, in its room", c.at.surfaceY === 0 && c.at.room?.name === "Hall" && !c.at.floorless, c.at);
   ck("  ...its glow from that floor up to the storey above", c.at.glowFloorY === 0 && c.at.ceilingY === UP, c.at);
-  const t = placeLight(3, 5, 2.8, 0, probe((x, y, z) => (Math.abs(x - 3) < 1 ? 0.75 : floorBelow(x, y, z))), P);
+  const t = placeLight({ x: 3, z: 5, fromY: 2.8, floorY: 0 }, { probe: probe((x, y, z) => (Math.abs(x - 3) < 1 ? 0.75 : floorBelow(x, y, z))), storeys: P });
   ck("a table under it (0.75 m) still puts its patch on the floor", t.surfaceY === 0 && t.room?.name === "Hall", t);
   const up = lamp(3, 5, UP + 2.4, P);
   ck("an upstairs lamp: its room upstairs, nothing above stops it", up.at.room?.name === "Landing" && up.at.glowFloorY === UP && up.at.ceilingY === Infinity, up.at);
@@ -144,15 +152,15 @@ console.log("\n  an outdoor light over a path along the house wall, alone in its
     room("Upper", UP, 2, sq(0, 12, 0, 6)), room("Upper 2", UP, 2, sq(12, 16, 0, 6)),
   ]);
   const path = probe(() => 0.06);
-  const alone = placeLight(6, -1.2, 2.4, 0.06, path, P, Infinity);
-  const crowded = placeLight(6, -1.2, 2.4, 0.06, path, P, 1.0);
+  const alone = placeLight({ x: 6, z: -1.2, fromY: 2.4, floorY: 0.06 }, { probe: path, storeys: P }, { spreadM: Infinity });
+  const crowded = placeLight({ x: 6, z: -1.2, fromY: 2.4, floorY: 0.06 }, { probe: path, storeys: P }, { spreadM: 1.0 });
   ck("the path under it and along it is lit as far as its light reaches the hedge beside it (2.5 m along: lit)",
      patchAt(alone, 2.5) > 0.1 && alone.shape.some((piece) => pointInPolygon(8.5, -1.2, piece)), { radius: alone.radius, at25: patchAt(alone, 2.5) });
   const plant = lit([{ x: 6, y: 2.4, z: -1.2, at: alone }], [8.5, 1.2, -1.2], [0, 1, 0]);
   ck("  ...where a hedge top beside the path (1.2 m), as far out, is lit by the same lamp", plant > 0.05, plant);
   ck("  ...its patch stops at the house wall: nothing on the far side", alone.shape.flat().every((q) => q.z <= 1e-9), alone.shape);
   ck("a lamp among others in its room keeps its small patch (their patches overlap already)", crowded.radius < 2, crowded.radius);
-  const inside = placeLight(6, 3, 2.4, 0, probe(() => 0), P, Infinity);
+  const inside = placeLight({ x: 6, z: 3, fromY: 2.4, floorY: 0 }, { probe: probe(() => 0), storeys: P }, { spreadM: Infinity });
   ck("  ...and a lamp alone in the house beyond the wall spreads only inside the house", inside.shape.flat().every((q) => q.z >= -1e-9), inside.shape);
 }
 
@@ -161,19 +169,18 @@ console.log("\n  two rooms with no wall between them (an open border, the room m
   const P = plan(0);
   const hall = P.rooms.find((r) => r.name === "Hall"), next = P.rooms.find((r) => r.name === "Next");
   const openTo = (r) => (r === hall ? [next] : r === next ? [hall] : []);
-  const o = placeLight(9, 5, 2.8, 0, probe(), P, LIGHT_POOL_RADIUS, null, openTo);
+  const o = placeLight({ x: 9, z: 5, fromY: 2.8, floorY: 0 }, { probe: probe(), storeys: P, openTo });
   const reach = o.shape.flat().reduce((m, q) => Math.max(m, q.x), -Infinity);
   ck("a lamp a metre from the border: its patch goes on into the next room, as far as it reaches (no line at the border)",
      o.room === hall && reach > 10.5 && o.shape.some((piece) => pointInPolygon(10.4, 5, piece)), { reach, pieces: o.shape.length });
   ck("  ...centred under the lamp, never pushed off the open edge", o.cx === 9 && o.cz === 5, { cx: o.cx, cz: o.cz });
-  const e = placeLight(9.9, 5, 2.8, 0, probe(), P, LIGHT_POOL_RADIUS, null, openTo);
+  const e = placeLight({ x: 9.9, z: 5, fromY: 2.8, floorY: 0 }, { probe: probe(), storeys: P, openTo });
   ck("  ...a lamp right on that border stays where it is too", e.cx === 9.9 && e.shape.some((piece) => pointInPolygon(10.3, 5, piece)), { cx: e.cx });
-  const w = placeLight(9, 5, 2.8, 0, probe(), P);
+  const w = placeLight({ x: 9, z: 5, fromY: 2.8, floorY: 0 }, { probe: probe(), storeys: P });
   ck("the same lamp with a wall on that border: its patch stops at the wall", w.shape.flat().every((q) => q.x <= 10 + 1e-9), w.shape);
-  const st = placeLight(3, 2.5, 2.8, 0, probe(), P, LIGHT_POOL_RADIUS, null,
-    (r) => (r === hall ? [P.rooms.find((q) => q.name === "Staircase" && q.storey === 1)] : []));
+  const st = placeLight({ x: 3, z: 2.5, fromY: 2.8, floorY: 0 }, { probe: probe(), storeys: P, openTo: (r) => (r === hall ? [P.rooms.find((q) => q.name === "Staircase" && q.storey === 1)] : []) });
   ck("a room open to the stairwell: its lamp's patch does not float over the flight", st.shape.flat().every((q) => q.z >= 2 - 1e-9), st.shape);
-  const up = placeLight(9, 5, 2.8, 0, probe(), P, LIGHT_POOL_RADIUS, null, (r) => (r === hall ? [P.rooms.find((q) => q.name === "Bedroom")] : []));
+  const up = placeLight({ x: 9, z: 5, fromY: 2.8, floorY: 0 }, { probe: probe(), storeys: P, openTo: (r) => (r === hall ? [P.rooms.find((q) => q.name === "Bedroom")] : []) });
   ck("never into a room on another storey", up.shape.flat().every((q) => q.x <= 10 + 1e-9), up.shape);
 }
 
@@ -188,7 +195,7 @@ console.log("\n  a terrace set into a garden drawn round it (the garden's outlin
   const P = new Storeys([terrace, garden]);
   const openTo = (r) => (r === terrace ? [garden] : r === garden ? [terrace] : []);
   const LX = 3.3, LZ = 3.6;
-  const t = placeLight(LX, LZ, 2.2, 0, probe(() => 0), P, LIGHT_POOL_RADIUS, null, openTo);
+  const t = placeLight({ x: LX, z: LZ, fromY: 2.2, floorY: 0 }, { probe: probe(() => 0), storeys: P, openTo });
   // Every bit of floor within the lamp's reach, terrace or garden, is under its patch, exactly once: as
   // drawn, each piece in triangles (LightPools.applyShape).
   const drawn = t.shape.flatMap((piece) => earClipTriangulate(piece).map(([a, b, c]) => [piece[a], piece[b], piece[c]]));
@@ -209,7 +216,7 @@ console.log("\n  a room outline drawn with a repeated corner and points along a 
   const L = room("L", 0, 1, [{ x: 0, z: 0 }, { x: 2, z: 0 }, { x: 4, z: 0 }, { x: 4, z: 0 }, { x: 4, z: 1.5 }, { x: 4, z: 3 },
     { x: 2, z: 3 }, { x: 2, z: 5 }, { x: 0, z: 5 }, { x: 0, z: 2.5 }]);
   const P = new Storeys([L]);
-  const c = placeLight(2, 2, 2.6, 0, probe(() => 0), P, 4);
+  const c = placeLight({ x: 2, z: 2, fromY: 2.6, floorY: 0 }, { probe: probe(() => 0), storeys: P }, { spreadM: 4 });
   const drawn = c.shape.flatMap((piece) => earClipTriangulate(piece).map(([a, b, cc]) => [piece[a], piece[b], piece[cc]]));
   let missing = 0, n = 0;
   for (let x = 0.05; x < 4; x += 0.1) for (let z = 0.05; z < 5; z += 0.1) {
@@ -223,18 +230,45 @@ console.log("\n  a room outline drawn with a repeated corner and points along a 
   ck("  ...and the room's highlight, drawn from the same triangles, fills it", Math.abs(area - 16) < 1e-9, area);
 }
 
-console.log("\n  a lamp over a tub, a lamp over a step:");
+console.log("\n  a lamp over a tub, a lamp over a step, a lamp over a path:");
 {
   const P = plan(0);
   // A tub in the hall, its water 0.16 m up (x 2.5..3.5, z 4..5.6); the lamp above its end.
-  const tub = (x, y, z) => (x > 2.5 && x < 3.5 && z > 4 && z < 5.6 ? 0.16 : floorBelow(x, y, z));
-  const over = placeLight(3, 4.3, 2.3, 0, { below: tub, describeBelow: (x, y, z) => ({ y: tub(x, y, z) }) }, P);
+  const inTub = (x, z) => x > 2.5 && x < 3.5 && z > 4 && z < 5.6;
+  const tub = (x, y, z) => (inTub(x, z) ? 0.16 : floorBelow(x, y, z));
+  const over = placeLight({ x: 3, z: 4.3, fromY: 2.3, floorY: 0 }, { probe: probe(tub, (x, z, s) => (inTub(x, z) ? [0, 0.16] : columnOf(x, z, s)), tub), storeys: P });
   ck("over a tub's end: the pool lies on the floor round it, not on the water (owner, 2026-11-20, the onsen)",
      over.surfaceY === 0, [over.surfaceY, over.notes]);
   // A raised platform 0.15 m up across the hall's end (x 0..10, z 4..8); the lamp in its middle.
-  const deck = (x, y, z) => (z > 4 && z < 8 ? 0.15 : floorBelow(x, y, z));
-  const step = placeLight(5, 6, 2.3, 0, { below: deck, describeBelow: (x, y, z) => ({ y: deck(x, y, z) }) }, P);
+  const onDeck = (x, z) => z > 4 && z < 8;
+  const deck = (x, y, z) => (onDeck(x, z) ? 0.15 : floorBelow(x, y, z));
+  const step = placeLight({ x: 5, z: 6, fromY: 2.3, floorY: 0 }, { probe: probe(deck, (x, z, s) => (onDeck(x, z) ? [0, 0.15] : columnOf(x, z, s)), deck), storeys: P });
   ck("  ...over a step, the step all round: the pool stays on the step", step.surfaceY === 0.15, [step.surfaceY, step.notes]);
+  // A path 6 cm up on the ground, 2 m wide along the hall (z 4..6), a kerb 0.4 m up beside it (z 6..6.3);
+  // the lamp over the path. The ground runs on under the path: the lowest surface there is the ground's.
+  const onPath = (x, z) => z > 4 && z < 6, onKerb = (x, z) => z >= 6 && z < 6.3;
+  const path = (x, y, z) => (onPath(x, z) ? 0.06 : onKerb(x, z) ? 0.4 : floorBelow(x, y, z));
+  const lit = placeLight({ x: 5, z: 5, fromY: 2.4, floorY: 0 }, { probe: probe(path, (x, z, s) => (onPath(x, z) ? [0, 0.06] : onKerb(x, z) ? [0, 0.4] : columnOf(x, z, s)), path), storeys: P });
+  ck("  ...over a path on the ground, the path along under it: the pool lies on the path (the entrance light, 0.06 m)",
+     lit.surfaceY === 0.06, [lit.surfaceY, lit.notes]);
+}
+
+console.log("\n  every lamp at once (placeLights): a light of three lamps, one past its wall line, and a lamp alone:");
+{
+  const P = plan(0);
+  // Three ceiling lamps of one light in the hall, the third a marker whose centre lies 5 cm past the
+  // hall's wall with the next room; one lamp of its own in the next room.
+  const at = (x, z, light) => ({ x, z, fromY: 2.8, floorY: 0, light });
+  const { placements: [a, b, wallLamp, alone] } = placeLights([at(3, 5, 0), at(6, 5, 0), at(10.05, 5, 0), at(12, 5)],
+    { probe: probe(), storeys: P });
+  const inHall = (q) => q.x <= 10 + 1e-9;
+  ck("the marker past the wall line lights the hall with its light's other lamps, laid into the hall, not the room behind",
+     wallLamp.room?.name === "Hall" && Math.abs(wallLamp.cx - (10 - POOL_EDGE_M)) < 1e-6 && wallLamp.shape.flat().every(inHall),
+     { room: wallLamp.room?.name, cx: wallLamp.cx });
+  ck("  ...the hall's lamps, three metres apart, keep their small patches (theirs already overlap)",
+     a.radius === LIGHT_POOL_RADIUS && b.radius === LIGHT_POOL_RADIUS, [a.radius, b.radius]);
+  ck("the lamp alone in the next room spreads as far as its light reaches the floor, inside its walls",
+     alone.radius > LIGHT_POOL_RADIUS + 0.5 && alone.shape.flat().every((q) => q.x >= 10 - 1e-9), alone.radius);
 }
 
 console.log("\n  where a room's floor is read:");
