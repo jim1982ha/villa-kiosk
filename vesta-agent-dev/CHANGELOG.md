@@ -1,3 +1,11 @@
+## 0.12.531
+
+- **"Not a problem" ends like every other close.** The card reads "(watch)" for 1 hour, then "(closed)" and struck, at
+  the same moment the fault leaves the tablet's watch list, even if the problem is still there (the door left unlocked).
+  Its last line then says so: "✅ Closed at …: still there, accepted as not a problem."
+- **The villa's repeats after it keep their times on the card:** "Still there at 21:56, 22:26 since 21:31".
+- The change of 0.12.529 and 0.12.530 that kept such a card under watch until the problem ended is undone.
+
 ## 0.12.530
 
 - **An alert closed by an older version while it was still there is under watch again.** At its next repeat, its card
