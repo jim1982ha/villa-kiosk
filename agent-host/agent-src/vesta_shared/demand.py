@@ -24,6 +24,7 @@ from datetime import datetime, timedelta, timezone
 from typing import NamedTuple
 
 from .occupancy import EMPTY, OCCUPIED, SAYS
+from .past import changed_at
 
 #: The night's verdicts, kept for the alert desk (Store.cache_put): {"at": when learned, "devices": {power entity: learned}}
 KEY = "pm-follows-people"
@@ -43,18 +44,10 @@ class Rules(NamedTuple):
     max_hold_hours: float     # need_h never above this
 
 
-def _at(row: dict) -> datetime | None:
-    try:
-        t = datetime.fromisoformat(str(row.get("last_changed") or row.get("last_updated")).replace("Z", "+00:00"))
-    except ValueError:
-        return None
-    return t if t.tzinfo else t.replace(tzinfo=timezone.utc)
-
-
 def spans(rows: list[dict], first: datetime, last: datetime) -> list[tuple[datetime, datetime, str | None]]:
     """The sensor's history `rows` (oldest first, the state at the window's start first) as (from, to, OCCUPIED |
     EMPTY | None) spans covering [first, last]; None where it read anything else, and before its first reading."""
-    marks = sorted((t, SAYS.get(str(r.get("state")))) for r in rows or [] if (t := _at(r)) is not None)
+    marks = sorted((t, SAYS.get(str(r.get("state")))) for r in rows or [] if (t := changed_at(r)) is not None)
     out, prev = [], (first, None)
     for t, st in marks:
         if t > prev[0]:

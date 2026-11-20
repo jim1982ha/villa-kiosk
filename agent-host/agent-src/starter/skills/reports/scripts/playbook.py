@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 from vesta_shared import battery  # a battery's charge: the night check's own reading
 from vesta_shared import daily  # a motor whose power is its own (measured_motor)
 from vesta_shared.stats import step_index  # the night check's step detector
-from vesta_shared.timeutil import day_time_label, moment_key, said  # the one day format; a stored time in words
+from vesta_shared.timeutil import day_time_label, moment, moment_key, said  # the one day format; a stored time in words
 from vesta_shared.past import unread  # the one "could not be read whole: nothing is known after"
 from vesta_shared.retention import days_words  # how long the villa's system keeps detail, in words
 from vesta_shared.result import PRIORITY_ORDER, WHOLE_DEVICE  # the one list of priorities; a whole device's faults
@@ -38,13 +38,6 @@ def _num(v):
     try:
         return float(v)
     except (TypeError, ValueError):
-        return None
-
-
-def _when(row: dict) -> datetime | None:
-    try:
-        return datetime.fromisoformat(str(row.get("when") or ""))
-    except ValueError:
         return None
 
 
@@ -300,7 +293,7 @@ def one_list(clue_rows: list[dict], problems: list[dict], device_of, name_of, ho
             continue
         n = len(its)
         why = group["shown"] + "."
-        times = [_when({"when": x["since"]}) for x in its]
+        times = [moment(x["since"]) for x in its]
         if all(t_ is not None and len(x["since"]) > 10 for t_, x in zip(times, its)):
             spread = (max(times) - min(times)).total_seconds() / 60
             if spread <= same_minutes and group_words.get("same_time"):

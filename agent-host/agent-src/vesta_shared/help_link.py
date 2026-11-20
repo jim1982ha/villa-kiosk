@@ -60,7 +60,7 @@ class HelpLink:
         if not self.new(subject, at):
             return None
         self.store.cache_put(_TOLD, {**(self.store.cache_get(_TOLD) or {}), subject: at})
-        kind, sid = self.problems._source(task)
+        kind, sid = self.problems.source_of(task)
         iid = sid if kind == "incident" and sid else self.standing(subject)
         inc = self.store.incident(iid) if iid else None
         if inc and not inc.get("closed_at"):

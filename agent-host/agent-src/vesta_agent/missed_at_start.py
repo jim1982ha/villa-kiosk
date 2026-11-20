@@ -25,6 +25,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 
 from vesta_shared.limits import limit
+from vesta_shared.timeutil import moment
 
 from .ha_events import CONTEXT_KEY
 
@@ -64,18 +65,10 @@ class Missed:
     data: dict = field(default_factory=dict)
 
 
-def _when(text) -> datetime | None:
-    try:
-        t = datetime.fromisoformat(str(text))
-    except (TypeError, ValueError):
-        return None
-    return t if t.tzinfo else t.replace(tzinfo=timezone.utc)
-
-
 def window(last_beat: str | None, now: datetime) -> tuple[datetime, datetime] | None:
     """(since, until) to look in: from the last beat before the stop, never further back than catch_up_hours(); None at
     a first start (no beat: nothing was missed)."""
-    since = _when(last_beat) if last_beat else None
+    since = moment(last_beat) if last_beat else None
     if since is None:
         return None
     return max(since, now - timedelta(hours=catch_up_hours())), now
@@ -108,7 +101,7 @@ def alerts(reader, since: datetime, until: datetime) -> list[Missed]:
         eid = rule["entity_id"]
         listed = reader.tool("ha_get_automation_traces", {"automation_id": eid, "limit": RUNS_LISTED})
         for run in (listed.get("traces") if isinstance(listed, dict) else None) or []:
-            start = _when((run.get("timestamp") or {}).get("start"))
+            start = moment((run.get("timestamp") or {}).get("start"))
             if start is None or not since < start <= until or not run.get("run_id"):
                 continue
             detail = reader.tool("ha_get_automation_traces",
@@ -146,7 +139,7 @@ def updates(reader, since: datetime, until: datetime) -> list[Missed]:
         rows, _ = paged(fetch, PAGE, max_pages=20)
         for row in rows:
             attrs = row.get("attributes") or {}
-            at = _when(row.get("state")) or _when(row.get("last_changed"))
+            at = moment(row.get("state")) or moment(row.get("last_changed"))
             et = attrs.get("event_type")
             if et in PEOPLE and at is not None and since < at <= until:
                 found.append(Missed(at, et, {k: v for k, v in attrs.items() if k not in _OWN}))

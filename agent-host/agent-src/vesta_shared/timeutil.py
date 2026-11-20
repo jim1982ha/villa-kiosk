@@ -12,7 +12,38 @@ from zoneinfo import ZoneInfo
 from . import agreement
 
 
-_NEVER = datetime.min.replace(tzinfo=timezone.utc)
+#: Where a value that is no moment sorts: first.
+NEVER = datetime.min.replace(tzinfo=timezone.utc)
+
+
+def moment(value) -> datetime | None:
+    """The moment of a stored value, aware: an ISO moment as the store ("…+00:00"), the villa ("…+08:00") or the Kiosk
+    ("…Z") writes it, or a datetime; one written without its zone is UTC. None when there is none, or it is no moment.
+
+    ⚠️ ONE READER OF A STORED MOMENT (architecture review part three, 2026-11-20): twelve private copies (`_moment`,
+    `_when`, `_instant`, `_epoch`…), some without the "Z", some returning a moment without its zone that raised when
+    compared with one that had it."""
+    if isinstance(value, datetime):
+        return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+    if not value:
+        return None
+    try:
+        t = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return None
+    return t if t.tzinfo else t.replace(tzinfo=timezone.utc)
+
+
+def before(a, b, *, or_same: bool = False) -> bool:
+    """Is moment `a` earlier than moment `b` (or the same one, `or_same`)? Each a stored value or a datetime, read by
+    `moment`; False when either is no moment.
+
+    ⚠️ NEVER BY THEIR TEXT (owner, 2026-11-20, #204): "…T04:20:12+00:00" is after "…T12:19:31+08:00", and the text
+    says the opposite."""
+    x, y = moment(a), moment(b)
+    if x is None or y is None:
+        return False
+    return x <= y if or_same else x < y
 
 
 def moment_key(value) -> tuple[datetime, str]:
@@ -21,13 +52,8 @@ def moment_key(value) -> tuple[datetime, str]:
     ⚠️ ONE ZONE IS NOT GUARANTEED (owner, 2026-11-20, #204): the villa writes some moments in UTC ("…T04:20:12+00:00")
     and some in its own time ("…T12:19:31+08:00"); sorted as text, a 12:20 photo came before two of 12:19. A value
     that is no moment (none, a label) sorts first, by its text, as before."""
-    if isinstance(value, datetime):
-        return (value if value.tzinfo else value.replace(tzinfo=timezone.utc)), ""
-    try:
-        t = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
-    except (TypeError, ValueError):
-        return _NEVER, str(value or "")
-    return (t if t.tzinfo else t.replace(tzinfo=timezone.utc)), ""
+    t = moment(value)
+    return (t, "") if t is not None else (NEVER, str(value or ""))
 
 
 def local_day(ms: int, zone: "str | ZoneInfo") -> date:

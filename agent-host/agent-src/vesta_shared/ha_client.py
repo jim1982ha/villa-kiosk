@@ -26,7 +26,7 @@ from typing import Any, Iterable
 import urllib.error
 import urllib.request
 
-from .past import History, Logbook, until
+from .past import History, Logbook, changed_at, until
 from .limits import limit
 from .read_guard import kept as read_guard_kept
 from .read_guard import READ_ACTIONS, READ_TOOLS, WRITE_TOOLS, logbook_slice, refused  # noqa: F401 (READ_ACTIONS, READ_TOOLS: read here by name)
@@ -310,13 +310,6 @@ def error_short_chars() -> int:
                  says="How much of an error's text a short failure note keeps (a template, a list that could not be "
                       "read).",
                  reached="The rest of the error's text is cut.", told="")
-
-
-def _when(row: dict) -> datetime | None:
-    try:
-        return datetime.fromisoformat(str(row.get("last_changed") or row.get("last_updated")))
-    except (TypeError, ValueError):
-        return None
 
 
 def paged(fetch, step: int, max_pages: int) -> tuple[list, bool]:
@@ -611,7 +604,7 @@ class McpClient(HABase):
                 batch, whole = paged(lambda off, a=at, b=to: fetch(a, b, off), page, max_pages=history_slice_pages())
                 if not whole:                             # even its pages could not hold it: read no further
                     rows.extend(batch[1:] if rows and batch and batch[0].get("state") == rows[-1].get("state") else batch)
-                    return rows, _when(rows[-1]) or at
+                    return rows, changed_at(rows[-1]) or at
             if rows and batch and batch[0].get("state") == rows[-1].get("state"):
                 batch = batch[1:]                         # the carried-over state, stamped at the slice's start
             rows.extend(batch)

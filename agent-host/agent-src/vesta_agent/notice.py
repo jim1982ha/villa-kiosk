@@ -43,7 +43,7 @@ from vesta_shared import status_words
 from vesta_shared.limits import limit
 from vesta_shared.messaging import incident_tag
 from vesta_shared.problems import again_days
-from vesta_shared.timeutil import moment_label
+from vesta_shared.timeutil import moment, moment_label
 
 from datetime import date, datetime, timezone
 from zoneinfo import ZoneInfo
@@ -191,20 +191,12 @@ def _in_time(history: list[dict], line: dict, at: str) -> list[dict]:
     """`history` with `line` placed in time order: after every step at or before `at`, before the first one later.
     ⚠️ IN TIME ORDER (owner's drill #129: "Seen at Test motion, 22:55–22:58 / Alert sent 22:57 / Test door opened,
     22:55"): VESTA taking over a visit late recorded its alert and its lines as it heard of them."""
-    t = _moment(at)
+    t = moment(at)
     for i, h in enumerate(history):
-        mine = _moment(h.get("since") or h.get("at"))
+        mine = moment(h.get("since") or h.get("at"))
         if t is not None and mine is not None and mine > t:
             return history[:i] + [line] + history[i:]
     return history + [line]
-
-
-def _moment(at) -> datetime | None:
-    try:
-        m = datetime.fromisoformat(str(at))
-    except (TypeError, ValueError):
-        return None
-    return m if m.tzinfo else m.replace(tzinfo=timezone.utc)
 
 
 def _fold_target(history: list[dict], line: dict) -> int | None:
@@ -381,7 +373,7 @@ class Notices:
         """Until when open visit `incident` is monitored, as a moment is written in the villa's time ("07/11/2026
         06:40"; layout.status_shown shortens it by the alert's day); None for any other incident."""
         try:
-            t = _moment(self.monitored_until(int(incident)) or "")
+            t = moment(self.monitored_until(int(incident)) or "")
         except Exception:  # noqa: BLE001 — the line is written without it, never not at all
             return None
         return moment_label(t, self.tz) if t else None
@@ -396,7 +388,7 @@ class Notices:
             at = None
         steps = self.state.incident_history(incident) if at is None else []
         at = at or next((h["at"] for h in steps if h.get("at")), None)
-        t = _moment(at) if at else None
+        t = moment(at) if at else None
         return t.astimezone(ZoneInfo(self.tz)).date().isoformat() if t else None
 
     def to_line(self, incident: int, also=(), history: list[dict] | None = None, chat_roles=None) -> str | None:

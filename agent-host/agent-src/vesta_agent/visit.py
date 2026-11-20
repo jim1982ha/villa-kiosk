@@ -33,7 +33,7 @@ from typing import Awaitable, Callable
 from vesta_shared import visit_state
 from vesta_shared.limits import limit
 from vesta_shared.result import SHEET, TELL_VILLA, WITHDRAW_SIREN
-from vesta_shared.timeutil import clock
+from vesta_shared.timeutil import clock, moment
 
 from . import ringing, sheet
 
@@ -310,7 +310,7 @@ class Visits:
         card showed only the Living Room's photo of 12:08:25 (the lock's, an empty room). A photo of nothing is still
         never kept: the later picture must differ from the burst's first."""
         from .photo_pick import moved
-        cam, at = str(live[-1].get("camera") or ""), visit_state.when(live[-1].get("at"))
+        cam, at = str(live[-1].get("camera") or ""), moment(live[-1].get("at"))
         first, last = sheet._inside(live[0].get("path"), (sheet.MEDIA,)), sheet._inside(live[-1].get("path"), (sheet.MEDIA,))
         if not cam.startswith("camera.") or at is None or not first or not last or first == last:
             return False

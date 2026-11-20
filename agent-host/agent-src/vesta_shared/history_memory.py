@@ -13,6 +13,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 
 from .limits import limit
+from .past import changed_at
 
 
 def settled_minutes() -> float:
@@ -28,22 +29,15 @@ def kept_rows() -> int:
                  reached="A busier device is read whole again on every pass.", told="")
 
 
-def _when(row: dict) -> datetime | None:
-    try:
-        return datetime.fromisoformat(str(row.get("last_changed") or row.get("last_updated")))
-    except (TypeError, ValueError):
-        return None
-
-
 def _from(rows: list[dict], start: datetime) -> list[dict]:
     """`rows` (oldest first, as history answers) as a read from `start` answers them: the state held at `start`,
     stamped at `start` when it began before, then each change after."""
-    before = [r for r in rows if (t := _when(r)) is not None and t <= start]
-    after = [r for r in rows if (t := _when(r)) is not None and t > start]
+    before = [r for r in rows if (t := changed_at(r)) is not None and t <= start]
+    after = [r for r in rows if (t := changed_at(r)) is not None and t > start]
     head = []
     if before:
         last = before[-1]
-        head = [last if _when(last) == start else {**last, "last_changed": start.isoformat()}]
+        head = [last if changed_at(last) == start else {**last, "last_changed": start.isoformat()}]
     return head + after
 
 
@@ -64,7 +58,7 @@ def remembered(client, store, key: str, now: datetime):
             except (KeyError, TypeError, ValueError):
                 frm = to = None
             if frm is not None and frm <= start <= to:
-                old[eid] = [r for r in k.get("rows") or [] if (t := _when(r)) is not None and t < end]
+                old[eid] = [r for r in k.get("rows") or [] if (t := changed_at(r)) is not None and t < end]
                 reads.setdefault(min(to, end), []).append(eid)       # nothing to read when it settled past `end`
             else:
                 reads.setdefault(start, []).append(eid)
@@ -86,7 +80,7 @@ def remembered(client, store, key: str, now: datetime):
         for eid, rows in out.items():
             if eid in cut:
                 continue                                 # stopped short: not known whole, read again next time
-            settled_rows = [r for r in rows if (t := _when(r)) is not None and t < settled]
+            settled_rows = [r for r in rows if (t := changed_at(r)) is not None and t < settled]
             if len(settled_rows) <= cap:
                 devices[eid] = {"from": start.isoformat(), "to": settled.isoformat(), "rows": settled_rows}
         store.cache_put(key, {"devices": devices})

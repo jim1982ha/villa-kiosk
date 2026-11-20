@@ -14,7 +14,7 @@ from vesta_shared.agent_records import run_cost   # what a run cost: one reading
 from vesta_shared import agent_records
 from vesta_shared import villa_recipients
 from vesta_shared.limits import limit
-from vesta_shared.timeutil import lasting, moment_key
+from vesta_shared.timeutil import before, lasting, moment_key
 from .api_errors import cause, what_to_do, why_job_sentence
 from .in_progress import CUT, ENDED, FAILED, run_ends
 
@@ -148,7 +148,7 @@ def report(state, store_path: str, hours: int = 24, now: datetime | None = None,
             from vesta_shared.store import Store
             st = Store(store_path)
             for i in st.incidents(open_only=False):
-                if (i.get("opened_at") or "") >= since.isoformat() or not i.get("closed_at"):
+                if before(since, i.get("opened_at"), or_same=True) or not i.get("closed_at"):
                     incidents.append({k: i.get(k) for k in ("id", "rule_id", "entity_id", "opened_at", "state",
                                                              "reply", "assignee", "closed_at")})
         except Exception as e:  # noqa: BLE001 — a status answer never fails on the store

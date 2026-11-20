@@ -7,7 +7,7 @@ import asyncio
 
 from kiosk_fake import FakeKiosk
 from test_fault_steps import kiosk_holding, ticket
-from vesta_agent.kiosk import tagged
+from vesta_agent.fault_card import write
 from vesta_agent.tickets import Tickets
 from vesta_shared.problems import Problems
 from vesta_shared.store import Store
@@ -33,9 +33,9 @@ def test_the_real_kiosk_writes_the_number_and_gives_it_once_to_a_fault_made_with
     assert ticket(doc, tid)["alertNumber"] == 5
     other = run(k.add_ticket("Battery low"))
     assert "alertNumber" not in ticket(doc, other)                       # no alert behind it: no number
-    assert run(k.amend(other, tagged(7))) and ticket(doc, other)["alertNumber"] == 7
-    assert not run(k.amend(other, tagged(7)))                          # already says it: nothing written
-    assert run(k.held_tickets())[other]["alert_number"] == 7
+    assert run(k.amend(other, write({"alertNumber": 7}))) and ticket(doc, other)["alertNumber"] == 7
+    assert not run(k.amend(other, write({"alertNumber": 7})))                          # already says it: nothing written
+    assert run(k.held_tickets())[other]["number"] == 7
 
 
 def test_a_fault_from_an_alert_carries_its_number_and_a_night_finding_none(tmp_path):

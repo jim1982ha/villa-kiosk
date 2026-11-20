@@ -70,7 +70,7 @@ def test_the_sample_reads_as_the_agreement_says():
     held = asyncio.run(FakeKiosk(T["sample"]).held_tickets())[T["sample"]["id"]]
     step = [u for u in T["sample"]["updates"] if u["status"] == T["takenStep"]["status"] and not u.get("kind")
             and u.get("by") != T["agentStamp"]][-1]
-    assert held["alert_number"] == T["sample"]["alertNumber"] and held["origin"] == T["sample"]["origin"]
+    assert held["number"] == T["sample"]["alertNumber"] and held["origin"] == T["sample"]["origin"]
     assert held["check"] == T["sample"]["check"]
     took = [g for g in held["gestures"] if g["kind"] == "take"]
     assert (took[-1]["by"], took[-1]["at"]) == (step["who"], step["at"])                 # the take-on the chase stops on

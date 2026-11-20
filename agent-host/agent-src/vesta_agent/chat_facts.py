@@ -35,7 +35,7 @@ from typing import Callable
 from vesta_shared.limits import limit
 from vesta_shared.message_format import STEPS
 from vesta_shared.messaging import incident_tag
-from vesta_shared.timeutil import moment_key
+from vesta_shared.timeutil import before, moment, moment_key
 
 from .in_progress import CHAT_JOB, HELD, InProgress, Item
 from .notice import when
@@ -76,11 +76,8 @@ class ChatFacts:
         self.closed = closed            # incidents.Incidents.closed: an alert listed is said closed since, if it is
 
     def _at(self, ts: float | str | datetime | None) -> str:
-        if isinstance(ts, str):
-            ts = datetime.fromisoformat(ts)
-        elif not isinstance(ts, datetime):
-            ts = datetime.fromtimestamp(float(ts or 0), timezone.utc)
-        return when(ts, self.tz)
+        t = moment(ts) if isinstance(ts, (str, datetime)) else None
+        return when(t or datetime.fromtimestamp(float(ts or 0), timezone.utc), self.tz)
 
     # ------------------------------------------------------------------ what reached a chat
     def _note(self, chat: int, said: str, at: datetime | None = None) -> None:
@@ -112,7 +109,7 @@ class ChatFacts:
         """The AI answered in `chat` a message it was told the facts with at `at`: what reached the chat until then is
         behind it."""
         rec = self.state.chat_facts(chat)
-        items = [i for i in rec.get("items") or [] if i["at"] > at.isoformat()]
+        items = [i for i in rec.get("items") or [] if before(at, i["at"])]
         self.state.set_chat_facts(chat, {"told": at.isoformat(), "items": items, "dropped": 0})
 
     # ------------------------------------------------------------------ what the AI is told
@@ -123,7 +120,10 @@ class ChatFacts:
         lines = [f"{HEAD} {self._preparing(chat)}"]
         rec = self.state.chat_facts(chat)
         since = rec.get("told") or self.state.session(chat)[1]
-        items = [i for i in rec.get("items") or [] if not since or i["at"] > since] + self._alert_steps(chat, since)
+        # ⚠️ BY THE MOMENT, NEVER ITS TEXT (owner, 2026-11-20, #204): the villa writes an alert's steps in its own zone
+        # ("…T12:19:31+08:00"), the agent its answers in UTC ("…T04:20:12+00:00") — compared as text, a step sent
+        # after the answer read as before it, and one before it as after
+        items = [i for i in rec.get("items") or [] if not since or before(since, i["at"])] + self._alert_steps(chat, since)
         items.sort(key=lambda i: moment_key(i["at"]))
         earlier = max(0, len(items) - shown()) + int(rec.get("dropped") or 0)
         if items:
@@ -149,9 +149,11 @@ class ChatFacts:
     def _alert_steps(self, chat: int, since: str | None) -> list[dict]:
         """Each step of an alert sent to this chat since `since`, from its incident's history (notice.Notices.record)."""
         out = []
-        for iid, history in self.state.incident_histories_since(since).items():
+        # the store writes each history's own moment in UTC: `since` in UTC to pick them (State.incident_histories_since)
+        utc = moment(since)
+        for iid, history in self.state.incident_histories_since(utc.astimezone(timezone.utc).isoformat() if utc else None).items():
             for h in history:
-                if (h.get("stage") not in STEPS or not h.get("at") or (since and h["at"] <= since)
+                if (h.get("stage") not in STEPS or not h.get("at") or (since and not before(since, h["at"]))
                         or chat not in {int(c) for c, _roles in h.get("chats") or []}):
                     continue
                 said = f"alert {self.name(iid)}: {STEPS[h['stage']].sent} here"
