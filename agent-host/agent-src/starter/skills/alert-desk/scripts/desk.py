@@ -442,15 +442,19 @@ alert_keys = W.keys
 def still_lasting(store: Store, inc: dict, ev: dict, now: datetime, out: dict) -> dict:
     """The rule repeated alert `inc`, closed "Not a problem" while it lasts (alert_watch.LASTING): the problem lasts, as
     the person said.
-    Recorded, and nothing more: never reopened, never a new number, nobody reminded or told; the villa's own message of
-    it stays as the villa sent it.
+    Recorded: never reopened, never a new number, nobody reminded or told by the desk. The villa's own message of the
+    repeat takes the incident's number and says its close again, as a late all-clear's does (_said_again), so the chat
+    keeps ONE card for the problem.
 
     ⚠️ NOT A PROBLEM IS NOT BACK (owner, 2026-11-20, #201): the door left unlocked on purpose, its rule repeating every
-    30 minutes, reopened "Back" at each repeat after the press, its reminders and escalation started again."""
+    30 minutes, reopened "Back" at each repeat after the press, its reminders and escalation started again.
+    ⚠️ ...NOR A NEW MESSAGE EVERY 30 MINUTES (owner, 2026-11-20: "Wasn't it merged into a single telegram notification
+    before?"): left as the villa sent it, each repeat stayed a card of its own, "Master Bedroom door unlocked / New
+    alert", at 13:59, 14:29, 14:59."""
     W.lasted_again(store, inc, now)
     store.audit("alert-desk", "lasting", {"incident": inc["id"], "rule": ev.get("rule_id"),
                                           "run": ev.get("ha_incident")})
-    out["incident_id"], out["decision"] = inc["id"], "lasting"
+    _said_again(store.incident(inc["id"]), ev, out, "lasting")
     return out
 
 

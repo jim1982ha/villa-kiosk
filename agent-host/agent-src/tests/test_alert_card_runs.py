@@ -140,6 +140,10 @@ def test_not_a_problem_still_repeated_by_its_rule_ends_its_watch_still_there(age
                                                 "user_id": OWNER, "message": {"message_id": 500, "chat": {"id": GROUP}},
                                                 "bot": BOT}))
     rule(agent, "opened", 1, 501)                                          # its rule's repeat: recorded, nothing said
+    # ...and its message is the alert's ONE card, closed, never a "New alert" card of its own beside it (owner,
+    # 2026-11-20: "Wasn't it merged into a single telegram notification before?")
+    shown = agent.thread.shown(1)[GROUP]
+    assert shown["mid"] == 501 and "New alert" not in shown["text"], shown
     tick(agent, 5 * 60)                                                    # its watch (4h) is over
     lines = status_lines(card(agent, GROUP))
     assert re.fullmatch(rf"✅ Closed (?:on|at) {T}: still there, accepted as not a problem\.", lines[-1]), lines
