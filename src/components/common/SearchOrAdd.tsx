@@ -16,7 +16,7 @@ import { firstToAdd, offered, type AddOffer } from "@/config/searchOrAdd";
 import EmptyLine from "@/components/common/EmptyLine";
 import Button from "@/components/common/Button";
 
-export default function SearchOrAdd({ query, onQuery, placeholder, offer, onAdd, onFound }: {
+export default function SearchOrAdd({ query, onQuery, placeholder, offer, onAdd, onFound, startOpen }: {
   /** What is typed: the list's filter (its owner narrows the list with it). */
   query: string;
   onQuery: (query: string) => void;
@@ -28,6 +28,8 @@ export default function SearchOrAdd({ query, onQuery, placeholder, offer, onAdd,
   onAdd?: (entityId: string) => void;
   /** A device already in the list was picked: show it there. */
   onFound?: (entityId: string) => void;
+  /** Its list of offers open from the start (its section's SectionStart `picking`); closed until tapped unless said. */
+  startOpen?: boolean;
 }) {
   const src = useDeviceSearch();
   const rows = (q: string): SearchRow[] => (offer ? offered(q, src, offer) : []).map((o) => (o.exact || o.ahead
@@ -40,6 +42,7 @@ export default function SearchOrAdd({ query, onQuery, placeholder, offer, onAdd,
   return (
     <div className="search-or-add">
       <SearchPicker text={{ value: query, onChange: onQuery }} rows={rows} onPick={pick} placeholder={placeholder} enterPicks
+        startOpen={startOpen}
         clear={!!query && { label: "Clear the search", run: () => onQuery("") }} />
     </div>
   );
