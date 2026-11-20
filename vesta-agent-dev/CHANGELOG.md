@@ -1,3 +1,14 @@
+## 0.12.528
+
+- **Your edits to the alert desk's words reach every line.** A villa that edited its alert desk's words now sees its
+  own words in a visit's last line too ("monitoring until …"), not the release's.
+- **/investigate finds the same devices as the chat.** For the same words: a room's other name, a word without its
+  accents, "bedroom" for every bedroom, and never a device from another room whose id only contains the room's name.
+- **"Since your last answer" keeps the right items** when the villa's alert steps are in its own time and the answers
+  in UTC.
+- Behind the scenes: a Cockpit fault card's fields are kept up to date from one table, and every stored time is read
+  and compared in one place.
+
 ## 0.12.526
 
 - **A problem accepted as "Not a problem" shows each repeat in its Status.** While the villa keeps repeating it, the
