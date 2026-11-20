@@ -27,7 +27,7 @@ from zoneinfo import ZoneInfo
 from vesta_shared import periods                         # the period kinds and their words (investigate.py's)
 from vesta_shared.past import unread                     # the one "could not be read whole: nothing is known after"
 from vesta_shared.periods import did
-from vesta_shared.timeutil import clock, lasting  # the one clock, the one duration wording
+from vesta_shared.timeutil import clock, lasting, moment_key  # the one clock, the one duration wording
 from vesta_shared.limits import limit                     # every limit, set on the VESTA Agent page's Limits tab
 
 TARGETS_NAMED = limit("investigate.targets_named", 6, unit="devices", group="text", lo=1, hi=100,
@@ -90,7 +90,7 @@ def _flagged(data: dict) -> list[dict]:
 
 def _grouped(items: list[dict], clock) -> list[list[dict]]:
     groups: dict[str, list[dict]] = {}
-    for x in sorted(items, key=lambda x: x["at"]):
+    for x in sorted(items, key=lambda x: moment_key(x["at"])):
         groups.setdefault(clock(_t(x["at"])), []).append(x)
     return list(groups.values())
 
@@ -246,7 +246,7 @@ def facts(data: dict | None, around: dict | None, notes: dict | None = None) -> 
 
     # past LOG_ROWS, the unusual rows are kept before the usual ones, and the page says how many it left out
     kept = sorted(rows, key=lambda r: (r["pill"] != "unusual", r["at"]))[:LOG_ROWS]
-    log = [{"time": clock(r["at"]), "text": r["text"], "pill": r["pill"]} for r in sorted(kept, key=lambda r: r["at"])]
+    log = [{"time": clock(r["at"]), "text": r["text"], "pill": r["pill"]} for r in sorted(kept, key=lambda r: moment_key(r["at"]))]
     if len(rows) > len(kept):
         log.append({"time": "", "pill": "usual",
                     "text": f"{len(rows) - len(kept)} more ordinary moments are not listed (the page's limit of rows)."})
@@ -283,7 +283,7 @@ def _lanes(data: dict, went: list[dict], acted: list, unproven: list) -> list[di
             [{"at": t, "text": f"“{a.get('name')}” (what it can do could not be read)", "as": "unproven"}
              for a, close in unproven for t in close]
     if marks:
-        out.append({"name": "Automations that could act", "marks": sorted(marks, key=lambda m: m["at"])})
+        out.append({"name": "Automations that could act", "marks": sorted(marks, key=lambda m: moment_key(m["at"]))})
     return out
 
 

@@ -37,7 +37,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 SKILL = os.path.dirname(HERE)
 from vesta_shared import script  # noqa: E402  (client, pack, store, zone, now: one set-up)
 from vesta_shared.messaging import no_code as _no_code  # noqa: E402
-from vesta_shared.timeutil import lasting  # noqa: E402  (how long something lasted, the Kiosk's words)
+from vesta_shared.timeutil import lasting, moment_key  # noqa: E402  (how long something lasted, the Kiosk's words)
 from vesta_shared import automation_words as AW  # noqa: E402  (an automation in words: one writer)
 from vesta_shared import daily  # noqa: E402  (a device's day: the one "running")
 from vesta_shared.daily import energy_daily_features  # noqa: E402  (a meter's day: one reading for every skill)
@@ -443,7 +443,7 @@ def _alert_rows(c: Ctx) -> list[dict]:
     rows += c.ha_alerts()
     for r in rows:
         r["when_h"] = day_time_label(datetime.fromisoformat(r["when"]).astimezone(c.Z), weekday=True)
-    return sorted(rows, key=lambda r: r["when"])
+    return sorted(rows, key=lambda r: moment_key(r["when"]))
 
 
 def _grouped(rows: list[dict]) -> list[dict]:
@@ -456,7 +456,7 @@ def _grouped(rows: list[dict]) -> list[dict]:
         else:
             g.update({"times": g["times"] + 1, "when": r["when"], "when_h": r["when_h"], "lasted": r["lasted"],
                       "outcome": r["outcome"]})
-    return sorted(by.values(), key=lambda r: r["when"])
+    return sorted(by.values(), key=lambda r: moment_key(r["when"]))
 
 
 def s_alerts(c: Ctx) -> dict:

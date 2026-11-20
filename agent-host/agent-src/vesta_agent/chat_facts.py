@@ -35,6 +35,7 @@ from typing import Callable
 from vesta_shared.limits import limit
 from vesta_shared.message_format import STEPS
 from vesta_shared.messaging import incident_tag
+from vesta_shared.timeutil import moment_key
 
 from .in_progress import CHAT_JOB, HELD, InProgress, Item
 from .notice import when
@@ -123,7 +124,7 @@ class ChatFacts:
         rec = self.state.chat_facts(chat)
         since = rec.get("told") or self.state.session(chat)[1]
         items = [i for i in rec.get("items") or [] if not since or i["at"] > since] + self._alert_steps(chat, since)
-        items.sort(key=lambda i: i["at"])
+        items.sort(key=lambda i: moment_key(i["at"]))
         earlier = max(0, len(items) - shown()) + int(rec.get("dropped") or 0)
         if items:
             lines.append(SINCE)

@@ -40,7 +40,7 @@ from vesta_shared import alert_watch as W  # noqa: E402  (a closed alert's watch
 from vesta_shared.params import VillaParams  # noqa: E402
 from vesta_shared import occupancy as occupancy_now  # noqa: E402  (the villa's "empty" sensor: the Kiosk's pick)
 from vesta_shared.maintenance import takes_up  # noqa: E402  (the villa's maintenance mode: the Kiosk's; the one gate)
-from vesta_shared.timeutil import clock, day_time_label, moment_label, villa_time  # noqa: E402
+from vesta_shared.timeutil import clock, day_time_label, moment_key, moment_label, villa_time  # noqa: E402
 from vesta_shared.problems import AGAIN_DAYS, Problems, again_days, incident_runs, problem_name  # noqa: E402  (a problem's lifecycle: one owner)
 from vesta_shared import result as R  # noqa: E402  (what the engine is asked to do: its shape)
 from vesta_shared import script  # noqa: E402  (client, store, settings, zone: one set-up)
@@ -1519,7 +1519,7 @@ def visit_lines(v: dict, zone: str, fold: dict | None = None) -> list[tuple[str,
     # while the villa opened the visit at its second detection, 05:14): the villa keeps one step per device in a row, so
     # the opening's own moment (`opened_at`) ends the pass it falls in when no step says it
     opened = _when(v.get("opened_at"))
-    for cur in sorted((ln for ln in lines.values() if ln["kind"] == MOTION), key=lambda ln: ln["first"]):
+    for cur in sorted((ln for ln in lines.values() if ln["kind"] == MOTION), key=lambda ln: moment_key(ln["first"])):
         if opened is not None and cur["first"] <= opened and cur["last"] < opened <= cur["last"] + gap:
             cur["last"] = opened
             break

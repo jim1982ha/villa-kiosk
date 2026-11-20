@@ -21,3 +21,7 @@ its manifest. Commands and release: the repository's `CLAUDE.md`. Module map and
   by `ship`, never edited here.
 - No secret in a log, a file under `/config`, the repository or CI. No Telegram call unless `telegram_takeover`.
 - Images are built by GitHub Actions only, never on the villa. Pin Actions by commit SHA.
+- A working tree may hold other agents' unsaved work: compare with `git diff` or `git show HEAD:<path>`, and leave the
+  tree's state as found (stash, checkout and reset change it for everyone in it). Agents editing code at the same time
+  each get their own worktree.
+- Sort moments with `timeutil.moment_key`, never by their text: the villa writes some in UTC, some in its own zone.

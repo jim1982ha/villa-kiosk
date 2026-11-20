@@ -14,7 +14,7 @@ from vesta_shared.agent_records import run_cost   # what a run cost: one reading
 from vesta_shared import agent_records
 from vesta_shared import villa_recipients
 from vesta_shared.limits import limit
-from vesta_shared.timeutil import lasting
+from vesta_shared.timeutil import lasting, moment_key
 from .api_errors import cause, what_to_do, why_job_sentence
 from .in_progress import CUT, ENDED, FAILED, run_ends
 
@@ -230,7 +230,7 @@ def costs(state, days: int = 30, now: datetime | None = None, zone=None, chat_la
                      "steps": steps_of(d.get("steps"), name_of),
                      # the skills it used, in order (runner.skills_of); a run recorded before 0.6.260 has none: "—"
                      "skills": [str(x) for x in d.get("skills") or [] if x]})
-    runs.sort(key=lambda r: r["at"], reverse=True)
+    runs.sort(key=lambda r: moment_key(r["at"]), reverse=True)
 
     def total(rs):
         return round(sum(r["cost"] for r in rs), 2)
@@ -265,7 +265,7 @@ def costs(state, days: int = 30, now: datetime | None = None, zone=None, chat_la
             # the daily chart's Y axis, from the one axis rule (vesta_shared.axis): the page only draws it
             "axis": _cost_axis(max([by_day.get(d, 0.0) for d in days_list] + [0.01])),
             "by_job": group("job"), "by_model": group("model"),
-            "runs": sorted(runs + made, key=lambda r: r["at"], reverse=True)[:limit(
+            "runs": sorted(runs + made, key=lambda r: moment_key(r["at"]), reverse=True)[:limit(
                 "costs.runs_listed", 300, unit="runs", group="keep", lo=20, hi=5000,
                 says="The latest runs the Costs tab lists one by one.",
                 reached="Older runs are not listed (the totals still count them).", told="")],

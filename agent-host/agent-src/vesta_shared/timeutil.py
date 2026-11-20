@@ -12,6 +12,24 @@ from zoneinfo import ZoneInfo
 from . import agreement
 
 
+_NEVER = datetime.min.replace(tzinfo=timezone.utc)
+
+
+def moment_key(value) -> tuple[datetime, str]:
+    """The key every sort of moments uses: the moment itself, never its text.
+
+    ⚠️ ONE ZONE IS NOT GUARANTEED (owner, 2026-11-20, #204): the villa writes some moments in UTC ("…T04:20:12+00:00")
+    and some in its own time ("…T12:19:31+08:00"); sorted as text, a 12:20 photo came before two of 12:19. A value
+    that is no moment (none, a label) sorts first, by its text, as before."""
+    if isinstance(value, datetime):
+        return (value if value.tzinfo else value.replace(tzinfo=timezone.utc)), ""
+    try:
+        t = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return _NEVER, str(value or "")
+    return (t if t.tzinfo else t.replace(tzinfo=timezone.utc)), ""
+
+
 def local_day(ms: int, zone: "str | ZoneInfo") -> date:
     """The villa's day of a Home Assistant statistics row's `start` (milliseconds, UTC).
 

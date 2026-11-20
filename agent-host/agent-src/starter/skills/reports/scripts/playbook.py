@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 from vesta_shared import battery  # a battery's charge: the night check's own reading
 from vesta_shared import daily  # a motor whose power is its own (measured_motor)
 from vesta_shared.stats import step_index  # the night check's step detector
-from vesta_shared.timeutil import day_time_label, said  # the one day format; a stored time in words
+from vesta_shared.timeutil import day_time_label, moment_key, said  # the one day format; a stored time in words
 from vesta_shared.past import unread  # the one "could not be read whole: nothing is known after"
 from vesta_shared.retention import days_words  # how long the villa's system keeps detail, in words
 from vesta_shared.result import PRIORITY_ORDER, WHOLE_DEVICE  # the one list of priorities; a whole device's faults
@@ -233,7 +233,7 @@ def group_kinds(items: list[dict], group_from: int, group_words: dict) -> list[t
         if len(its) < group_from or not title:
             out += [(None, [it]) for it in its]
             continue
-        its.sort(key=lambda x: x.get("since") or "")
+        its.sort(key=lambda x: moment_key(x.get("since")))
         n = len(its)
         names = [x["subject"] for x in its]
         out.append(({"title": title.format(n=n, kind=kind.split("/")[-1]), "names": names,
