@@ -62,6 +62,7 @@ import { formatCountBadge, withCount } from "@/utils/countBadge";
 import { useConversation } from "@/messages/ConversationContext";
 import { useAnnouncements } from "@/messages/AnnouncementsContext";
 import { countOf } from "@/utils/countOf";
+import Button from "@/components/common/Button";
 
 // Label-size stepper (next to the category filter): each click moves
 // entityIconScale by this much, clamped to the shared
@@ -514,8 +515,8 @@ export default function HUD({
               const hidden = config.hiddenCategories.includes(cat);
               const Icon = CATEGORY_ICONS[cat];
               return (
-                <button
-                  key={cat}
+                <Button
+                  key={cat} on="map" icon={<Icon size={24} />}
                   // No .has-hold-action here (unlike the floor buttons/camera
                   // next-arrow, which keep their dot) — these already have a
                   // full row of same-shaped neighbours, and the constant
@@ -525,7 +526,7 @@ export default function HUD({
                   // (common/categoryChip): shown = the category's own tint,
                   // hidden = the neutral surface, dimmed. Not `.active`, whose
                   // accent fill would paint every category the same green.
-                  className={`icon-btn hud-cat-btn${hidden ? " is-hidden" : ""}`}
+                  className={`hud-cat-btn${hidden ? " is-hidden" : ""}`}
                   style={categoryChipStyle(cat, !hidden)}
                   {...catHold}
                   onPointerDown={onCatPointerDown(cat)}
@@ -534,12 +535,10 @@ export default function HUD({
                   onKeyDown={onCatKeyDown(cat)}
                   onContextMenu={(e) => e.preventDefault()}
                   onClick={onCatClick(cat)}
-                  data-tip={`${hidden ? "Show" : "Hide"} ${CATEGORY_LABELS[cat]} devices on the map, hold to list them`}
-                  aria-label={`${CATEGORY_LABELS[cat]} devices on the map`}
+                  tip={`${hidden ? "Show" : "Hide"} ${CATEGORY_LABELS[cat]} devices on the map, hold to list them`}
+                  label={`${CATEGORY_LABELS[cat]} devices on the map`}
                   aria-pressed={!hidden}
-                >
-                  <Icon size={24} />
-                </button>
+                />
               );
             })}
             {/* The colour-legend (?) lives INSIDE the category row — it explains
@@ -548,14 +547,9 @@ export default function HUD({
                 overflow menu (see .hud-cat-help's media query), which is where
                 the whole right-hand cluster collapses to. */}
             <span className="hud-cat-sep hud-cat-help" aria-hidden="true" />
-            <button
-              className="icon-btn hud-cat-help"
+            <Button on="map" icon={<CircleHelp size={24} />} className="hud-cat-help"
               onClick={() => setLegendOpen(true)}
-              data-tip="What do these colours mean, and the keyboard keys"
-              aria-label="Map colours and keyboard keys"
-            >
-              <CircleHelp size={24} />
-            </button>
+              tip="What do these colours mean, and the keyboard keys" label="Map colours and keyboard keys" />
           </div>
 
           {/* Label size: steps the in-scene badge scale by 0.25 per click,
@@ -572,24 +566,10 @@ export default function HUD({
               a stray blank rounded box sitting between the category row and
               the overflow button. */}
           <div className="hud-group hud-labelsize-group" role="toolbar" aria-label="Label size">
-            <button
-              className="icon-btn hud-labelsize-btn"
-              onClick={() => stepLabelScale(-LABEL_SCALE_STEP)}
-              disabled={labelScale <= ENTITY_ICON_SCALE_MIN}
-              data-tip="Decrease label size"
-              aria-label="Decrease label size"
-            >
-              <Minus size={24} />
-            </button>
-            <button
-              className="icon-btn hud-labelsize-btn"
-              onClick={() => stepLabelScale(LABEL_SCALE_STEP)}
-              disabled={labelScale >= ENTITY_ICON_SCALE_MAX}
-              data-tip="Increase label size"
-              aria-label="Increase label size"
-            >
-              <Plus size={24} />
-            </button>
+            <Button on="map" icon={<Minus size={24} />} className="hud-labelsize-btn" label="Decrease label size"
+              onClick={() => stepLabelScale(-LABEL_SCALE_STEP)} disabled={labelScale <= ENTITY_ICON_SCALE_MIN} />
+            <Button on="map" icon={<Plus size={24} />} className="hud-labelsize-btn" label="Increase label size"
+              onClick={() => stepLabelScale(LABEL_SCALE_STEP)} disabled={labelScale >= ENTITY_ICON_SCALE_MAX} />
           </div>
         </div>
 
@@ -627,25 +607,20 @@ export default function HUD({
             {/* VESTA's conversation, its own button beside the robot (owner, 2026-10-29), every profile, while VESTA runs:
                 tap to open it, hold to talk where the page can record (ticket 23 of "One inbox") */}
             {thread.shown && (
-              <TalkButton place="bar" onOpen={onAskVesta} onTap={onAskVesta} className="icon-btn"
+              <TalkButton place="bar" onOpen={onAskVesta} onTap={onAskVesta}
                 idle={talker ? "Ask VESTA: tap to open, hold to talk" : "Ask VESTA"} />
             )}
-            <button
-              className={`icon-btn${robot ? " agent-btn" : ""}${HEALTH_CLASS[health.level]}`}
+            <Button on="map" icon={robot ? <Bot size={24} /> : <TriangleAlert size={24} />}
+              className={`${robot ? "agent-btn" : ""}${HEALTH_CLASS[health.level]}`.trim() || undefined}
               onClick={onOpenCockpit}
-              data-tip={(attentionGroups.length > 0 ? health.summary : "Cockpit, villa status at a glance")
+              tip={(attentionGroups.length > 0 ? health.summary : "Cockpit, villa status at a glance")
                 + (robot ? ` · ${agentTitle}` : "") + unreadSaid}
-              aria-label={`Open Cockpit, villa status at a glance${robot ? ` (${agentTitle})` : ""}${unreadSaid}`}
+              label={`Open Cockpit, villa status at a glance${robot ? ` (${agentTitle})` : ""}${unreadSaid}`}
+              count={openIssues > 0 ? formatCountBadge(openIssues) : null}
             >
-              {robot ? <Bot size={24} /> : <TriangleAlert size={24} />}
               {robot && agentDot}
               {unreadMark}
-              {openIssues > 0 && (
-                <span className="icon-btn-count" aria-hidden="true">
-                  {formatCountBadge(openIssues)}
-                </span>
-              )}
-            </button>
+            </Button>
             {/* (The colour-legend button moved into the category row — it
                 explains those very colours. See .hud-cat-help.) */}
             {/* (The first-person / bird's-eye switch moved to the left
@@ -656,16 +631,11 @@ export default function HUD({
                 (owner, 2026-10-12: Settings no longer has its own icon here). */}
             {role && (
               <div className="hud-account" ref={account.ref}>
-                <button
-                  className={`icon-btn hud-role-badge${account.open ? " active" : ""}`}
+                <Button on="map" lit={account.open} className="hud-role-badge"
                   onClick={() => account.setOpen((o) => !o)}
-                  data-tip={`Signed in as ${ROLE_LABELS[role]}, settings and logout`}
-                  aria-label={`Signed in as ${ROLE_LABELS[role]}, settings and logout`}
-                  aria-haspopup="menu"
-                  aria-expanded={account.open}
-                >
-                  <span aria-hidden="true" className={`role-glyph${ROLE_INITIALS[role].length > 1 ? " two" : ""}`}>{ROLE_INITIALS[role]}</span>
-                </button>
+                  label={`Signed in as ${ROLE_LABELS[role]}, settings and logout`} tip={`Signed in as ${ROLE_LABELS[role]}, settings and logout`}
+                  aria-haspopup="menu" aria-expanded={account.open}
+                  icon={<span aria-hidden="true" className={`role-glyph${ROLE_INITIALS[role].length > 1 ? " two" : ""}`}>{ROLE_INITIALS[role]}</span>} />
                 {account.open && (
                   <div className="hud-menu" role="menu" aria-label="Settings and profile">
                     {accountRows(() => account.setOpen(false))}
@@ -687,23 +657,18 @@ export default function HUD({
             {/* "Ask VESTA" left of the gear (owner, 2026-10-31), the top bar's own talk button (tap: the conversation;
                 held: VESTA listens), only while VESTA runs and the bar has room; the menu's row shows only without it */}
             {barMic && (
-              <TalkButton place="bar" onOpen={onAskVesta} onTap={onAskVesta} className="icon-btn hud-bar-mic"
+              <TalkButton place="bar" onOpen={onAskVesta} onTap={onAskVesta} className="hud-bar-mic"
                 idle={talker ? "Ask VESTA: tap to open, hold to talk" : "Ask VESTA"} />
             )}
-            <button
-              className={`icon-btn hud-gear${menuOpen ? " active" : ""}`}
-              onClick={() => setMenuOpen((o) => !o)}
-              data-tip={`Menu${unreadSaid}`}
-              aria-label={`Menu${unreadSaid}`}
-              aria-haspopup="menu"
-              aria-expanded={menuOpen}
+            <Button on="map" lit={menuOpen} className="hud-gear" onClick={() => setMenuOpen((o) => !o)}
+              tip={`Menu${unreadSaid}`} label={`Menu${unreadSaid}`} aria-haspopup="menu" aria-expanded={menuOpen}
+              icon={<Settings size={24} />}
             >
               {/* A gear: this button is where Settings lives on a phone (on a
                   roomy screen it is in the role badge's menu, with the same
                   rows — accountRows). */}
-              <Settings size={24} />
               {unreadMark}
-            </button>
+            </Button>
             {menuOpen && (
               <div className="hud-menu" role="menu" aria-label="Settings and profile">
                 {/* Cockpit/Facility — the same two buttons that sit beside
@@ -735,7 +700,7 @@ export default function HUD({
                 {/* ...and held, VESTA listens (ticket 23; owner 2026-10-29: the phone's one way to it): the top bar's own button */}
                 {/* ...and only where the top bar has no microphone beside the gear (owner, 2026-10-31) */}
                 {menuAsk && (
-                  <TalkButton place="menu" className="hud-menu-item"
+                  <TalkButton place="menu"
                     onOpen={() => { setMenuOpen(false); onAskVesta(); }} onTap={() => { setMenuOpen(false); onAskVesta(); }}
                     idle={talker ? "Ask VESTA: tap to open, hold to talk" : "Ask VESTA"}>
                     <span>Ask VESTA</span>
@@ -765,24 +730,10 @@ export default function HUD({
                     <span>Label size</span>
                   </button>
                   <div className="row" style={{ gap: 6 }}>
-                    <button
-                      className="icon-btn"
-                      onClick={() => stepLabelScale(-LABEL_SCALE_STEP)}
-                      disabled={labelScale <= ENTITY_ICON_SCALE_MIN}
-                      data-tip="Decrease label size"
-                      aria-label="Decrease label size"
-                    >
-                      <Minus size={16} />
-                    </button>
-                    <button
-                      className="icon-btn"
-                      onClick={() => stepLabelScale(LABEL_SCALE_STEP)}
-                      disabled={labelScale >= ENTITY_ICON_SCALE_MAX}
-                      data-tip="Increase label size"
-                      aria-label="Increase label size"
-                    >
-                      <Plus size={16} />
-                    </button>
+                    <Button on="map" icon={<Minus size={16} />} label="Decrease label size"
+                      onClick={() => stepLabelScale(-LABEL_SCALE_STEP)} disabled={labelScale <= ENTITY_ICON_SCALE_MIN} />
+                    <Button on="map" icon={<Plus size={16} />} label="Increase label size"
+                      onClick={() => stepLabelScale(LABEL_SCALE_STEP)} disabled={labelScale >= ENTITY_ICON_SCALE_MAX} />
                   </div>
                 </div>
                 {/* Same view switch as the inline row's, immediately before
@@ -830,12 +781,12 @@ export default function HUD({
       <div className="hud-left-col">
         <div className="hud-stack">
           {availFloors.map((f) => (
-            <button
-              key={f}
+            <Button
+              key={f} on="map" lit={currentFloor === f || radial?.floor === f}
               ref={(el) => { if (el) floorBtnRefs.current.set(f, el); else floorBtnRefs.current.delete(f); }}
-              className={`icon-btn hud-floor-btn has-hold-action${currentFloor === f || radial?.floor === f ? " active" : ""}`}
-              data-tip={`Show floor ${f}, hold for its rooms`}
-              aria-label={`Show floor ${f}, hold for its rooms`}
+              className="hud-floor-btn has-hold-action"
+              tip={`Show floor ${f}, hold for its rooms`}
+              label={`Show floor ${f}, hold for its rooms`}
               aria-describedby="floor-btn-hint"
               aria-pressed={currentFloor === f}
               style={{ touchAction: "none" }}
@@ -847,7 +798,7 @@ export default function HUD({
               onKeyUp={onFloorKeyUp(f)}
             >
               {f}F
-            </button>
+            </Button>
           ))}
           <span id="floor-btn-hint" className="sr-only">Hold (or hold Enter/Space) for this floor's rooms</span>
           {/* The first-person / bird's-eye switch, last in the floor section

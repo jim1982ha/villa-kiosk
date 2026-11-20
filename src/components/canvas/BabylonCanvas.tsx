@@ -28,6 +28,7 @@ import {
 } from "@/utils/diagnostics";
 import { adoptDetected } from "@/config/mappingEdits";
 import { missingImagesMessage } from "@/utils/glbRoomDataExtractor";
+import Button from "@/components/common/Button";
 
 interface Props {
   onManager: (m: SceneManager | null) => void;
@@ -884,7 +885,7 @@ function VillaScene({
             : undefined}
           detail={report}
           actions={!(model.kind === "error" && model.addon) && canManageModel
-            ? <button className="btn" onClick={() => cbRef.current.onNeedModel()}>Upload Model</button>
+            ? <Button onClick={() => cbRef.current.onNeedModel()}>Upload Model</Button>
             : undefined}
         />
       )}
@@ -905,13 +906,13 @@ function VillaScene({
           detail={report}
           actions={
             <>
-              <button className="btn" onClick={() => { clearCrashLoop(); location.reload(); }}>
+              <Button onClick={() => { clearCrashLoop(); location.reload(); }}>
                 Try once more
-              </button>
+              </Button>
               {canManageModel && (
-                <button className="btn" onClick={() => { clearCrashLoop(); cbRef.current.onNeedModel(); }}>
+                <Button onClick={() => { clearCrashLoop(); cbRef.current.onNeedModel(); }}>
                   Upload a lighter model
-                </button>
+                </Button>
               )}
             </>
           }
@@ -959,9 +960,9 @@ function ModelOffer({ canManageModel, beginSwitch, ask, offer }: {
           `beginSwitch`, not `logout`: it overlays the picker over the
           live session, so cancelling returns you exactly here rather
           than ending a session the user never asked to end. */}
-      <button type="button" className="btn primary" onClick={beginSwitch}>
+      <Button look="main" onClick={beginSwitch}>
         Switch profile
-      </button>
+      </Button>
     </>
   );
 }

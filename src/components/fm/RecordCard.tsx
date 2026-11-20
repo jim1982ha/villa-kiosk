@@ -42,6 +42,7 @@ import ErasableRow from "./ErasableRow";
 import EvidenceRow from "./EvidenceRow";
 import { RecordNotes } from "./RecordMeta";
 import { PageLink } from "@/components/messages/AnnouncementContent";
+import Button from "@/components/common/Button";
 
 /** A Settings card's remove, a small round bin at the right of its strip (owner, 2026-11-06: ONE remove icon on every
  *  card, the bin; it had been an ✕ on a card taking a thing off a list). `label` is its tooltip and its accessible
@@ -173,8 +174,8 @@ export function CardAsk({ question, icon, confirmLabel, onConfirm, onCancel }: {
   return (
     <>
       <div className="fm-record-ask">{icon}<span>{question}</span></div>
-      <button type="button" className="btn fm-bar-main" onClick={() => { void onConfirm(); }}>{confirmLabel}</button>
-      <button type="button" className="btn" onClick={onCancel}>Cancel</button>
+      <Button className="fm-bar-main" onClick={() => { void onConfirm(); }}>{confirmLabel}</Button>
+      <Button onClick={onCancel}>Cancel</Button>
     </>
   );
 }

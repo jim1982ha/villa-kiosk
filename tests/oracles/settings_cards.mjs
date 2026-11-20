@@ -179,6 +179,7 @@ console.log("\n  the remove icon (owner, 2026-11-06): a press is the button's, S
     if (Array.isArray(el)) return el.flatMap(expand);
     if (!el || typeof el !== "object") return [];
     if (typeof el.type === "function") return expand(el.type.name === "Tip" ? el.props.children : el.type(el.props));
+    if (typeof el.type?.render === "function") return expand(el.type.render(el.props, null));   // a forwardRef (common/Button)
     return [el, ...expand(el.props?.children)];
   };
   const ran = [], opened = [];

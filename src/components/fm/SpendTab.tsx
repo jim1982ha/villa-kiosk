@@ -40,6 +40,7 @@ import { TONE_OF, toneClass } from "@/fm/tone";
 import FmForm from "./FmForm";
 import { useListEditor } from "./ListEditor";
 import EmptyLine from "@/components/common/EmptyLine";
+import Button from "@/components/common/Button";
 
 export default function SpendTab(
   { onOpenEntity, deviceOptions, inputs }: {
@@ -172,7 +173,7 @@ export default function SpendTab(
           <div className="fm-cap-total"><span className="muted">{COST_CATEGORY_NAMES.major}</span><strong>{money(b.majorSpend)}</strong></div>
           <div className="fm-cap-total"><span className="muted">Total</span><strong>{money(b.totalSpend)}</strong></div>
           {editor.addButton && (
-            <button className="btn fm-cap-record" onClick={editor.add}><Plus size={16} /> Record spend</button>
+            <Button icon={<Plus size={16} />} className="fm-cap-record" onClick={editor.add}> Record spend</Button>
           )}
         </div>
         {b.cap > 0 && (
@@ -183,7 +184,6 @@ export default function SpendTab(
         {/* the cap's sentence, ONE per state (fmEngine.capNotes) — the statement's and the cost banner's too */}
         {capNotes(b).map((note) => <p key={note} className="fine-print fm-cap-note">{note}</p>)}
       </div>
-
 
       {/* a new entry's form here; an edit's in its entry's place, below (FmForm) */}
       {editor.adding && form}
@@ -211,7 +211,6 @@ export default function SpendTab(
       </div>
       <Pager paged={entries} />
 
-
       {/* ⚠️ THE MONTHLY RECAP, A SECTION OF ITS OWN UNDER THE SPEND (owner, 2026-11-05): its title, then the Month on the
           same line as its recap's buttons (owner, 2026-10-14), its preview, its saved copies. The Month still chooses
           what this whole tab shows, the money card and the list above included, and the recap is of that month. */}
@@ -231,9 +230,8 @@ export default function SpendTab(
             options={recap.months.map((m) => ({ value: m, label: monthLabel(m) }))} />
         </div>
         <div className="fm-statement-buttons">
-          <button className="btn" onClick={recap.generate}>
-            <Sparkles size={16} /> {recap.markdown ? "Regenerate recap" : "Generate recap"}
-          </button>
+          <Button icon={<Sparkles size={16} />}
+            onClick={recap.generate}> {recap.markdown ? "Regenerate recap" : "Generate recap"}</Button>
           {/* only with a recap to save or download (owner, 2026-10-22: never greyed out beside nothing) */}
           <DocumentButtons markdown={recap.markdown} saved={recap.saved} saveLabel="Save" onSave={() => void recap.save()} onDownload={recap.download} />
         </div>

@@ -308,10 +308,6 @@ body:has(.camera-fullscreen) .vesta-notice.below-camera { display: none; }
 .cockpit-attention-story { list-style: none; margin: 4px 0 0; padding: 10px 12px; border-radius: 12px; display: flex;
   flex-direction: column; gap: 6px; background: var(--bg-input); }
 
-/* A count on a window's header button (the Cockpit's updates): at its bottom-right corner (owner, 2026-10-14); the
-   top bar's counts stay where they are. */
-.btn.icon-only { position: relative; }
-.btn.icon-only > .icon-btn-count { top: auto; bottom: 1px; }
 
 /* ── Telemetry log rows ────────────────────────────────────────────────────
    A diagnostic row is four parts: the event kind, which device/role/build sent

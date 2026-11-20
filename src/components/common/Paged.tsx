@@ -20,6 +20,7 @@ import { useEffect, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { PAGE_ROWS, pageOf, clampPage, type PageView } from "./paging";
 import { countOf } from "@/utils/countOf";
+import Button from "@/components/common/Button";
 
 // ⚠️ THE SIZES AND THE ARITHMETIC MOVED TO `paging.ts` (2.955.0), with the
 // rival module `Pager.tsx` folded in — see that file's header. Re-exported so
@@ -71,21 +72,18 @@ export function Pager<T>({ paged, unit, children }: {
         {children}
         {many && (
           <>
-            <button className="btn" disabled={pageNo === 0}
-                    onClick={() => go(pageNo - 1)} aria-label="Previous page">
+            <Button disabled={pageNo === 0} onClick={() => go(pageNo - 1)} label="Previous page">
               <ChevronLeft size={16} aria-hidden />
-            </button>
-            <button className="btn" disabled={pageNo >= lastPage}
-                    onClick={() => go(pageNo + 1)} aria-label="Next page">
+            </Button>
+            <Button disabled={pageNo >= lastPage} onClick={() => go(pageNo + 1)} label="Next page">
               <ChevronRight size={16} aria-hidden />
-            </button>
+            </Button>
           </>
         )}
       </span>
     </div>
   );
 }
-
 
 /* ⚠️ `PagerCompact` IS NOT TRANSPLANTED. It exists on the agent branch for the
    briefings screens and wears a `.reports-pager` class this build has no rule

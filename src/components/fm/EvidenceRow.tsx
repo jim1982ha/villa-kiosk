@@ -16,6 +16,7 @@ import { evidenceUrl } from "@/fm/fmApi";
 import PhotoLightbox from "./PhotoLightbox";
 import { useEvidenceUpload } from "./useEvidenceUpload";
 import ProblemLine from "@/components/common/ProblemLine";
+import Button from "@/components/common/Button";
 
 export default function EvidenceRow({
   photoIds, onChange, disabled,
@@ -56,11 +57,8 @@ export default function EvidenceRow({
               <img src={evidenceUrl(id)} alt="" loading="lazy" />
             </button>
             {!disabled && (
-              <button
-                className="media-btn small fm-thumb-x"
-                onClick={() => onChange?.(photoIds.filter((p) => p !== id))}
-                aria-label="Remove photo"
-              ><X size={16} /></button>
+              <Button on="photo" small icon={<X size={16} />} className="fm-thumb-x" label="Remove photo"
+                onClick={() => onChange?.(photoIds.filter((p) => p !== id))} />
             )}
           </span>
         ))}

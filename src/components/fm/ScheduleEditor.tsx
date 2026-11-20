@@ -24,6 +24,7 @@ import FmForm from "./FmForm";
 import { useListEditor } from "./ListEditor";
 import ProblemLine from "@/components/common/ProblemLine";
 import EmptyLine from "@/components/common/EmptyLine";
+import Button from "@/components/common/Button";
 
 export default function ScheduleEditor() {
   const { data, addSchedule, updateSchedule, removeSchedule } = useFmData();
@@ -104,7 +105,7 @@ export default function ScheduleEditor() {
       {/* the description and "Add a task" on one line (owner, 2026-10-14) */}
       <div className="fm-desc-row">
         {editor.addButton && (
-          <button className="btn" onClick={startAdd}><Plus size={16} /> Add a task</button>
+          <Button icon={<Plus size={16} />} onClick={startAdd}> Add a task</Button>
         )}
         <InfoTip label="About the tasks">
           Each task repeats at the interval you set. It becomes overdue when its interval has passed since it was last
@@ -125,12 +126,10 @@ export default function ScheduleEditor() {
             // THE task's card, the Today tab's too (TaskCard): its state, due day and who last did it on both
             <TaskCard key={s.id} status={due} room={roomOf(s)} onRemove={() => removeSchedule(s.id)}
               actions={<>
-                <button className="btn" onClick={() => void updateSchedule(s.id, { enabled: !s.enabled })}>
+                <Button onClick={() => void updateSchedule(s.id, { enabled: !s.enabled })}>
                   {s.enabled ? "Pause" : "Resume"}
-                </button>
-                <button className="btn icon-only" onClick={() => startEdit(s)} aria-label={`Edit ${s.title}`}>
-                  <Pencil size={16} />
-                </button>
+                </Button>
+                <Button icon={<Pencil size={16} />} onClick={() => startEdit(s)} label={`Edit ${s.title}`} />
               </>} />
           ), () => form);
         })}

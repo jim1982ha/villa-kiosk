@@ -18,6 +18,7 @@ import { createPortal } from "react-dom";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import { useModalA11y } from "@/hooks/useModalA11y";
 import { useArrowStep } from "@/hooks/useArrowStep";
+import Button from "@/components/common/Button";
 
 /** One photo the viewer shows: where it is served, and its words under it (an announcement's camera and time). */
 export interface ViewedPhoto { src: string; label?: string }
@@ -49,15 +50,10 @@ export default function PhotoLightbox({
   const view = (
     <div ref={dialogRef} className="fm-lightbox" onClick={onClose} role="dialog" aria-modal="true"
       aria-label={`Photo ${index + 1} of ${count}`}>
-      <button className="media-btn fm-lightbox-close" onClick={onClose} aria-label="Close photo">
-        <X size={20} />
-      </button>
+      <Button on="photo" icon={<X size={20} />} className="fm-lightbox-close" label="Close photo" onClick={onClose} />
       {count > 1 && (
-        <button
-          className="media-btn fm-lightbox-nav prev"
-          onClick={(e) => { e.stopPropagation(); step(-1); }}
-          aria-label="Previous photo"
-        ><ChevronLeft size={26} /></button>
+        <Button on="photo" icon={<ChevronLeft size={26} />} className="fm-lightbox-nav prev" label="Previous photo"
+          onClick={(e) => { e.stopPropagation(); step(-1); }} />
       )}
       {/* Stops the backdrop's close handler: tapping the photo itself should
           not dismiss the thing you are trying to look at. */}
@@ -65,11 +61,8 @@ export default function PhotoLightbox({
         onClick={(e) => e.stopPropagation()} />
       {photo.label && <div className="fm-lightbox-label">{photo.label}</div>}
       {count > 1 && (
-        <button
-          className="media-btn fm-lightbox-nav next"
-          onClick={(e) => { e.stopPropagation(); step(1); }}
-          aria-label="Next photo"
-        ><ChevronRight size={26} /></button>
+        <Button on="photo" icon={<ChevronRight size={26} />} className="fm-lightbox-nav next" label="Next photo"
+          onClick={(e) => { e.stopPropagation(); step(1); }} />
       )}
       {count > 1 && <div className="fm-lightbox-count">{index + 1} / {count}</div>}
     </div>

@@ -7,6 +7,7 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
 import ErrorReport from "./ErrorReport";
 import { captureError, buildReport, type CapturedError } from "@/utils/diagnostics";
+import Button from "@/components/common/Button";
 
 interface Props {
   children: ReactNode;
@@ -34,7 +35,7 @@ export default class ErrorBoundary extends Component<Props, State> {
         title="Something went wrong"
         hint="The app hit an unexpected error while rendering. Copy the details below and send them over so it can be diagnosed."
         detail={buildReport(captured)}
-        actions={<button className="btn" onClick={() => location.reload()}>Reload</button>}
+        actions={<Button onClick={() => location.reload()}>Reload</Button>}
       />
     );
   }

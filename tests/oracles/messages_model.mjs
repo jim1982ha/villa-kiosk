@@ -260,11 +260,13 @@ const mark = elements(hud, "span").find((e) => propText(e, "className") === '"un
 ck("the light mark is drawn only while something is unread, the count read from the page's announcements",
    !!mark && guardsOf(mark).some((g) => /^unread > 0$/.test(g))
    && /const \{ unread, openIssues \} = useAnnouncements\(\);/.test(hud.getText()), mark && guardsOf(mark));
-const buttons = elements(hud, "button");
+// the top bar's buttons, a <button> or the one Button (common/Button): its name is `label` there
+const buttons = [...elements(hud, "button"), ...elements(hud, "Button")];
+const buttonName = (b) => propText(b, "aria-label") ?? propText(b, "label") ?? "";
 const holds = (pick) => buttons.filter(pick).some((b) => b.getText().includes("{unreadMark}"));
 ck("  ...on the robot, apart from its count of open issues", holds((b) => propText(b, "onClick") === "onOpenCockpit"));
 ck("  ...on a phone, on the gear and on the menu's Cockpit row",
-   holds((b) => /Menu/.test(propText(b, "aria-label") ?? "")) && holds((b) => propText(b, "role") === '"menuitem"'
+   holds((b) => /Menu/.test(buttonName(b))) && holds((b) => propText(b, "role") === '"menuitem"'
      && /onOpenCockpit\(\)/.test(propText(b, "onClick") ?? "")));
 ck("Messages opens where its opening says (the top bar: Issues), else where the model says, and marks nothing itself (the Cockpit's opening does: readAtOpening)",
    /useState<MessagesFilter>\(\(\) => start \?\? openingFilter\(unread, opening, unreadReports\)\)/.test(tab) && !/shown\(/.test(tab)

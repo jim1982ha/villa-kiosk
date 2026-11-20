@@ -8,6 +8,7 @@ import { useRef, useState, type ReactNode } from "react";
 import { AlertTriangle, Copy, Check } from "lucide-react";
 import { copyText } from "@/utils/clipboard";
 import { ERROR_COLOR } from "@/utils/stateColors";
+import Button from "@/components/common/Button";
 
 interface Props {
   title: string;
@@ -70,22 +71,18 @@ export default function ErrorReport({ title, hint, detail, actions }: Props) {
         </div>
       )}
 
-      <button
-        className="btn"
-        onClick={() => setDetailsOpen((o) => !o)}
-        style={{ alignSelf: "flex-start", display: "inline-flex", alignItems: "center", gap: 8 }}
-        aria-expanded={detailsOpen}
-      >
+      <Button onClick={() => setDetailsOpen((o) => !o)}
+        style={{ alignSelf: "flex-start", display: "inline-flex", alignItems: "center", gap: 8 }} aria-expanded={detailsOpen}>
         {detailsOpen ? "Hide" : "Show"} technical details
-      </button>
+      </Button>
 
       {detailsOpen && (
         <>
           <div>
-            <button className="btn primary" onClick={copy} style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+            <Button look="main" onClick={copy} style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
               {copied ? <Check size={18} /> : <Copy size={18} />}
               {copied ? "Copied!" : "Copy error details"}
-            </button>
+            </Button>
           </div>
 
           {/* Readonly, pre-selectable — so copy works even if the clipboard API is

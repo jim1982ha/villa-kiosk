@@ -27,6 +27,7 @@ import { countOf } from "@/utils/countOf";
 import { groupMatches } from "@/config/deviceRecord";
 import { useDeviceSearch } from "@/hooks/useDeviceSearch";
 import EmptyLine from "@/components/common/EmptyLine";
+import Button from "@/components/common/Button";
 
 /** The list Grouped devices shows: its groups, or the groups it suggests. */
 type GroupView = "groups" | "suggested";
@@ -165,9 +166,8 @@ export default function GroupedDevices({ title, tip }: { title: string; tip?: Re
             <EntityCard key={`${s.primaryEntityId}|${s.memberEntityId}`} entityId={s.primaryEntityId} also={[s.memberEntityId]}
               lead={<Sparkles size={16} aria-hidden />}
               actions={
-                <button type="button" className="btn fm-bar-main" onClick={() => acceptSuggestion(s.primaryEntityId, s.memberEntityId)}>
-                  <Plus size={16} aria-hidden />Create this group
-                </button>
+                <Button icon={<Plus size={16} aria-hidden />} className="fm-bar-main"
+                  onClick={() => acceptSuggestion(s.primaryEntityId, s.memberEntityId)}>Create this group</Button>
               } />
           ))}
         </div>

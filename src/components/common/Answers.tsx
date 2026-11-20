@@ -12,7 +12,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Check, X } from "lucide-react";
-import Tip from "./Tip";
+import Button from "@/components/common/Button";
 
 export interface Answer {
   /** Its word: what a press does ("Save task", "Unlock", "Send report"). */
@@ -60,19 +60,14 @@ export default function Answers({ answer, onCancel, cancelLabel = "Cancel", canc
     <>
       {extra}
       {onCancel && (
-        <Tip text={cancelTip}>
-          <button type="button" className="btn" aria-label={cancelLabel} onClick={onCancel}>
-            <X size={18} aria-hidden /><span className="btn-label">{cancelLabel}</span>
-          </button>
-        </Tip>
+        <Button icon={<X size={18} aria-hidden />} label={cancelLabel} tip={cancelTip} onClick={onCancel}
+          shortOnPhone>{cancelLabel}</Button>
       )}
-      <Tip text={answer.tip}>
-        <button type="button" className={`btn ${answer.danger ? "danger" : "primary"}`} disabled={answer.disabled || sending}
-          aria-label={answer.name} onClick={press}>
-          {answer.icon ?? <Check size={18} aria-hidden />}
-          <span className={answer.terse ? "btn-label" : undefined}>{sending && answer.busy ? answer.busy : answer.label}</span>
-        </button>
-      </Tip>
+      <Button look={answer.danger ? "danger" : "main"} icon={answer.icon ?? <Check size={18} aria-hidden />}
+        label={answer.name}
+        tip={answer.tip} disabled={answer.disabled || sending} onClick={press} shortOnPhone={answer.terse}>
+        {sending && answer.busy ? answer.busy : answer.label}
+      </Button>
     </>
   );
 }

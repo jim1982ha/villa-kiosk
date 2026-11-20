@@ -34,6 +34,7 @@ import Answers, { type Answer } from "./Answers";
 import BackButton from "./BackButton";
 import FooterNote from "./FooterNote";
 import { useWindowLeave } from "./Window";
+import Button from "@/components/common/Button";
 
 /** An editable draft a dialog can commit. ⚠️ THE DIALOG OWNS IT, NOT THIS
  *  COMPONENT: a draft that lives in the footer would be lost the moment a tab
@@ -124,10 +125,8 @@ export default function ModalFooter({
     // beside Settings' round buttons on the same phone): its glyph and its word, the glyph alone on a phone. A
     // window's own word stays words.
     ? actions ?? (closeLabel
-      ? <button type="button" className="btn primary" onClick={leave}>{closeLabel}</button>
-      : <button type="button" className="btn primary" aria-label="Close" onClick={leave}>
-          <X size={18} aria-hidden /><span className="btn-label">Close</span>
-        </button>)
+      ? <Button look="main" onClick={leave}>{closeLabel}</Button>
+      : <Button look="main" icon={<X size={18} aria-hidden />} label="Close" onClick={leave} shortOnPhone>Close</Button>)
     // ⚠️ THE PRIMARY ANSWER ON THE RIGHT, WHERE EVERY OTHER WINDOW'S Close IS (owner, 2026-10-22: Settings' footer
     // "differs from the other modals"): Cancel, then Save. ⚠️ A TOOLTIP AND A NAME ON BOTH, INDEPENDENTLY OF THE
     // VISIBLE WORD: the word is hidden on a phone, and the tooltip (common/Tip) explains the CONSEQUENCE, which the

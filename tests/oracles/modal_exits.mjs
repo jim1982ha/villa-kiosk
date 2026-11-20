@@ -81,7 +81,7 @@ ck("Settings' Escape and backdrop are the same Cancel, and no question is asked 
   ck("the footer's buttons are Cancel and Save, no Close beside a Save", save.join() === "Cancel,Save" && plain.join() === "Close", [save, plain]);
   const asks = drawn({ answer: { label: "Send report", onPress: () => {} }, error: "The villa's system did not answer." });
   ck("a window that asks one thing: what went wrong, then Cancel and its answer, the same pair",
-     text(asks) === "|The villa's system did not answer.|[icon]|Cancel|[icon]|Send report|" && names(asks).join() === "Cancel", text(asks));
+     text(asks) === "|The villa's system did not answer.|[icon]|Cancel|[icon]Send report|" && names(asks).join() === "Cancel", text(asks));
 }
 
 done("✅ Save saves and closes; Cancel undoes and closes; the notice says which; Back only where there is no Cancel");

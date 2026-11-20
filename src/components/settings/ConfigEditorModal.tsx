@@ -12,7 +12,7 @@ import { useState, type ReactNode } from "react";
 import { FIELD_COMMIT_MS, PendingFields, typedNumber, usePendingField, type PendingField } from "@/hooks/usePendingField";
 import type { AppConfig } from "@/config/AppConfig";
 import { villaBounds } from "@/config/villaSettings";
-import { Boxes, CalendarClock, Home, LogOut, Upload, Wrench } from "lucide-react";
+import { Boxes, CalendarClock, Home, LogOut, Wrench } from "lucide-react";
 import SettingRow, { SettingSlider, settingValue } from "@/components/common/SettingRow";
 import ToolGroup from "@/components/common/ToolGroup";
 import InfoTip, { TipTitle } from "@/components/common/InfoTip";
@@ -21,7 +21,7 @@ import { DialogEdits, useConfig } from "@/config/ConfigContext";
 import { northOffsetFacing } from "@/babylon/skyMoment";
 import { useProfile } from "@/auth/ProfileContext";
 import CentralModelInfo from "./CentralModelInfo";
-import { useGlbUpload, ModelFileInput } from "./useGlbUpload";
+import { useGlbUpload, UploadModelButton, UploadProblem } from "./useGlbUpload";
 import ConfigEditor from "./ConfigEditor";
 import TelemetryPanel from "./TelemetryPanel";
 import GroupedDevices from "./GroupedDevices";
@@ -35,6 +35,7 @@ import { useAppNotice } from "@/components/hud/AppNotice";
 import { useDraftedSlice } from "@/hooks/useDraftedSlice";
 import { ADVANCED_SETTINGS_KEYS } from "@/config/configSlice";
 import ProblemLine from "@/components/common/ProblemLine";
+import Button from "@/components/common/Button";
 
 /** ⚠️ EVERY TAB CARRIES TWO PANELS, AND THAT IS A RULE RATHER THAN AN
  *  ACCIDENT. This screen was a stack of six collapsible sections and read as
@@ -141,13 +142,12 @@ function NorthOffset({ viewHeadingDeg }: { viewHeadingDeg?: () => number | null 
         onChange={(northOffsetDeg) => update({ northOffsetDeg })}
         before={
           // One control in two forms: the button measures it from the view, the slider sets it by hand.
-          <button className="btn" disabled={!viewHeadingDeg}
-            onClick={() => {
+          <Button disabled={!viewHeadingDeg} onClick={() => {
               const h = viewHeadingDeg?.();
               if (h != null) update({ northOffsetDeg: northOffsetFacing(h) });
             }}>
             Set North
-          </button>
+          </Button>
         } />
     </div>
   );
@@ -196,7 +196,6 @@ function RecordsKept() {
   );
 }
 
-
 /** "Log Out All": immediately signs every device out — a lost tablet, a PIN someone saw. Two-tap confirm, same idiom
  *  as Facility's "Delete all" buttons: this signs the person clicking it out too, so it's worth pausing on. At the
  *  header's right since 2026-10-24 (owner: Back took its footer place, where Settings' "Advanced Settings" opener is). */
@@ -207,10 +206,9 @@ function LogoutAll() {
   return (
     <>
       {failed && <ProblemLine>Could not reach the server, no session was signed out.</ProblemLine>}
-      <AskFirstButton confirmLabel="Log out every device?" title="Log Out All" aria-label="Log Out All"
-        onConfirm={async () => setFailed(!(await logoutAll()))}>
-        <LogOut size={18} aria-hidden /><span className="btn-label">Log Out All</span>
-      </AskFirstButton>
+      <AskFirstButton on="tools" icon={<LogOut size={18} aria-hidden />} label="Log Out All"
+        tip="Log Out All" shortOnPhone
+        confirmLabel="Log out every device?" onConfirm={async () => setFailed(!(await logoutAll()))}>Log Out All</AskFirstButton>
     </>
   );
 }
@@ -229,23 +227,7 @@ export function HeaderActions({ glbUpload, logout }: {
       {/* ⚠️ ONE GROUP IN THE THEME CONTROL'S LOOK (owner, 2026-11-06: Advanced Settings' header buttons were filled
           squares beside Settings' pill): the one tool group (.tool-group), each word hidden on a phone */}
       <ToolGroup label="The model and the sessions">
-      {glbUpload && (
-        <>
-          <ModelFileInput upload={glbUpload} />
-          <button
-            type="button"
-            onClick={glbUpload.openPicker}
-            disabled={glbUpload.uploadBusy !== null}
-            data-tip="Upload a GLB model"
-            aria-label={glbUpload.progress.words ?? "Upload Model"}
-          >
-            <Upload size={18} aria-hidden />
-            <span className="btn-label">{glbUpload.progress.words ?? "Upload Model"}</span>
-            {/* on a phone the words are hidden: the progress stays on the icon */}
-            {glbUpload.progress.mark && <span className="icon-btn-count btn-mark" aria-hidden>{glbUpload.progress.mark}</span>}
-          </button>
-        </>
-      )}
+      {glbUpload && <UploadModelButton upload={glbUpload} tool />}
       {logout}
       </ToolGroup>
       <InfoTip label="About these buttons">
@@ -320,11 +302,7 @@ export default function ConfigEditorModal({ onBack, withinSettings, focusEntityI
       />
 
       <div className="modal-body">
-        {glbUpload.uploadMsg && (
-          <div className={`test-result ${glbUpload.uploadMsg.ok ? "ok" : "fail"}`}>
-            {glbUpload.uploadMsg.text}
-          </div>
-        )}
+        <UploadProblem upload={glbUpload} />
 
         {tab === "villa" && (
           <>
@@ -394,7 +372,6 @@ export default function ConfigEditorModal({ onBack, withinSettings, focusEntityI
               Copy and Download give every detail; Clear empties the list.
             </>} />
             <TelemetryPanel />
-
 
           </>
         )}

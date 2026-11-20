@@ -15,6 +15,7 @@ import { useRef, useState, type ReactNode } from "react";
 import { Plus } from "lucide-react";
 import { useOutsideClose } from "@/hooks/useOutsideClose";
 import Tip from "./Tip";
+import Button from "@/components/common/Button";
 
 export default function AddOnLine({ title, label, words, children }: {
   /** The list's title, at the left of the line. */
@@ -46,10 +47,8 @@ export default function AddOnLine({ title, label, words, children }: {
         </div>
       ) : (
         <Tip text={label}>
-          <button ref={button} type="button" className="btn add-line-button" aria-label={label}
-            onClick={() => setOpen(true)}>
-            <Plus size={16} aria-hidden /> {words}
-          </button>
+          <Button icon={<Plus size={16} aria-hidden />} ref={button} className="add-line-button" label={label}
+            onClick={() => setOpen(true)}> {words}</Button>
         </Tip>
       )}
     </div>

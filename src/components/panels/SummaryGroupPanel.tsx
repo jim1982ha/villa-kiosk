@@ -46,6 +46,7 @@ import { usePendingAck } from "@/hooks/usePendingAck";
 import { domainOf } from "@/utils/entityDomain";
 import { NOT_IN_HA } from "@/utils/deviceHealth";
 import EmptyLine from "@/components/common/EmptyLine";
+import Button from "@/components/common/Button";
 
 interface Props {
   group: SummaryGroup;
@@ -109,15 +110,8 @@ function BulkToggle({ devices, looks }: { devices: HassEntity[]; looks: LookSour
     <InlineConfirm question={`${words}?`} confirmLabel={anyOn ? "Turn off" : "Turn on"} onConfirm={run}
       onCancel={() => setConfirming(false)} />
   ) : (
-    <button
-      className="btn icon-only"
-      onClick={() => setConfirming(true)}
-      data-tip={words}
-      aria-label={words}
-      aria-busy={pending || undefined}
-    >
-      {anyOn ? <PowerOff size={18} /> : <Power size={18} />}
-    </button>
+    <Button icon={anyOn ? <PowerOff size={18} /> : <Power size={18} />} label={words} busy={pending}
+      onClick={() => setConfirming(true)} />
   );
 }
 
@@ -221,19 +215,8 @@ export default function SummaryGroupPanel({
           <div className="section-title">Scenes for this room</div>
           <div className="summary-room-scenes-row">
             {roomScenes.map((s) => (
-              <button
-                key={s.entityId}
-                type="button"
-                className="btn"
-                disabled={!canControl}
-                // ⚠️ THE SAME HOOK THE SUMMARY BAR USES. A scene run from a
-                // room panel and one run from the bar are the same act with
-                // the same consequence, so they ask the same question. This
-                // surface also had no haptic; the hook carries one.
-                onClick={() => askScene(s)}
-              >
-                <Sparkles size={16} /> {s.name}
-              </button>
+              <Button icon={<Sparkles size={16} />} key={s.entityId} disabled={!canControl}
+                onClick={() => askScene(s)}> {s.name}</Button>
             ))}
           </div>
         </div>

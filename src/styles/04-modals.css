@@ -487,9 +487,6 @@
 .info-pop .row span:last-child { color: var(--text-primary); word-break: break-all; text-align: right; }
 .info-pop code { font-family: ui-monospace, monospace; font-size: var(--text-2xs); word-break: break-all; }
 
-.test-result { margin-top: 12px; padding: 10px 14px; border-radius: 10px; font-size: var(--text-base); }
-.test-result.ok { background: color-mix(in srgb, var(--status-on) 18%, transparent); color: var(--status-on); }
-.test-result.fail { background: color-mix(in srgb, var(--status-danger) 18%, transparent); color: var(--status-danger); }
 
 /* --- A device's card in Devices (EntityMapRow, the Cockpit's RecordCard): its decided first line, then its fields when
    opened, each a name at the left and its control at the right (.card-field). The controls' own look, inside the card. */

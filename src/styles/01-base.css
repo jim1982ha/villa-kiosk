@@ -556,7 +556,9 @@ button {
    "Record spend" were outlined boxes, and a third look (a grey box) for a handful more. Every worded button is this
    pill: grey, the main answer in the accent (.primary), one that cannot be taken back in red (.danger). No place
    restyles it: a footer, a form and a card's line place a button, they never redraw it. A word that may hide on a
-   phone is its .btn-label (08-shared.css); a card's bar draws its own segments (07-facility.css). */
+   phone is its .btn-label (08-shared.css); a card's bar draws its own segments (07-facility.css, owner 2026-11-05)
+   and a tool group its own (04-modals.css .tool-group, owner 2026-11-06). Its classes are common/Button's alone
+   (buttonClass): a call site says what the button is (architecture review, owner approved 2026-11-20). */
 .btn {
   min-height: var(--touch-min);
   min-width: var(--touch-min);
@@ -577,6 +579,10 @@ button {
 .btn.danger { background: var(--status-danger); color: #fff; }
 /* the worded button without its word: an action beside worded ones (a window header's, a card's Edit beside Pause) */
 .btn.icon-only { padding: 0; width: var(--touch-min); min-width: var(--touch-min); justify-content: center; }
+/* A count on a window's button (the Cockpit's updates): at its bottom-right corner (owner, 2026-10-14); the top bar's
+   counts (.icon-btn-count, below) stay at the top right. */
+.btn.icon-only, .btn:has(> .icon-btn-count) { position: relative; }
+.btn > .icon-btn-count { top: auto; bottom: 1px; }
 
 /* ⚠️ THE ONE LONE ICON BUTTON OF A WINDOW (common/IconButton; owner, 2026-11-10: "only 1 definition for all similar UI
    elements"): a card's remove, a pill's ✕, a notice's and a footer note's ✕, a field's clear, the (i), a chart's
@@ -628,16 +634,16 @@ button {
   .btn.danger:hover:not(:disabled) { background: var(--status-danger); color: #fff; filter: brightness(1.08); }
 }
 .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-/* A device window's own buttons (a cover's Open / Stop / Close, a player's Play) speak the DEVICE's colour, as its On
-   button and its chosen mode do (.segmented-device): one vocabulary for "this belongs to this device". Only its
-   .row-buttons: Edit and "Open a ticket" are the app's own, in the footer. */
-.panel-modal .row-buttons .btn { background: var(--device-fill, var(--bg-input)); color: var(--device-ink, var(--text-primary)); }
-/* …except an action, in the colour of the state it leads to (03-panels .btn.action), and a command that leads to no
-   state (a blind's Stop), plain: a category colour is the device's identity, never what a button does */
-.panel-modal .row-buttons .btn.action { background: color-mix(in srgb, var(--state) 18%, transparent); color: var(--state); }
-.panel-modal .row-buttons .btn.plain { background: var(--bg-input); color: var(--text-primary); }
+/* A device's own command (a player's Play / Pause: common/Button look "device") speaks the DEVICE's colour, as its On
+   button and its chosen mode do (.segmented-device): one vocabulary for "this belongs to this device"; its window sets
+   the colour. An action that moves a device is in the colour of the state it leads to (03-panels .btn.action), and a
+   command that leads to no state (a blind's Stop) is plain: a category colour is the device's identity, never what a
+   button does. Each brightens under the mouse, keeping its colour. (It was a window's restyling of every button in
+   its .row-buttons, so an action there took the device's colour under the mouse; 2026-11-20.) */
+.btn.device { background: var(--device-fill, var(--bg-input)); color: var(--device-ink, var(--text-primary)); }
 @media (hover: hover) {
-  .panel-modal .row-buttons .btn:hover:not(:disabled) { background: var(--device-fill, var(--bg-input)); color: var(--device-ink, var(--text-primary)); filter: brightness(1.12); }
+  .btn.device:hover:not(:disabled) { background: var(--device-fill, var(--bg-input)); color: var(--device-ink, var(--text-primary)); filter: brightness(1.12); }
+  .btn.action:hover:not(:disabled) { background: color-mix(in srgb, var(--state) 18%, transparent); color: var(--state); filter: brightness(1.12); }
 }
 .btn:disabled { opacity: 0.4; pointer-events: none; }
 /* ⚠️ THE ONE GROUP OF BUTTONS (owner, 2026-11-10: one definition): a footer's answers, a form's end, a question in

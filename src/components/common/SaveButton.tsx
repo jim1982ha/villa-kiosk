@@ -6,6 +6,7 @@
 
 import type { ReactNode } from "react";
 import { Download, Save } from "lucide-react";
+import Button from "@/components/common/Button";
 
 export default function SaveButton({ saved, label, icon, onClick }: {
   saved: boolean;
@@ -15,9 +16,9 @@ export default function SaveButton({ saved, label, icon, onClick }: {
   onClick: () => void;
 }) {
   return (
-    <button className="btn" onClick={onClick} disabled={saved}>
+    <Button onClick={onClick} disabled={saved}>
       {icon} {saved ? "Saved" : label}
-    </button>
+    </Button>
   );
 }
 
@@ -37,9 +38,7 @@ export function DocumentButtons({ markdown, saved, saveLabel, onSave, onDownload
   return (
     <>
       <SaveButton saved={saved} label={saveLabel} icon={<Save size={16} />} onClick={onSave} />
-      <button className="btn" onClick={onDownload}>
-        <Download size={16} /> Download .md
-      </button>
+      <Button icon={<Download size={16} />} onClick={onDownload}> Download .md</Button>
     </>
   );
 }

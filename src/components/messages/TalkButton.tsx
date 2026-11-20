@@ -13,6 +13,7 @@ import { createPortal } from "react-dom";
 import { MessageCircle, Mic } from "lucide-react";
 import { useConversation } from "@/messages/ConversationContext";
 import type { TalkPlace } from "@/messages/talk";
+import Button from "@/components/common/Button";
 import VoiceOrb from "./VoiceOrb";
 
 /** What the button says (its title, for a reader too) in each phase of its own press. */
@@ -27,7 +28,9 @@ export default function TalkButton({ place, onOpen, onTap, className, idle, chil
   onOpen: () => void;
   /** A tap, the finger lifted before the hold: the top bar opens the conversation; the conversation's box says how. */
   onTap: () => void;
-  className: string;
+  /** Where it sits (the top bar's own place class), never how it looks: its place draws it (the top bar's plate, a
+   *  window's button in the conversation, a row of the phone's menu). */
+  className?: string;
   /** What the button says while nothing is pressed. */
   idle: string;
   /** Drawn beside the icon (the conversation's button names itself). */
@@ -45,10 +48,10 @@ export default function TalkButton({ place, onOpen, onTap, className, idle, chil
   const [pressed, setPressed] = useState(false);
   return (
     <>
-      <button
-        type="button" role={menu ? "menuitem" : undefined}
-        className={`${className} talk-btn${phase !== "idle" ? ` talk-${phase}` : ""}`}
-        data-tip={label} aria-label={label}
+      <Button
+        on={place === "bar" ? "map" : menu ? "menu" : undefined} role={menu ? "menuitem" : undefined}
+        className={`${className ? `${className} ` : ""}talk-btn${phase !== "idle" ? ` talk-${phase}` : ""}`}
+        tip={label} label={label}
         onPointerDown={(e) => {
           // a finger that slides off while talking still sends on release
           if (talker && e.button === 0 && talker.down(place, onOpen)) {
@@ -68,7 +71,7 @@ export default function TalkButton({ place, onOpen, onTap, className, idle, chil
           {!talker && <MessageCircle size={menu ? 18 : 24} aria-hidden />}
         </span>
         {children}
-      </button>
+      </Button>
       {place !== "thread" && phase === "listening" && pressed && <ListeningOverScreen />}
     </>
   );

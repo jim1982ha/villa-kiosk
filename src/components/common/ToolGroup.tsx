@@ -10,7 +10,7 @@ export default function ToolGroup({ label, className = "", children }: {
   /** The group's name for assistive technology ("Device telemetry"). */
   label: string;
   className?: string;
-  /** The tools: <button>s, each a glyph and a .btn-label word. */
+  /** The tools: each a common/Button `on="tools"` (its glyph, its word hidden on a phone: `shortOnPhone`). */
   children: ReactNode;
 }) {
   return <div className={`tool-group${className ? ` ${className}` : ""}`} role="group" aria-label={label}>{children}</div>;
