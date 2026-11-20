@@ -1,3 +1,10 @@
+## 2.496.848
+
+- **A visit's photos fill the space beside the large one.** On a card in the Messages and the Cockpit, the small
+  photos now sit in two rows to the right of the large photo, then in full rows under it.
+- **Every notice has its ✕ on its title's line.** It sat halfway down a notice with a photo or buttons; it is now in
+  the top right corner, beside the title, on every notice.
+
 ## 2.496.847
 
 - **Lamp light reaches the garden on every device.** An area's floor height was measured at the middle of its
