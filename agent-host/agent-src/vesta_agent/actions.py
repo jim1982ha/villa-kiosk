@@ -434,6 +434,26 @@ class Actions:
                                       "error": str(e)[:error_short_chars()]})
             return False
 
+    # ------------------------------------------------------------------ a rule told to stop repeating
+    async def quiet_rule(self, rule_id: str, run: str, until: str) -> bool:
+        """The villa's rule `rule_id` told its run `run` need not send its alert again until `until` (ISO): a person
+        closed it "Not a problem" (result.quiet_rule, the alert desk's). ONE event, result.QUIET_EVENT, naming only an
+        automation's own run: it acts on no device, and a rule that does not hear it repeats as before. ⚠️ GATED HERE,
+        NEVER BY THE AI; recorded like every other call."""
+        from vesta_shared.result import QUIET_EVENT
+        if not str(rule_id).startswith("automation.") or not str(run).startswith(f"{rule_id}-"):
+            self.state.log("refused", {"system": True, "event": QUIET_EVENT, "rule": rule_id, "reason": "not its run"})
+            return False
+        data = {"rule_id": str(rule_id), "incident_id": str(run), "until": str(until)}
+        try:
+            await asyncio.to_thread(self.writer_factory().fire_event, QUIET_EVENT, data)
+            self.state.log("executed", {"system": True, "event": QUIET_EVENT, **data})
+            return True
+        except Exception as e:  # noqa: BLE001 — the rule repeats as before; its next repeat tells it again
+            self.state.log("failed", {"system": True, "event": QUIET_EVENT, "rule": rule_id,
+                                      "error": str(e)[:error_short_chars()]})
+            return False
+
     async def set_villa_setting(self, entity_id: str, value: float, names: set[str]) -> bool:
         """A behaviour's villa value (input_number.vesta_<name>, `name` one of `names`: a skill's behaviour) set to
         `value`, asked on the VESTA Agent page by its administrator (the Limits tab): the one value the skills and the

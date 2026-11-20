@@ -371,9 +371,11 @@ def test_the_rules_give_up_after_not_a_problem_joins_the_incident_it_closed(stor
 def _quiet(res) -> bool:
     """Nothing told by the desk: no message, no Kiosk fault moved; the villa's own message of the repeat taken over as
     the closed incident's card, saying its close again (owner, 2026-11-20: one card, not one per repeat), the repeat a
-    line of its Status counted since the close (owner, 2026-11-20, #201)."""
+    line of its Status counted since the close (owner, 2026-11-20, #201). Its rule alone is told, to repeat it no more
+    (owner, 2026-11-21: result.quiet_rule)."""
     taken = res.get("ha_messages") or []
-    return (not res["send"] and not res["actions"] and not res.get("settle") and len(taken) == 1
+    told = all(isinstance(a, dict) and a.get("action") == "rule.quiet" for a in res["actions"])
+    return (not res["send"] and told and not res.get("settle") and len(taken) == 1
             and taken[0].get("incident_id") == res["incident_id"] and taken[0].get("stage") == "lasting"
             and taken[0].get("as_it_stands") and bool(taken[0].get("since")))
 

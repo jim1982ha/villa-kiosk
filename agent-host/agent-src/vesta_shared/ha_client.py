@@ -115,6 +115,10 @@ class HABase:
     def call_service(self, domain: str, service: str, data: dict) -> Any:
         raise NotImplementedError
 
+    def fire_event(self, event_type: str, data: dict) -> Any:
+        """Event `event_type` with `data` on the villa's event bus (the executor only: actions.Actions.quiet_rule)."""
+        raise NotImplementedError
+
     def template(self, text: str) -> str:
         """`text` (a Home Assistant template) rendered by Home Assistant now — an alert's claim (alert-desk)."""
         raise NotImplementedError
@@ -825,6 +829,11 @@ class McpClient(HABase):
         if data:
             args["data"] = data
         return self.tool("ha_call_service", args)
+
+    def fire_event(self, event_type, data):
+        if not self.write:
+            raise HAError("fire_event refused: this client is read-only")
+        return self.tool("ha_call_event", {"event_type": str(event_type), "data": dict(data or {})})
 
     # ------------------------------------------------------------------ templates (read)
     def template(self, text):

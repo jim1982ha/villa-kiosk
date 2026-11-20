@@ -186,10 +186,12 @@ def closed_said(inc, pressed: Said) -> Said:
     return watched(pressed, W.minutes(inc))
 
 
-def cockpit_closes(store: Store, out: dict, t: dict | None = None) -> list[int]:
+def cockpit_closes(store: Store, out: dict, t: dict | None = None, now: datetime | None = None,
+                   params: VillaParams | None = None) -> list[int]:
     """Every alert a person closed in the Cockpit since the last look (Notes.KIOSK_CLOSED: Problems.person_done), told
     as a Telegram close is (closed_said): its buttons go in every chat, its line says who, when and its watch. `t`: the
-    desk's terms, for a close made before they were carried. Their ids."""
+    desk's terms, for a close made before they were carried. A "Not a problem" there quiets its rule as on Telegram
+    (quiet_rule; `now`, `params`: the tick's). Their ids."""
     told = []
     for inc in store.incidents(open_only=False):
         if f'"{Notes.KIOSK_CLOSED}"' not in (inc.get("payload") or ""):
@@ -204,6 +206,8 @@ def cockpit_closes(store: Store, out: dict, t: dict | None = None) -> list[int]:
         line = closed_said(store.incident(inc["id"]), stop)
         out.setdefault("settle", []).append(R.settle(inc["id"], line, note_in=line.langs or None, closed=True))
         visit_answered(store.incident(inc["id"]), "done", str(said), out)    # its visit ends on the villa too
+        if now is not None:
+            quiet_rule(store.incident(inc["id"]), notes_of(inc).get("ha_incident"), now, params, out)
         _faults_follow(out)                                                 # its fault says when VESTA confirms it
         told.append(inc["id"])
     return told
@@ -439,7 +443,26 @@ def occupancy(client=None) -> str:
 alert_keys = W.keys
 
 
-def still_lasting(store: Store, inc: dict, ev: dict, now: datetime, out: dict) -> dict:
+def quiet_rule(inc: dict, run, now: datetime, params: VillaParams | None, out: dict) -> None:
+    """Alert `inc`, closed "Not a problem" while it lasts: its rule's run `run` (an event's incident_id) told to send
+    it again no more for `quiet_hours` since the close (result.quiet_rule) — the problem's all-clear ends it on the
+    villa's side. Past that time, or not closed so, nothing: the rule repeats as before.
+
+    ⚠️ NOT A PROBLEM STOPS THE REPEATS (owner, 2026-11-21): the door left unlocked on purpose was still sent to Telegram
+    every 30 minutes by its rule, a day long. Told again at each repeat within the time (its run restarted with Home
+    Assistant, or the event not heard): one repeat at most gets through."""
+    since = moment(W.lasting_since(inc))
+    hours = _params(params).behaviour("quiet_hours")
+    rule, run = str(inc.get("rule_id") or ""), str(run or "")
+    if since is None or hours <= 0 or not rule.startswith("automation.") or not run.startswith(f"{rule}-"):
+        return
+    until = since + timedelta(hours=hours)
+    if moment(now) < until:
+        out.setdefault("actions", []).append(R.quiet_rule(inc["id"], rule, run, until.isoformat()))
+
+
+def still_lasting(store: Store, inc: dict, ev: dict, now: datetime, out: dict,
+                  params: VillaParams | None = None) -> dict:
     """The rule repeated alert `inc`, closed "Not a problem" while it lasts (alert_watch.LASTING): the problem lasts, as
     the person said.
     Recorded: never reopened, never a new number, nobody reminded or told by the desk. The villa's own message of the
@@ -458,6 +481,7 @@ def still_lasting(store: Store, inc: dict, ev: dict, now: datetime, out: dict) -
     # reminders in the status section"): posted again every 30 minutes, the card's Status said nothing new. Its
     # message is a "lasting" step: ONE line, "Still there at 18:46, 11 times since 13:30", counted from the close
     _said_again(store.incident(inc["id"]), ev, out, "lasting", stage="lasting", since=W.lasting_since(inc))
+    quiet_rule(inc, ev.get("ha_incident"), now, params, out)
     return out
 
 
@@ -498,7 +522,7 @@ def intake(store: Store, ev: dict, now: datetime, params: VillaParams | None = N
     st = W.standing(store, ev, now)
     cur = W.file(store, st, ev) if st.verdict == W.OPEN else None
     if st.verdict == W.LASTING:
-        return still_lasting(store, st.incident, ev, now, out)
+        return still_lasting(store, st.incident, ev, now, out, params)
     # ⚠️ THE KIOSK'S SWITCH (owner, 2026-10-29; vesta_shared.maintenance.takes_up, the gate every door asks): no longer
     # a villa helper no screen showed. Only a NEW alert is held: one already open carries on as before (its promise)
     if cur is None and not takes_up(sev):
@@ -1878,6 +1902,7 @@ def reply(store: Store, iid: int, option: str, sender_role: str, now: datetime, 
         # no read again, its fault closed with nothing done; its watch for the alert coming back is said, as at a close
         out["actions"] += Problems(store).person_done(iid, place, who=who, at=now.isoformat(),
                                                       terms=watch_terms(inc, terms(params)), read_again=False)
+        quiet_rule(store.incident(iid), notes_of(inc).get("ha_incident"), now, params, out)
         pressed = closed_said(store.incident(iid), pressed)
         out["send"].append(here(pressed, "closed"))
     elif option == "need_help":
@@ -2044,7 +2069,7 @@ def tick(store: Store, now: datetime, params: VillaParams | None = None, client=
         out["not_quiet"] = quiet_after_done(store, now, client, params.behaviour("clear_minutes"), out, terms(params))
         out["rule_gone"] = rule_gone(store, now, client, params.behaviour("clear_minutes"), out)
         out["visits_over"] = visits_over(store, now, client, out, params, zone)
-    out["cockpit_closed"] = cockpit_closes(store, out, terms(params))
+    out["cockpit_closed"] = cockpit_closes(store, out, terms(params), now, params)
     out["watch_over"] = watch_over(store, now, out, zone)
     out["helped"] = help_alerts(store, now, out, terms(params))
     for inc in store.incidents(open_only=True):

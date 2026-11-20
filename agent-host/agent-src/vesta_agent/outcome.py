@@ -45,7 +45,7 @@ from typing import Awaitable, Callable
 
 from vesta_shared.message_format import KIOSK_UNREACHED
 from vesta_shared import result as R
-from vesta_shared.result import FAULTS_CHANGED, REDRAW, SHEET, TAKE_ON, TELL_VILLA
+from vesta_shared.result import FAULTS_CHANGED, QUIET_RULE, REDRAW, SHEET, TAKE_ON, TELL_VILLA
 from vesta_shared.ha_client import error_short_chars
 
 from . import layout, ringing
@@ -441,6 +441,10 @@ class Outcome:
                         iid, self.notices.observe(iid, []) if self.notices else {}, a.get("body"))
                 elif await visits.act(n, a):
                     pass                                                    # a visit's (visit.Run.act)
+                elif kind == QUIET_RULE:
+                    # "Not a problem": the villa's rule repeats its alert no more while it lasts (actions.quiet_rule)
+                    await self.actions.quiet_rule(str(a.get("rule_id") or ""), str(a.get("run") or ""),
+                                                  str(a.get("until") or ""))
                 elif kind == TAKE_ON and str(a.get("incident_id") or "").isdigit():
                     # Open Ticket on Telegram (owner, 2026-11-05): the Kiosk's own take-on, or a plain answer and the
                     # buttons back — never a press that looks taken and is not

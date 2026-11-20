@@ -1,3 +1,10 @@
+## 0.12.532
+
+- **"Not a problem" stops the villa's repeats.** Pressed on Telegram or in the Cockpit, VESTA tells the villa's alert
+  rule to stop sending that alert every 30 minutes. The all-clear still comes when the problem is over. If it is still
+  there 24 hours later, the rule repeats again. "Done" does not stop the repeats.
+- If VESTA is off or not set up, the villa's rules repeat as before: the villa's system never waits on VESTA.
+
 ## 0.12.531
 
 - **"Not a problem" ends like every other close.** The card reads "(watch)" for 1 hour, then "(closed)" and struck, at

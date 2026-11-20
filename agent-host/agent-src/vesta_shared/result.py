@@ -346,3 +346,19 @@ def tell_villa(incident: int, script: str, fields: dict) -> dict:
     if not str(script).startswith("script.") or "\n" in str(script):
         raise ValueError("the villa is told through one of its scripts")
     return {"action": TELL_VILLA, "incident_id": int(incident), "script": str(script), "fields": dict(fields)}
+
+
+#: The action of a rule told to stop repeating its alert (quiet_rule), and the event it is told by: the villa's VESTA
+#: rules listen for it while they repeat (critical_condition: its repeat wait).
+QUIET_RULE, QUIET_EVENT = "rule.quiet", "vesta_alert_quiet"
+
+
+def quiet_rule(incident: int, rule_id: str, run: str, until: str) -> dict:
+    """The villa's rule `rule_id` told that a person closed its alert `incident` "Not a problem": its run `run` (the
+    event's incident_id) sends that alert again no more until `until` (ISO), or the problem is over. ⚠️ NEVER IN THE
+    CRITICAL PATH: an event the rule hears while it waits anyway — unheard (VESTA away, an older rule), the rule
+    repeats as before. Only an automation, only a run it named."""
+    if not str(rule_id).startswith("automation.") or not str(run).startswith(f"{rule_id}-"):
+        raise ValueError("a rule is told about one of its own runs")
+    return {"action": QUIET_RULE, "incident_id": int(incident), "rule_id": str(rule_id), "run": str(run),
+            "until": str(until)}

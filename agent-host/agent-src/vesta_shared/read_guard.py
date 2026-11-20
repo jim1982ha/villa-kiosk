@@ -21,7 +21,8 @@ READ_TOOLS = {
     "ha_list_floors_areas", "ha_get_camera_image", "ha_get_todo", "ha_get_overview", "ha_get_system_health",
     "ha_get_integration",
 }
-WRITE_TOOLS = {"ha_call_service"}
+#: ha_call_event: the executor's one event, a rule told to stop repeating an alert (actions.Actions.quiet_rule)
+WRITE_TOOLS = {"ha_call_service", "ha_call_event"}
 #: A tool that can also write, allowed for its READ actions only, refused for every other one: {tool: (the argument
 #: that names the action, the values that only read)}. ha_manage_blueprints `get`: what an automation built from a
 #: blueprint can do (investigate's automation_able). ha_manage_energy_prefs mode `get`: the villa's Energy settings
