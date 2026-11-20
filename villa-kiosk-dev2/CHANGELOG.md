@@ -1,3 +1,9 @@
+## 2.496.851
+
+- **The upper terrace's highlight sits on its deck.** Its floor was read 12 cm low, on a surface under the deck.
+- Behind the scenes, no change to the lights: the villa's plan and every lamp's light are each worked out in one
+  place, the same on every screen and in the test renderer.
+
 ## 2.496.850
 
 - **A lamp over a tub lights the floor round it.** Where a lamp hangs over a tub or another low object, its light on
