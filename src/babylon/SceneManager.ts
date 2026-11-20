@@ -40,18 +40,18 @@ import { RenderEnhancements } from "./RenderEnhancements";
 import { lightingModeFor, type LightingMode } from "./lightingMode";
 import { loadModelInto } from "./ModelLoader";
 import { resetLightPoolTextureCache } from "./LightPools";
-import { hasVariantSuffix, resolveMeshToMapping } from "@/config/EntityMap";
+import { resolveMeshToMapping } from "@/config/EntityMap";
 import { isIOS as detectIOS } from "@/utils/diagnostics";
 import { report as reportTelemetry } from "@/utils/telemetry";
 import { beginSpan } from "@/utils/perfSpans";
 import { runPerfProbe, type ProbeRow } from "./perfProbe";
 import { axisWorldScale } from "./meshUnits";
-import { ENTITY_CALIBRATION_CM, ROOM_POLYGONS_CM, polygonCentroid } from "@/config/Sh3dCalibration";
-import { cameraBeamDir, solvePlanToWorld } from "./roomCalibration";
+import { ENTITY_CALIBRATION_CM, ROOM_POLYGONS_CM } from "@/config/Sh3dCalibration";
+import { cameraBeamDir } from "./roomCalibration";
+import { buildVillaPlan, flatFloorAt, type WorldRoom } from "./villaPlan";
 import { WalkerView } from "./walkerView";
 import { rayTargets } from "./meshRoles";
-import type { PlanWorldPair } from "@/utils/affineFit";
-import { pointInPolygon, pointInside, type Pt2, boundsXZ } from "@/utils/geometry";
+import { pointInPolygon, type Pt2, boundsXZ } from "@/utils/geometry";
 import { devLog } from "@/utils/devLog";
 import { tapDebug } from "@/utils/tapDebug";
 import { loadOverviewView, saveOverviewView } from "@/utils/viewPrefs";
@@ -85,14 +85,6 @@ const ANIMATION_FRAME_MS = 33;
  *  one input to that decision, and every branch of the render loop reads it. */
 const SHARPEN_STILL_MS = 350;
 
-/** Round a derived world coordinate to millimetres. Used where a computed
- *  position is about to be STORED rather than only drawn — see the teleport
- *  points built in calibrateRooms for why the precision has to be dropped. */
-const mm = (v: number): number => Math.round(v * 1000) / 1000;
-/** A device whose meshes' centres spread wider than this (metres) is not one
- *  point on the plan, so it does not calibrate the plan (calibrateRooms). A
- *  lamp's parts, a curtain, a fan lie well inside it. */
-const CALIBRATION_SPREAD_M = 1;
 
 
 
@@ -184,16 +176,6 @@ function polygonKey(pts: Pt2[], floor: number): string {
   return `f${floor}:${(h >>> 0).toString(36)}:${pts.length}`;
 }
 
-/** A calibrated room in world space — what the plan (storeys.ts) holds. */
-interface WorldRoom {
-  name: string;
-  pts: Pt2[];
-  floorY: number;
-  /** The plan's storey number for it. */
-  storey: number;
-  /** A stepped room's surface-hugging highlight mesh, built after first paint. */
-  conform?: { positions: number[]; indices: number[] };
-}
 
 export class SceneManager {
   readonly engine: Engine;
@@ -1960,7 +1942,7 @@ export class SceneManager {
       : ENTITY_CALIBRATION_CM;
     const rooms = this.config.sh3dRooms?.length ? this.config.sh3dRooms : ROOM_POLYGONS_CM;
 
-    // ⚠️ READ the index, do not rebuild it. This loop used to resolve every one
+    // ⚠️ READ the index, do not rebuild it. This used to resolve every one
     // of the ~856 meshes through `resolveMeshToMapping` — a second full pass
     // moments after `indexMeshes` had just done exactly that and kept the
     // answer. Attribution of the worst load stall found it: 2412ms on an
@@ -1970,150 +1952,41 @@ export class SceneManager {
     // paint, so the villa appeared and then sat frozen, which reads worse than a
     // spinner because it looks ready and ignores a tap.
     //
-    // Only the calibration entities matter, and only their meshes need a world
-    // matrix, so both the resolve and the recompute now touch a hundred-odd
-    // meshes rather than all of them.
-    //
-    // ⚠️ ONLY MESHES THAT MARK ONE PLACE (owner, 2026-11-19: the light on the
-    // floor sat beside its lamp). A pose mesh ("__open") stands where the pose
-    // puts it, a curtain drawn aside, not at the device's plan point; a device
-    // drawn as meshes spread over metres (a row of globes, fans sharing a
-    // name) averages to a point the plan never marked. Both pulled the fit and
-    // moved every room; the robust fit (roomCalibration) drops what is left.
-    const world = new Map<string, { x: number; z: number; n: number }>();
-    for (const [entityId, list] of this.visuals.meshesByEntity()) {
-      if (!(entityId in entityCalib) || hasVariantSuffix(entityId)) continue;
-      const acc = { x: 0, z: 0, n: 0 };
-      let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
-      for (const m of list) {
-        if (hasVariantSuffix(m.name)) continue;
-        // Bounding-box centre (same reason as in normalizeScale above).
-        m.computeWorldMatrix(true);
-        const c = m.getBoundingInfo().boundingBox.centerWorld;
-        acc.x += c.x;
-        acc.z += c.z;
-        acc.n += 1;
-        minX = Math.min(minX, c.x); maxX = Math.max(maxX, c.x);
-        minZ = Math.min(minZ, c.z); maxZ = Math.max(maxZ, c.z);
-      }
-      if (acc.n > 0 && Math.hypot(maxX - minX, maxZ - minZ) <= CALIBRATION_SPREAD_M) world.set(entityId, acc);
-    }
-
-    const pairs: PlanWorldPair[] = [];
-    for (const [id, acc] of world) {
-      const plan = entityCalib[id];
-      pairs.push({ px: plan.x, py: plan.y, wx: acc.x / acc.n, wz: acc.z / acc.n });
-    }
-
-    // --- Build the plan→world transform ---
-    // Delegated to the pure solver in roomCalibration.ts (three strategies, in
-    // order of accuracy). A manual flipX/flipZ override (Settings) is applied
-    // on top of whichever runs. The solver only needs one scene query — the
-    // no-entity fallback's "does a downward ray hit a floor here?" probe.
+    // Which devices mark the plan, the fit, each room's outline and floor, the
+    // storeys and the viewpoints are villaPlan's (the render rig calls it too);
+    // what is left here is handing them on.
     const ext = this.worldExtends(meshes);
-    const solution = solvePlanToWorld({
-      pairs,
+    const villa = buildVillaPlan({
+      devices: this.visuals.meshesByEntity(),
+      entities: entityCalib,
       rooms,
       modelWidth: ext.max.x - ext.min.x,
       modelDepth: ext.max.z - ext.min.z,
-      hitsFloorAt: (wx, wz) => {
-        const _calibrationFloor = rayTargets({ enabled: false });
-        const hit = this.scene.pickWithRay(
-          new Ray(new Vector3(wx, 20, wz), new Vector3(0, -1, 0), 40),
-          (m) => {
-            // ⚠️ A CEILING IS THIN TOO (2.478.0, /dry-audit). This ray starts at
-            // y=20 and the thinness test alone happily accepts a 2.44 m ceiling
-            // slab on the way down, answering "there is floor here" from the
-            // lid rather than the floor. Harmless where a floor is directly
-            // beneath, wrong wherever a ceiling overhangs past one — and it
-            // feeds CALIBRATION, so a wrong answer moves the whole plan fit.
-            // The ceiling rule is `rayTargets`' now and cannot be dropped.
-            if (!_calibrationFloor(m)) return false;
-            const bb = m.getBoundingInfo().boundingBox;
-            return (bb.maximumWorld.y - bb.minimumWorld.y) < 0.8; // flat = floor/ground
-          },
-        );
-        return hit?.hit ?? false;
-      },
+      eyeHeight: this.eyeHeight(),
+    }, {
+      probe: this.visuals.floorProbe,
+      storeyMeshes: (storey) => this.floors.getFloorMeshes(storey),
+      hitsFloorAt: flatFloorAt(this.scene),
     });
 
-    if (!solution) {
+    if (!villa) {
       console.warn("[Villa] room calibration skipped — no rooms and no entity meshes");
       this.calibratedPoints = null;
       return;
     }
-    const planToWorld = solution.planToWorld;
+    const planToWorld = villa.planToWorld;
     // ⚠️ tapDebug, not devLog — same rule as ModelLoader's `ceiling lighting:`
     // line. Which strategy the plan→world fit landed on is the first thing to
     // ask when badges, room glows or light pools sit in the wrong place, and
     // that is reported from a wall iPad with no console. One line per load.
-    tapDebug(`calibration: ${solution.strategy}`);
+    tapDebug(`calibration: ${villa.strategy}`);
 
-    // Transform each room polygon to model space; centroid → teleport point.
-    const worldPolys: WorldRoom[] = [];
-    const points: TeleportPoint[] = [];
-    /** Stair rooms whose surface-hugging glow is built after the block ends. */
-    const stairJobs: Array<{ index: number; pts: Pt2[]; floor: number }> = [];
-    for (const room of rooms) {
-      const pts = room.points.map((p) => planToWorld(p.x, p.y));
-      // The storey the plan actually recorded. This used to be
-      // `(room.floor ?? 1) >= 2 ? 2 : 1` — a clamp onto a `1 | 2` union, so a
-      // three-storey villa had its top floor's rooms filed under the second.
-      const floor = room.floor ?? 1;
-      const c = polygonCentroid(room.points);
-      // Its viewpoint and its floor: in the room, even where its middle is not.
-      const wc = pointInside(pts, planToWorld(c.x, c.y));
-      const floorY = this.estimateFloorY(wc.x, wc.z, floor);
-      // Surface-hug the glow ONLY for staircase rooms (matched by name). The
-      // grid-probe raycasts the whole fused structure, so running it on every
-      // room — especially the big outdoor/terrain polygons, which vary in height
-      // and so false-positive as "stepped" — flooded load with tens of thousands
-      // of raycasts and hung "Loading the villa". Stairs are the only case a flat
-      // patch reads wrong, so scope it to them.
-      //
-      // DEFERRED since 2.350.0. It was measured at 736-834ms for this villa's
-      // TWO stair rooms — a third of a block that runs after first paint, for a
-      // glow that is only ever seen once a stair room is highlighted. The room
-      // ships with its flat patch now and is upgraded a few frames later.
-      const isStairRoom = isStairwell(room.name);
-      if (isStairRoom) stairJobs.push({ index: worldPolys.length, pts, floor });
-      // The plan's storey travels with the room — Storeys (storeys.ts) needs
-      // it, and re-deriving it from a centroid height is what went wrong.
-      worldPolys.push({ name: room.name, pts, floorY, storey: floor });
-      // QUANTISED TO MILLIMETRES, and that is not cosmetic — it is what stops
-      // this data pushing itself to the server on every single boot.
-      //
-      // These points are DERIVED: `planToWorld` is an affine fit re-solved on
-      // each load and `floorY` comes off a raycast, so both land on full
-      // double precision. Dashboard adopts them into `config.teleportPoints`,
-      // which is a SHARED key — and the sync layer diffs shared items with
-      // JSON.stringify (keyedSync's diffKeyed), so a single differing ULP in
-      // one coordinate makes the whole room read as an edit worth sending.
-      // Field telemetry showed a config push on essentially every boot with no
-      // user edit behind it, ~15/day, against a rule the sync layer's own
-      // docstring calls load-bearing ("push only real changes").
-      //
-      // A millimetre is far below anything the camera can express (these feed
-      // an eye position and a look-at target in metres) and far above the noise
-      // floor of a re-solved fit, so equal geometry now serialises equal.
-      points.push({
-        name: room.name,
-        floor,
-        // The configured eye height — it was a literal 1.7 here, so a villa
-        // with its own eye height had every room viewpoint at the wrong one,
-        // and syncRoomPoints (floorY = y − eyeHeight) read the floor wrong.
-        position: { x: mm(wc.x), y: mm(floorY + this.eyeHeight()), z: mm(wc.z) },
-        target: { x: mm(wc.x), y: mm(floorY + this.eyeHeight() - 0.1), z: mm(wc.z + 1.5) },
-        // DERIVED — never synced. See TeleportPoint.fitted.
-        fitted: true,
-      });
-    }
-
-    this.calibratedPoints = points;
-    this.camera.setTeleportPoints(points);
-    // ONE plan per calibration, the same object for every reader. A polygon
-    // of fewer than three points contains nothing and has no floor to vote.
-    const plan = new Storeys(worldPolys.filter((p) => p.pts.length >= 3));
+    const worldPolys = villa.rooms;
+    const stairJobs = villa.stairRooms;
+    this.calibratedPoints = villa.teleportPoints;
+    this.camera.setTeleportPoints(villa.teleportPoints);
+    // ONE plan per calibration, the same object for every reader.
+    const plan = villa.storeys;
     this.plan = plan;
     this.camera.setPlan(plan);
     // FloorManager re-decides every non-structure mesh's floor by it

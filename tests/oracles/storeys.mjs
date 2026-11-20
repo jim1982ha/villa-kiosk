@@ -90,8 +90,8 @@ console.log("\n  one plan, held once:");
   const walk = tsFiles;
   const files = walk(SRC).map((f) => ({ f: f.slice(SRC.length), src: readFileSync(f, "utf8") }));
   const builders = files.filter(({ src }) => /new Storeys(?:<[^>]*>)?\((?!\[\]\))/.test(src)).map(({ f }) => f);
-  ck("only SceneManager builds a plan with rooms in it; everyone else is handed it",
-     builders.length === 1 && builders[0] === "babylon/SceneManager.ts", builders);
+  ck("only the villa's plan (villaPlan) builds a plan with rooms in it; everyone else is handed it",
+     builders.length === 1 && builders[0] === "babylon/villaPlan.ts", builders);
   ck("roomStorey.ts is gone (folded into the plan)", !existsSync(new URL("../../src/babylon/roomStorey.ts", import.meta.url)));
   const heightRule = files.filter(({ src }) => /groundY \+|STAIR_FOOT_TOLERANCE/.test(src)).map(({ f }) => f);
   ck("no 'lowest floor + tolerance is the ground' rule is left", heightRule.length === 0, heightRule);
