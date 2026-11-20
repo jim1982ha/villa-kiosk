@@ -1,4 +1,4 @@
-## 0.12.527
+## 0.12.528
 
 - **Your edits to the alert desk's words reach every line.** A villa that edited its alert desk's words now sees its
   own words in a visit's last line too ("monitoring until …"), not the release's.
