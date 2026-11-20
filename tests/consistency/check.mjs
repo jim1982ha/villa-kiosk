@@ -20,6 +20,15 @@ export function tsFiles(dir, out = []) {
   return out;
 }
 
+/** Whether `html` has an element whose class list holds `cls` (and every class of `also`): a test asks for the class it
+ *  is about, so one more class on the element (a layout change) fails no test about something else. */
+export function hasClass(html, cls, ...also) {
+  return [...html.matchAll(/class="([^"]*)"/g)].some((m) => {
+    const list = m[1].split(/\s+/);
+    return [cls, ...also].every((c) => list.includes(c));
+  });
+}
+
 let fail = 0;
 
 export function ck(name, ok, got) {

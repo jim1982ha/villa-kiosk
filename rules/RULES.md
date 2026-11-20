@@ -11,6 +11,10 @@ Keep this file short: add a rule only when the owner states one, and remove rule
 - Asked whether something makes sense: first say whether it did what its settings say, with its timeline; a change
   of behaviour comes after, as an offer.
 - The owner installs updates and checks the result with screenshots: say what to look at, on which screen.
+- A message that needs the owner ends with "Your part:", numbered actions (what to tap, paste or answer); the details
+  come before it (owner, 2026-11-20: "what do you need from me and what should i do now?").
+- A fact about a villa device (which door, which sensor, how it was opened) is read from the villa's system before it
+  is said, and names the entity it came from.
 - Talk in the screen's words, in plain English: no file names, function names or version ids unless the owner needs
   them to decide. At most three short questions at a time.
 - Review pages: for each item, what the owner sees today, what he would see after, why in one sentence, the cost; code
