@@ -17,6 +17,7 @@
 
 import { clipPolygonToConvex, distanceToPolygonBoundary, earClipTriangulate, pointInPolygon, regularPolygon, type Pt2 } from "@/utils/geometry";
 import { isStairwell, type Storeys } from "./storeys";
+import type { FloorArea } from "./floorProbe";
 
 /** How far a bulb's light reaches before it has faded out: the furniture
  *  light's (lampGlow.ts), the bulb's PointLight's (bulbSet.ts) and the floor
@@ -48,10 +49,6 @@ export const POOL_FLOOR_LIFT = 0.02;
  *  them. What stands under a lamp is the furniture light's; the pool is the
  *  floor's. */
 const POOL_RAISED_M = 0.2;
-/** A pool raised a little above its room's floor asks this many points round it, this far out (a share of its
- *  radius), what they lie on. */
-const RING_POINTS = 8;
-const RING_AT = 0.6;
 /** How far below the tread under it a light over a flight still lights: the
  *  step or two below its own. Below that is the next lamp's, or the room
  *  built under the flight, whose ceiling is the flight's underside a riser
@@ -88,11 +85,13 @@ export function poolFootprint(cx: number, cz: number, radius: number): Pt2[] {
 }
 
 /** What placement needs from the floor below. FloorProbe is the adapter. */
-interface PlacementProbe {
+export interface PlacementProbe {
   /** The floor under (x, z) seen from height y. Cached. */
   below(x: number, y: number, z: number): number | null;
   /** The same question, never answered from the cache. */
   describeBelow(x: number, y: number, z: number): { y: number } | null;
+  /** The floor most of an area of a storey lies on; null: none. Cached. */
+  areaFloorY(area: FloorArea, storey: number): number | null;
 }
 
 export interface PlacementRoom { name: string; pts: Pt2[]; floorY: number; storey?: number }
@@ -185,20 +184,14 @@ export function placeLight<R extends PlacementRoom>(
     if (roomFloor !== null && surfaceY - roomFloor > POOL_RAISED_M) { surfaceY = roomFloor; notes.push("lowered"); }
     // ⚠️ WHAT MOST OF THE POOL LIES ON, NOT THE SPOT UNDER THE LAMP (owner, 2026-11-20: the onsen lamp moved over
     // the tub's end in a new model, and its pool lay at the water's 0.18 m, a disc floating over the pebbles and
-    // glowing inside the tub). Raised a little above the room's floor (a step, or a tub's water), the pool asks a
-    // few points around it: when most of them lie lower, it was an object under the lamp, and the pool goes on the
-    // room's floor; a lamp over a step, the step all round, keeps the step. Only these lamps pay the rays.
+    // glowing inside the tub). Raised a little above the room's floor (a step, or a tub's water), the pool asks what
+    // most of its disc lies on (floorProbe.areaFloorY, the same question a room's floor is): lower, it was an object
+    // under the lamp, and the pool goes on the room's floor; a lamp over a step, the step all round, keeps the step.
+    // Only these lamps pay the rays.
     else if (roomFloor !== null && surfaceY - roomFloor > 2 * POOL_FLOOR_LIFT) {
-      const ring = Math.min(spreadM, LIGHT_POOL_RADIUS) * RING_AT;
-      let lower = 0, seen = 0;
-      for (let k = 0; k < RING_POINTS; k++) {
-        const a = (2 * Math.PI * k) / RING_POINTS;
-        const hit = probe.describeBelow(x + ring * Math.cos(a), fromY, z + ring * Math.sin(a));
-        if (!hit || hit.y > surfaceY + POOL_RAISED_M) continue;   // a wall or a fence: no floor there
-        seen++;
-        if (hit.y < surfaceY - 2 * POOL_FLOOR_LIFT) lower++;
-      }
-      if (seen > 0 && lower * 2 > seen) { surfaceY = roomFloor; notes.push("aside"); }
+      const storey = storeys.storeyStandingOn(roomFloor);
+      const most = storey === null ? null : probe.areaFloorY({ disc: { x, z, r: LIGHT_POOL_RADIUS } }, storey);
+      if (most !== null && most < surfaceY - 2 * POOL_FLOOR_LIFT) { surfaceY = roomFloor; notes.push("aside"); }
     }
   }
   // ⚠️ TWO RULES, AND WHAT WE KNOW PICKS ONE (2.477.0). A probed surface is

@@ -31,6 +31,7 @@ import type { Pt2 } from "@/utils/geometry";
 import { Storeys } from "./storeys";
 import { placeLight, LIGHT_POOL_RADIUS, POOL_FLOOR_LIFT, type LightPlacement } from "./lightPlacement";
 import type { LampRoomBits } from "./roomLightMask";
+import type { FloorArea } from "./floorProbe";
 
 // Where each light stands — its floor, room, storey, the glow's floor and
 // ceiling, the pool's reach — is lightPlacement's, one answer per pool that
@@ -42,6 +43,8 @@ export interface PoolFloorProbe {
   below(x: number, y: number, z: number, exclude?: AbstractMesh): number | null;
   /** The same question, never answered from the cache. */
   describeBelow(x: number, y: number, z: number): { y: number } | null;
+  /** The floor most of an area of a storey lies on (lightPlacement). */
+  areaFloorY(area: FloorArea, storey: number): number | null;
   clearMemo(): void;
   save(): void;
   readonly stats: { probeAbove: number };

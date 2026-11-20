@@ -572,6 +572,9 @@ export class SceneManager {
     // capture has ever measured it. Wired here, where both objects exist, so
     // neither subsystem has to know the other.
     this.visuals.setWalkFloorCost(() => this.camera.floorProbeCost);
+    // The floor an area lies on is sampled on its storey's meshes, shown or
+    // not (floorProbe.areaFloorY): the rooms' floors and the light pools'.
+    this.visuals.floorProbe.setStoreyMeshes((storey) => this.floors.getFloorMeshes(storey));
     // The ceiling's state while WALKING — see EntityVisuals.setCeilingState for
     // why every previous ceiling report was taken in the one view that hides
     // them. `active` is read from the meshes the last frame actually submitted,
@@ -1484,9 +1487,10 @@ export class SceneManager {
   }
 
   /**
-   * Real floor-surface (walking-surface) Y for a given storey at (x, z). Used
-   * to place a room's RoomHighlight glow (and its teleport point) on the
-   * storey it's actually on.
+   * Real floor-surface (walking-surface) Y for a given storey at (x, z), for
+   * the first-person spawn's standability test: a POINT. A room's floor (its
+   * glow, its teleport point) is an AREA's, floorProbe.areaFloorY's, since
+   * 2026-11-20 (villaPlan).
    *
    * Cast a ray straight DOWN at the room's centre through only that storey's
    * structure meshes and take the LOWEST hit — the floor slab's top surface is
@@ -1965,7 +1969,6 @@ export class SceneManager {
       eyeHeight: this.eyeHeight(),
     }, {
       probe: this.visuals.floorProbe,
-      storeyMeshes: (storey) => this.floors.getFloorMeshes(storey),
       hitsFloorAt: flatFloorAt(this.scene),
     });
 

@@ -17,6 +17,7 @@ const { Storeys } = await import("@/babylon/storeys");
 const { GLOW_TERM, POOL_CENTRE } = await import("@/babylon/lampGlow");
 const { pointInPolygon, earClipTriangulate, pointInside } = await import("@/utils/geometry");
 const { POOL_ALPHA_STOPS } = await import("@/babylon/LightPools");
+const { floorOfArea } = await import("@/babylon/floorProbe");
 /** What a patch gives the floor at distance d from its centre (its gradient). */
 const patchAt = (at, d) => {
   const t = d / at.radius;
@@ -48,7 +49,14 @@ const floorBelow = (x, y, z) => {
   if (onFlight(x, z) && tread(x) <= y) return tread(x);
   return y >= UP ? UP : 0;
 };
-const probe = (below = floorBelow) => ({ below, describeBelow: (x, y, z) => ({ y: floorBelow(x, y, z) }) });
+/** Every surface a storey has over (x, z), as the probe's column: its floor, and a tread over it. */
+const columnOf = (x, z, storey) => (storey >= 2 ? [UP] : onFlight(x, z) ? [0, tread(x)] : [0]);
+/** The scripted probe: `below` its memo (stale, when a test says so), `fresh` the ray today, `column` what lies on
+ *  the floor; the vote is the probe's own (floorOfArea). */
+const probe = (below = floorBelow, column = columnOf, fresh = floorBelow) => ({
+  below, describeBelow: (x, y, z) => ({ y: fresh(x, y, z) }),
+  areaFloorY: (area, storey) => floorOfArea(area, (x, z) => column(x, z, storey)),
+});
 
 // THE glow's own formula (GLOW_TERM), summed over lamps as the shader does.
 const term = new Function("min", "max", "clamp", "smoothstep", "step", "inversesqrt", "pX", "pY", "pZ", "nX", "nY", "nZ",
@@ -223,18 +231,27 @@ console.log("\n  a room outline drawn with a repeated corner and points along a 
   ck("  ...and the room's highlight, drawn from the same triangles, fills it", Math.abs(area - 16) < 1e-9, area);
 }
 
-console.log("\n  a lamp over a tub, a lamp over a step:");
+console.log("\n  a lamp over a tub, a lamp over a step, a lamp over a path:");
 {
   const P = plan(0);
   // A tub in the hall, its water 0.16 m up (x 2.5..3.5, z 4..5.6); the lamp above its end.
-  const tub = (x, y, z) => (x > 2.5 && x < 3.5 && z > 4 && z < 5.6 ? 0.16 : floorBelow(x, y, z));
-  const over = placeLight(3, 4.3, 2.3, 0, { below: tub, describeBelow: (x, y, z) => ({ y: tub(x, y, z) }) }, P);
+  const inTub = (x, z) => x > 2.5 && x < 3.5 && z > 4 && z < 5.6;
+  const tub = (x, y, z) => (inTub(x, z) ? 0.16 : floorBelow(x, y, z));
+  const over = placeLight(3, 4.3, 2.3, 0, probe(tub, (x, z, s) => (inTub(x, z) ? [0, 0.16] : columnOf(x, z, s)), tub), P);
   ck("over a tub's end: the pool lies on the floor round it, not on the water (owner, 2026-11-20, the onsen)",
      over.surfaceY === 0, [over.surfaceY, over.notes]);
   // A raised platform 0.15 m up across the hall's end (x 0..10, z 4..8); the lamp in its middle.
-  const deck = (x, y, z) => (z > 4 && z < 8 ? 0.15 : floorBelow(x, y, z));
-  const step = placeLight(5, 6, 2.3, 0, { below: deck, describeBelow: (x, y, z) => ({ y: deck(x, y, z) }) }, P);
+  const onDeck = (x, z) => z > 4 && z < 8;
+  const deck = (x, y, z) => (onDeck(x, z) ? 0.15 : floorBelow(x, y, z));
+  const step = placeLight(5, 6, 2.3, 0, probe(deck, (x, z, s) => (onDeck(x, z) ? [0, 0.15] : columnOf(x, z, s)), deck), P);
   ck("  ...over a step, the step all round: the pool stays on the step", step.surfaceY === 0.15, [step.surfaceY, step.notes]);
+  // A path 6 cm up on the ground, 2 m wide along the hall (z 4..6), a kerb 0.4 m up beside it (z 6..6.3);
+  // the lamp over the path. The ground runs on under the path: the lowest surface there is the ground's.
+  const onPath = (x, z) => z > 4 && z < 6, onKerb = (x, z) => z >= 6 && z < 6.3;
+  const path = (x, y, z) => (onPath(x, z) ? 0.06 : onKerb(x, z) ? 0.4 : floorBelow(x, y, z));
+  const lit = placeLight(5, 5, 2.4, 0, probe(path, (x, z, s) => (onPath(x, z) ? [0, 0.06] : onKerb(x, z) ? [0, 0.4] : columnOf(x, z, s)), path), P);
+  ck("  ...over a path on the ground, the path along under it: the pool lies on the path (the entrance light, 0.06 m)",
+     lit.surfaceY === 0.06, [lit.surfaceY, lit.notes]);
 }
 
 console.log("\n  where a room's floor is read:");

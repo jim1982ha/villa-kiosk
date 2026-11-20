@@ -3,7 +3,7 @@
 // Babylon's NullEngine with the app's own floor probe and storeys
 // (FloorProbe, FloorManager): a small two-storey house with a garden drawn
 // round three sides of it, its devices at their plan points, mirrored and
-// moved as a SweetHome export is.
+// moved as a SweetHome export is; then a tub where the garden's viewpoint is.
 //
 // What a person sees: each room's highlight and viewpoint on its own floor;
 // the garden's on the lawn, not on the house its middle lies on (2026-11-20:
@@ -68,11 +68,16 @@ const rooms = [
   { name: "Garden", floor: 1, points: [{ x: 0, y: 0 }, { x: 200, y: 0 }, { x: 200, y: 600 }, { x: 800, y: 600 }, { x: 800, y: 0 },
     { x: 1000, y: 0 }, { x: 1000, y: 800 }, { x: 0, y: 800 }] },
 ];
-const floors = new FloorManager(scene, () => {});
-floors.indexFloors(scene.meshes);
-const probe = new FloorProbe(scene);
-const villa = buildVillaPlan({ devices, entities, rooms, modelWidth: 10, modelDepth: 8, eyeHeight: 1.6 },
-  { probe, storeyMeshes: (s) => floors.getFloorMeshes(s), hitsFloorAt: flatFloorAt(scene) });
+/** The plan, measured afresh (a new probe: nothing cached) on the scene as it is now. */
+const measure = () => {
+  const floors = new FloorManager(scene, () => {});
+  floors.indexFloors(scene.meshes);
+  const probe = new FloorProbe(scene);
+  probe.setStoreyMeshes((s) => floors.getFloorMeshes(s));
+  return buildVillaPlan({ devices, entities, rooms, modelWidth: 10, modelDepth: 8, eyeHeight: 1.6 },
+    { probe, hitsFloorAt: flatFloorAt(scene) });
+};
+const villa = measure();
 
 const of = (name) => villa.rooms.find((r) => r.name === name);
 ck("the fit is the devices' (an affine fit)", /^affine fit/.test(villa.strategy), villa.strategy);
@@ -93,4 +98,13 @@ ck("  ...two storeys", S.storeyStandingOn(0.3) === 1 && S.storeyStandingOn(3.2) 
 const tp = villa.teleportPoints.find((p) => p.name === "Garden");
 ck("each room's viewpoint stands in it, at eye height over its floor (the garden's on the lawn)",
    pointInPolygon(tp.position.x, tp.position.z, of("Garden").pts) && Math.abs(tp.position.y - 1.6) < 1e-6, tp.position);
+
+// A tub's water, 0.16 m up on the lawn, right where the garden's viewpoint stands.
+const tubAt = MeshBuilder.CreateGround("tub", { width: 1.2, height: 1.2 }, scene);
+tubAt.position.set(tp.position.x, 0.16, tp.position.z);
+structure(tubAt, 0);
+const withTub = measure();
+const gardenFloor = withTub.rooms.find((r) => r.name === "Garden").floorY;
+ck("a tub at the garden's viewpoint: the garden is still on the lawn, where most of it lies (not the water's 0.16)",
+   Math.abs(gardenFloor) < 1e-6, gardenFloor);
 done("✅ the villa's plan: every room on its own floor");

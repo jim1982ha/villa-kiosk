@@ -13,9 +13,9 @@
 //
 // Interface: `buildVillaPlan(inputs, ports)` → the calibrated plan, or null
 // when there is nothing to fit against. The scene comes in as ports: the
-// floor probe (FloorProbe in the app and the rig, a script in the oracle), the
-// meshes of a storey (FloorManager), and the solver's "is there a floor here?"
-// for a villa with no device on its plan. tests/oracles/villa_plan.mjs.
+// floor probe (FloorProbe, which samples a storey's meshes, FloorManager's)
+// and the solver's "is there a floor here?" for a villa with no device on its
+// plan (flatFloorAt). tests/oracles/villa_plan.mjs.
 
 import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
 import { Ray } from "@babylonjs/core/Culling/ray";
@@ -26,6 +26,7 @@ import { polygonCentroid } from "@/config/Sh3dCalibration";
 import type { PlanWorldPair } from "@/utils/affineFit";
 import { pointInside, type Pt2 } from "@/utils/geometry";
 import type { TeleportPoint } from "@/types/scene.types";
+import type { FloorArea } from "./floorProbe";
 import { rayTargets } from "./meshRoles";
 import { solvePlanToWorld } from "./roomCalibration";
 import { Storeys, isStairwell } from "./storeys";
@@ -70,11 +71,11 @@ export interface VillaPlanInputs {
 }
 
 export interface VillaPlanPorts {
-  /** The floor of a storey at (x, z), from the storey's own meshes whether or
-   *  not it is shown. FloorProbe is the adapter. */
-  probe: { storeyFloorY(meshes: AbstractMesh[], x: number, z: number, storey: number): number };
-  /** A storey's meshes (FloorManager.getFloorMeshes). */
-  storeyMeshes(storey: number): AbstractMesh[];
+  /** The floor most of an area of a storey lies on, from the storey's own
+   *  meshes whether or not it is shown; null where it has none. FloorProbe is
+   *  the adapter, and holds the storeys' meshes (FloorManager) for the light
+   *  pools too. */
+  probe: { areaFloorY(area: FloorArea, storey: number): number | null };
   /** Does a downward ray at (x, z) meet a flat floor? Only for a villa with
    *  no device on its plan (roomCalibration's last strategy). */
   hitsFloorAt(x: number, z: number): boolean;
@@ -181,9 +182,11 @@ export function buildVillaPlan(inputs: VillaPlanInputs, ports: VillaPlanPorts): 
     // three-storey villa had its top floor's rooms filed under the second.
     const floor = room.floor ?? 1;
     const c = polygonCentroid(room.points);
-    // Its viewpoint and its floor: in the room, even where its middle is not.
+    // Its viewpoint: in the room, even where its middle is not.
     const wc = pointInside(pts, planToWorld(c.x, c.y));
-    const floorY = ports.probe.storeyFloorY(ports.storeyMeshes(floor), wc.x, wc.z, floor);
+    // Its floor: what most of it lies on (floorProbe.areaFloorY), the ground
+    // (0) where its storey has nothing under it.
+    const floorY = ports.probe.areaFloorY({ outline: pts }, floor) ?? 0;
     // Surface-hug the glow ONLY for staircase rooms (matched by name). The
     // grid-probe raycasts the whole fused structure, so running it on every
     // room — especially the big outdoor/terrain polygons, which vary in height

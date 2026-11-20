@@ -5,8 +5,13 @@
 // field bug (a light pool buried under the walkway it was meant to light).
 //
 //   EntityVisuals.surfaceBelow   light pools + label/strip drops
-//   SceneManager.estimateFloorY  room glow, teleport points, camera framing
+//   SceneManager.estimateFloorY  the first-person spawn, camera framing
 //   RoomHighlight.buildDecal     the surface a point-room glow drapes over
+//
+// and since 2026-11-20 a fourth, which is an AREA's question, not a point's:
+// the floor most of a room (villaPlan: its glow, its teleport point) or of a
+// light pool's disc (lightPlacement) lies on — `areaFloorY`, one rule for
+// both (see there).
 //
 // They are not the same question and this module does not pretend they are —
 // the first wants the structure below a fixture, the second wants ONE STOREY's
@@ -59,6 +64,7 @@ import type { PickingInfo } from "@babylonjs/core/Collisions/pickingInfo";
 import type { Scene } from "@babylonjs/core/scene";
 
 import { roomKey } from "@/config/roomKey";
+import { distanceToPolygonBoundary, pointInPolygon, pointInside, boundsXZ, type Pt2 } from "@/utils/geometry";
 import { structureRole, isResolvedCeiling, rayTargets, isHelperMesh } from "./meshRoles";
 import { ModelKeyedStore } from "./modelStore";
 // Babylon prototype patches this module depends on — see babylonSideEffects.
@@ -79,6 +85,105 @@ const PROBE_REACH_M = 20;
  *  Nudging a few cm and retrying routes around that gap without needing to know
  *  which side of it the room's interior is on. */
 const SEAM_NUDGE_M = 0.12;
+/** What still lies ON a storey's bottom surface: a path on the ground, a
+ *  deck, a step, a tub's water. A beam, a table, the storey above stand far
+ *  higher. The same 0.2 m as a step is to a light pool (lightPlacement). */
+const FLOOR_STEP_M = 0.2;
+/** Two samples this close are one floor. Twice a pool's lift: closer than
+ *  that, a pool could not tell them apart. */
+const FLOOR_AGREE_M = 0.04;
+/** Samples a room's outline is asked at: where its viewpoint stands, then,
+ *  when something lies on its floor there, two more spread across it.
+ *  Majority of three: one sample on a tub, a deck or a planter is outvoted. */
+const OUTLINE_SAMPLES = 3;
+/** A disc is asked at this many points round its centre, this far out (a
+ *  share of its radius): its centre is what the asker already knows. */
+const DISC_SAMPLES = 8;
+const DISC_RING_AT = 0.6;
+
+/** An area whose floor is asked: a room's outline, or the disc a light pool
+ *  covers at its least reach. */
+export type FloorArea = { outline: readonly Pt2[] } | { disc: { x: number; z: number; r: number } };
+
+/**
+ * Where an area is sampled, in the order asked: an outline at the point its
+ * viewpoint takes (inside it even where its middle is not, geometry.pointInside),
+ * then at the points of a grid inside it farthest from those already taken;
+ * a disc on a ring round its centre.
+ */
+export function areaSamples(area: FloorArea): Pt2[] {
+  if ("disc" in area) {
+    const { x, z, r } = area.disc;
+    return Array.from({ length: DISC_SAMPLES }, (_, k) => {
+      const a = (2 * Math.PI * k) / DISC_SAMPLES;
+      return { x: x + r * DISC_RING_AT * Math.cos(a), z: z + r * DISC_RING_AT * Math.sin(a) };
+    });
+  }
+  const poly = area.outline as Pt2[];
+  const b = boundsXZ(poly);
+  if (!b || poly.length < 3) return [];
+  let cx = 0, cz = 0, a2 = 0;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const cr = poly[j].x * poly[i].z - poly[i].x * poly[j].z;
+    a2 += cr; cx += (poly[j].x + poly[i].x) * cr; cz += (poly[j].z + poly[i].z) * cr;
+  }
+  const centre = a2 ? { x: cx / (3 * a2), z: cz / (3 * a2) } : { x: (b.minX + b.maxX) / 2, z: (b.minZ + b.maxZ) / 2 };
+  const out = [pointInside(poly, centre)];
+  const grid: Pt2[] = [];
+  const N = 8;
+  for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) {
+    const p = { x: b.minX + ((b.maxX - b.minX) * (i + 0.5)) / N, z: b.minZ + ((b.maxZ - b.minZ) * (j + 0.5)) / N };
+    // Clear of the walls: a sample on a wall line reads the wall's foot.
+    if (pointInPolygon(p.x, p.z, poly) && distanceToPolygonBoundary(p.x, p.z, poly) > 0.3) grid.push(p);
+  }
+  while (out.length < OUTLINE_SAMPLES && grid.length) {
+    let best = 0, far = -1;
+    grid.forEach((p, k) => {
+      const d = Math.min(...out.map((q) => Math.hypot(p.x - q.x, p.z - q.z)));
+      if (d > far) { far = d; best = k; }
+    });
+    out.push(grid.splice(best, 1)[0]);
+  }
+  return out;
+}
+
+/**
+ * What a point of a storey is stood on, from every surface the storey has in
+ * that column (any order): the highest within FLOOR_STEP_M of its lowest.
+ * `clear` when that is the lowest itself, nothing lying on it. Null when the
+ * column is empty.
+ */
+export function standingSurface(heights: readonly number[]): { y: number; clear: boolean } | null {
+  if (!heights.length) return null;
+  const lowest = Math.min(...heights);
+  let top = lowest;
+  for (const h of heights) if (h <= lowest + FLOOR_STEP_M && h > top) top = h;
+  return { y: top, clear: top - lowest <= FLOOR_AGREE_M };
+}
+
+/**
+ * The floor most of an area lies on: each sample's standing surface (the
+ * storey's surfaces in its column, `columnAt`), the vote's upper median, so
+ * more than half the samples lie at or above it and more than half at or
+ * below. Stops asking once more than half the planned samples agree. A
+ * room's outline whose first sample is clear (nothing lying on its floor
+ * there) is answered by it: one ray, where most rooms are. Null when no
+ * sample found a surface.
+ */
+export function floorOfArea(area: FloorArea, columnAt: (x: number, z: number) => readonly number[]): number | null {
+  const samples = areaSamples(area);
+  const votes: number[] = [];
+  for (const p of samples) {
+    const s = standingSurface(columnAt(p.x, p.z));
+    if (s === null) continue;
+    if ("outline" in area && p === samples[0] && s.clear) return s.y;
+    votes.push(s.y);
+    if (votes.filter((v) => Math.abs(v - s.y) <= FLOOR_AGREE_M).length * 2 > samples.length) break;
+  }
+  if (!votes.length) return null;
+  votes.sort((x, y) => x - y);
+  return votes[Math.floor(votes.length / 2)];
+}
 
 /** localStorage prefix. ⚠️ BUMPED AGAIN to `vk.probe3.` in 2.474.1, for the same
  *  reason and with the same symptom: every stored answer was computed by a
@@ -177,6 +282,14 @@ export class FloorProbe {
     this.roomAt = fn;
   }
 
+  /** A storey's meshes, whether or not it is shown (FloorManager in the app):
+   *  what `areaFloorY` samples. Injected for the same reason as the room
+   *  resolver, and none until then: an area on no known storey has no floor. */
+  private storeyMeshes: ((storey: number) => readonly AbstractMesh[]) | null = null;
+  setStoreyMeshes(fn: ((storey: number) => readonly AbstractMesh[]) | null): void {
+    this.storeyMeshes = fn;
+  }
+
   /**
    * Reuse the previous load's probes when the geometry is byte-identical.
    * `key` is the VERSIONED model URL, so a stale answer cannot outlive the
@@ -203,6 +316,8 @@ export class FloorProbe {
   load(): void {
     this.cache.clear();
     this.persisted.clear();
+    // The columns are this model's geometry; the next load's are its own.
+    this.columns.clear();
     for (const [k, v] of this.store.load()) {
       // Into BOTH: `cache` so this pass can hit them, `persisted` so a save
       // later in this same load cannot drop what a previous load learned.
@@ -381,6 +496,83 @@ export class FloorProbe {
     return { y: hit.pickedPoint.y, what: hit.pickedMesh?.name ?? "?" };
   }
 
+  /**
+   * THE FLOOR MOST OF AN AREA LIES ON, on one storey: a room's outline (its
+   * highlight, its viewpoint, every reader of the plan) or the disc a light
+   * pool covers (lightPlacement). Sampled inside the area, a majority vote
+   * (floorOfArea), cached by the area and kept with every other answer here.
+   * Null when no sample found a surface.
+   *
+   * ⚠️ ONE RULE FOR A POINT, WHERE THERE WERE TWO (2026-11-20). A room read
+   * its floor as the LOWEST of its storey's surfaces under one point inside
+   * it; a pool raised a little above its room's floor asked eight points
+   * round it for the FIRST structure under its fixture. Each rule is wrong
+   * for the other's case, which is why each existed:
+   *   * the lowest misses what lies on the slab: under the entrance light the
+   *     path is 6 cm up on the ground, and the ground under it is lowest,
+   *     so the pool would sink off the path;
+   *   * the first from above meets whatever overhangs the point: a beam over
+   *     a bathroom's middle, a terrace's roof, and on a model whose
+   *     structure is one mesh for every storey, the storey above itself.
+   * So a point is stood on the highest of its storey's surfaces within
+   * FLOOR_STEP_M of the lowest (standingSurface): the path, a deck, a step
+   * or a tub's water, never a beam, a roof or a floor above. And where
+   * something lies on the floor, one point is not the area's answer: the
+   * onsen pool read the one point under its lamp (the tub's water), a room
+   * whose viewpoint falls on a deck or a tub would read that. The vote over
+   * the area is what both now share; a staircase's viewpoint stands on one
+   * tread, nothing on it, and keeps it (a vote across its treads would land
+   * on the lowest).
+   *
+   * Cost: one pick per sample, the same ~21 ms pick as `storeyFloorY`, and
+   * every area's answer cached and persisted: a room pays one ray, as before,
+   * unless something lies on its floor at its viewpoint (then three, once
+   * per model on a device); a pool pays only when it is raised a little
+   * above its room's floor (placeLight), once, where its ring of rays was
+   * cast again on every placement pass.
+   */
+  areaFloorY(area: FloorArea, storey: number): number | null {
+    const meshes = this.storeyMeshes?.(storey) ?? [];
+    if (!meshes.length) return null;
+    const q = (v: number) => Math.round(v * 1000);
+    const key = "disc" in area
+      ? `ad:${storey}:${q(area.disc.x)}:${q(area.disc.z)}:${q(area.disc.r)}`
+      : `ao:${storey}:${area.outline.map((p) => `${q(p.x)},${q(p.z)}`).join(" ")}`;
+    const cached = this.cache.get(key);
+    if (cached !== undefined) return cached;
+    // A SET, for the reason spelled out in `storeyFloorY`. The storey's
+    // structure (`acceptsAsFloor`): what a light lands on and what a room
+    // stands on are structure, a table is not. A model that marks no
+    // structure on the storey has only its meshes to stand on, ceilings aside.
+    const structure = meshes.filter(this.acceptsAsFloor);
+    const wanted = new Set(structure.length ? structure : meshes.filter((m) => !isResolvedCeiling(m)));
+    const result = floorOfArea(area, (x, z) => this.columnAt(wanted, storey, x, z));
+    this.cache.set(key, result);
+    this.persisted.set(key, result);
+    return result;
+  }
+
+  /** Every surface of a storey's meshes under (x, z), cached by point for
+   *  this session (a room and a pool beside it share samples; the AREA's
+   *  answer is what is kept across loads). */
+  private columns = new Map<string, number[]>();
+  private columnAt(meshes: ReadonlySet<AbstractMesh>, storey: number, x: number, z: number): number[] {
+    const key = `${storey}:${Math.round(x * 1000)}:${Math.round(z * 1000)}`;
+    const cached = this.columns.get(key);
+    if (cached) return cached;
+    const t0 = performance.now();
+    // World Y is metres after normalisation; ±1000 comfortably brackets any villa.
+    const hits = this.scene.multiPickWithRay(
+      new Ray(new Vector3(x, 1000, z), Vector3.Down(), 2000),
+      (m) => meshes.has(m),
+    );
+    this.stats.probeMs += performance.now() - t0;
+    this.stats.probeRays += 1;
+    const column = (hits ?? []).flatMap((h) => (h.pickedPoint ? [h.pickedPoint.y] : []));
+    this.columns.set(key, column);
+    return column;
+  }
+
   storeyFloorY(meshes: AbstractMesh[], x: number, z: number, storey: number): number {
     if (!meshes.length) return 0;
     const key = `s:${storey}:${Math.round(x * 1000)}:${Math.round(z * 1000)}`;
@@ -419,7 +611,7 @@ export class FloorProbe {
       // (2.474.0): a storey's ceiling is in that storey's mesh set, so a ray
       // dropped from 1000 m hits it long before the floor and this would answer
       // "the floor of storey N is at ceiling height". Every consumer wants the
-      // surface you STAND on — room glow, teleport points, camera framing, and
+      // surface you STAND on — camera framing, and
       // the first-person spawn's standability test.
       (m) => wanted.has(m) && !isResolvedCeiling(m),
     );
