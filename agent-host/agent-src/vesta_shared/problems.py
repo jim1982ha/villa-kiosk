@@ -640,9 +640,10 @@ class Problems:
             if inc and inc.get("closed_at"):
                 # kiosk_words.reopened: who and when, said once — mail to the alert desk (store.Notes), which names who
                 # is asked (its chase.asks: a skill's setting, never the engine's)
-                self.store.note(sid, {Notes.KIOSK_REOPENED: kiosk_words.stored(said) if said else by or "a person"},
-                                drop=(alert_watch.CHECK, Notes.LASTING),
-                                closed_at=None, reply=None, state=Incident.ASKED, asked_at=self.store.now())
+                # THE reopening (alert_watch.reopened): what the run that ended kept goes with it
+                alert_watch.reopened(self.store, sid,
+                                     {Notes.KIOSK_REOPENED: kiosk_words.stored(said) if said else by or "a person"},
+                                     closed_at=None, reply=None, state=Incident.ASKED, asked_at=self.store.now())
                 self.store.reopening_told(task_id)
                 return sid
         return None

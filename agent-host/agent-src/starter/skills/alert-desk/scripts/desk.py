@@ -435,83 +435,13 @@ def occupancy(client=None) -> str:
     return occupancy_now.siren_now(client)
 
 
-def _find_by_ha_incident(store: Store, ha_incident: str | None, closed_within: timedelta | None = None,
-                         now: datetime | None = None) -> dict | None:
-    """The open incident of Home Assistant's `ha_incident` — or, with `closed_within`, one closed that recently."""
-    if not ha_incident:
-        return None
-    rows = store.incidents(open_only=closed_within is None)
-    if closed_within is not None:
-        rows = [i for i in rows if i.get("closed_at") and now - datetime.fromisoformat(i["closed_at"]) <= closed_within]
-    for inc in rows:
-        if notes_of(inc).get("ha_incident") == ha_incident:
-            return inc
-    return None
-
-
-def alert_keys(ev: dict) -> tuple[str, str | None]:
-    """(the key an alert is filed under, the key an alert of the same rule was filed under before its rule sent its
-    permanent number — None when it sends none). An alert is its rule and its device: the rule by its permanent number
-    (`rule_uid`, the automation's own id) when it sends one, else by its entity id.
-
-    ⚠️ A NEW NUMBER FOR A NEW NAME (owner, 2026-10-18 — architecture review, one problem one card #1): the laundry
-    rule's entity id changed while its alert #41 was open; its next alert, under the new id, became #55 — the same
-    door, two faults. The automation's own id survives any rename."""
-    eid = ev.get("entity_id", "")
-    by_name = f"{ev.get('rule_id', '')}|{eid}"
-    uid = str(ev.get("rule_uid") or "").strip()
-    return (f"rule:{uid}|{eid}", by_name) if uid else (by_name, None)
-
-
-def open_alert(store: Store, ev: dict) -> dict | None:
-    """The open incident of `ev`'s alert, whatever its rule is called now: filed under its permanent number, or under
-    the rule's name before rules sent one (then moved under the number). Its rule's name is brought up to date."""
-    key, by_name = alert_keys(ev)
-    cur = store.find_open_incident(key)
-    if cur is None and by_name:
-        cur = store.find_open_incident(by_name)
-        if cur is not None:
-            store.update_incident(cur["id"], key=key)
-    if cur is None:
-        return None
-    if ev.get("rule_id") and cur["rule_id"] != ev["rule_id"]:
-        store.update_incident(cur["id"], rule_id=ev["rule_id"])   # renamed: the name it has now
-    if ev.get("rule_uid"):
-        store.note(cur["id"], {"rule_uid": str(ev["rule_uid"])})
-    return store.incident(cur["id"])
-
-
-def back_alert(store: Store, ev: dict, now: datetime) -> dict | None:
-    """The incident of `ev`'s alert closed and still watched (came_back): under its permanent number, or under its
-    rule's name from before rules sent one — then filed under the number, its rule's name brought up to date.
-
-    ⚠️ ONE FILE OF ALERTS (architecture review scan 2, 2026-10-19): open_alert knew both keys and a rename; intake's
-    "came back" path re-did the two keys itself and kept the old name. Both ask here and in open_alert: intake no
-    longer knows a by-name key exists."""
-    key, by_name = alert_keys(ev)
-    back = came_back(store, key, now) or (came_back(store, by_name, now) if by_name else None)
-    if back is None:
-        return None
-    fields = {k: v for k, v in (("key", key), ("rule_id", ev.get("rule_id"))) if v and back.get(k) != v}
-    if fields:
-        store.update_incident(back["id"], **fields)
-    return store.incident(back["id"])
-
-
-def lasting_alert(store: Store, ev: dict) -> dict | None:
-    """The latest incident of `ev`'s alert (its permanent number's, else its rule's name's) when a person closed it "Not
-    a problem" while it lasts (Notes.LASTING, still written: alert_watch.lasting says whether it still holds). Its
-    alert, never its run: Home Assistant restarted, the rule's run has another id for the same problem."""
-    for key in filter(None, alert_keys(ev)):
-        rows = store.incidents_of_key(key)
-        if rows:
-            last = rows[-1]
-            return last if last.get("closed_at") and notes_of(last).get(Notes.LASTING) else None
-    return None
+#: An alert is its rule and its device, filed under its permanent number (alert_watch.keys: one reading)
+alert_keys = W.keys
 
 
 def still_lasting(store: Store, inc: dict, ev: dict, now: datetime, out: dict) -> dict:
-    """The rule repeated alert `inc`, closed "Not a problem" while it lasts: the problem lasts, as the person said.
+    """The rule repeated alert `inc`, closed "Not a problem" while it lasts (alert_watch.LASTING): the problem lasts, as
+    the person said.
     Recorded, and nothing more: never reopened, never a new number, nobody reminded or told; the villa's own message of
     it stays as the villa sent it.
 
@@ -557,16 +487,17 @@ def intake(store: Store, ev: dict, now: datetime, params: VillaParams | None = N
     sev = priority(ev, route)
     key = alert_keys(ev)[0]
     out = {"send": [], "actions": [], "incident_id": None, "decision": None}
-    cur = open_alert(store, ev)
-    accepted = lasting_alert(store, ev) if cur is None else None
-    if accepted and W.lasting(accepted, now):
-        return still_lasting(store, accepted, ev, now, out)
+    # where this alert stands (alert_watch.standing: ONE answer to "the same problem as before?")
+    st = W.standing(store, ev, now)
+    cur = W.file(store, st, ev) if st.verdict == W.OPEN else None
+    if st.verdict == W.LASTING:
+        return still_lasting(store, st.incident, ev, now, out)
     # ⚠️ THE KIOSK'S SWITCH (owner, 2026-10-29; vesta_shared.maintenance.takes_up, the gate every door asks): no longer
     # a villa helper no screen showed. Only a NEW alert is held: one already open carries on as before (its promise)
     if cur is None and not takes_up(sev):
         out["decision"] = "maintenance_mode"; store.audit("alert-desk", "suppressed_maintenance", ev); return out
     if cur:
-        last = datetime.fromisoformat(cur["last_seen_at"])
+        last = moment_key(cur["last_seen_at"])[0]
         store.touch_incident(cur["id"], now.isoformat())
         out["incident_id"] = cur["id"]
         # ⚠️ WHAT IT SAYS NOW (owner, 2026-10-13, the house pump's #5: "last confirmed: 2026-10-01" every morning while
@@ -589,7 +520,7 @@ def intake(store: Store, ev: dict, now: datetime, params: VillaParams | None = N
         # ⚠️ THE RULE ALERTED AGAIN, NOT A REMINDER (owner, 2026-10-17, #45: "Reminder sent 11:38 to Owner & FM" — the
         # load had moved from phase C to phase B and the villa's rule alerted again; a reminder is the desk's own chase)
         out["ha_messages"] = [R.ha_message(cur["id"], context=ev.get("_context_id"), stage="still", **about(cur, status))]
-        if (now - last) < timedelta(minutes=route["cooldown_min"]):
+        if (moment_key(now)[0] - last) < timedelta(minutes=route["cooldown_min"]):
             out["decision"] = "counted"  # repeat inside the cooldown: no message of the desk's own
             return out
         out["decision"] = "repeat"
@@ -597,9 +528,8 @@ def intake(store: Store, ev: dict, now: datetime, params: VillaParams | None = N
         # P2, P3"): a repeat went to the facility manager whatever the priority, unlike the alert it repeats
         out["send"] += tell(sev, "still", incident=cur["id"], ladder=route.get("ladder", True), **about(cur, status))
         return out
-    back = back_alert(store, ev, now)
-    if back:
-        return reopen(store, back, ev, now, sev, route, out, zone=zone)
+    if st.verdict == W.BACK:
+        return reopen(store, W.file(store, st, ev), ev, now, sev, route, out, zone=zone)
     hold = expected(store, ev, now, client) if does(sev, route) == "chase" else None
     iid = store.new_incident(key, rule_id, eid, sev, ev, now.isoformat())
     carry_check(store, iid, route, ev)
@@ -724,7 +654,7 @@ def _restated(store: Store, cur: dict, ev: dict, sev: str, now: datetime, route:
     its Kiosk fault stayed open, for an alert now meant for the morning digest."""
     cur = dict(cur)                                # a store row
     # it fired again: whatever was seen clearing is not over
-    p = store.note(cur["id"], {k: ev[k] for k in RESTATED if ev.get(k) is not None}, drop=("clear_since",))
+    p = W.repeated(store, cur["id"], {k: ev[k] for k in RESTATED if ev.get(k) is not None})
     carry_check(store, cur["id"], route, p)
     _reprioritised(store, cur, p, sev, now, route, out)
     return store.incident(cur["id"])
@@ -780,17 +710,6 @@ def _ladder(store: Store, iid: int, ev: dict, now: datetime, sev: str, route: di
         store.update_incident(iid, state=Incident.LOGGED)
 
 
-def came_back(store: Store, key: str, now: datetime) -> dict | None:
-    """The incident of `key` still watched after its close (alert_watch.reopens), if any: an alert back so soon is the
-    SAME problem again.
-
-    ⚠️ BACK AGAIN IS NOT NEW (architecture review 23): an access point dropping every hour got a new number, a new
-    "New" message with buttons and a new Kiosk fault each time the desk closed it — the "repeat after" applied only to
-    an incident still open, and the retune proposal then counted the desk's own closes."""
-    closed = [i for i in store.incidents(open_only=False) if i["key"] == key and i.get("closed_at") and W.reopens(i, now)]
-    return closed[-1] if closed else None
-
-
 def reopen(store: Store, inc: dict, ev: dict, now: datetime, sev: str, route: dict, out: dict,
            status: str | None = None, zone: str | None = None) -> dict:
     """`inc`, closed, open again under its own number — the ONE way an incident reopens (architecture review 24: two
@@ -805,16 +724,10 @@ def reopen(store: Store, inc: dict, ev: dict, now: datetime, sev: str, route: di
     ⚠️ A RUN'S "CLEAR SINCE" ENDS WITH IT (villa's #54, 2026-10-18): main power back at 11:30:15 was closed at
     11:30:17 — the "back to normal since 10:40" of the run closed at 10:50 was still on the incident, so the new run
     read as 50 minutes clear. Either way it reopens, it is bad now: seen_again counts its clear_minutes afresh."""
-    store.note(inc["id"], drop=("clear_since", "silent_told", Notes.LASTING))
     came_back_now = status is None
-    if came_back_now:
-        ended = notes_of(store.incident(inc["id"])).get(Notes.MESSAGE)   # the run that ended keeps its own words
-        p = store.note(inc["id"], {k: ev[k] for k in ("mode", "bad_states", "state", "ha_incident", "message", "summary",
-                                                      "entities") if ev.get(k) is not None}, drop=("abandoned", W.CHECK))
-        store.reopen_incident(inc["id"], now.isoformat(), message=ended)     # this run's first alert: counted one
-    else:
-        # Home Assistant no longer watches it: the desk does (seen_again)
-        p = store.note(inc["id"], {"abandoned": True}, drop=(W.CHECK,), closed_at=None, reply=None)
+    # the run that ended takes its notes with it (alert_watch.RUN_NOTES: its clearing, its "Not a problem", its check);
+    # still there, Home Assistant no longer watches it: the desk does (seen_again)
+    p = W.came_back(store, inc["id"], ev, now.isoformat()) if came_back_now else W.not_over(store, inc["id"])
     carry_check(store, inc["id"], route, p)
     carry_to(store, inc["id"], sev, p)
     inc = store.incident(inc["id"])
@@ -843,28 +756,21 @@ def resolved(store: Store, ev: dict, now: datetime, params: VillaParams | None =
     Home Assistant already sent its own all-clear to the group: the desk writes only
     when a person was being chased, to tell them no reply is needed any more."""
     out = {"send": [], "actions": [], "incident_id": None, "decision": "resolved_unknown"}
-    inc = _find_by_ha_incident(store, ev.get("ha_incident")) or open_alert(store, ev)
+    st = W.standing(store, ev, now)
+    inc = W.file(store, st, ev) if st.verdict == W.OPEN else None
     if not inc:
-        # the problem a person said was "Not a problem" while it lasts is over: its next alert is a new occurrence
-        accepted = lasting_alert(store, ev)
-        if accepted:
-            W.lasted(store, accepted)
-            store.audit("alert-desk", "lasting_over", {"incident": accepted["id"]})
         # ⚠️ ALREADY CLOSED HERE, STILL ITS MESSAGE (architecture review 22): the desk saw it over first (seen_again, a
         # Done) — Home Assistant's all-clear then stayed a second message in the group, without its incident's number
-        late = _find_by_ha_incident(store, ev.get("ha_incident"), closed_within=timedelta(days=W.late_close_days()), now=now)
+        late = _closed_already(store, st)
         if late and not VS.transition(visit_of(ev), None, notes_of(late), "resolved").tell:
             # a visit the villa closed while VESTA was away, closed at its first event (visit_intake): its replayed
             # close changes nothing seen (owner's drills, 2026-11-07, #141, #143)
             out["incident_id"], out["decision"] = late["id"], "visit_closed"
             return out
         if late:
-            out["incident_id"], out["decision"] = late["id"], "resolved_late"
             # ⚠️ ITS CLOSE SAID AGAIN, NEVER "CLEARED" (owner, 2026-11-05, #118): "Not a problem" pressed at 00:19, the
             # rule's all-clear at 00:27 made the card "Cleared on 00:27. Watch 1h" — the person's close replaced
-            out["ha_messages"] = [R.ha_message(late["id"], context=ev.get("_context_id"), stage="closed",
-                                               **about(late, watched(_close_again(late), W.minutes(late))),
-                                               as_it_stands=True)]
+            _said_again(late, ev, out, "resolved_late")
         return out
     v = visit_of(ev) or notes_of(inc).get(VISIT)
     away = VS.transition(v or {}, notes_of(inc), None, "resolved").away
@@ -937,6 +843,24 @@ def answer_said(ans: dict, when: str, who: str, end: bool = False) -> Said:
     return Said(acted(b["label"], when, who) + stop("en"),
                 {lang: SW.acted(lab, when, who, lang) + stop(lang)
                  for lang, lab in (b.get("labels") or {}).items() if lang in SW.LANGS})
+
+
+def _closed_already(store: Store, st) -> dict | None:
+    """An all-clear (or a rule giving up) of no open alert (`st`: its alert_watch.standing): the problem a person said
+    was "Not a problem" while it lasts is over when it says so (alert_watch.lasted: its next alert is a new
+    occurrence), and the incident of its run closed lately (LATE), read as it stands now — or None."""
+    if st.ends is not None:
+        W.lasted(store, st.ends)
+        store.audit("alert-desk", "lasting_over", {"incident": st.ends["id"]})
+    return store.incident(st.incident["id"]) if st.verdict == W.LATE else None
+
+
+def _said_again(late: dict, ev: dict, out: dict, decision: str) -> None:
+    """Closed `late`'s run ended on the villa's side after its close here: its message takes the incident's number and
+    says its close again, as it stands (`decision`: what the desk did)."""
+    out["incident_id"], out["decision"] = late["id"], decision
+    out["ha_messages"] = [R.ha_message(late["id"], context=ev.get("_context_id"), stage="closed",
+                                       **about(late, watched(_close_again(late), W.minutes(late))), as_it_stands=True)]
 
 
 def _close_again(inc: dict):
@@ -1057,16 +981,13 @@ def quiet_after_done(store: Store, now: datetime, client, clear_minutes: float, 
     until it is right; unknown (its rule names no states), the people asked are told what each device reads, that VESTA
     cannot check it. `t`: the desk's terms (terms()). Returns the ids reopened."""
     reopened = []
-    for inc in store.incidents(open_only=False):
-        if f'"{W.CHECK}"' not in (inc.get("payload") or ""):
-            continue                                                       # most are not waiting for it: not read
+    for inc in W.awaiting(store):
         p = notes_of(inc)
         if t is not None and W.rewatch(store, inc, watch_terms(inc, t)):
             # watched without its length (closed before a tick carried it, or the wait edited since): its Kiosk fault
             # learns when it is confirmed (Problems.card confirms_by)
             _faults_follow(out)
-        if not (inc.get("closed_at") and p.get(W.CHECK)) or \
-                now - datetime.fromisoformat(inc["closed_at"]) < timedelta(minutes=clear_minutes):
+        if not W.read_due(inc, now, clear_minutes):
             continue
         try:
             there, words = still_there(inc, client, now)
@@ -1074,7 +995,7 @@ def quiet_after_done(store: Store, now: datetime, client, clear_minutes: float, 
             return reopened
         # checked once, whatever it reads — taken from the record as it stands now: a fault reopened in the Kiosk
         # while the villa was read took the check away (problems.reopen_task) and its own note stays
-        who = store.take_note(inc["id"], W.CHECK)
+        who = W.read_again(store, inc)
         if who is None:
             continue
         # ⚠️ THE WATCH IS OVER, WHATEVER IT READ (owner, 2026-10-23): the Kiosk fault said "VESTA confirms by …" since the
@@ -1122,24 +1043,21 @@ def seen_again(store: Store, now: datetime, client, clear_minutes: float, out: d
         if there is None:
             # ⚠️ A DEVICE THAT DOES NOT ANSWER IS NOT "OVER" (owner's choice, architecture review 29): it stays open,
             # said once, until the device answers and is right. Cannot be told: whatever was seen clearing is not over
-            if not p.get("silent_told"):
+            if W.cannot_tell(store, inc):
                 out["send"] += tell(inc["severity"], "update", incident=inc["id"],
                                     **about(inc, say("cannot_tell", words=joined(words))))
-            store.note(inc["id"], {"silent_told": True}, drop=("clear_since", Notes.CLOSES_AT))
             _closes_at_changed(p, None, out)
             continue
         if there:
             # still holds: whatever was seen clearing is not over
-            store.note(inc["id"], drop=("clear_since", "silent_told", Notes.CLOSES_AT))
+            W.holds(store, inc["id"])
             _closes_at_changed(p, None, out)
             continue
         if p.get("claim"):
             # out of it `clear_minutes` on end, as the desk saw it (a claim is a verdict, not a state with its time)
-            since = p.get("clear_since") or now.isoformat()
-            closes = (datetime.fromisoformat(since) + timedelta(minutes=clear_minutes)).isoformat()
-            store.note(inc["id"], {"clear_since": since, Notes.CLOSES_AT: closes}, drop=("silent_told",))
+            closes, due = W.clearing(store, inc, now, clear_minutes)
             _closes_at_changed(p, closes, out)
-            if now - datetime.fromisoformat(since) < timedelta(minutes=clear_minutes):
+            if not due:
                 continue
             said = say("back_to_normal")
         else:
@@ -1149,8 +1067,7 @@ def seen_again(store: Store, now: datetime, client, clear_minutes: float, out: d
             # out of its bad states since one moment (out_since): the time shown and the close are the same reading
             since = out_since(client, ents, now_states, bad, now, clear_minutes, pack=_pack())
             closes = (since + timedelta(minutes=clear_minutes)).isoformat() if since else None
-            store.note(inc["id"], {Notes.CLOSES_AT: closes} if closes else None,
-                       drop=("silent_told",) if closes else ("silent_told", Notes.CLOSES_AT))
+            W.clears_at(store, inc["id"], closes)
             _closes_at_changed(p, closes, out)
             if since is None or now - since < timedelta(minutes=clear_minutes):
                 continue
@@ -1175,14 +1092,7 @@ def watch_over(store: Store, now: datetime, out: dict, zone: str | None = None) 
     ⚠️ "WATCH 1H." WAS THE LAST THING SAID (owner, 2026-10-25): the watch ended and nothing told it — the card read
     "(closed)" from the moment it cleared, while it could still come back as the same alert."""
     told = []
-    every = store.incidents(open_only=False)
-    for inc in every:
-        if not inc.get("closed_at") or f'"{Notes.WATCH_MINUTES}"' not in (inc.get("payload") or ""):
-            continue                                                       # open, or never watched: not read
-        how = W.over(inc, now, every)
-        if how is None:
-            continue
-        W.told_over(store, inc)
+    for inc, how in W.watches_over(store, now):
         if how == W.CAME_BACK_AS_NEW:
             # ⚠️ IT DID COME BACK (architecture review, 2026-10-26): the villa silent again 40 minutes after #1 closed
             # was #2, and #1 then read "it did not come back within 4h". A close that cannot come back keeps no watch
@@ -1283,7 +1193,8 @@ def restated(store: Store, ev: dict, now: datetime) -> dict:
     6200 W while its alert was open; the save cancelled the rule's run, so no all-clear ever came, and the desk kept
     reading the alert against 4000 W with 6000 W on the phase — it could never close, and a Done would reopen it."""
     out = {"send": [], "actions": [], "incident_id": None, "decision": "restated_nothing_open"}
-    cur = open_alert(store, ev)
+    st = W.standing(store, ev, now)
+    cur = W.file(store, st, ev) if st.verdict == W.OPEN else None
     if not cur:
         return out
     out["incident_id"], out["decision"] = cur["id"], "restated"
@@ -1305,32 +1216,26 @@ def abandoned(store: Store, ev: dict, now: datetime, params: VillaParams | None 
     ⚠️ "STOPPED WATCHING" IS NOT "STILL NOT CLEAR" (architecture review 22): the rule's own message said "cleared just
     inside the limit — back to normal now", and the desk told the owner "Still not clear" with Done / Need help."""
     out = {"send": [], "actions": [], "incident_id": None, "decision": "abandoned_unknown"}
-    inc = _find_by_ha_incident(store, ev.get("ha_incident")) or open_alert(store, ev)
+    st = W.standing(store, ev, now)
+    inc = W.file(store, st, ev) if st.verdict == W.OPEN else None
     if not inc:
-        accepted = lasting_alert(store, ev)
-        if accepted and str(ev.get("still_true")).lower() == "false":
-            W.lasted(store, accepted)            # back to normal as its rule gave up: the problem accepted is over
-            store.audit("alert-desk", "lasting_over", {"incident": accepted["id"]})
         # ⚠️ ALREADY CLOSED BY A PERSON, STILL ITS MESSAGE (owner, 2026-11-04, #117: "Not a problem" pressed at 15:11,
         # then the rule's own "Still not clear after 30min: no longer tracking this incident" at 15:34, a message with no
         # number and no priority): the rule gave up on a run a person had already closed. Its message becomes the
         # incident's card again, as it stands (its close said once more), never a second, nameless alert
-        late = _find_by_ha_incident(store, ev.get("ha_incident"), closed_within=timedelta(days=W.late_close_days()), now=now)
+        late = _closed_already(store, st)
         if late:
-            out["incident_id"], out["decision"] = late["id"], "abandoned_late"
-            out["ha_messages"] = [R.ha_message(late["id"], context=ev.get("_context_id"), stage="closed",
-                                               **about(late, watched(_close_again(late), W.minutes(late))),
-                                               as_it_stands=True)]
+            _said_again(late, ev, out, "abandoned_late")
         return out
     out["incident_id"] = inc["id"]
-    if str(ev.get("still_true")).lower() == "false":
+    if W.all_clear(ev):
         cleared = _close(store, inc, now, out, ended(say("stopped_watching")), terms=terms(params))
         out["decision"] = "abandoned_cleared"
         # ⚠️ ITS OWN MESSAGE SAYS THE SAME END (architecture review 23): taken over with the rule's "🔶 no longer
         # tracked" as its status, Home Assistant's "✅ cleared just inside the limit" became an orange warning
         out["ha_messages"] = [R.ha_message(inc["id"], context=ev.get("_context_id"), stage="closed", **about(inc, cleared))]
         return out
-    store.note(inc["id"], {"abandoned": True, **{k: ev[k] for k in ("mode", "bad_states") if ev.get(k) is not None}},
+    store.note(inc["id"], {W.ABANDONED: True, **{k: ev[k] for k in ("mode", "bad_states") if ev.get(k) is not None}},
                state=Incident.ESCALATED, escalated_at=now.isoformat(), assignee=CHASE["escalates_to"])
     out["decision"] = "abandoned"
     # who watches it now, and what to do: the rule stopped, the desk did not (seen_again)
@@ -1716,9 +1621,8 @@ def visit_intake(store: Store, ev: dict, now: datetime, params: VillaParams | No
     top = v.get("strongest") or v.get("step") or {}
     # the alert's words: the strongest step's title as the villa writes it ("<name> opened while the villa is empty")
     ev = {**ev, "message": ev.get("label") or ev.get("message"), "entity_id": str(top.get("entity_id") or "")}
-    inc = _find_by_ha_incident(store, vid)
-    late = _find_by_ha_incident(store, vid, closed_within=timedelta(days=W.late_close_days()), now=now) if inc is None \
-        else None
+    inc = W.of_run(store, vid)
+    late = W.closed_of_run(store, vid, now) if inc is None else None
     # ⚠️ OVER ON THE VILLA BEFORE VESTA HEARD IT (owner's drill, 2026-11-07, #138): VESTA back after the villa closed the
     # visit replayed it, opened #138 again, told the villa (its record rewritten: owner, number, ack, the villa's
     # replies lost) and showed "Cleared at 07:17" for a close at 07:16. Recorded once, closed as the villa closed it;

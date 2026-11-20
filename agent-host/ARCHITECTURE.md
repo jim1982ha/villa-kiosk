@@ -261,8 +261,8 @@ Decisions of 2026-09-30 (owner):
   Owed copies are retried by DURATION (`OWED_FOR`), housekeeping runs every 30 s. A state finding that comes back
   within `AGAIN_DAYS` is reopened, never new. `state.RUNNING_JOB` marks a scheduled run delivered from Delivery.send.
   Review 23, 0.12.147: a reopened finding is its own occurrence (findings.reopened_day/_at/occurrences); every reader
-  goes through `Problems.open_problems` and `again_title`. An incident back within `reopen_hours` reopens (desk
-  `came_back`); after Done the desk reads the device once (`quiet_after_done`, `rule_states`).
+  goes through `Problems.open_problems` and `again_title`. An incident back within `reopen_hours` reopens
+  (`alert_watch.standing`: BACK); after Done the desk reads the device once (`quiet_after_done`, `rule_states`).
   Review 24, 0.12.148: an incident's runs are rows of their own to every reader (`store.incident_occurrences`); a
   returning problem reopens its OWN task and Kiosk fault (`Problems.reopen_task`, `ticket.reopen`); the heading's word
   comes from the notice's stage (`notice.HEAD_WORDS`). Mutation runs: `PYTHONDONTWRITEBYTECODE=1 python -B`.
@@ -1048,6 +1048,16 @@ still off; an investigation calling a sensor with no value "stopped reporting").
   alert came back as another number during a watch an older desk carried), and the desk's closing words say the
   length the close wrote (`minutes`). With reopen_hours 0 an alert the villa clears is watched nowhere. An incident an
   older desk carried only a length for keeps it.
+- **An alert's standing: `alert_watch.standing` (architecture review, 2026-11-20).** One answer to "the same problem as
+  before?" for every event of an alert: OPEN (its run's open incident for an all-clear, else its alert's under its
+  permanent number or its old name), LASTING (closed "Not a problem" and its rule still repeating it, inside its watch
+  or after; a day silent and it no longer holds), BACK (closed and watched still), LATE (an all-clear or giving up of a
+  run closed within `alerts.late_close_days`), NEW; an all-clear's `ends` is the "Not a problem" it ends (`lasted`).
+  Reads only: `file` brings the incident found up to date with its alert's names. The module writes every note of an
+  alert's life (an open run's clearing: `repeated`, `holds`, `cannot_tell`, `clearing`, `clears_at`; THE close; the
+  read-again: `awaiting`, `read_due`, `read_again`; THE reopening: `reopened`, `came_back`, `not_over`, dropping
+  `RUN_NOTES` whichever way; the watch's end: `watches_over`), every moment read aware (`_at`, `moment_key`). The desk
+  dispatches on the verdict and keeps every word; the Cockpit's reopen goes through `reopened`.
 - **When a sensor really last reported: `vesta_shared/offline.reported_since`**, beside `held_since`: its
   last_reported when that moved alone (a real report of the same value), else since when it really holds its state,
   one history read for all of them. The silence check (`nightly.silent_findings`, read again by recheck.py every 5
