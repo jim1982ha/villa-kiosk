@@ -1,3 +1,9 @@
+## 0.12.524
+
+- **Lists in time order everywhere.** The villa writes some times in UTC and some in its own time; the lists in
+  reports, investigations, VESTA's own status and a visit's passes now follow the real time, as the alert photos
+  already do.
+
 ## 0.12.523
 
 - **The alert says the villa's real state.** When a door is unlocked while the villa is only waiting for the house to
