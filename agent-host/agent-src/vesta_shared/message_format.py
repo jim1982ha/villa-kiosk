@@ -660,9 +660,15 @@ JINJA_END = "{#- END WORDS -#}"
 JINJA_FILE = os.path.join(os.path.dirname(__file__), "..", "homeassistant", "custom_templates", "vesta_message.jinja")
 
 
+#: The alert desk, by its skill's name: the engine reads its words as the villa has them (skill_words.words).
+ALERT_DESK = "alert-desk"
 #: The alert desk's own settings (its released rules.yaml): whom each priority reaches is ITS table (people_roles,
 #: priority_does) — read here as data for the villa's template, never typed (skills before code).
-ALERT_DESK_RULES = os.path.join(os.path.dirname(__file__), "..", "starter", "skills", "alert-desk", "rules.yaml")
+#: ⚠️ THE RELEASED COPY, FOR WRITING HOME ASSISTANT'S FILES ONLY (architecture review part three, 2026-11-20): these
+#: three paths are the starter folder, read by the build-time writers below (jinja_words, package_chats,
+#: package_visit_words). Nothing that runs on the villa reads them: a villa's edited skill is read through
+#: vesta_shared.skill_words.
+ALERT_DESK_RULES = os.path.join(os.path.dirname(__file__), "..", "starter", "skills", ALERT_DESK, "rules.yaml")
 #: The alert desk's words (its words.yaml): a visit's lines, which the villa writes itself, in English, while VESTA is
 #: away (owner, 2026-11-06: one visit, one story, VESTA on or off) — the villa's visit words read their English from
 #: here (package_visit_words); its buttons, from the desk's skill.yaml.
@@ -674,21 +680,6 @@ VISIT_WORDS = ("visit_seen", "visit_lock_here", "visit_lock_app", "visit_lock_ap
                "visit_person", "visit_changed_lock", "visit_changed_door", "visit_changed_inside",
                "visit_changed_motion", "visit_changed_person", "visit_expected", "visit_ended", "visit_home", "no_answer",
                "visit_title_opened", "visit_title_opened_waiting", "visit_noted", "visit_noise", "visit_changed_noise", "visit_drill", "visit_monitoring")
-
-
-_DESK_WORDS: dict | None = None
-
-
-def desk_words(key: str) -> dict[str, str]:
-    """Entry `key` of the alert desk's words.yaml, by language ({} when it has none): words the engine draws on every
-    copy of a visit's card, the desk's own (skills before code), never typed here — "monitoring until {time}"."""
-    global _DESK_WORDS
-    if _DESK_WORDS is None:
-        import yaml
-        with open(ALERT_DESK_WORDS, encoding="utf-8") as f:
-            _DESK_WORDS = yaml.safe_load(f) or {}
-    entry = _DESK_WORDS.get(key)
-    return {k: str(v) for k, v in entry.items()} if isinstance(entry, dict) else {}
 
 
 def priority_to(rules: dict) -> dict[str, str]:

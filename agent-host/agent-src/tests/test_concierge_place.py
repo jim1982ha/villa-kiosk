@@ -48,11 +48,11 @@ def test_the_area_decides_not_the_id():
 def test_an_area_alias_and_accents_name_the_same_area():
     p = pack(area_aliases={"Kitchen": ["Cuisine"]})
     assert ids(concierge.find(p, "lights", "cuisine")) == ids(concierge.find(p, "lights", "kitchen"))
-    assert concierge.place(p, "Cuisiné") == ["Kitchen"]
+    assert p.places("Cuisiné") == ["Kitchen"]
 
 
 def test_no_area_answers_then_names_decide():
-    assert concierge.place(pack(), "pool") == []
+    assert pack().places("pool") == []
     assert ids(concierge.find(pack(), "lights", "pool")) == ["light.pool_led"]
 
 
@@ -63,11 +63,11 @@ def test_an_entity_id_is_never_matched():
 
 def test_an_old_pack_without_aliases_still_loads():
     p = pack()
-    assert p.area_aliases == {} and concierge.place(p, "living room") == ["Living Room"]
+    assert p.area_aliases == {} and p.places("living room") == ["Living Room"]
 
 
 def test_a_word_shared_by_rooms_names_all_of_them_an_exact_name_one():
-    assert concierge.place(pack(), "bedroom") == ["Bedroom 1", "Bedroom 2"]
+    assert pack().places("bedroom") == ["Bedroom 1", "Bedroom 2"]
     assert ids(concierge.find(pack(), "lights", "bedroom")) == ["light.bed_a", "light.bed_b"]
-    assert concierge.place(pack(), "bedroom 2") == ["Bedroom 2"]
-    assert concierge.place(pack(), "patio") == ["Patio"]      # an area named exactly so wins over "Patio Upper"
+    assert pack().places("bedroom 2") == ["Bedroom 2"]
+    assert pack().places("patio") == ["Patio"]      # an area named exactly so wins over "Patio Upper"

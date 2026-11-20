@@ -350,6 +350,31 @@ def test_a_visit_a_person_closes_in_the_cockpit_is_closed_on_the_tablet_never_ab
     assert fault["status"] == "resolved" and fault.get("notWatched") is True and "confirmsBy" not in fault, fault
 
 
+def test_the_villas_edited_desk_words_draw_the_visits_bottom_line(tmp_path, kiosk, media):
+    # architecture review part three (owner, 2026-11-20): a villa that edited its alert desk's words.yaml kept the
+    # release's "monitoring until" on the bottom line the engine draws; its own words now, again after each edit
+    import os
+    v = villa(tmp_path, kiosk)
+    words = os.path.join(v.s.skills_dir, "alert-desk", "words.yaml")
+
+    def said(english: str) -> None:
+        with open(words, encoding="utf-8") as f:
+            text = f.read()
+        text = re.sub(r'(visit_monitoring:\n  en: )"[^"]*"', lambda m: f'{m.group(1)}"{english}"', text)
+        with open(words, "w", encoding="utf-8") as f:
+            f.write(text)
+    said("watched until {time}")
+    vi = Visit(media=media)
+    vi.add("motion", PARKING, "22:48:03", photo=True)
+    play(v, send(vi.event("opened")))
+    for chat in (OWNER, FM):
+        assert re.fullmatch(r"⚠️ New alert, watched until \d\d:\d\d", lines(copy(v, chat)["text"])[-1])
+    said("kept under watch until {time}")
+    vi.add("door", GARDEN_DOOR, "22:52:20", photo=True)
+    play(v, send(vi.event()))
+    assert re.fullmatch(r"⚠️ New alert, kept under watch until \d\d:\d\d", lines(copy(v, OWNER)["text"])[-1])
+
+
 def test_an_open_visit_says_until_when_it_is_monitored_on_every_copy_and_its_fault(tmp_path, kiosk, media):
     # owner, 2026-11-07: "⚠️ New alert, monitoring until HH:MM" on Telegram, "monitoring until HH:MM" on the tablet's
     # pill, the villa's record's closes_at, moved later at each step

@@ -21,6 +21,7 @@ from __future__ import annotations
 import re
 
 from . import message_format as mf
+from . import skill_words
 from .timeutil import lasting, status_moments
 
 #: Every language written here, English first: the People list's menu (vesta_agent.policy.LANGUAGES; a test holds the
@@ -424,8 +425,9 @@ def monitoring(word: str, until: str, lang: str = "en") -> str:
     """An open visit's own bottom line: its stage's words, then until when it is monitored, in the desk's words for the
     chat's language (words.yaml visit_monitoring, English for one it lacks): "New alert, monitoring until 07/11/2026
     06:40" — the moment shortened by the alert's day when drawn (layout.status_shown). Its stage's words alone without
-    them."""
-    said = mf.desk_words("visit_monitoring")
+    them. ⚠️ THE VILLA'S OWN COPY OF THE DESK (architecture review part three, 2026-11-20): its words.yaml as edited
+    there, read again when it changes (skill_words) — never the release's."""
+    said = skill_words.words(mf.ALERT_DESK, "visit_monitoring")
     words = said.get(lang_of(lang)) or said.get("en")
     return f"{stage_words(word, lang=lang)}{sep(lang)}{words.replace('{time}', until)}" if words else stage_words(word, lang=lang)
 

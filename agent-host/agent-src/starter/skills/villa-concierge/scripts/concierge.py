@@ -16,7 +16,6 @@ import argparse
 import json
 import os
 import sys
-import unicodedata
 from datetime import datetime, timezone
 
 
@@ -100,58 +99,14 @@ def status(pack: KnowledgePack, states: dict, store: Store | None) -> dict:
 
 
 # ------------------------------------------------------------------ resolve
-def fold(text: str | None) -> str:
-    """A name as a person types it: no case, no accents, `_` as a space ("Cuisine_é" == "cuisine e")."""
-    t = unicodedata.normalize("NFKD", text or "")
-    t = "".join(c for c in t if not unicodedata.combining(c)).casefold().replace("_", " ")
-    return " ".join(t.split())
-
-
-def place(pack: KnowledgePack, where: str | None) -> list[str]:
-    """The Home Assistant areas a place names: by name or alias, exact first, then any area containing it
-    ("bedroom" -> every bedroom). Empty when no area answers to it."""
-    w = fold(where)
-    if not w:
-        return []
-    names = {a: [a] + list(getattr(pack, "area_aliases", {}).get(a, []) or []) for a in pack.areas}
-    exact = [a for a, ns in names.items() if any(fold(n) == w for n in ns)]
-    return exact or [a for a, ns in names.items() if any(w in fold(n) for n in ns)]
+#: what a person never asks the concierge to act on: the villa's system itself, its network, its auxiliary meters
+NOT_ASKED_FOR = ("system", "network", "electrical_aux")
 
 
 def find(pack: KnowledgePack, what: str | None, where: str | None, domains: list[str] | None = None) -> list[dict]:
-    """The devices a person means.
-
-    ⚠️ THE AREA DECIDES (owner, 2026-10-05). When the place is a Home Assistant area, only that area's
-    devices count — plus a device with NO area whose name says the place. A name or an entity id that
-    merely contains the room's word is not in it: "kitchen lights" once switched on a living-room light
-    whose id read "kitchen_and_dining". Only when no area answers to the place is it looked for in the
-    names. An entity id is never matched: it is not what a person sees."""
-    what_l = fold(what)
-    where_l = fold(where)
-    areas = set(place(pack, where))
-    # the words that name the place: what was said, and every name of the areas it resolved to
-    words = {where_l} | {fold(n) for a in areas for n in [a, *(getattr(pack, "area_aliases", {}).get(a) or [])]}
-    out = []
-    for fam, rows in pack.families.items():
-        if fam in ("system", "network", "electrical_aux"):
-            continue
-        for r in rows:
-            dom = r["entity_id"].split(".")[0]
-            if domains and dom not in domains:
-                continue
-            name = fold(r["name"])
-            if not where_l:
-                ok_where = True
-            elif areas:
-                ok_where = r["area"] in areas or (not r["area"] and any(w in name for w in words))
-            else:
-                ok_where = where_l in name
-            ok_what = (not what_l) or what_l in name or what_l == fam or what_l == dom \
-                or (what_l in ("light", "lights") and dom in ("light",)) \
-                or (what_l in ("lock", "locks", "doors") and dom == "lock")
-            if ok_where and ok_what:
-                out.append({"entity_id": r["entity_id"], "name": r["name"], "area": r["area"], "family": fam, "asset": r["asset"]})
-    return out
+    """The devices a person means (KnowledgePack.meant: the area decides, owner 2026-10-05; the investigation reads
+    the same), without the families a person never asks the concierge for (NOT_ASKED_FOR)."""
+    return pack.meant(what, where, domains, leave_out=NOT_ASKED_FOR)
 
 
 def main(argv=None):
@@ -166,7 +121,7 @@ def main(argv=None):
         # a device asleep between its reports reads its last real state (vesta_shared.asleep), never "unavailable"
         res = status(pack, read_states(cli, pack, datetime.now(timezone.utc)) if cli else {}, store)
     else:
-        areas = place(pack, a.where)
+        areas = pack.places(a.where)
         res = {"targets": find(pack, a.what, a.where),
                "place": {"areas": areas} if areas else {"by_name": bool(a.where)}}
     print(json.dumps(res, indent=1, default=str))

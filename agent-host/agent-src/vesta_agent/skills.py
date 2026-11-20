@@ -922,6 +922,16 @@ class Skills:
     def get(self, name: str) -> Skill | None:
         return self.all().get(name)
 
+    def folder(self, name: str) -> str | None:
+        """The folder of skill `name` as the agent uses it, for reading one of its files (vesta_shared.skill_words):
+        None when the villa has no such skill, switched it off, or the last reading of the skills refused it (all()).
+        Cheap — no skill.yaml is parsed: a card drawn asks it at every redraw, where all() costs tens of ms."""
+        path = os.path.join(self.dir, name)
+        if not SKILL_NAME.match(name) or self._reported.get(name) or name in set(self._off() or ()):
+            return None
+        ok = os.path.isfile(os.path.join(path, "SKILL.md")) and os.path.isfile(os.path.join(path, "skill.yaml"))
+        return path if ok else None
+
     # ------------------------------------------------------------------ against the release (the page)
     # ⚠️ ONE VERDICT, ONE REPLACE (architecture review 16, 2026-10-10): the start-up update compared fingerprints and the
     # page compared files, each reading the shipped list itself; and "Take the release version" replaced the folder

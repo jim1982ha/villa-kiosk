@@ -1453,3 +1453,18 @@ close ever reached it). `incsent:` rows are {id: what it shows}; the list of ids
 ids. Other modules ask the thread (`chats`, `card`, `cards`, `parts`, `settled`, `settled_everywhere`, `answering`,
 `replaced`, `held`) and never read a record's keys; `own` records a pressed request sent before 0.12.128 as its one
 copy.
+
+## A skill's words and "which device" have one reader each (architecture review part three, 2026-11-20)
+
+- **The villa's copy of a skill's words at run time**: `vesta_shared.skill_words.words(skill, key)` reads the skill's
+  words.yaml in the villa's own folder, where the live skills put it (`Skills.folder`, set by `Vesta.__init__` through
+  `skill_words.use`: none for a skill switched off, refused or deleted), read again when the file changes (mtime and
+  size). The visit's bottom line ("monitoring until …", `status_words.monitoring`) reads it. `message_format.ALERT_DESK_*`
+  (the starter folder) are read by the build-time writers alone (`jinja_words`, `package_chats`, `package_visit_words`);
+  `message_format.desk_words`, which read the starter copy once for good, is gone.
+- **Which devices a person means**: `KnowledgePack.places(where)` and `KnowledgePack.meant(what, where, domains,
+  leave_out)`, beside `device_of`, with `knowledge_pack.fold` (case, accents, `_`). The area decides (owner,
+  2026-10-05). villa-concierge `find` is `meant` without the system, network and auxiliary-meter families; investigate
+  `meant` reads it first and asks Home Assistant's search only for what the pack does not name (no pack, an entity the
+  pack leaves out), then adds its own neighbours (same physical device, powered devices in the same room).
+  tests/test_device_meant.py holds the two skills to the same answer.

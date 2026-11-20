@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import json
 import re
+import unicodedata
 from collections import defaultdict
 from dataclasses import dataclass, field, fields, asdict
 from typing import Any
@@ -55,6 +56,13 @@ GENERATION_WORDS = ("solar", "_pv", "pv_", "inverter", "battery_soc", "state_of_
 PERSONAL_PLATFORMS = ("mobile_app",)
 NETWORK_PLATFORMS = ("unifi", "fritz", "tplink_omada", "netgear", "asuswrt", "openwrt", "luci", "ubus", "mikrotik",
                      "keenetic_ndms2", "nmap_tracker")
+
+
+def fold(text: str | None) -> str:
+    """A name as a person types it: no case, no accents, `_` as a space ("Cuisine_é" == "cuisine e")."""
+    t = unicodedata.normalize("NFKD", text or "")
+    t = "".join(c for c in t if not unicodedata.combining(c)).casefold().replace("_", " ")
+    return " ".join(t.split())
 
 
 def asset_slug(entity_id: str) -> str:
@@ -489,6 +497,60 @@ class KnowledgePack:
         if whole_device:
             return self.device_of(entity_id)[0], self.device_name(entity_id, default)
         return self.reading_key(entity_id), self.reading_name(entity_id, default)
+
+    # ---------------------------------------------------------------- which devices a person means
+    # ⚠️ ONE ANSWER TO "WHICH DEVICE DOES A PERSON MEAN" (architecture review part three, owner 2026-11-20): the
+    # concierge resolved a place by its Home Assistant area (owner, 2026-10-05), with accents and aliases; the
+    # investigation asked Home Assistant's search with the place as an area filter — no alias, no "bedroom" for every
+    # bedroom, no device without an area whose name says the place, "Salle à manger" not "salle a manger". The same
+    # words named other devices in the two skills. Both read these two now.
+    def places(self, where: str | None) -> list[str]:
+        """The Home Assistant areas a place names: by name or alias (folded: no case, no accent), exact first, then
+        any area containing it ("bedroom" -> every bedroom). Empty when no area answers to it."""
+        w = fold(where)
+        if not w:
+            return []
+        names = {a: [a] + list((self.area_aliases or {}).get(a, []) or []) for a in self.areas}
+        exact = [a for a, ns in names.items() if any(fold(n) == w for n in ns)]
+        return exact or [a for a, ns in names.items() if any(w in fold(n) for n in ns)]
+
+    def meant(self, what: str | None, where: str | None, domains: list[str] | None = None,
+              leave_out: tuple[str, ...] = ()) -> list[dict]:
+        """The devices a person means by `what` (a name, a family, a domain; "lights", "locks") in `where` (a place):
+        each {"entity_id", "name", "area", "family", "asset"}. `domains`: only these; `leave_out`: these families.
+
+        ⚠️ THE AREA DECIDES (owner, 2026-10-05). When the place is a Home Assistant area, only that area's devices
+        count — plus a device with NO area whose name says the place. A name or an entity id that merely contains the
+        room's word is not in it: "kitchen lights" once switched on a living-room light whose id read
+        "kitchen_and_dining". Only when no area answers to the place is it looked for in the names. An entity id is
+        never matched: it is not what a person sees. Every word is folded (fold): "Cuisiné" is "cuisine"."""
+        what_l, where_l = fold(what), fold(where)
+        areas = set(self.places(where))
+        aliases = self.area_aliases or {}
+        # the words that name the place: what was said, and every name of the areas it resolved to
+        words = {where_l} | {fold(n) for a in areas for n in [a, *(aliases.get(a) or [])]}
+        out = []
+        for fam, rows in self.families.items():
+            if fam in leave_out:
+                continue
+            for r in rows:
+                dom = r["entity_id"].split(".")[0]
+                if domains and dom not in domains:
+                    continue
+                name = fold(r["name"])
+                if not where_l:
+                    ok_where = True
+                elif areas:
+                    ok_where = r["area"] in areas or (not r["area"] and any(w in name for w in words))
+                else:
+                    ok_where = where_l in name
+                ok_what = (not what_l) or what_l in name or what_l == fam or what_l == dom \
+                    or (what_l in ("light", "lights") and dom == "light") \
+                    or (what_l in ("lock", "locks", "doors") and dom == "lock")
+                if ok_where and ok_what:
+                    out.append({"entity_id": r["entity_id"], "name": r["name"], "area": r["area"], "family": fam,
+                                "asset": r["asset"]})
+        return out
 
     def name_of(self, entity_id: str, default: str | None = None) -> str | None:
         """An entity's name as the pack has it; `default` when the pack does not name it."""

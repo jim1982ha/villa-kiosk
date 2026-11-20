@@ -147,6 +147,9 @@ class Vesta:
         # the skills the villa switched off (policy.yaml skills_off) are not loaded: no schedule, no hook, not read
         self.skills = skills or Skills(settings.skills_dir, os.path.join(STARTER_DIR, "skills"),
                                        off=lambda: self.policy().skills_off)
+        # a skill's words the engine draws (the visit's "monitoring until …") are the villa's copy, as edited there
+        from vesta_shared import skill_words
+        skill_words.use(self.skills.folder)
         self._policy: Policy | None = None
         # one reading of the villa's devices at a time (the night's, the start's, one after a registry change)
         self._pack_lock = threading.Lock()

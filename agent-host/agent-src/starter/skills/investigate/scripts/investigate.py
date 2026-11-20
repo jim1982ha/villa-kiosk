@@ -159,15 +159,10 @@ def read(client, eid: str, start: datetime, end: datetime,
 
 # ------------------------------------------------------------------ find
 def find(client, what: str, where: str | None, pack=None, now: datetime | None = None) -> dict:
-    """The entities `what` (and `where`) mean, with their neighbours. Universal: Home Assistant's own search, devices
-    and areas — no list of devices anywhere. `now`: the time it is (the clock when not given)."""
+    """The entities `what` (and `where`) mean (meant), with their neighbours. Universal: the villa's own devices and
+    areas — no list of devices anywhere. `now`: the time it is (the clock when not given)."""
     now = now or datetime.now(timezone.utc)
-    args = {"query": what, "exact_match": False, "limit": FIND_MATCHES,
-            "result_fields": ["entity_id", "friendly_name", "state", "area"]}
-    if where:
-        args["area_filter"] = where
-    found = (client.tool("ha_search", args) or {}).get("entities") or []
-    ids = [e["entity_id"] for e in found if e.get("entity_id", "").split(".")[0] not in ("automation", "script", "update")]
+    ids = meant(client, what, where, pack)
     if not ids:
         return {"lines": [f"Nothing in the villa's records matches \"{what}\"" + (f" in {where}" if where else "") + "."],
                 "entities": []}
@@ -199,6 +194,29 @@ def find(client, what: str, where: str | None, pack=None, now: datetime | None =
         if it["same_room"]:
             lines.append("  powered devices in the same room: " + ", ".join(f"{n} ({x})" for x, n in it["same_room"][:NEIGHBOURS_SHOWN]))
     return {"lines": lines, "entities": out}
+
+
+NOT_INVESTIGATED = ("automation", "script", "update")     # rules and updates: what `around` reads, never a device
+
+
+def meant(client, what: str, where: str | None, pack=None) -> list[str]:
+    """The entity ids a person's words mean, at most FIND_MATCHES.
+
+    ⚠️ THE CONCIERGE'S ANSWER (architecture review part three, owner 2026-11-20): KnowledgePack.meant — the area
+    decides, an area's alias and a word without its accents name it, "bedroom" every bedroom, a device with no area
+    whose name says the place counts. Home Assistant's own search, with the place as its area filter, named other
+    devices for the same words. Its search stays for what the pack does not name: no pack yet, or an entity the pack
+    leaves out (an uptime sensor, an id written as it is)."""
+    ids: list[str] = []
+    if pack is not None:
+        ids = list(dict.fromkeys(r["entity_id"] for r in pack.meant(what, where)))
+    if not ids:
+        args = {"query": what, "exact_match": False, "limit": FIND_MATCHES,
+                "result_fields": ["entity_id", "friendly_name", "state", "area"]}
+        if where:
+            args["area_filter"] = where
+        ids = [e["entity_id"] for e in (client.tool("ha_search", args) or {}).get("entities") or [] if e.get("entity_id")]
+    return [x for x in ids if x.split(".")[0] not in NOT_INVESTIGATED][:FIND_MATCHES]
 
 
 def _same_box(client, e: dict, exclude: list[str], asked: dict | None = None, pack=None) -> list[tuple[str, str]]:
