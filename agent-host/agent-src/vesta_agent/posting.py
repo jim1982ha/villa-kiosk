@@ -1,4 +1,5 @@
-"""Putting one message in one chat: its heading, its parts laid out, the send, and the copy recorded in its thread.
+"""Putting one message in one chat: its heading, its parts laid out, whether it rings, and the send — a copy of an
+incident or a request handed to its thread, which sends, records and replaces it (IncidentThread.deliver).
 
 ⚠️ ONE STEP FOR EVERY MESSAGE THE AGENT SENDS ON ITS OWN (architecture review 18, then 20). It was Outcome's private
 `_post`, which the approvals reached through Outcome — and Outcome reached the approvals through a field patched in after
@@ -112,29 +113,17 @@ class Poster:
         shown = laid_out(lambda: layout.render(p, limit), "\n\n".join(x for x in (lead, text, status) if x))
         how = ringing.decide(incident, stage, mark, editable=thread is not None and str(thread) == str(incident)
                              and self.thread is not None and not document and not reply_to)
-        if how == ringing.EDIT_QUIET:
-            # ⚠️ A QUIET STEP IS AN EDIT (owner, 2026-11-08, live #154): a chat that shows the alert already gets its
-            # copy edited in place, its picture kept — never sent again (IncidentThread.restep)
-            mid = await self.thread.restep(incident, chat, {**p, "limit": limit}, keyboard)
-            if mid:
-                return mid
+        if thread is not None and self.thread is not None:
+            # ⚠️ A COPY OF AN INCIDENT OR A REQUEST IS THE THREAD'S TO SEND (architecture review, 2026-11-20): it sends it
+            # (a quiet step an edit of the chat's copy), records it the moment it arrives and replaces the older one —
+            # here it was sent, then `sent`, then `post`, and every other caller had to repeat the three
+            return await self.thread.deliver(thread, chat, shown, p, limit=limit, how=how, keyboard=keyboard,
+                                             document=document, photo=photo, sheet=sheet, origin=origin,
+                                             reply_to=reply_to)
         mid = await self.send(chat, shown, keyboard=keyboard, document=document, photo=photo,
                               origin=origin, **({"reply_to": reply_to} if reply_to else {}),
                               **({"silent": True} if how != ringing.RING_NEW else {}))
-        if mid and thread is not None and self.thread is not None:
-            # ⚠️ KNOWN BEFORE IT IS RECORDED (owner, 2026-11-20, #199): the post waits for the incident's lock; a stop in
-            # between left a copy no record named, its buttons live for good. Its id is kept the moment it arrives
-            self.thread.sent(thread, chat, mid)
-            await self.thread.post(thread, chat, mid, {**p, "limit": limit}, buttons=bool(keyboard), keyboard=keyboard,
-                                   photo=None if sheet else photo, sheet=sheet)
-        elif thread is not None and self.thread is not None:
-            # ⚠️ THE TABLET TOO WHEN TELEGRAM DID NOT TAKE IT (off, or refused): the thread records only what arrived, and
-            # the tablet is the second place precisely for when Telegram is not there (spec, "Without the internet").
-            # ⚠️ TOLD BY THE THREAD, THE ONE WRITER OF AN INCIDENT'S RECORD (architecture review 2026-10-29 #1): built here,
-            # one chat's refusal replaced the card with one that named only that chat and none of the villa's runs it
-            # stands for — the villa's own alert came back beside it on the tablet
-            self.thread.tell(thread, p, keyboard, photo)
-        elif keep:
+        if keep:
             self._keep(keep, kiosk_messages.note(keep, str((p.get("head") or {}).get("title") or ""), to, text, parts=p,
                                                  keyboard=keyboard, photo=photo, document=document, language=language))
         return mid

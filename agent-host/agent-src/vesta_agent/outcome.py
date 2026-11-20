@@ -354,7 +354,7 @@ class Outcome:
         # copy kept "(new)" and the first alert — every other copy now shows what was just sent, quietly
         for iid, shown_in in posted.items():
             last_chat, last_stage, last_also = shown_in[-1]
-            latest = (self.thread.shown(iid).get(last_chat) or {})
+            latest = self.thread.parts(iid, last_chat)          # the copy just sent there
             # ⚠️ EVERY COPY THE STEP IS MEANT FOR (owner, 2026-11-20, live #201, reversing 2026-11-07 #146-P2 "every
             # copy at every change"): the owner's group, joined at the escalation, was edited at every still-there
             # alert to the facility manager. Every copy of a chat the step is for shows it, quietly; the others stay
@@ -372,8 +372,8 @@ class Outcome:
             # and a visit's alert (notice.stays)
             hist = self.notices.state.incident_history(iid) if self.notices else []
             listed = any(stays({"stage": st}, hist) for (i, st) in noticed if i == iid)
-            if latest.get("parts"):
-                await self.thread.sync(iid, layout.of(latest), skip=set() if listed else {c for c, _s, _a in shown_in},
+            if latest is not None:
+                await self.thread.sync(iid, latest, skip=set() if listed else {c for c, _s, _a in shown_in},
                                        head_for=head_for, only=(lambda c, i=iid, n=steps_now: self.notices.meant(i, c, n))
                                        if self.notices else None, keyboard=(
                     lambda c, i=iid: self.buttons.keyboard(i, c, skill_name)) if skill_name and self.buttons.open(iid) else None)
@@ -469,8 +469,7 @@ class Outcome:
         """The close chat `chat`'s copy of incident `iid`, closed already, shows (its bottom line, and the step it was
         drawn from, kept for the next redraw); None when it shows none. Not by its `settled` mark: the answer to a press
         replaces the copy the press settled."""
-        rec = self.state.incident_message(iid, chat) if self.thread is not None else None
-        p = layout.of(rec) if rec else {}
+        p = (self.thread.parts(iid, chat) if self.thread is not None else None) or {}
         return (p["status"], p.get("said")) if p.get("status") else None
 
     async def adopt_ha(self, h: dict, skill_name: str | None = None, also=None, told=None,
@@ -511,7 +510,7 @@ class Outcome:
             # ⚠️ NEVER A MESSAGE THE THREAD ALREADY REPLACED (owner, 2026-11-06, #125-P1 at 18:53): the all-clear of a run
             # named the card its reminder had replaced; taken over, the live copy was deleted for a message gone
             found = [(c, m) for c, m in found
-                     if self.thread is None or int(m) not in ((self.state.incident_message(int(iid), c) or {}).get("replaced") or [])]
+                     if self.thread is None or not self.thread.replaced(int(iid), c, m)]
         out = []
         for chat, mid in found:
             # Home Assistant's own alert, taken over: the incident's text, the earlier messages' times, its buttons

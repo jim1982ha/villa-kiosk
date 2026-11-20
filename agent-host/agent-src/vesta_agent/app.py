@@ -205,7 +205,9 @@ class Vesta:
                                      name=incidents.name, mirror=self.messages.keep,
                                      translations=lambda: self.translations,
                                      media=(self.delivery.edit_media if self.tg else None),
-                                     send=(self.delivery.send if self.tg else None))
+                                     # every copy it sends, Telegram off too: the send logs it skipped, the tablet's
+                                     # conversation still gets it, and the tablet's card is told (deliver)
+                                     send=self.delivery.send)
         self.buttons = AlertButtons(state=self.state, skills=self.skills, incidents=incidents,
                                     thread=self.thread, run_job=self.run_code_job, facts=self.chat_facts,
                                     siren=lambda iid, chat: self.visits.siren(iid, chat))

@@ -58,6 +58,54 @@ def test_a_request_approved_seconds_before_a_restart_is_ended_at_the_start(tmp_p
     assert re.search(r"\nOpened .*\nStatus:\nApproved on \d\d/\d\d/\d{4} \d\d:\d\d \(JM\)\.$", text)
 
 
+def test_a_request_copy_sent_but_never_recorded_before_a_stop_loses_its_buttons_like_the_others(tmp_path):
+    # architecture review, 2026-11-20 (#199's stray, for a request): the group's copy was taken by Telegram while JM's
+    # Refuse was being written on his own copy, Telegram slow; an update stopped the agent before the group's copy was
+    # recorded — no record named it, so nothing ever took its Approve button off
+    v = _villa(tmp_path, roster=Roster.of(owner=[(JM, "JM"), (GROUP, "Owner chat")], fm=[(FABIEN, "Fabien")]))
+    _, msg = v.actions.request("cover", "open_cover", "cover.bedroom3", {}, v.policy().roster.person(JM), JM)
+    first, late = msg.chats[0], msg.chats[1]
+    real_send, real_edit = v.tg.send, v.tg.edit
+    tasks = []
+
+    async def go():
+        writing = asyncio.Event()
+
+        async def slow_edit(chat, mid, text, keyboard=None, struck=False):
+            writing.set()
+            await asyncio.Event().wait()                     # Telegram slow to write the Refuse: the stop comes first
+
+        async def send(chat, *a, **k):
+            ids = await real_send(chat, *a, **k)
+            if chat == late:                                 # taken by Telegram, just as JM presses Refuse on his copy
+                mid = next(n for n, (c, _t, kb) in enumerate(v.tg.sent, start=1001) if c == first and kb)
+                v.tg.edit = slow_edit
+                tasks.append(asyncio.create_task(v.on_ha_event("telegram_callback", {
+                    "id": "cb", "data": msg.keyboard["inline_keyboard"][0][1]["callback_data"], "chat_id": first,
+                    "user_id": JM, "message": {"message_id": mid, "chat": {"id": first}}, "bot": BOT})))
+                await writing.wait()
+            return ids
+        v.tg.send = send
+        tasks.append(asyncio.create_task(v.approvals.ask(msg)))
+        while not writing.is_set() or len([c for c, _t, _k in v.tg.sent]) < 2:
+            await asyncio.sleep(0.01)
+        await asyncio.sleep(0.05)
+        for t in tasks:                                      # the stop
+            t.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+    run(go())
+    v.tg.send, v.tg.edit = real_send, real_edit
+    sent = {c: n for n, (c, _t, kb) in enumerate(v.tg.sent, start=1001) if kb}
+    assert set(sent) == {first, late} and v.tg.edits == []
+    v = restarted(v)
+    run(v.housekeeping())
+    shows = {(c, m): t for c, m, t in v.tg.edits}
+    for chat, mid in sent.items():                           # every copy says it, its buttons gone
+        assert re.search(r"\nStatus:\nRefused on .* \(JM\)\. Nothing was done\.$", shows.get((chat, mid), "")), \
+            (chat, mid, v.tg.edits)
+    assert v.tg.edit_keyboards == [None] * len(v.tg.edits)
+
+
 def test_a_decision_whose_copies_never_said_so_says_it_at_the_start(tmp_path):
     v = _villa(tmp_path)
     _, msg = v.actions.request("cover", "open_cover", "cover.bedroom3", {}, v.policy().roster.person(JM), JM)

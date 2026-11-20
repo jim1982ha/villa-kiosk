@@ -93,7 +93,7 @@ RECORDS, CURRENT, BOUNDED = "records", "current", "bounded"
 KV_FAMILIES: dict[str, str] = {
     "inc:": RECORDS,                # which skill answers an alert's buttons in a chat
     "incthread:": RECORDS,          # what a chat shows of an incident (incident_thread.py)
-    "incsent:": RECORDS,            # a copy Telegram took that the thread has not recorded yet (incident_thread.sent)
+    "incsent:": RECORDS,            # a copy Telegram took that the thread has not recorded yet (IncidentThread._send)
     "inchist:": RECORDS,            # when each notice of an incident was sent, of what kind, to whom (notice.py)
     "incruns:": RECORDS,            # the villa's automation runs an incident took over (incident_thread.taken)
     "inccard:": RECORDS,            # an incident's or a request's card as the tablet keeps it (incident_thread.tell)
@@ -589,25 +589,38 @@ class State:
     def set_incident_message(self, incident: int | str, chat: int | str, record: dict) -> None:
         self.put(f"incthread:{incident}:{chat}", json.dumps(record))
 
-    # The copies of an incident Telegram took in a chat that the thread has not recorded yet (incident_thread.sent):
-    # written the moment Telegram gives their id, so a stop before the record never leaves one unknown.
-    def incident_sent(self, incident: int | str, chat: int | str) -> list[int]:
-        v = self.get(f"incsent:{incident}:{chat}")
-        return [int(m) for m in json.loads(v)] if v else []
+    # The copies of an incident Telegram took in a chat that the thread has not recorded yet (IncidentThread._send):
+    # written the moment Telegram gives their id, so a stop before the record never leaves one unknown — each with what
+    # it shows ({id: {parts, buttons, kb?, sheet?}}), so one that is its chat's only copy can be recorded later.
+    # ⚠️ TWO FORMATS READ (0.12.525): 0.12.522-524 wrote a list of ids (read as ids showing nothing kept); a release
+    # of then reading this one's {id: ...} reads its keys, the same ids.
+    @staticmethod
+    def _sent_of(v: str) -> dict[int, dict]:
+        got = json.loads(v)
+        return {int(m): w for m, w in got.items()} if isinstance(got, dict) else {int(m): {} for m in got}
 
-    def set_incident_sent(self, incident: int | str, chat: int | str, mids: list[int]) -> None:
-        """The copies still unrecorded in `chat` (none: the row goes)."""
-        if mids:
-            self.put(f"incsent:{incident}:{chat}", json.dumps(sorted({int(m) for m in mids})))
-        else:
+    def add_incident_sent(self, incident: int | str, chat: int | str, mid: int, shows: dict) -> None:
+        """Copy `mid` of `incident` taken by Telegram in `chat`, showing `shows`, not recorded yet."""
+        v = self.get(f"incsent:{incident}:{chat}")
+        sent = self._sent_of(v) if v else {}
+        sent[int(mid)] = shows
+        self.put(f"incsent:{incident}:{chat}", json.dumps({str(m): w for m, w in sorted(sent.items())}))
+
+    def drop_incident_sent(self, incident: int | str, chat: int | str, mids) -> None:
+        """Copies `mids` in `chat` are dealt with (recorded, or gone); the row goes with the last."""
+        v = self.get(f"incsent:{incident}:{chat}")
+        sent = {m: w for m, w in (self._sent_of(v) if v else {}).items() if m not in {int(x) for x in mids}}
+        if sent:
+            self.put(f"incsent:{incident}:{chat}", json.dumps({str(m): w for m, w in sorted(sent.items())}))
+        elif v:
             self.drop(f"incsent:{incident}:{chat}")
 
-    def incidents_sent(self) -> list[tuple[int | str, int, list[int]]]:
-        """(incident, chat, ids) of every chat holding a copy not recorded yet."""
+    def incidents_sent(self) -> list[tuple[int | str, int, dict[int, dict]]]:
+        """(incident, chat, {id: what it shows}) of every chat holding a copy not recorded yet."""
         out = []
         for k, v in self.kv_prefix("incsent:").items():
             iid, chat = k[len("incsent:"):].rsplit(":", 1)
-            out.append((int(iid) if iid.isdigit() else iid, int(chat), [int(m) for m in json.loads(v)]))
+            out.append((int(iid) if iid.isdigit() else iid, int(chat), self._sent_of(v)))
         return out
 
     def incident_card(self, thread: int | str) -> dict | None:
