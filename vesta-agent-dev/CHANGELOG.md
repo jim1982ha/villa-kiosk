@@ -1,3 +1,14 @@
+## 0.12.525
+
+- **One card for a problem accepted as "Not a problem".** While the villa keeps repeating it (a door left unlocked on
+  purpose), each repeat no longer stays a "New alert" message of its own every 30 minutes: it becomes the alert's one
+  card again, still saying "Not a problem". The repeats already sent today stay; delete them by hand.
+- **Approval messages can no longer be left behind with live buttons either.** A copy cut off by a restart now gets
+  its buttons removed with the others.
+- Behind the scenes: VESTA decides in one place whether an alert is the same problem as before, and one part of it
+  sends, records and replaces every Telegram message. A Cockpit reopen of an alert VESTA had seen clear now waits its
+  full time again before closing it on its own.
+
 ## 0.12.524
 
 - **Lists in time order everywhere.** The villa writes some times in UTC and some in its own time; the lists in
