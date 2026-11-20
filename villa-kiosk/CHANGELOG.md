@@ -1,3 +1,23 @@
+## 2.496.849
+
+- **A visit's photos in time order.** A photo whose time the villa wrote in another time zone no longer jumps ahead of
+  earlier ones: a Parking photo of 12:20 stood before two of 12:19.
+
+## 2.496.848
+
+- **A visit's photos fill the space beside the large one.** On a card in the Messages and the Cockpit, the small
+  photos now sit in two rows to the right of the large photo, then in full rows under it.
+- **Every notice has its ✕ on its title's line.** It sat halfway down a notice with a photo or buttons; it is now in
+  the top right corner, beside the title, on every notice.
+
+## 2.496.847
+
+- **Lamp light reaches the garden on every device.** An area's floor height was measured at the middle of its
+  outline; a garden drawn round the house has its middle on the house, and read 2.1 m up. The lamps of a terrace then
+  stopped at the edge of the lawn. The height is now measured inside the area.
+- **A closed curtain stops the lamps' light.** With a curtain closed, the room's light no longer falls on the terrace
+  or garden through the window; open it, and the light passes again. Half-open counts as open.
+
 ## 2.496.846
 
 - **Lamp light reaches the lawn beside a terrace.** The light on the floor stopped in a straight line where a deck

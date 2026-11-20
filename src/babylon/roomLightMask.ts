@@ -21,6 +21,12 @@
 // OPEN_BORDER_M without a wall share their light. A doorway is narrower: the
 // bathroom off a corridor stays dark.
 //
+// ⚠️ A CLOSED CURTAIN IS A WALL (owner, 2026-11-20). Glass reads as open, so
+// the living room lit the terrace through its windows with the curtains
+// drawn. A closed curtain's triangles are a wall of their own (`shut`),
+// added to the model's when the map is drawn: no new map, only some of its
+// cells marked, and the open borders read again with them.
+//
 // Pure: the triangles are passed in (bulbSet.ts reads them from the model).
 // tests/oracles/room_light_mask.mjs.
 
@@ -69,7 +75,8 @@ const WALL_BIT = 0x80000000;
 export interface LampRoomBits { band: number; lo: number; hi: number }
 
 /** What a device keeps per model and plan, so a load reads no wall again:
- *  the open borders, and each band's wall cells as [start, length] runs. */
+ *  the open borders, and each band's wall cells as [start, length] runs.
+ *  The model's walls only, never a closed curtain's. */
 export interface RoomLightKnown { open: string[]; walls: number[][] }
 
 export interface RoomLightMask<R> {
@@ -108,6 +115,7 @@ type MaskRoom = { name: string; pts: Pt2[]; floorY: number; storey?: number };
  * which neighbours are open to each other: from `known` (a previous load's
  * answer for the same model and plan), else from the model's walls
  * (`triangles`); with neither, no wall is known and every border is walled.
+ * `shut`: the closed curtains, walls too while they stay closed.
  *
  * A cell's rooms, in order:
  *  * the rooms that reach it from their middle without crossing a wall, the
@@ -119,7 +127,7 @@ type MaskRoom = { name: string; pts: Pt2[]; floorY: number; storey?: number };
  * built under it, and its lights light the steps above them.
  */
 export function buildRoomLightMask<R extends MaskRoom>(
-  storeys: Storeys<R>, triangles: TriangleVisitor | null, known?: RoomLightKnown,
+  storeys: Storeys<R>, triangles: TriangleVisitor | null, known?: RoomLightKnown, shut?: TriangleVisitor | null,
 ): RoomLightMask<R> | null {
   const rooms = storeys.rooms;
   const b = boundsXZ(rooms.flatMap((r) => r.pts));
@@ -141,10 +149,12 @@ export function buildRoomLightMask<R extends MaskRoom>(
     bitOf.set(r, { band, bit: perBand[band]++ });
   }
   const cells = grid.width * grid.rows;
-  const walls = known && known.walls.length === storeyKeys.length
+  const built = known && known.walls.length === storeyKeys.length
     ? known.walls.map((runs) => fromRuns(runs, cells))
     : triangles ? wallMaps(storeys, storeyKeys, grid, triangles)
     : storeyKeys.map(() => new Uint8Array(cells));
+  const curtains = shut ? wallMaps(storeys, storeyKeys, grid, shut) : null;
+  const walls = curtains ? built.map((m, k) => m.map((v, i) => v | curtains[k][i])) : built;
   const inside = new Uint32Array(cells * storeyKeys.length);
   const near = new Uint32Array(cells * storeyKeys.length);
   const seeds = new Uint32Array(cells * storeyKeys.length);
@@ -192,9 +202,10 @@ export function buildRoomLightMask<R extends MaskRoom>(
       words[i] = (walls[band][c] && !flight[i] ? (own | WALL_BIT) : own) >>> 0;
     }
   }
-  const open = known ? [...known.open]
-    : triangles ? openBorders(storeys, [...bitOf.keys()], walls, bandOf, grid)
+  const builtOpen = known ? [...known.open]
+    : triangles ? openBorders(storeys, [...bitOf.keys()], built, bandOf, grid)
     : [];
+  const open = curtains && (known || triangles) ? openBorders(storeys, [...bitOf.keys()], walls, bandOf, grid) : builtOpen;
   const openSet = new Set(open);
   const lampBits = new Map<R, LampRoomBits>();
   const openRooms = new Map<R, R[]>();
@@ -212,7 +223,7 @@ export function buildRoomLightMask<R extends MaskRoom>(
     bitsOf: (room) => (room ? lampBits.get(room) : undefined),
     openTo: (room) => openRooms.get(room) ?? [],
     open,
-    known: { open, walls: walls.map(toRuns) },
+    known: { open: builtOpen, walls: built.map(toRuns) },
   };
 }
 

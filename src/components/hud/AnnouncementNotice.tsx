@@ -56,7 +56,7 @@ export function AnnouncementNoticeView({ announcement, onDismiss, buttons, step 
         ? <RecordHead title={card.title} lead={cardLead(card)} number={top.number} when={top.when} status={top.status}
             statusTip={top.statusTip} tone={strip}>{cardWords(card, { step })}</RecordHead>
         : words}
-      <PhotoRow photos={announcement.photos} />
+      <PhotoRow photos={announcement.photos} beside={false} />
       {buttons}
     </NoticeView>
   );

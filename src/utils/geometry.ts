@@ -211,3 +211,22 @@ export function distanceToPolygonBoundary(x: number, z: number, poly: Pt2[]): nu
   }
   return best;
 }
+
+/** A point inside the polygon: `near` if it is inside (a room's middle), else
+ *  the point of a grid over the polygon farthest from its edges. A garden
+ *  drawn round a house has its middle on the house: its floor was read there,
+ *  2.1 m up, and the lamps of the terrace beside it stopped at the lawn
+ *  (owner, 2026-11-20). */
+export function pointInside(poly: Pt2[], near: Pt2, steps = 24): Pt2 {
+  if (pointInPolygon(near.x, near.z, poly)) return near;
+  const b = boundsXZ(poly);
+  if (!b) return near;
+  let best = near, far = -1;
+  for (let i = 0; i < steps; i++) for (let j = 0; j < steps; j++) {
+    const x = b.minX + ((b.maxX - b.minX) * (i + 0.5)) / steps, z = b.minZ + ((b.maxZ - b.minZ) * (j + 0.5)) / steps;
+    if (!pointInPolygon(x, z, poly)) continue;
+    const d = distanceToPolygonBoundary(x, z, poly);
+    if (d > far) { far = d; best = { x, z }; }
+  }
+  return best;
+}

@@ -15,7 +15,7 @@ import { ck, done } from "../consistency/check.mjs";
 const { placeLight, LIGHT_POOL_RADIUS } = await import("@/babylon/lightPlacement");
 const { Storeys } = await import("@/babylon/storeys");
 const { GLOW_TERM, POOL_CENTRE } = await import("@/babylon/lampGlow");
-const { pointInPolygon, earClipTriangulate } = await import("@/utils/geometry");
+const { pointInPolygon, earClipTriangulate, pointInside } = await import("@/utils/geometry");
 const { POOL_ALPHA_STOPS } = await import("@/babylon/LightPools");
 /** What a patch gives the floor at distance d from its centre (its gradient). */
 const patchAt = (at, d) => {
@@ -223,4 +223,15 @@ console.log("\n  a room outline drawn with a repeated corner and points along a 
   ck("  ...and the room's highlight, drawn from the same triangles, fills it", Math.abs(area - 16) < 1e-9, area);
 }
 
+console.log("\n  where a room's floor is read:");
+{
+  // A garden round three sides of a house (x 2..8, z 0..6): its middle is on the house.
+  const garden = [{ x: 0, z: 0 }, { x: 10, z: 0 }, { x: 10, z: 8 }, { x: 0, z: 8 }, { x: 0, z: 6 }, { x: 8, z: 6 }, { x: 8, z: 2 }, { x: 0, z: 2 }]
+    .map(({ x, z }) => ({ x, z }));
+  const square = [{ x: 0, z: 0 }, { x: 4, z: 0 }, { x: 4, z: 4 }, { x: 0, z: 4 }];
+  const g = pointInside(garden, { x: 5.6, z: 4 });
+  ck("a garden drawn round a house: on the lawn, not on the house", pointInPolygon(g.x, g.z, garden), g);
+  const s = pointInside(square, { x: 2, z: 2 });
+  ck("a room whose middle is in it: its middle, as before", s.x === 2 && s.z === 2, s);
+}
 done("✅ a light lights its own room, and a stair light its steps");

@@ -39,14 +39,16 @@ const floor = { below: () => 0, describeBelow: () => ({ y: 0 }), clearMemo() {},
 /** A lightmapped villa's scene: a lit floor slab (the glow's surface), the
  *  wall between the two rooms as the model marks its structure, and the
  *  lamps, all on. */
-function villa(key = null) {
+function villa(key = null, walled = true) {
   const scene = new Scene(new NullEngine());
   const slab = MeshBuilder.CreateBox("slab", { width: 30, height: 0.1, depth: 10 }, scene);
   slab.material = new PBRMaterial("slab", scene);
-  const wall = MeshBuilder.CreateBox("wall", { width: 0.2, height: 3, depth: 4 }, scene);
-  wall.position.set(4.1, 1.5, 2);
-  wall.metadata = { gltf: { extras: { vk_role: "structure" } } };
-  wall.material = new PBRMaterial("wall", scene);
+  if (walled) {
+    const wall = MeshBuilder.CreateBox("wall", { width: 0.2, height: 3, depth: 4 }, scene);
+    wall.position.set(4.1, 1.5, 2);
+    wall.metadata = { gltf: { extras: { vk_role: "structure" } } };
+    wall.material = new PBRMaterial("wall", scene);
+  }
   const lamps = Object.entries(SPOTS).map(([name, [x, z]]) => {
     const m = MeshBuilder.CreateSphere(`lamp_${name}`, { diameter: 0.2 }, scene);
     m.position.set(x, 2.5, z);
@@ -62,7 +64,7 @@ function villa(key = null) {
     bulbs.mergeStrips(lamps.map((m) => [m]));
     bulbs.glowEverythingLit();
   };
-  return { bulbs, index };
+  return { bulbs, index, scene };
 }
 /** What the glow is handed: each lamp's rooms, by where it stands. */
 const roomsOf = (bulbs) => Object.fromEntries(Object.entries(SPOTS).map(([name, [x, z]]) => {
@@ -111,6 +113,21 @@ again.index();
 ck("the next load, from the stored answer, gives every lamp the same rooms",
    JSON.stringify(roomsOf(again.bulbs)) === JSON.stringify(keyedRooms) && JSON.stringify(keyedRooms) === JSON.stringify(loaded),
    roomsOf(again.bulbs));
+
+console.log("\n  a curtain between two rooms with no wall:");
+const open = villa(null, false);
+open.index();
+open.bulbs.setRooms(plan());
+const shared = roomsOf(open.bulbs);
+const curtain = MeshBuilder.CreateBox("cover.x__closed", { width: 0.05, height: 2.6, depth: 4 }, open.scene);
+curtain.position.set(4.1, 1.3, 2);
+curtain.computeWorldMatrix(true);
+open.bulbs.setClosedCurtains([curtain]);
+const drawn = roomsOf(open.bulbs);
+open.bulbs.setClosedCurtains([]);
+ck("open, both lamps light both rooms; closed, each its own room; opened again, both again",
+   shared.a === shared.b && drawn.a !== drawn.b && drawn.a === loaded.a && drawn.b === loaded.b
+   && JSON.stringify(roomsOf(open.bulbs)) === JSON.stringify(shared), { shared, drawn });
 
 console.log("\n  no plan yet:");
 const bare = villa();

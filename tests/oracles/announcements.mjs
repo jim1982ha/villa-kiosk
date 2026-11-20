@@ -226,7 +226,7 @@ ck("  ...the notice says it so too (it showed the title alone)",
 console.log("\n  drawn as every notice, for 10s, in the villa view's column:");
 const html = draw(h(AnnouncementNoticeView, { announcement: { ...a(1), title: "🔔 Visitor", text: "At the door\nmore" } }));
 ck("the one notice, news tone, title then the first line of what it says",
-   /class="vesta-notice"/.test(html) && html.includes("--tone:var(--accent)")
+   /class="vesta-notice( closable)?"/.test(html) && html.includes("--tone:var(--accent)")
    && html.includes("🔔 Visitor · At the door") && !html.includes("more"), html);
 ck("  ...shown for 10s", ANNOUNCEMENT_NOTICE_MS === 10_000, ANNOUNCEMENT_NOTICE_MS);
 globalThis.window = { location: { pathname: "/" } };   // the add-on's own address (no Ingress prefix)
@@ -308,6 +308,10 @@ ck("a photo's words: its camera and its time, the time alone when no camera is n
        ["photo-tile", ID("a")], ["photo-tile", ID("d")]]), [tiles, card]);
   const later = photoOrder([visitPhotos[0], { ...visitPhotos[3], strongest: true }, visitPhotos[1]]);
   ck("  ...a flagged photo not first is put first", later.big && later.photos.map((p) => p.id).join() === [ID("d"), ID("b"), ID("a")].join());
+  const zones = photoOrder([{ id: ID("m"), label: "Waterwall", at: "2026-11-20T12:18:30+08:00", strongest: true },
+    { id: ID("p"), label: "Parking", at: "2026-11-20T04:20:12+00:00" }, { id: ID("s"), label: "Staircase", at: "2026-11-20T12:19:32+08:00" }]);
+  ck("  ...in time order whatever zone a time is written in (owner, 2026-11-20, #204: Parking 12:20 before Staircase 12:19)",
+     zones.photos.map((p) => p.id).join() === [ID("m"), ID("s"), ID("p")].join(), zones.photos.map((p) => p.label));
   const plain = photoOrder(visitPhotos);
   ck("  ...none flagged: the record's order, every tile alike; one photo alone, even flagged: as today",
      !plain.big && plain.photos.map((p) => p.id).join() === visitPhotos.map((p) => p.id).join()

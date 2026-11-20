@@ -62,16 +62,18 @@ export function NoticeView({ tone, icon, children, onTap, onDismiss, role = "sta
   if (closed) return null;
   const closable = !onTap && !stays;
   const own = tone in TONE ? TONE[tone as NoticeTone] : null;
-  const className = `vesta-notice${own ? "" : ` strip-${tone}`}${onTap ? " tappable" : ""}${belowCamera ? " below-camera" : ""}`;
+  const className = `vesta-notice${own ? "" : ` strip-${tone}`}${onTap ? " tappable" : ""}${belowCamera ? " below-camera" : ""}${closable ? " closable" : ""}`;
   const style = { "--tone": own ?? "var(--strip)" } as React.CSSProperties;
   const inner = (
     <>
       {icon}
       <span className="vesta-notice-text">{children}</span>
       {closable && (
-        <IconButton small label="Dismiss" onClick={(e) => { e.stopPropagation(); setClosed(true); onDismiss?.(); }}>
-          <X size={16} />
-        </IconButton>
+        <span className="vesta-notice-close">
+          <IconButton small label="Dismiss" onClick={(e) => { e.stopPropagation(); setClosed(true); onDismiss?.(); }}>
+            <X size={16} />
+          </IconButton>
+        </span>
       )}
     </>
   );

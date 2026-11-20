@@ -62,4 +62,18 @@ console.log("\n  a previous load's answer:");
 const again = buildRoomLightMask(plan, null, mask.known);
 ck("draws the same map without reading a wall", Buffer.compare(Buffer.from(again.data), Buffer.from(mask.data)) === 0
    && again.open.join() === mask.open.join());
+console.log("\n  a closed curtain:");
+// Drawn across the whole living room | kitchen border, floor to 2.6 m.
+const curtain = (visit) => {
+  visit(6, 0, 4.1, 6, 0, 10, 6, 2.6, 10);
+  visit(6, 0, 4.1, 6, 2.6, 10, 6, 2.6, 4.1);
+};
+const drawn = buildRoomLightMask(plan, null, mask.known, curtain);
+const lightsDrawn = (from, x, z) => maskAllows(drawn, drawn.bitsOf(R[from]), x, z);
+ck("the living room's light stops at it: the kitchen stays dark, the living room is lit",
+   !lightsDrawn("Living", 8, 7) && lightsDrawn("Living", 3, 7), drawn.open);
+ck("the other rooms are as before", drawn.open.filter((k) => k !== "Kitchen|Living").join() === mask.open.filter((k) => k !== "Kitchen|Living").join()
+   && !lightsDrawn("Corridor", 7.5, 2) && lightsDrawn("Corridor", 3, 2));
+ck("what the device keeps is the model's walls alone: opened again, the light passes",
+   drawn.known.open.join() === mask.open.join() && maskAllows(buildRoomLightMask(plan, null, drawn.known), mask.bitsOf(R.Living), 8, 7));
 done();
