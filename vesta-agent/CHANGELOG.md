@@ -1,3 +1,9 @@
+## 0.12.526
+
+- **A problem accepted as "Not a problem" shows each repeat in its Status.** While the villa keeps repeating it, the
+  card has one line, updated each time: "Still there at 18:46, 11 times since 13:30". It is a line of the facility
+  manager's card (and the tablet's), not of the owner's when the owner was only brought in by an escalation.
+
 ## 0.12.525
 
 - **One card for a problem accepted as "Not a problem".** While the villa keeps repeating it (a door left unlocked on

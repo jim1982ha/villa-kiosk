@@ -31,7 +31,7 @@ from zoneinfo import ZoneInfo
 
 from vesta_shared import status_words
 from vesta_shared.message_format import MARK_ICONS, ON_PLACE, ON_TELEGRAM, PRESSED_STAGE, STEPS
-from vesta_shared.timeutil import status_moment
+from vesta_shared.timeutil import moment_label, status_moment
 
 #: Where a line's moment goes in its words: filled when it is shown (`shown`), taken out for the fault (`fault`).
 SLOT = "⁣"
@@ -85,9 +85,11 @@ def lines(notices, incident: int, lang: str = "en", latest_excluded: int = 0, bo
     # ⚠️ A CLOSE STANDING IS ITS BOTTOM LINE (owner, 2026-11-05, #118): redrawn while closed, the card listed
     # "- Closing note sent 00:19" above "✅ Not a problem on 00:19 (Jm). Watch 1h." — the same close. Its step shows
     # once something came after it (it came back), or as the close's own words once its watch is over (note_step)
+    # ...and stays it under the lines of its problem repeated while it lasts (a lasting repeat: `standing`)
     kept = [i for i in range(len(history)) if i not in gone]
-    if bottom and kept and history[kept[-1]].get("stage") == CLOSED_STEP and notices.closed_now(incident):
-        gone.add(kept[-1])
+    at = standing([history[i] for i in kept])
+    if bottom and at is not None and history[kept[at]].get("stage") == CLOSED_STEP and notices.closed_now(incident):
+        gone.add(kept[at])
     # a visit's card sent again is said on the line of the step that made it ring (resent_into)
     into = {i: j for i, j in resent_into(history).items() if j not in gone}
     resent: dict[int, set[str]] = {}
@@ -177,8 +179,10 @@ def _words(notices, h: dict, lang: str) -> str | None:
         return (h.get("note_in") or {}).get(lang) or h["note"]
     if h.get("stage") == PRESSED_STAGE:
         return _pressed(h, lang)
+    since = _moment(h.get("from")) if h.get("from") else None
     return status_words.step(h.get("stage"), SLOT, status_words.times(h.get("run"), _again(), lang),
-                             notices._who(notices._roles(h), h.get("reach"), lang=lang), lang, h.get("times"))
+                             notices._who(notices._roles(h), h.get("reach"), lang=lang), lang, h.get("times"),
+                             since=moment_label(since, notices.tz) if since else None)
 
 
 def _again() -> int:
@@ -303,6 +307,16 @@ def _cut(history: list[dict], n: int) -> tuple[list[dict], set[int]]:
 
 #: A visit's card sent again for a step stronger than every one before it (message_format.STEPS "stronger").
 STRONGER_STAGE = "stronger"
+#: The alert's rule repeating a problem closed "Not a problem" while it lasts (message_format.STEPS "lasting").
+LASTING_STAGE = "lasting"
+
+
+def standing(history: list[dict]) -> int | None:
+    """The position in `history` of its latest step that is no lasting repeat: where the alert stands (its close, while
+    its problem repeats), None when there is none. ⚠️ A LASTING REPEAT LEAVES THE CLOSE WHERE IT STANDS (owner,
+    2026-11-20, #201): its line comes after the close, which is still the card's bottom line, the one its watch's end
+    words again and the one the villa's late all-clear says again."""
+    return next((i for i in range(len(history) - 1, -1, -1) if history[i].get("stage") != LASTING_STAGE), None)
 
 
 def resent_into(history: list[dict]) -> dict[int, int]:

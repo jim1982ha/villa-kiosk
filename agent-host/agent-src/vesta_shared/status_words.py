@@ -37,6 +37,7 @@ def _ordinal_en(n: int) -> str:
 #: its own; `steps`: what each step sent is called ({sent}), and the lines of the steps that read differently (`new`,
 #: `back`); `times`: how many times this week, after the moment; `repeats`: how often a step came in a row, after the
 #: moment (message_format.REPEATS); `acted`: "<what> on <when>" (message_format.acted);
+#: `since`: since when a lasting repeat's problem lasts, after its count (message_format.SINCE);
 #: `colon` / `stop`: what goes before a tail and at a sentence's end; `sep`: between a step and the desk's words;
 #: `units`: s, min, h, d as timeutil.lasting writes them (each joined to its number), `tight` when the parts go unspaced.
 #: `resent`: a visit's card sent again, on its step's line (message_format.RESENT); `on`: the words before a moment that
@@ -46,12 +47,12 @@ WORDS: dict[str, dict] = {
         "resent": "alerte renvoyée", "on": ("le", "à"),
         "status": "Statut", "to": " (à: {who})", "roles": {"owner": "Propriétaire", "fm": "FM"}, "nobody": "personne",
         "sent": "Envoyé", "line": "{sent} le {at}{to}",
-        "steps": {"stronger": "Signal plus fort envoyé", "new": "Alerte envoyée", "reminder": "Rappel envoyé", "escalated": "Escalade envoyée",
+        "steps": {"lasting": "Répétition « toujours là » publiée", "stronger": "Signal plus fort envoyé", "new": "Alerte envoyée", "reminder": "Rappel envoyé", "escalated": "Escalade envoyée",
                   "update": "Mise à jour envoyée", "back": "Retour: alerte envoyée",
                   "still": "Alerte « toujours là » envoyée", "reopened": "Demande de réouverture envoyée",
                   "closed": "Note de clôture envoyée"},
-        "lines": {"new": "Alerte envoyée le {at}{times}{to}", "back": "De retour le {at}{times}{to}"},
-        "times": ", {n}e fois en {days} jours", "repeats": ", {n} fois", "acted": "{what} le {when}", "cleared": "Résolu",
+        "lines": {"lasting": "Toujours là le {at}", "new": "Alerte envoyée le {at}{times}{to}", "back": "De retour le {at}{times}{to}"},
+        "times": ", {n}e fois en {days} jours", "since": " depuis {since}", "repeats": ", {n} fois", "acted": "{what} le {when}", "cleared": "Résolu",
         "night": {"watched": "surveillé jusqu’à {until}", "closed": "Clôturé", "not_back": "il n’est pas revenu"},
         "colon": ": ", "stop": ".", "sep": ", ", "new_alert": "Nouvelle alerte", "still_open": "Toujours en cours",
         "earlier": ("… {n} notification précédente", "… {n} notifications précédentes"),
@@ -64,12 +65,12 @@ WORDS: dict[str, dict] = {
         "resent": "peringatan dikirim lagi", "on": ("pada", "pukul"),
         "status": "Status", "to": " (kepada: {who})", "roles": {"owner": "Pemilik", "fm": "FM"}, "nobody": "tidak ada",
         "sent": "Terkirim", "line": "{sent} {at}{to}",
-        "steps": {"stronger": "Sinyal lebih kuat terkirim", "new": "Peringatan terkirim", "reminder": "Pengingat terkirim", "escalated": "Eskalasi terkirim",
+        "steps": {"lasting": "Pengulangan \"masih ada\" diposting", "stronger": "Sinyal lebih kuat terkirim", "new": "Peringatan terkirim", "reminder": "Pengingat terkirim", "escalated": "Eskalasi terkirim",
                   "update": "Pembaruan terkirim", "back": "Kembali: peringatan terkirim",
                   "still": "Peringatan \"masih ada\" terkirim", "reopened": "Permintaan buka kembali terkirim",
                   "closed": "Catatan penutupan terkirim"},
-        "lines": {"new": "Peringatan terkirim {at}{times}{to}", "back": "Muncul lagi {at}{times}{to}"},
-        "times": ", ke-{n} kali dalam {days} hari", "repeats": ", {n} kali", "acted": "{what} pada {when}", "cleared": "Selesai",
+        "lines": {"lasting": "Masih ada pada {at}", "new": "Peringatan terkirim {at}{times}{to}", "back": "Muncul lagi {at}{times}{to}"},
+        "times": ", ke-{n} kali dalam {days} hari", "since": " sejak {since}", "repeats": ", {n} kali", "acted": "{what} pada {when}", "cleared": "Selesai",
         "night": {"watched": "dipantau sampai {until}", "closed": "Ditutup", "not_back": "tidak muncul lagi"},
         "colon": ": ", "stop": ".", "sep": ", ", "new_alert": "Peringatan baru", "still_open": "Masih terbuka",
         "earlier": ("… {n} pemberitahuan sebelumnya", "… {n} pemberitahuan sebelumnya"),
@@ -82,12 +83,12 @@ WORDS: dict[str, dict] = {
         "resent": "Alarm erneut gesendet", "on": ("am", "um"),
         "status": "Status", "to": " (an: {who})", "roles": {"owner": "Eigentümer", "fm": "FM"}, "nobody": "niemand",
         "sent": "Gesendet", "line": "{sent} am {at}{to}",
-        "steps": {"stronger": "Stärkeres Signal gesendet", "new": "Alarm gesendet", "reminder": "Erinnerung gesendet", "escalated": "Eskalation gesendet",
+        "steps": {"lasting": "Wiederholung „noch da“ gepostet", "stronger": "Stärkeres Signal gesendet", "new": "Alarm gesendet", "reminder": "Erinnerung gesendet", "escalated": "Eskalation gesendet",
                   "update": "Aktualisierung gesendet", "back": "Zurück: Alarm gesendet",
                   "still": "Alarm „noch da“ gesendet", "reopened": "Bitte um Wiedereröffnung gesendet",
                   "closed": "Abschlussnachricht gesendet"},
-        "lines": {"new": "Alarm gesendet am {at}{times}{to}", "back": "Wieder da am {at}{times}{to}"},
-        "times": ", {n}. Mal in {days} Tagen", "repeats": ", {n} Mal", "acted": "{what} am {when}", "cleared": "Behoben",
+        "lines": {"lasting": "Noch da am {at}", "new": "Alarm gesendet am {at}{times}{to}", "back": "Wieder da am {at}{times}{to}"},
+        "times": ", {n}. Mal in {days} Tagen", "since": " seit {since}", "repeats": ", {n} Mal", "acted": "{what} am {when}", "cleared": "Behoben",
         "night": {"watched": "beobachtet bis {until}", "closed": "Geschlossen", "not_back": "nicht wiedergekommen"},
         "colon": ": ", "stop": ".", "sep": ", ", "new_alert": "Neuer Alarm", "still_open": "Weiterhin offen",
         "earlier": ("… {n} frühere Meldung", "… {n} frühere Meldungen"),
@@ -100,12 +101,12 @@ WORDS: dict[str, dict] = {
         "resent": "alerta enviada de nuevo", "on": ("el", "a las"),
         "status": "Estado", "to": " (para: {who})", "roles": {"owner": "Propietario", "fm": "FM"}, "nobody": "nadie",
         "sent": "Enviado", "line": "{sent} el {at}{to}",
-        "steps": {"stronger": "Señal más fuerte enviada", "new": "Alerta enviada", "reminder": "Recordatorio enviado", "escalated": "Escalado enviado",
+        "steps": {"lasting": "Repetición «sigue ahí» publicada", "stronger": "Señal más fuerte enviada", "new": "Alerta enviada", "reminder": "Recordatorio enviado", "escalated": "Escalado enviado",
                   "update": "Actualización enviada", "back": "De vuelta: alerta enviada",
                   "still": "Alerta «sigue ahí» enviada", "reopened": "Solicitud de reapertura enviada",
                   "closed": "Nota de cierre enviada"},
-        "lines": {"new": "Alerta enviada el {at}{times}{to}", "back": "De vuelta el {at}{times}{to}"},
-        "times": ", {n}.ª vez en {days} días", "repeats": ", {n} veces", "acted": "{what} el {when}", "cleared": "Resuelto",
+        "lines": {"lasting": "Sigue ahí el {at}", "new": "Alerta enviada el {at}{times}{to}", "back": "De vuelta el {at}{times}{to}"},
+        "times": ", {n}.ª vez en {days} días", "since": " desde {since}", "repeats": ", {n} veces", "acted": "{what} el {when}", "cleared": "Resuelto",
         "night": {"watched": "vigilado hasta {until}", "closed": "Cerrado", "not_back": "no volvió"},
         "colon": ": ", "stop": ".", "sep": ", ", "new_alert": "Nueva alerta", "still_open": "Sigue abierta",
         "earlier": ("… {n} aviso anterior", "… {n} avisos anteriores"),
@@ -118,12 +119,12 @@ WORDS: dict[str, dict] = {
         "resent": "avviso inviato di nuovo", "on": ("il", "alle"),
         "status": "Stato", "to": " (a: {who})", "roles": {"owner": "Proprietario", "fm": "FM"}, "nobody": "nessuno",
         "sent": "Inviato", "line": "{sent} il {at}{to}",
-        "steps": {"stronger": "Segnale più forte inviato", "new": "Avviso inviato", "reminder": "Promemoria inviato", "escalated": "Escalation inviata",
+        "steps": {"lasting": "Ripetizione «ancora presente» pubblicata", "stronger": "Segnale più forte inviato", "new": "Avviso inviato", "reminder": "Promemoria inviato", "escalated": "Escalation inviata",
                   "update": "Aggiornamento inviato", "back": "Di nuovo: avviso inviato",
                   "still": "Avviso «ancora presente» inviato", "reopened": "Richiesta di riapertura inviata",
                   "closed": "Nota di chiusura inviata"},
-        "lines": {"new": "Avviso inviato il {at}{times}{to}", "back": "Di nuovo il {at}{times}{to}"},
-        "times": ", {n}ª volta in {days} giorni", "repeats": ", {n} volte", "acted": "{what} il {when}", "cleared": "Risolto",
+        "lines": {"lasting": "Ancora presente il {at}", "new": "Avviso inviato il {at}{times}{to}", "back": "Di nuovo il {at}{times}{to}"},
+        "times": ", {n}ª volta in {days} giorni", "since": " da {since}", "repeats": ", {n} volte", "acted": "{what} il {when}", "cleared": "Risolto",
         "night": {"watched": "sorvegliato fino a {until}", "closed": "Chiuso", "not_back": "non è tornato"},
         "colon": ": ", "stop": ".", "sep": ", ", "new_alert": "Nuovo avviso", "still_open": "Ancora aperto",
         "earlier": ("… {n} notifica precedente", "… {n} notifiche precedenti"),
@@ -136,12 +137,12 @@ WORDS: dict[str, dict] = {
         "resent": "melding opnieuw verzonden", "on": ("op", "om"),
         "status": "Status", "to": " (aan: {who})", "roles": {"owner": "Eigenaar", "fm": "FM"}, "nobody": "niemand",
         "sent": "Verzonden", "line": "{sent} op {at}{to}",
-        "steps": {"stronger": "Sterker signaal verzonden", "new": "Melding verzonden", "reminder": "Herinnering verzonden", "escalated": "Escalatie verzonden",
+        "steps": {"lasting": "Herhaling 'nog steeds' geplaatst", "stronger": "Sterker signaal verzonden", "new": "Melding verzonden", "reminder": "Herinnering verzonden", "escalated": "Escalatie verzonden",
                   "update": "Update verzonden", "back": "Terug: melding verzonden",
                   "still": "Melding 'nog steeds' verzonden", "reopened": "Verzoek tot heropenen verzonden",
                   "closed": "Afsluitbericht verzonden"},
-        "lines": {"new": "Melding verzonden op {at}{times}{to}", "back": "Terug op {at}{times}{to}"},
-        "times": ", {n}e keer in {days} dagen", "repeats": ", {n} keer", "acted": "{what} op {when}", "cleared": "Opgelost",
+        "lines": {"lasting": "Nog steeds aanwezig op {at}", "new": "Melding verzonden op {at}{times}{to}", "back": "Terug op {at}{times}{to}"},
+        "times": ", {n}e keer in {days} dagen", "since": " sinds {since}", "repeats": ", {n} keer", "acted": "{what} op {when}", "cleared": "Opgelost",
         "night": {"watched": "bewaakt tot {until}", "closed": "Gesloten", "not_back": "niet teruggekomen"},
         "colon": ": ", "stop": ".", "sep": ", ", "new_alert": "Nieuwe melding", "still_open": "Nog open",
         "earlier": ("… {n} eerdere melding", "… {n} eerdere meldingen"),
@@ -154,11 +155,11 @@ WORDS: dict[str, dict] = {
         "resent": "已再次发送警报",
         "status": "状态", "to": " (发给: {who})", "roles": {"owner": "业主", "fm": "FM"}, "nobody": "无人",
         "sent": "已发送", "line": "{at} {sent}{to}",
-        "steps": {"stronger": "已发送更强信号", "new": "已发送警报", "reminder": "已发送提醒", "escalated": "已发送升级通知", "update": "已发送更新",
+        "steps": {"lasting": "已发布“仍存在”重复提醒", "stronger": "已发送更强信号", "new": "已发送警报", "reminder": "已发送提醒", "escalated": "已发送升级通知", "update": "已发送更新",
                   "back": "再次出现：已发送警报", "still": "已发送“仍存在”警报", "reopened": "已发送重新打开请求",
                   "closed": "已发送关闭通知"},
-        "lines": {"new": "{at} 已发送警报{times}{to}", "back": "{at} 再次出现{times}{to}"},
-        "times": "，{days} 天内第 {n} 次", "repeats": "，{n} 次", "acted": "{when} {what}", "cleared": "已解除",
+        "lines": {"lasting": "{at} 仍存在", "new": "{at} 已发送警报{times}{to}", "back": "{at} 再次出现{times}{to}"},
+        "times": "，{days} 天内第 {n} 次", "since": "（自 {since} 起）", "repeats": "，{n} 次", "acted": "{when} {what}", "cleared": "已解除",
         "night": {"watched": "观察至{until}", "closed": "已关闭", "not_back": "未再出现"},
         "colon": "：", "stop": "。", "sep": "，", "new_alert": "新警报", "still_open": "仍未解决",
         "earlier": ("… 之前 {n} 条通知", "… 之前 {n} 条通知"),
@@ -171,11 +172,11 @@ WORDS: dict[str, dict] = {
         "resent": "アラートを再送信",
         "status": "状況", "to": " (宛先: {who})", "roles": {"owner": "オーナー", "fm": "FM"}, "nobody": "なし",
         "sent": "送信済み", "line": "{at} {sent}{to}",
-        "steps": {"stronger": "より強い信号を送信", "new": "アラート送信", "reminder": "リマインダー送信", "escalated": "エスカレーション送信",
+        "steps": {"lasting": "「継続中」の繰り返しを投稿", "stronger": "より強い信号を送信", "new": "アラート送信", "reminder": "リマインダー送信", "escalated": "エスカレーション送信",
                   "update": "更新送信", "back": "再発：アラート送信", "still": "「継続中」アラート送信",
                   "reopened": "再オープン依頼送信", "closed": "終了通知送信"},
-        "lines": {"new": "{at} アラート送信{times}{to}", "back": "{at} 再発{times}{to}"},
-        "times": "、{days}日間で{n}回目", "repeats": "、{n}回", "acted": "{when} {what}", "cleared": "解除",
+        "lines": {"lasting": "{at} 継続中", "new": "{at} アラート送信{times}{to}", "back": "{at} 再発{times}{to}"},
+        "times": "、{days}日間で{n}回目", "since": "（{since}から）", "repeats": "、{n}回", "acted": "{when} {what}", "cleared": "解除",
         "night": {"watched": "{until}まで監視", "closed": "終了", "not_back": "再発なし"},
         "colon": "：", "stop": "。", "sep": "、", "new_alert": "新しいアラート", "still_open": "未解決",
         "earlier": ("… 以前の通知 {n} 件", "… 以前の通知 {n} 件"),
@@ -188,11 +189,11 @@ WORDS: dict[str, dict] = {
         "resent": "알림 다시 전송",
         "status": "상태", "to": " (수신: {who})", "roles": {"owner": "소유자", "fm": "FM"}, "nobody": "없음",
         "sent": "전송됨", "line": "{at} {sent}{to}",
-        "steps": {"stronger": "더 강한 신호 전송", "new": "알림 전송", "reminder": "리마인더 전송", "escalated": "에스컬레이션 전송", "update": "업데이트 전송",
+        "steps": {"lasting": "'계속됨' 반복 알림 게시", "stronger": "더 강한 신호 전송", "new": "알림 전송", "reminder": "리마인더 전송", "escalated": "에스컬레이션 전송", "update": "업데이트 전송",
                   "back": "재발: 알림 전송", "still": "'계속됨' 알림 전송", "reopened": "재개 요청 전송",
                   "closed": "종료 알림 전송"},
-        "lines": {"new": "{at} 알림 전송{times}{to}", "back": "{at} 재발{times}{to}"},
-        "times": ", {days}일 동안 {n}번째", "repeats": ", {n}회", "acted": "{when} {what}", "cleared": "해제됨",
+        "lines": {"lasting": "{at} 계속됨", "new": "{at} 알림 전송{times}{to}", "back": "{at} 재발{times}{to}"},
+        "times": ", {days}일 동안 {n}번째", "since": " ({since}부터)", "repeats": ", {n}회", "acted": "{when} {what}", "cleared": "해제됨",
         "night": {"watched": "{until}까지 감시", "closed": "종료", "not_back": "다시 발생하지 않음"},
         "colon": ": ", "stop": ".", "sep": ", ", "new_alert": "새 알림", "still_open": "아직 열림",
         "earlier": ("… 이전 알림 {n}건", "… 이전 알림 {n}건"),
@@ -278,9 +279,11 @@ def repeats(n, lang: str = "en") -> str:
     return (w["repeats"] if w else mf.REPEATS).format(n=n)
 
 
-def step(stage: str | None, at: str, times_text: str, whom: str, lang: str = "en", repeated=None) -> str:
+def step(stage: str | None, at: str, times_text: str, whom: str, lang: str = "en", repeated=None,
+         since: str | None = None) -> str:
     """A step as a card's Status says it — what was sent, when, to whom (message_format.STEPS, its words in `lang`);
-    `repeated`: how many times it came in a row, said before whom ("…18:35, 3 times (to: Owner & FM)")."""
+    `repeated`: how many times it came in a row, said before whom ("…18:35, 3 times (to: Owner & FM)"); `since`: since
+    when it lasts, after the count (a lasting repeat: "Still there at 18:46, 11 times since 13:30")."""
     w = _w(lang)
     s = mf.STEPS.get(stage or "")
     if not w:
@@ -291,6 +294,8 @@ def step(stage: str | None, at: str, times_text: str, whom: str, lang: str = "en
         line = (w["lines"].get(stage or "", w["line"]) if s else w["line"]).format(
             sent=sent, at=at, times=times_text, to=to_tail(whom, lang))
     more, to = repeats(repeated, lang), to_tail(whom, lang)
+    if since:
+        more += (w["since"] if w else mf.SINCE).format(since=since)
     return f"{line.removesuffix(to)}{more}{to}" if more and line.endswith(to) else line + more
 
 

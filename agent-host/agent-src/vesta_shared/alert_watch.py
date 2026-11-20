@@ -402,6 +402,12 @@ def lasted_again(store: Store, inc, at: datetime) -> None:
     store.note(dict(inc)["id"], {Notes.LASTING: {**held, "seen": at.isoformat()}})
 
 
+def lasting_since(inc) -> str | None:
+    """Since when closed `inc`'s problem lasts: its "Not a problem" close (Notes.LASTING), ISO; None when not held."""
+    held = notes_of(dict(inc) if inc is not None else {}).get(Notes.LASTING)
+    return str(held["since"]) if isinstance(held, dict) and held.get("since") else None
+
+
 def lasted(store: Store, inc) -> None:
     """The problem closed "Not a problem" ended (the villa's all-clear for it): its next alert is a new occurrence."""
     store.note(dict(inc)["id"], drop=(Notes.LASTING,))

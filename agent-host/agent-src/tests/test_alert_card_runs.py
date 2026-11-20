@@ -45,10 +45,10 @@ def agent(tmp_path):
     return v
 
 
-def rule(v, phase: str, run_no: int, mid: int, priority: str | None = None):
-    """The villa's rule: its own message in the group, then its event — one run, one context."""
-    ctx = f"RUN-{run_no}-{phase}"
-    run(v.on_ha_event("telegram_sent", {"chat_id": GROUP, "message_id": mid, "bot": BOT, CONTEXT_KEY: ctx}))
+def rule(v, phase: str, run_no: int, mid: int, priority: str | None = None, chat: int = GROUP):
+    """The villa's rule: its own message in the group (or `chat`), then its event — one run, one context."""
+    ctx = f"RUN-{run_no}-{phase}-{mid}"
+    run(v.on_ha_event("telegram_sent", {"chat_id": chat, "message_id": mid, "bot": BOT, CONTEXT_KEY: ctx}))
     run(v.on_ha_event("vesta_critical_event", {
         "blueprint": "critical_condition", "rule_id": RULE, "incident_id": f"{RULE}-{run_no}", "phase": phase,
         "severity": "critical", "label": "Phase C high", "entities": ["sensor.phase_c"], "summary": SUMMARY,
@@ -139,15 +139,45 @@ def test_not_a_problem_still_repeated_by_its_rule_ends_its_watch_still_there(age
     run(agent.on_ha_event("telegram_callback", {"id": "cb", "data": "i:1:not_a_problem", "chat_id": GROUP,
                                                 "user_id": OWNER, "message": {"message_id": 500, "chat": {"id": GROUP}},
                                                 "bot": BOT}))
-    rule(agent, "opened", 1, 501)                                          # its rule's repeat: recorded, nothing said
+    sent = len(agent.tg.sent)
+    for mid in (501, 502, 503):
+        rule(agent, "opened", 1, mid)                                      # its rule's repeats: nobody rung
     # ...and its message is the alert's ONE card, closed, never a "New alert" card of its own beside it (owner,
     # 2026-11-20: "Wasn't it merged into a single telegram notification before?")
     shown = agent.thread.shown(1)[GROUP]
-    assert shown["mid"] == 501 and "New alert" not in shown["text"], shown
+    assert shown["mid"] == 503 and "New alert" not in shown["text"] and "(watch)" in shown["text"].split("\n")[0], shown
+    assert len(agent.tg.sent) == sent, agent.tg.sent[sent:]
+    # each repeat in its Status, ONE line at its latest moment, counted since the close (owner, 2026-11-20, #201: "the
+    # message needs to reflect the timings of reminders in the status section"), above the close it leaves standing
+    lines = status_lines(shown["text"])
+    lasting = [ln for ln in lines if ln.startswith("- Still there")]
+    assert len(lasting) == 1 and re.fullmatch(rf"- Still there at {T}, 3 times since {T}", lasting[0]), lines
+    assert re.fullmatch(rf"✅ Not a problem (?:on|at) {T} \(Owner\)\. Watch .+", lines[-1]), lines
+    # the tablet's card and the Kiosk fault's story tell it too
+    assert any(x["note"].startswith("Still there, 3 times since ") for x in agent.notices.story(1))
     tick(agent, 5 * 60)                                                    # its watch (4h) is over
     lines = status_lines(card(agent, GROUP))
     assert re.fullmatch(rf"✅ Closed (?:on|at) {T}: still there, accepted as not a problem\.", lines[-1]), lines
+    assert lines[-3].startswith("- Not a problem ") and lasting[0] == lines[-2], lines
     assert not any("did not come back" in ln or ln.startswith("- Back") for ln in lines), lines
+
+
+def test_a_lasting_repeat_is_a_line_of_the_chats_first_told_never_of_the_owner_escalated_to(agent):
+    # owner, 2026-11-20 (#201): a P2 to the facility manager, escalated to the owner, then "Not a problem" — the rule's
+    # repeats are lines of the FM's card; the owner's chats, joined at the escalation, list closes and presses only
+    rule(agent, "opened", 1, 500, chat=FM_CHAT)
+    tick(agent, 20)
+    tick(agent, 50)                                                        # the escalation: the owner's chats
+    run(agent.on_ha_event("telegram_callback", {"id": "cb", "data": "i:1:not_a_problem", "chat_id": FM_CHAT,
+                                                "user_id": FM, "message": {"message_id": agent.thread.shown(1)[FM_CHAT]["mid"],
+                                                                           "chat": {"id": FM_CHAT}}, "bot": BOT}))
+    owners = {c: card(agent, c) for c in (GROUP, OWNER)}
+    for mid in (501, 502):
+        rule(agent, "opened", 1, mid, chat=FM_CHAT)
+    lines = status_lines(card(agent, FM_CHAT))
+    assert sum(ln.startswith("- Still there") for ln in lines) == 1, lines
+    assert any(re.fullmatch(rf"- Still there at {T}, 2 times since {T}", ln) for ln in lines), lines
+    assert {c: card(agent, c) for c in (GROUP, OWNER)} == owners
 
 
 def test_a_run_that_came_back_starts_at_a_back_at_line_and_a_reminder_carries_its_own_time(agent):

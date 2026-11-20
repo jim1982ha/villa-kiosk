@@ -340,8 +340,12 @@ class Outcome:
         recorded: dict[int, int] = {}                        # incident → the steps this result added to its history
         # when each step happened, when the desk says (a visit's alert taken over late: when the villa sent it)
         at_of: dict[tuple[int, str | None], datetime] = {}
+        # since when a step's problem lasts, when the desk says (a lasting repeat: its line counts from its close)
+        since_of: dict[tuple[int, str | None], str] = {}
         for x in list(res.get("ha_messages") or []) + list(res.get("send") or []):
             iid_x = (x or {}).get("incident_id") if isinstance(x, dict) else None
+            if str(iid_x or "").isdigit() and x.get("since"):
+                since_of[(int(iid_x), x.get("stage"))] = str(x["since"])
             if str(iid_x or "").isdigit() and x.get("at"):
                 try:
                     at_of[(int(iid_x), x.get("stage"))] = datetime.fromisoformat(str(x["at"]))
@@ -349,7 +353,8 @@ class Outcome:
                     pass
         if self.notices:
             for (iid, stage), chs in noticed.items():
-                recorded[iid] = recorded.get(iid, 0) + self.notices.record(iid, stage, chs, at=at_of.get((iid, stage)))
+                recorded[iid] = recorded.get(iid, 0) + self.notices.record(iid, stage, chs, at=at_of.get((iid, stage)),
+                                                                           since=since_of.get((iid, stage)))
         # ⚠️ ONE INCIDENT, ONE PICTURE (owner, 2026-10-11): a reminder went to the facility manager only, and the group's
         # copy kept "(new)" and the first alert — every other copy now shows what was just sent, quietly
         for iid, shown_in in posted.items():

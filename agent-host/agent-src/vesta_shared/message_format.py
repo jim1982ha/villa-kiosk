@@ -263,6 +263,12 @@ STEPS: dict[str, Step] = {
     "stronger": Step("Stronger signal sent", "new", timed=False, listed=True, rings=True),
     "reopened": Step("Reopen request sent", "existing", timed=True),
     "closed": Step("Closing note sent", "closed", timed=False),
+    # ⚠️ A LASTING REPEAT IS A LINE OF ITS CLOSED CARD (owner, 2026-11-20, #201: "the message needs to reflect the
+    # timings of reminders in the status section"): the door left unlocked, closed "Not a problem", its rule repeating
+    # every 30 minutes; the card was posted again each time with nothing new in its Status. Each repeat is ONE line,
+    # folded at its latest moment and counted since the close ("Still there at 18:46, 11 times since 13:30", SINCE):
+    # the card stays closed (its title word), nobody is rung, its line stays above the close's bottom line (`listed`)
+    "lasting": Step("Still-there repeat posted", "closed", timed=False, line="Still there on {at}", listed=True),
 }
 
 
@@ -288,6 +294,9 @@ REPEATS = ", {n} times"
 #: ⚠️ ONE LINE PER STEP (owner, 2026-11-07, drill #135): "- Stronger signal sent 07/11/2026 05:14 (to: Owner & FM)" stood
 #: under each step that rang, a second line for one step.
 RESENT = "alert sent again"
+#: Since when a lasting repeat's problem lasts (the "Not a problem" close), after its count: "Still there at 18:46, 11
+#: times since 13:30" (STEPS "lasting"; status_words writes each other language's).
+SINCE = " since {since}"
 #: The words a moment follows in a Status line when it is a day ("Cleared on 08/11 09:20") and when it is a time alone
 #: ("Cleared at 05:23": timeutil.status_moments); status_words.ON has each language's.
 ON = ("on", "at")
@@ -308,9 +317,10 @@ def rings(stage: str | None, mark: str | None = None) -> bool:
 
 def folds(stage: str | None) -> bool:
     """Does a step of `stage` repeated right after one of the same stage make ONE line with its count (REPEATS)? Every
-    step but a run's start ("Alert sent", "Back at …": each counts its own week) and a close (one close, one step)."""
+    step but a run's start ("Alert sent", "Back at …": each counts its own week) and a close (one close, one step). A
+    lasting repeat of a closed card folds: one line per lasting period."""
     s = STEPS.get(stage or "")
-    return bool(s) and not s.starts_run and s.title != "closed"
+    return bool(s) and not s.starts_run and stage != "closed"
 
 
 #: A button pressed on an alert: the answer in its own chat is no step of its own — the press is the story's line

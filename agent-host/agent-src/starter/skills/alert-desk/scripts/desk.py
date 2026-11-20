@@ -454,7 +454,10 @@ def still_lasting(store: Store, inc: dict, ev: dict, now: datetime, out: dict) -
     W.lasted_again(store, inc, now)
     store.audit("alert-desk", "lasting", {"incident": inc["id"], "rule": ev.get("rule_id"),
                                           "run": ev.get("ha_incident")})
-    _said_again(store.incident(inc["id"]), ev, out, "lasting")
+    # ⚠️ ...AND EACH REPEAT IN ITS STATUS (owner, 2026-11-20, #201: "the message needs to reflect the timings of
+    # reminders in the status section"): posted again every 30 minutes, the card's Status said nothing new. Its
+    # message is a "lasting" step: ONE line, "Still there at 18:46, 11 times since 13:30", counted from the close
+    _said_again(store.incident(inc["id"]), ev, out, "lasting", stage="lasting", since=W.lasting_since(inc))
     return out
 
 
@@ -859,12 +862,14 @@ def _closed_already(store: Store, st) -> dict | None:
     return store.incident(st.incident["id"]) if st.verdict == W.LATE else None
 
 
-def _said_again(late: dict, ev: dict, out: dict, decision: str) -> None:
+def _said_again(late: dict, ev: dict, out: dict, decision: str, stage: str = "closed", since: str | None = None) -> None:
     """Closed `late`'s run ended on the villa's side after its close here: its message takes the incident's number and
-    says its close again, as it stands (`decision`: what the desk did)."""
+    says its close again, as it stands (`decision`: what the desk did). `stage` "lasting": its problem repeated while it
+    lasts, since `since` (its close), a line of the card's Status."""
     out["incident_id"], out["decision"] = late["id"], decision
-    out["ha_messages"] = [R.ha_message(late["id"], context=ev.get("_context_id"), stage="closed",
-                                       **about(late, watched(_close_again(late), W.minutes(late))), as_it_stands=True)]
+    out["ha_messages"] = [R.ha_message(late["id"], context=ev.get("_context_id"), stage=stage,
+                                       **about(late, watched(_close_again(late), W.minutes(late))), as_it_stands=True,
+                                       since=since)]
 
 
 def _close_again(inc: dict):

@@ -256,7 +256,7 @@ def settle(incident: int, note: str, mark: str | None = None, note_in: dict | No
 
 def ha_message(incident: int, text: str, context: str | None, stage: str | None = None, status: str | None = None,
                status_in: dict | None = None, as_it_stands: bool = False, messages=None, takes=None,
-               at: str | None = None, alone: bool = False) -> dict:
+               at: str | None = None, alone: bool = False, since: str | None = None) -> dict:
     """Home Assistant's own messages of the automation run `context` (the event's context) become `incident`'s
     messages, rewritten as `text` under the incident's heading, like every other notice about it (`stage`: STAGES;
     `status_in`: as `message`'s). `as_it_stands`: the incident closed before this message (the rule's late all-clear)
@@ -270,7 +270,8 @@ def ha_message(incident: int, text: str, context: str | None, stage: str | None 
     happened, its Status line's moment — a visit's alert taken over late is "Alert sent" when the VILLA sent it (owner's
     drill #129: "Alert sent 22:57", VESTA's take-over, for an alert sent at 22:55). `alone`: the tablet's card only,
     no chat's message taken over or sent — ⚠️ A VISIT THAT ENDED WHILE VESTA WAS AWAY (owner's drill, 2026-11-07, #138):
-    the villa's cards are final, VESTA records the visit and the tablet shows its one card."""
+    the villa's cards are final, VESTA records the visit and the tablet shows its one card. `since`: since when its
+    problem lasts (ISO), a lasting repeat's (stage "lasting"): its Status line counts the repeats from it."""
     m = {"incident_id": int(incident), "text": text, "context": context,
          **({"status": status, **_in("status_in", status_in)} if status else {}),
          **({"as_it_stands": True} if as_it_stands else {})}
@@ -282,6 +283,8 @@ def ha_message(incident: int, text: str, context: str | None, stage: str | None 
         m["at"] = str(at)                              # when the step happened (a visit's alert: when the villa sent it)
     if alone:
         m["alone"] = True                              # the tablet's card only (a visit that ended while VESTA was away)
+    if since:
+        m["since"] = str(since)                        # since when its problem lasts (a lasting repeat's close)
     if stage is not None:
         if stage not in STAGES:
             raise ValueError(f"stage must be one of {', '.join(STAGES)}")

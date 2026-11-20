@@ -50,7 +50,7 @@ from zoneinfo import ZoneInfo
 from typing import Callable
 
 from . import layout, status_story
-from .status_story import STRONGER_STAGE, _NO_STEP, _cut, listed, observed, resent_into, stays  # noqa: F401
+from .status_story import STRONGER_STAGE, _NO_STEP, _cut, listed, observed, resent_into, standing, stays  # noqa: F401
 
 
 #: The steps that are notes, not notices sent (note_step): a ticket someone took on in the Kiosk (app.py) — the Kiosk's
@@ -108,11 +108,12 @@ def close_step(state, incident: int, note: str, note_in: dict | None = None) -> 
     A closing step standing already is its close: a closing message's ("Closing note sent", no words) takes these words;
     one with words, or the close's end (CLEARED), stays."""
     history = state.incident_history(incident)
-    if history and (history[-1].get("stage") == CLEARED_STAGE
-                    or (history[-1].get("stage") == CLOSED_STEP and history[-1].get("note"))):
+    at = standing(history)          # a lasting repeat after a close leaves it where it stands
+    last = history[at] if at is not None else {}
+    if last.get("stage") == CLEARED_STAGE or (last.get("stage") == CLOSED_STEP and last.get("note")):
         return
-    if history and history[-1].get("stage") == CLOSED_STEP:
-        history.pop()
+    if last.get("stage") == CLOSED_STEP:
+        history.pop(at)
         state.set_incident_history(incident, history)
     note_step(state, incident, CLOSED_STEP, note, note_in)
 
@@ -125,11 +126,12 @@ def note_step(state, incident: int, stage: str, note: str, note_in: dict | None 
     langs = {k: str(v).rstrip(".") for k, v in (note_in or {}).items() if isinstance(v, str) and v}
     step = {"at": datetime.now(timezone.utc).isoformat(), "stage": stage, "note": note.rstrip("."),
             **({"note_in": langs} if langs else {})}
-    if stage == CLEARED_STAGE and history and history[-1].get("stage") == CLOSED_STEP:
+    at = standing(history)
+    if stage == CLEARED_STAGE and at is not None and history[at].get("stage") == CLOSED_STEP:
         # ⚠️ ONE LINE PER CLOSE (owner, 2026-11-05, #118): "- Closing note sent 00:19 (to: Owner & FM)" stood above
         # "- Cleared on … Watch 1h", one close told twice. The close's own words take its closing step's place, told in
-        # every chat as the close was (its copy in each said it)
-        history[-1] = step
+        # every chat as the close was (its copy in each said it), above the line of its problem still repeated
+        history[at] = step
     else:
         history.append(step)
     state.set_incident_history(incident, _kept(history))
@@ -659,9 +661,11 @@ class Notices:
                 or h["to"], **({"day": d} if (d := self.day(int(incident))) else {}),
                 **({"until": u} if (u := self.until(int(incident))) else {})}
 
-    def record(self, incident: int, stage: str | None, sent: list[tuple[int, object]], at: datetime | None = None) -> int:
+    def record(self, incident: int, stage: str | None, sent: list[tuple[int, object]], at: datetime | None = None,
+               since: str | None = None) -> int:
         """A notice about `incident` went to `sent` — (chat, the role or roles it was for) — one result's messages being one
         notice: its history line, each chat with the roles it was for. `stage` unset: "new" for the first, "update" after.
+        `since`: since when its problem lasts (ISO; a lasting repeat's, the desk's: its line counts from it).
         Returns how many steps it recorded (0 or 1): the ONE answer to "what did this result add" (Outcome's `before`)."""
         if stage == PRESSED_STAGE:
             # the answer to a press in its own chat: the press itself is the story's line (note_press) — recorded as
@@ -678,7 +682,8 @@ class Notices:
         # heading reads the chat's roles out of it (owner, 2026-10-17)
         chats = [[int(c), sorted(self.roles_for(c, to) if reach is None else self._wanted(to))] for c, to in sent]
         line = {"at": (at or datetime.now(timezone.utc)).isoformat(), "chats": chats,
-                "stage": stage if stage in STEPS else ("update" if history else "new"), **self._reach_field(reach=reach)}
+                "stage": stage if stage in STEPS else ("update" if history else "new"), **self._reach_field(reach=reach),
+                **({"from": str(since)} if since else {})}
         # the steps whose line counts the week (message_format.STEPS "{times}"): a return, and a new number of an alert
         # already seen this week — ONE count, problems.incident_runs
         if line["stage"] in ("back", "new"):
@@ -708,8 +713,10 @@ class Notices:
 
     @staticmethod
     def _closed_again(history: list[dict]) -> bool:
-        """The incident's last step is its close already: nothing happened since (no return, no reopening)."""
-        return bool(history) and history[-1].get("stage") in (CLOSED_STEP, CLEARED_STAGE)
+        """The incident's last step is its close already: nothing happened since (no return, no reopening; its problem
+        repeated while it lasts leaves the close where it stands: `standing`)."""
+        at = standing(history)
+        return at is not None and history[at].get("stage") in (CLOSED_STEP, CLEARED_STAGE)
 
     def _roles(self, h: dict) -> set[str]:
         """The roles a history line's notice went to, as recorded. A line recorded before 0.12.181 named people (`to`,
