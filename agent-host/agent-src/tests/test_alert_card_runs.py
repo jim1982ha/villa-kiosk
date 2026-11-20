@@ -170,6 +170,28 @@ def test_not_a_problem_still_repeated_by_its_rule_stays_watched_until_its_all_cl
     assert not any(ln.startswith("- Back") for ln in lines), lines
 
 
+def test_a_card_closed_by_an_older_engine_while_still_there_is_watched_again_at_its_next_repeat(agent):
+    # owner, 2026-11-20 (#208: "the notification says the fault is already closed, which is not right"): before
+    # 0.12.529 its watch ended while the door stayed unlocked — "(closed)", struck, "Closed at 22:31: still there"
+    from vesta_shared.store import Notes, Store
+    rule(agent, "opened", 1, 500, priority="P1")
+    run(agent.on_ha_event("telegram_callback", {"id": "cb", "data": "i:1:not_a_problem", "chat_id": GROUP,
+                                                "user_id": OWNER, "message": {"message_id": 500, "chat": {"id": GROUP}},
+                                                "bot": BOT}))
+    rule(agent, "opened", 1, 501)
+    st = Store(agent.s.store_path)                                        # the older engine's watch end, as it left it
+    st.note(1, {Notes.WATCH_OVER: st.incident(1)["closed_at"]})
+    run(agent.thread.close(1, "Closed on {time}: still there, accepted as not a problem.", final=True))
+    assert "(closed)" in card(agent, GROUP).split("\n")[0]
+    rule(agent, "opened", 1, 502)                                         # the door still unlocked: its next repeat
+    text = card(agent, GROUP)
+    assert "(watch)" in text.split("\n")[0] and "Closed" not in text, text
+    lines = status_lines(text)
+    assert re.fullmatch(rf"✅ Not a problem (?:on|at) {T} \(Owner\)\. Watch .+", lines[-2]), lines
+    assert re.fullmatch(rf"- Still there at {T}, {T} since {T}", lines[-1]), lines
+    assert not any(ln.startswith("- Not a problem") for ln in lines), lines   # its close once, its bottom line
+
+
 def test_a_lasting_repeat_is_a_line_of_the_chats_first_told_never_of_the_owner_escalated_to(agent):
     # owner, 2026-11-20 (#201): a P2 to the facility manager, escalated to the owner, then "Not a problem" — the rule's
     # repeats are lines of the FM's card; the owner's chats, joined at the escalation, list closes and presses only

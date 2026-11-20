@@ -469,6 +469,17 @@ def over(inc, now: datetime, later=()) -> str | None:
     return ENDED
 
 
+def watch_ended_while_lasting(store: Store, inc) -> bool:
+    """Closed `inc`'s watch was said over while its "Not a problem" problem lasts (an engine before 0.12.529 did, #208):
+    its end taken back (Notes.WATCH_OVER), watched again while it lasts (`over`). Whether it was."""
+    inc = dict(inc)
+    if not (inc.get("closed_at") and notes_of(inc).get(Notes.WATCH_OVER) == inc["closed_at"]
+            and notes_of(inc).get(Notes.LASTING)):
+        return False
+    store.note(inc["id"], drop=(Notes.WATCH_OVER,))
+    return True
+
+
 def told_over(store: Store, inc) -> None:
     """Its watch's end recorded (Notes.WATCH_OVER: this close's moment) — said once; a later close is watched again."""
     store.note(dict(inc)["id"], {Notes.WATCH_OVER: dict(inc)["closed_at"]})

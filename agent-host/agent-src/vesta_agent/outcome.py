@@ -516,6 +516,9 @@ class Outcome:
             # named the card its reminder had replaced; taken over, the live copy was deleted for a message gone
             found = [(c, m) for c, m in found
                      if self.thread is None or not self.thread.replaced(int(iid), c, m)]
+        if h.get("unfinish") and self.thread is not None:
+            # its problem still there: the last word an older engine gave it taken back (IncidentThread.unfinish)
+            self.thread.unfinish(int(iid))
         out = []
         for chat, mid in found:
             # Home Assistant's own alert, taken over: the incident's text, the earlier messages' times, its buttons
