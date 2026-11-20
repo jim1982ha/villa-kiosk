@@ -1,3 +1,11 @@
+## 0.12.529
+
+- **An alert marked "Not a problem" is never closed while it is still there.** The door left unlocked: its card stays
+  under watch, not struck, for as long as the villa's system keeps repeating it, and closes ("Cleared at …") when the
+  villa says it is over (the door locked).
+- **Each repeat shows its own time, on the card's last line:** "Still there at 21:56, 22:26, 22:56, 23:26 since 21:31",
+  so every ping adds something you can see. Past six repeats, the latest six and how many in all.
+
 ## 0.12.528
 
 - **Your edits to the alert desk's words reach every line.** A villa that edited its alert desk's words now sees its
