@@ -451,6 +451,12 @@ def over(inc, now: datetime, later=()) -> str | None:
     end = until(inc)
     if end is None or p.get(Notes.WATCH_OVER) == inc.get("closed_at") or p.get(CHECK):
         return None
+    if lasting(inc, now):
+        # ⚠️ NEVER CLOSED WHILE IT IS STILL THERE (owner, 2026-11-20, #208: "It can't be closed if an issue is still
+        # here, right?"): its watch of 1h over at 22:31, the card read "(closed)", struck, "Closed at 22:31: still there,
+        # accepted as not a problem." while the door stayed unlocked and its rule posted it again every 30 minutes. A
+        # "Not a problem" problem is watched while it lasts; the villa's all-clear for it ends it (desk.resolved)
+        return None
     now = moment(now)
     if now < end or now - end > timedelta(days=late_close_days()):
         return None

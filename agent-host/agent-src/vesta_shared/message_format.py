@@ -297,6 +297,11 @@ RESENT = "alert sent again"
 #: Since when a lasting repeat's problem lasts (the "Not a problem" close), after its count: "Still there at 18:46, 11
 #: times since 13:30" (STEPS "lasting"; status_words writes each other language's).
 SINCE = " since {since}"
+#: How many of a lasting repeat's latest moments its line lists, each one ("Still there at 21:56, 22:26, 22:56, 23:26
+#: since 21:31"): more than these, the line lists the latest and says how many in all (REPEATS). ⚠️ EACH REPEAT ITS
+#: TIME (owner, 2026-11-20, #208: "I still receive telegram notification without seeing any new texts in the status
+#: section"): one line, "Still there at 23:26, 4 times since 21:31", only its time and count changed at each ping.
+LASTING_LISTED = 6
 #: The words a moment follows in a Status line when it is a day ("Cleared on 08/11 09:20") and when it is a time alone
 #: ("Cleared at 05:23": timeutil.status_moments); status_words.ON has each language's.
 ON = ("on", "at")

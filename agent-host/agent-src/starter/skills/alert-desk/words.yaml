@@ -133,19 +133,6 @@ watch_over:
   zh: "已于{time}关闭：{watch}内未再出现。"
   ja: "{time}に終了：{watch}以内に再発なし。"
   ko: "{time}에 종료: {watch} 안에 다시 발생하지 않음."
-# ⚠️ STILL THERE, NEVER "IT DID NOT COME BACK" (owner, 2026-11-20, #201): closed "Not a problem" while it lasts, its rule
-# still repeating it (the door still unlocked); its watch's end says so instead. {time}: as above.
-watch_over_lasting:
-  en: "Closed on {time}: still there, accepted as not a problem."
-  fr: "Clôturée le {time} : toujours là, acceptée comme pas un problème."
-  id: "Ditutup pada {time}: masih ada, diterima sebagai bukan masalah."
-  de: "Geschlossen am {time}: noch da, als kein Problem akzeptiert."
-  es: "Cerrada el {time}: sigue ahí, aceptada como no es un problema."
-  it: "Chiusa il {time}: ancora presente, accettata come non è un problema."
-  nl: "Gesloten op {time}: nog steeds aanwezig, aanvaard als geen probleem."
-  zh: "已于{time}关闭：仍存在，已接受为不是问题。"
-  ja: "{time}に終了：継続中、問題なしとして承認済み。"
-  ko: "{time}에 종료: 여전히 발생 중, 문제 아님으로 승인됨."
 
 rule_gone:
   en: "the automation that sent it no longer exists (it was renamed or deleted in the villa's system). Its next alert comes with a new number"

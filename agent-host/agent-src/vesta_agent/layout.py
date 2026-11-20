@@ -203,7 +203,9 @@ def render(p: dict, limit: int | None = None) -> str:
     if not h:
         tail = f"{status_head()}{status}" if status else ""
         return fit(middle, max(limit - tg_len(tail), 20)) + tail if middle else tail.lstrip("\n")
-    title, to, history = title_line(h), h["to"], status_shown(h, list(h["history"]))
+    # a problem closed "Not a problem" posted again after its close: its line under the bottom line, the card's last
+    above, under = status_story.after_close(h["history"], h.get("word"))
+    title, to, history, under = title_line(h), h["to"], status_shown(h, above), status_shown(h, under)
     floor, dropped, cap = min(middle_floor(), tg_len(middle)), 0, None
     lang = h.get("lang") or "en"                       # the chat's language: its Status label and counted line
 
@@ -211,7 +213,7 @@ def render(p: dict, limit: int | None = None) -> str:
         more = [f"- {status_words.earlier(dropped, lang)}"] if dropped else []
         hist = "\n".join(history[:1] + more + history[1:])
         return document(title, to, [(None, [mid]), (status_words.label(lang),
-                                                    [fit(hist, cap) if cap and hist else hist, status])])
+                                                    [fit(hist, cap) if cap and hist else hist, status, *under])])
     while len(history) > 1 and tg_len(framed("")) + floor > limit:
         history.pop(1)                                 # the oldest after the first notice, which always stays
         dropped += 1

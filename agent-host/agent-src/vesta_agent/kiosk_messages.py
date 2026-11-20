@@ -32,7 +32,7 @@ from datetime import datetime, timezone
 from vesta_shared import agreement
 from vesta_shared.message_format import role_words
 
-from . import button_data, layout, ringing
+from . import button_data, layout, ringing, status_story
 from .kiosk_owed import MESSAGE, KioskOwed
 from .in_progress import scheduled_run
 from .scheduler import job_of
@@ -114,12 +114,13 @@ def of_parts(key: str, p: dict, *, keyboard: dict | None = None, photo: str | No
     if isinstance(tr, dict) and tr.get("lang") and isinstance(tr.get("body"), str) and tr["body"].strip():
         languages.setdefault(tr["lang"], {})["body"] = tr["body"].strip()
     story, said_with = _said_on_its_line(_tablet_lines((h.get("story") or h["history"])) if h else [], said, said_with)
+    story, under = status_story.after_close(story, (h or {}).get("word"))     # a lasting repeat after the close: under its state, as Telegram
     rec = {
         "key": key, "title": layout.title_line(h) if h else "", "to": to if to is not None else (h["to"] if h else ""),
         "takes": takes or [],
         "lead": p.get("lead"), "body": layout.body_shown(p, h),
         # the tablet is everyone's: every step, whoever it went to (layout.head's `story`), else this copy's own
-        "status": _lines(layout.status_shown(h, [*story, *([f"- {said_with}"] if said_with else []), status]),
+        "status": _lines(layout.status_shown(h, [*story, *([f"- {said_with}"] if said_with else []), status, *under]),
                          "status", "statusLine"),
         "stage": (h or {}).get("word") or said.get("stage") or "", "mark": p.get("mark") or "",
         "buttons": buttons_of(keyboard), "languages": languages, "photos": tablet_photos(photos),

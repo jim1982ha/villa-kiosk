@@ -133,7 +133,7 @@ def test_not_a_problem_then_the_rules_late_all_clear_then_its_watch_tell_the_pre
     assert not any("Cleared" in ln or "Closing note" in ln for ln in lines), lines
 
 
-def test_not_a_problem_still_repeated_by_its_rule_ends_its_watch_still_there(agent):
+def test_not_a_problem_still_repeated_by_its_rule_stays_watched_until_its_all_clear(agent):
     # owner, 2026-11-20 (#201): the door still unlocked, its rule repeating it; "it did not come back" would be false
     rule(agent, "opened", 1, 500, priority="P1")
     run(agent.on_ha_event("telegram_callback", {"id": "cb", "data": "i:1:not_a_problem", "chat_id": GROUP,
@@ -142,24 +142,32 @@ def test_not_a_problem_still_repeated_by_its_rule_ends_its_watch_still_there(age
     sent = len(agent.tg.sent)
     for mid in (501, 502, 503):
         rule(agent, "opened", 1, mid)                                      # its rule's repeats: nobody rung
-    # ...and its message is the alert's ONE card, closed, never a "New alert" card of its own beside it (owner,
-    # 2026-11-20: "Wasn't it merged into a single telegram notification before?")
+    # ...and its message is the alert's ONE card, never a "New alert" card of its own beside it (owner, 2026-11-20:
+    # "Wasn't it merged into a single telegram notification before?")
     shown = agent.thread.shown(1)[GROUP]
     assert shown["mid"] == 503 and "New alert" not in shown["text"] and "(watch)" in shown["text"].split("\n")[0], shown
     assert len(agent.tg.sent) == sent, agent.tg.sent[sent:]
-    # each repeat in its Status, ONE line at its latest moment, counted since the close (owner, 2026-11-20, #201: "the
-    # message needs to reflect the timings of reminders in the status section"), above the close it leaves standing
+    # each repeat its own time, on ONE line counted from the close, the card's LAST line, under the close (owner,
+    # 2026-11-20, #208: "I still receive telegram notification without seeing any new texts in the status section")
     lines = status_lines(shown["text"])
-    lasting = [ln for ln in lines if ln.startswith("- Still there")]
-    assert len(lasting) == 1 and re.fullmatch(rf"- Still there at {T}, 3 times since {T}", lasting[0]), lines
-    assert re.fullmatch(rf"✅ Not a problem (?:on|at) {T} \(Owner\)\. Watch .+", lines[-1]), lines
+    assert re.fullmatch(rf"- Still there at {T}, {T}, {T} since {T}", lines[-1]), lines
+    assert re.fullmatch(rf"✅ Not a problem (?:on|at) {T} \(Owner\)\. Watch .+", lines[-2]), lines
+    assert sum(ln.startswith("- Still there") for ln in lines) == 1, lines
     # the tablet's card and the Kiosk fault's story tell it too
     assert any(x["note"].startswith("Still there, 3 times since ") for x in agent.notices.story(1))
-    tick(agent, 5 * 60)                                                    # its watch (4h) is over
-    lines = status_lines(card(agent, GROUP))
-    assert re.fullmatch(rf"✅ Closed (?:on|at) {T}: still there, accepted as not a problem\.", lines[-1]), lines
-    assert lines[-3].startswith("- Not a problem ") and lasting[0] == lines[-2], lines
-    assert not any("did not come back" in ln or ln.startswith("- Back") for ln in lines), lines
+    # never closed while it is still there (owner, 2026-11-20, #208: "It can't be closed if an issue is still here")
+    tick(agent, 5 * 60)                                                    # its watch (4h) is past
+    text = card(agent, GROUP)
+    assert "(watch)" in text.split("\n")[0] and "Closed" not in text, text
+    # the villa's all-clear (the door locked) ends it (the desk's own test: past its watch, "Cleared" its last word):
+    # closed, its story struck, the repeats a line of it above its last word
+    rule(agent, "resolved", 1, 504)
+    tick(agent, 5 * 60 + 10)
+    text = card(agent, GROUP)
+    assert "(closed)" in text.split("\n")[0], text
+    lines = status_lines(text)
+    assert lines[-1].startswith("✅ Closed ") and lines[-2].startswith("- Still there at "), lines
+    assert not any(ln.startswith("- Back") for ln in lines), lines
 
 
 def test_a_lasting_repeat_is_a_line_of_the_chats_first_told_never_of_the_owner_escalated_to(agent):
@@ -176,7 +184,7 @@ def test_a_lasting_repeat_is_a_line_of_the_chats_first_told_never_of_the_owner_e
         rule(agent, "opened", 1, mid, chat=FM_CHAT)
     lines = status_lines(card(agent, FM_CHAT))
     assert sum(ln.startswith("- Still there") for ln in lines) == 1, lines
-    assert any(re.fullmatch(rf"- Still there at {T}, 2 times since {T}", ln) for ln in lines), lines
+    assert any(re.fullmatch(rf"- Still there at {T}, {T} since {T}", ln) for ln in lines), lines
     assert {c: card(agent, c) for c in (GROUP, OWNER)} == owners
 
 

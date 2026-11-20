@@ -30,7 +30,7 @@ from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
 from vesta_shared import status_words
-from vesta_shared.message_format import MARK_ICONS, ON_PLACE, ON_TELEGRAM, PRESSED_STAGE, STEPS
+from vesta_shared.message_format import LASTING_LISTED, MARK_ICONS, ON_PLACE, ON_TELEGRAM, PRESSED_STAGE, STEPS
 from vesta_shared.timeutil import moment, moment_label, status_moment
 
 #: Where a line's moment goes in its words: filled when it is shown (`shown`), taken out for the fault (`fault`).
@@ -99,7 +99,7 @@ def lines(notices, incident: int, lang: str = "en", latest_excluded: int = 0, bo
         if bottom and h.get("stage") == PRESSED_STAGE and h.get("told") and \
                 all(x.get("stage") == ESCALATED_STAGE for x in history[i + 1:]):
             continue
-        words = _words(notices, h, lang)
+        words = _words(notices, h, lang, listed=bottom)
         if words is None:
             continue
         if i in resent:
@@ -161,9 +161,10 @@ def ending(h: dict) -> bool:
     return h.get("stage") in (CLOSED_STEP, CLEARED_STAGE, TAKEN_STAGE, PRESSED_STAGE)
 
 
-def _words(notices, h: dict, lang: str) -> str | None:
+def _words(notices, h: dict, lang: str, listed: bool = False) -> str | None:
     """One step of an incident's history as its line says it, SLOT where its moment goes: "Reminder sent ⁣ (to: FM)",
-    "Back at ⁣, 2nd time in 7 days (to: FM)", "🆘 Need help on Telegram at ⁣ (Fabien)", a note as written."""
+    "Back at ⁣, 2nd time in 7 days (to: FM)", "🆘 Need help on Telegram at ⁣ (Fabien)", a note as written. `listed`:
+    a lasting repeat's moments each go in its SLOT (`shown`, LASTING_LISTED), its count said only past them."""
     if h.get("dropped"):
         return status_words.earlier(h["dropped"], lang)
     if h.get("note"):
@@ -172,8 +173,11 @@ def _words(notices, h: dict, lang: str) -> str | None:
     if h.get("stage") == PRESSED_STAGE:
         return _pressed(h, lang)
     since = moment(h.get("from")) if h.get("from") else None
+    times = h.get("times")
+    if listed and h.get("stage") == LASTING_STAGE and (times or 1) <= LASTING_LISTED:
+        times = None                    # each repeat its moment on the line (`shown`): no count beside them
     return status_words.step(h.get("stage"), SLOT, status_words.times(h.get("run"), _again(), lang),
-                             notices._who(notices._roles(h), h.get("reach"), lang=lang), lang, h.get("times"),
+                             notices._who(notices._roles(h), h.get("reach"), lang=lang), lang, times,
                              since=moment_label(since, notices.tz) if since else None)
 
 
@@ -209,15 +213,41 @@ def shown(x: Line, day: date | None, zone: str | None = None, lang: str = "en") 
         if day is not None and t.date() == day:
             for on, at in status_words.on_words(lang):
                 words = words.replace(f"{on} {SLOT}", f"{at} {SLOT}")
-        words = words.replace(SLOT, status_moment(t, day))
+        words = words.replace(SLOT, ", ".join(status_moment(_local(m, zone), day) for m in _listed(x)) or
+                              status_moment(t, day))
     return status_words.moments(words.replace(SLOT, ""), day, lang)
+
+
+def _listed(x: Line) -> list[datetime]:
+    """The moments line `x` lists: a lasting repeat's latest (LASTING_LISTED), each one — "Still there at 21:56, 22:26,
+    22:56" (owner, 2026-11-20, #208) — none for any other line (its one moment)."""
+    if x.stage != LASTING_STAGE and not x.id.startswith(f"{LASTING_STAGE}@"):
+        return []
+    return [m for m in (moment(a) for a in x.ats[-LASTING_LISTED:]) if m is not None]
+
+
+def after_close(lines, word: str | None = None) -> tuple[list, list]:
+    """A heading's Status lines (as `as_head` keeps them) split before its bottom line and after it: the repeats of a
+    problem closed "Not a problem" that came after the close go UNDER it, the card's last line.
+
+    ⚠️ CLOSED, STRUCK, STILL RINGING (owner, 2026-11-20, #208: "But it says 'closed at...' and it's stroke"): its watch
+    over, the card read "✅ Closed at 22:31: still there, accepted as not a problem." and every line above it struck —
+    the repeat posted at 23:26 among them. The latest repeat is what the ping is about: the card's last, plain line.
+    `word`: the card's title word — "closed", the problem is over (its all-clear): its last word is the bottom line."""
+    lines = list(lines or ())
+    if word == "closed":
+        return lines, []
+    cut = len(lines)
+    while cut and isinstance(lines[cut - 1], dict) and str(lines[cut - 1].get("id") or "").startswith(f"{LASTING_STAGE}@"):
+        cut -= 1
+    return lines[:cut], lines[cut:]
 
 
 def text(x, day: date | None = None, lang: str = "en") -> str:
     """A heading's Status line as shown: one kept as facts (`as_head`), drawn from them; one kept as text (a copy
     drawn before 0.12.481, a line the desk wrote) with its moments written by the alert's day (status_words.moments)."""
     if isinstance(x, dict):
-        return f"- {shown(Line(str(x.get('id') or ''), moment(x['at']) if x.get('at') else None, str(x.get('words') or '')), day, None, lang)}"
+        return f"- {shown(Line(str(x.get('id') or ''), moment(x['at']) if x.get('at') else None, str(x.get('words') or ''), ats=tuple(x.get('ats') or ())), day, None, lang)}"
     return status_words.moments(str(x), day, lang)
 
 
@@ -253,7 +283,9 @@ def fault(notices, incident: int) -> list[dict]:
 def as_head(x: Line, zone: str) -> dict:
     """Line `x` as a heading keeps it (layout.head's history): its id, its moment in the villa's time and its words —
     drawn when shown (layout.status_shown), never stored as text."""
-    return {"id": x.id, "at": _local(x.at, zone).isoformat() if x.at else None, "words": x.words}
+    ats = [_local(m, zone).isoformat() for m in _listed(x)]
+    return {"id": x.id, "at": _local(x.at, zone).isoformat() if x.at else None, "words": x.words,
+            **({"ats": ats} if len(ats) > 1 else {})}
 
 
 # ------------------------------------------------------------------ which lines stay, which the bottom line says

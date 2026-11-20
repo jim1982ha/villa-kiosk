@@ -768,7 +768,7 @@ def resolved(store: Store, ev: dict, now: datetime, params: VillaParams | None =
     if not inc:
         # ⚠️ ALREADY CLOSED HERE, STILL ITS MESSAGE (architecture review 22): the desk saw it over first (seen_again, a
         # Done) — Home Assistant's all-clear then stayed a second message in the group, without its incident's number
-        late = _closed_already(store, st)
+        late = _closed_already(store, st, now, out, ended())
         if late and not VS.transition(visit_of(ev), None, notes_of(late), "resolved").tell:
             # a visit the villa closed while VESTA was away, closed at its first event (visit_intake): its replayed
             # close changes nothing seen (owner's drills, 2026-11-07, #141, #143)
@@ -852,13 +852,21 @@ def answer_said(ans: dict, when: str, who: str, end: bool = False) -> Said:
                  for lang, lab in (b.get("labels") or {}).items() if lang in SW.LANGS})
 
 
-def _closed_already(store: Store, st) -> dict | None:
+def _closed_already(store: Store, st, now: datetime, out: dict, last: Said) -> dict | None:
     """An all-clear (or a rule giving up) of no open alert (`st`: its alert_watch.standing): the problem a person said
     was "Not a problem" while it lasts is over when it says so (alert_watch.lasted: its next alert is a new
-    occurrence), and the incident of its run closed lately (LATE), read as it stands now — or None."""
+    occurrence), and the incident of its run closed lately (LATE), read as it stands now — or None.
+
+    Its watch already past (alert_watch.over: watched while it lasted), it ends now: `last` its last word ("Cleared on
+    23:58."), every copy titled "(closed)" and struck, as a watch's end (watch_over). Only an all-clear ends it (`ends`):
+    a rule giving up while it is still there leaves it watched while it repeats."""
     if st.ends is not None:
         W.lasted(store, st.ends)
         store.audit("alert-desk", "lasting_over", {"incident": st.ends["id"]})
+        ends = store.incident(st.ends["id"])
+        if W.over(ends, now) == W.ENDED:
+            W.told_over(store, ends)
+            out.setdefault("settle", []).append(R.settle(ends["id"], str(last), note_in=last.langs, final=True))
     return store.incident(st.incident["id"]) if st.verdict == W.LATE else None
 
 
@@ -1109,8 +1117,8 @@ def watch_over(store: Store, now: datetime, out: dict, zone: str | None = None) 
             store.audit("alert-desk", "watch_over", {"incident": inc["id"], "came_back_as_new": True})
             continue
         until = W.until(inc)
-        # closed "Not a problem" and its rule still repeating it: still there, never "it did not come back"
-        said = say("watch_over_lasting" if W.lasting(inc, now) else "watch_over",
+        # closed "Not a problem" and its rule still repeating it, its watch holds (alert_watch.over): never said here
+        said = say("watch_over",
                    time=moment_label(until, zone) if zone else "{time}", watch=lasting_in(W.minutes(inc) * 60))
         out.setdefault("settle", []).append(R.settle(inc["id"], str(said), note_in=said.langs, final=True))
         store.audit("alert-desk", "watch_over", {"incident": inc["id"]})
@@ -1232,7 +1240,7 @@ def abandoned(store: Store, ev: dict, now: datetime, params: VillaParams | None 
         # then the rule's own "Still not clear after 30min: no longer tracking this incident" at 15:34, a message with no
         # number and no priority): the rule gave up on a run a person had already closed. Its message becomes the
         # incident's card again, as it stands (its close said once more), never a second, nameless alert
-        late = _closed_already(store, st)
+        late = _closed_already(store, st, now, out, ended())
         if late:
             _said_again(late, ev, out, "abandoned_late")
         return out
