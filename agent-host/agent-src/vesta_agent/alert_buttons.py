@@ -109,7 +109,7 @@ class AlertButtons:
         if not iid.isdigit():
             return await toast("Unknown button.")
         skill_name = self.state.alert_skill(iid, chat) or (next(
-            (k for c in self.thread.shown(int(iid)) if (k := self.state.alert_skill(iid, c))), None) if anywhere else None)
+            (k for c in self.thread.chats(int(iid)) if (k := self.state.alert_skill(iid, c))), None) if anywhere else None)
         skill = self.skills.get(skill_name) if skill_name else None
         buttons = {b["option"]: b for b in self.offered(skill, iid)}
         if opt not in buttons:
@@ -129,9 +129,8 @@ class AlertButtons:
         # two presses in two places at once were each taken. Keyed by the incident; a press on the tablet's copy is
         # answered already once every copy of it is settled.
         key = str(iid)
-        shown = self.thread.shown(int(iid))
-        settled_everywhere = anywhere and bool(shown) and all((c or {}).get("settled") for c in shown.values())
-        if key in self._pressing or (shown.get(int(chat)) or {}).get("settled") or settled_everywhere:
+        settled_everywhere = anywhere and self.thread.settled_everywhere(int(iid))
+        if key in self._pressing or self.thread.settled(int(iid), int(chat)) or settled_everywhere:
             self.state.log("press_refused", {"incident": iid, "by": person.telegram_id, "reason": "already answered"})
             # ⚠️ A STRAY COPY OF AN ALERT ALREADY ANSWERED GOES TOO (owner, 2026-11-20, #199): one no record names kept
             # its buttons after the close, each press only "Already answered."

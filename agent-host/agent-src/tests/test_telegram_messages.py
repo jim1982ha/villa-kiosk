@@ -75,10 +75,10 @@ def test_an_edit_keeps_its_note_and_shows_as_a_send_does(tmp_path):
     # edits went to Telegram directly: cut at 4,096 characters (the "Done — Marie" at the end lost) and never cleaned
     from vesta_agent.incident_thread import IncidentThread
     d, tg = _delivery(tmp_path)
-    thread = IncidentThread(d.state, "UTC", edit=d.edit, delete=d.delete)
+    thread = IncidentThread(d.state, "UTC", edit=d.edit, delete=d.delete, send=d.send)
     long_alert = "Incident #9 · **leak**\n" + "\n".join("detail " + "w" * 80 for _ in range(60))
     from vesta_agent import layout
-    asyncio.run(thread.post(9, GROUP, 77, layout.parts(body=long_alert), buttons=True))
+    asyncio.run(_copy(thread, 9, layout.parts(body=long_alert)))
     asyncio.run(thread.close(9, "Done, Marie, {time}"))
     (_, _, text), = tg.edits
     assert "Done, Marie" in text and tg_len(text) <= TELEGRAM_LIMIT and "**" not in text
@@ -92,9 +92,9 @@ def test_a_double_tap_on_done_answers_once(tmp_path):
     from vesta_agent.incidents import Incidents
     from vesta_agent.incident_thread import IncidentThread
     d, tg = _delivery(tmp_path)
-    thread = IncidentThread(d.state, "UTC", edit=d.edit, delete=d.delete)
+    thread = IncidentThread(d.state, "UTC", edit=d.edit, delete=d.delete, send=d.send)
     from vesta_agent import layout
-    asyncio.run(thread.post(5, GROUP, 70, layout.parts(body="Incident #5 · leak"), buttons=True))
+    asyncio.run(_copy(thread, 5, layout.parts(body="Incident #5 · leak")))
     ran, toasts = [], []
     skill = SimpleNamespace(name="desk", on_reply="desk.py reply")
 
@@ -125,7 +125,7 @@ def test_a_double_tap_on_done_answers_once(tmp_path):
     toasts.clear()
     asyncio.run(b.press(tablet_chat, ["5", "need_help"], person, toast, anywhere=True))
     assert len(ran) == 1 and toasts == ["Already answered."]
-    asyncio.run(thread.post(6, GROUP, 71, layout.parts(body="Incident #6 · leak"), buttons=True))
+    asyncio.run(_copy(thread, 6, layout.parts(body="Incident #6 · leak")))
     d.state.set_alert_skill(6, GROUP, "desk")
 
     async def slow_toast(text):                         # a real toast goes to Telegram: the press waits there
@@ -160,3 +160,10 @@ def test_a_style_that_fails_never_keeps_a_message_from_its_chat(monkeypatch):
     assert asyncio.run(tg.send(1, text)) == [7] and asyncio.run(tg.edit(1, 7, text))
     assert [(m, d["text"], "entities" in d) for m, d in calls] == [("sendMessage", text, False),
                                                                   ("editMessageText", text, False)]
+
+
+def _copy(thread, iid, parts):
+    """Incident `iid`'s copy, with its Done button, sent to the group through the thread."""
+    from vesta_agent import layout
+    kb = {"inline_keyboard": [[{"text": "Done", "callback_data": f"i:{iid}:done"}]]}
+    return thread.deliver(iid, GROUP, layout.render(parts), parts, keyboard=kb)

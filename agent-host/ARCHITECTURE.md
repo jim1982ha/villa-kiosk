@@ -1426,3 +1426,20 @@ tick beside lines that cannot be, not an on/off setting) and `(file)` inside the
 
 Not renamed on purpose: Telegram's messages and the AI's instructions still say "VESTA Kiosk" (`message_format`,
 `kiosk_told`, `villa_recipients`, `tools`, `tickets`, the starter skills); the page's own texts say "VESTA UI".
+
+## One module sends, records and replaces every copy (architecture review, 2026-11-20)
+
+`IncidentThread.deliver(thread, chat, text, parts, limit=, how=, keyboard=, …)` is the one way a copy of an incident or
+an approval request reaches a chat: a quiet step (`how` EDIT_QUIET) is an edit of the chat's copy (`restep`), else it
+is sent through the thread's adapter (`send` / `edit` / `delete` / `media`: `delivery.Delivery` in the engine, its
+`send` Telegram off too; the tests' fake Telegram under it), its id and what it shows recorded at once
+(`state.add_incident_sent`), then made the chat's copy under the incident's lock (`_post`); not taken, the tablet is
+told (`tell`). `resend` and `picture` send through the same private `_send`; `_retire` is the one "delete, else a
+pointer to the newer one". `posting.Poster` lays the copy out and decides whether it rings, nothing more. A copy sent
+and never recorded (a stop in between) goes at the next post, close or housekeeping pass when its chat holds a record
+(#199), and BECOMES the chat's record when it holds none (an approval's copy, an alert's first in a chat: before, no
+close ever reached it). `incsent:` rows are {id: what it shows}; the list of ids 0.12.522–0.12.524 wrote is still read
+(ids with nothing kept: deleted as before, never recorded), and a release of then reads the new rows' keys as the same
+ids. Other modules ask the thread (`chats`, `card`, `cards`, `parts`, `settled`, `settled_everywhere`, `answering`,
+`replaced`, `held`) and never read a record's keys; `own` records a pressed request sent before 0.12.128 as its one
+copy.

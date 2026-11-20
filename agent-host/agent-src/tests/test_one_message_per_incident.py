@@ -341,12 +341,17 @@ def test_two_posts_of_one_incident_at_once_leave_one_copy_in_the_chat(tmp_path):
     async def edit(*_a):
         await asyncio.sleep(0)
         return True
-    th = IncidentThread(State(str(tmp_path / "s.db")), "UTC", edit=edit, delete=delete)
-    asyncio.run(th.post(55, GROUP, 1, {"body": "x"}))
+    ids = iter((1, 2, 3))
+
+    async def send(_chat, _text, **_how):
+        mid = next(ids)
+        shown.add(mid)
+        return mid
+    th = IncidentThread(State(str(tmp_path / "s.db")), "UTC", edit=edit, delete=delete, send=send)
+    asyncio.run(th.deliver(55, GROUP, "x", {"body": "x"}))
 
     async def both():
-        shown.update({2, 3})
-        await asyncio.gather(th.post(55, GROUP, 2, {"body": "a"}), th.post(55, GROUP, 3, {"body": "b"}))
+        await asyncio.gather(th.deliver(55, GROUP, "a", {"body": "a"}), th.deliver(55, GROUP, "b", {"body": "b"}))
     asyncio.run(both())
     assert shown == {th.shown(55)[GROUP]["mid"]}, (shown, th.shown(55))
 
@@ -476,24 +481,29 @@ def test_a_cleared_alert_is_watched_then_closed_struck_with_the_time_it_ended(ag
 
 
 def _reminder_cut_before_its_record(v):
-    """The reminder sent to the FM's chat, then the work stopped (an update) while its post waited for the incident's
-    lock: Telegram took the copy, no record names it."""
+    """The reminder sent to the FM's chat, then the work stopped (an update) before it was recorded: Telegram took the
+    copy, then was slow to delete the older one, and the stop came first — no record names the new copy."""
     sk = v.skills.get("alert-desk")
     at = (datetime.now(timezone.utc) + timedelta(minutes=20)).isoformat()
+    real = v.tg.delete
 
     async def go():
-        lock = v.thread._lock(1)
-        await lock.acquire()                         # another change of #1 under way
-        n = len(v.tg.sent)
+        reached = asyncio.Event()
+
+        async def slow(chat, mid):
+            if chat == FM_CHAT:
+                reached.set()
+                await asyncio.Event().wait()         # Telegram answering slowly: the stop comes first
+            return await real(chat, mid)
+        v.tg.delete = slow
         work = asyncio.create_task(v.run_code_job(sk, f"desk.py tick --now {at}", 60))
-        for _ in range(600):
-            if [c for c, _t, _k in v.tg.sent[n:] if c == FM_CHAT]:
-                break
-            await asyncio.sleep(0.05)
+        await asyncio.wait_for(reached.wait(), 30)
         work.cancel()                                # the stop
         await asyncio.gather(work, return_exceptions=True)
-        lock.release()
-    run(go())
+    try:
+        run(go())
+    finally:
+        v.tg.delete = real
 
 
 def test_a_copy_sent_but_never_recorded_goes_at_the_close(agent):

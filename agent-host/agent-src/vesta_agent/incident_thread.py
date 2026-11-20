@@ -6,6 +6,12 @@ answer, and Home Assistant's own alert once its incident is known — replaces t
 new one is posted first, then the older one is deleted, so a failed send never leaves the chat without the incident.
 One Telegram will no longer let the bot delete (older than 48 hours) is cut down to a pointer instead.
 
+⚠️ ONE MODULE SENDS, RECORDS AND REPLACES EVERY COPY (architecture review, 2026-11-20): `deliver` sends a copy through
+the chats' adapter (send / edit / delete), records its id the moment it arrives, makes it the chat's copy, retires the
+older one and cleans up a copy a stop left unrecorded. The poster only lays the copy out and decides whether it rings;
+the other modules ask the thread what a chat shows (`chats`, `card`, `settled`, `answering`, `replaced`, `parts`)
+instead of reading its records.
+
 ⚠️ ONE MODULE, ONE RECORD (architecture review 12, 2026-10-09). This was spread over two record families with two
 lifetimes, alert_buttons' replace / adopt / settle, and the order outcome.carry_out ran them in. Settling after the
 sends took the buttons off the owner's escalation the moment "Need help" sent it, and the latest-message records were
@@ -113,8 +119,9 @@ class IncidentThread:
         self._translations = translations or (lambda: None)
         self._wanted: dict[tuple[str, int], tuple] = {}  # (incident, chat) → its words still to translate, once recorded
         self.mirror = mirror
-        # a copy's picture replaced (delivery.Delivery.edit_media: "shown", "not_media", "refused"), and a copy sent
-        # again as a photo when it is a text message (delivery.Delivery.send): a visit's sheet (`picture`)
+        # a copy's picture replaced (delivery.Delivery.edit_media: "shown", "not_media", "refused"), and every copy the
+        # thread sends (delivery.Delivery.send: `deliver`, `resend`, `picture`); with `edit` and `delete`, the one
+        # adapter to the chats (Telegram's client in the engine, the tests' fake Telegram)
         self.media, self.send = media, send
         self._locks: dict[str, asyncio.Lock] = {}
         self._flying: set[tuple[str, int, int]] = set()   # (incident, chat, id): sent, its `post` on the way
@@ -123,54 +130,109 @@ class IncidentThread:
         """Incident `iid`'s lock: its copies change one at a time (see the module's note)."""
         return self._locks.setdefault(str(iid), asyncio.Lock())
 
-    async def post(self, iid: int | str, chat: int, mid: int, parts: dict, *, buttons: bool = False,
-                   keyboard: dict | None = None, photo=None, sheet: str | None = None) -> None:
-        """Message `mid`, just sent to `chat` with these `parts` (layout.py), is now incident `iid`'s message there: the
-        earlier one goes. `photo`: the picture it carries ((base64, mime)), kept for the tablet; `sheet`:
-        the visit's sheet it carries (its fingerprint: `picture` leaves it as it is)."""
+    async def deliver(self, iid: int | str, chat: int, text: str, parts: dict, *, limit: int | None = None,
+                      how: str = ringing.RING_NEW, keyboard: dict | None = None, document: str | None = None,
+                      photo=None, sheet: str | None = None, origin=None, reply_to: int | None = None) -> int | None:
+        """Thread `iid`'s copy (an incident, an approval request) in `chat`: `text`, laid out from `parts` (layout.py) to
+        `limit`, with `keyboard`, `document` or `photo` ((base64, mime)). `how` (ringing.decide, the caller's): a quiet
+        step is an edit of the chat's copy (`restep`) when it holds one, else it is sent without a sound; a step that
+        rings is sent. Sent, its id is recorded at once, then it becomes the chat's copy and the older one goes
+        (`_post`). Not taken (Telegram off, or refusing), the tablet is told it all the same (`tell`). `sheet`: `photo`
+        is a visit's sheet (its fingerprint), never the tablet's. The message id, or None when nothing arrived.
+
+        ⚠️ ONE WAY IN (architecture review, 2026-11-20): the send happened outside the thread, and each caller (the
+        poster, a re-send, a picture) had to send, call `sent`, then `post` — a caller that forgot `sent` left a copy a
+        stop could strand with live buttons (#199)."""
+        if how == ringing.EDIT_QUIET:
+            # ⚠️ A QUIET STEP IS AN EDIT (owner, 2026-11-08, live #154): a chat that shows the alert already gets its
+            # copy edited in place, its picture kept — never sent again (restep)
+            mid = await self.restep(iid, chat, {**parts, "limit": limit}, keyboard)
+            if mid:
+                return mid
+        mid = await self._send(iid, chat, text, {**parts, "limit": limit}, keyboard=keyboard, document=document,
+                               photo=photo, origin=origin, sheet=sheet, **({"reply_to": reply_to} if reply_to else {}),
+                               **({"silent": True} if how != ringing.RING_NEW else {}))
+        if not mid:
+            # ⚠️ THE TABLET TOO WHEN TELEGRAM DID NOT TAKE IT (off, or refused): the thread records only what arrived, and
+            # the tablet is the second place precisely for when Telegram is not there (spec, "Without the internet").
+            # ⚠️ TOLD BY THE THREAD, THE ONE WRITER OF AN INCIDENT'S RECORD (architecture review 2026-10-29 #1): built by
+            # the poster, one chat's refusal replaced the card with one that named only that chat and none of the
+            # villa's runs it stands for — the villa's own alert came back beside it on the tablet
+            self.tell(iid, parts, keyboard, photo)
+            return None
         flying = (str(iid), int(chat), int(mid))
         self._flying.add(flying)
         try:
             async with self._lock(iid):
-                await self._post(iid, chat, mid, parts, buttons=buttons, keyboard=keyboard, photo=photo, sheet=sheet)
+                await self._post(iid, chat, mid, {**parts, "limit": limit}, buttons=bool(keyboard), keyboard=keyboard,
+                                 photo=None if sheet else photo, sheet=sheet)
         finally:
             self._flying.discard(flying)
+        return mid
 
-    def sent(self, iid: int | str, chat: int, mid: int) -> None:
-        """Message `mid` of incident `iid` was just taken by Telegram in `chat`: known at once, before `post` records it
-        (it waits for the incident's lock). One never recorded (the work stopped in between) goes at the next post,
-        close or housekeeping pass (`_strays`), as a replaced copy does.
+    async def _send(self, iid: int | str, chat: int, text: str, parts: dict, *, sheet: str | None = None,
+                    **how) -> int | None:
+        """`text` sent to `chat` as a copy of `iid` showing `parts` (`how`: delivery.Delivery.send's own arguments); its
+        id, None when nothing arrived. Known the moment Telegram gives it, with what it shows, before `_post` records it
+        (that waits for the incident's lock): one never recorded (the work stopped in between) is dealt with at the next
+        post, close or housekeeping pass (`_strays`).
 
         ⚠️ A COPY SENT IS KNOWN AT ONCE (owner, 2026-11-20, #199): a copy sent at 17:23 was never recorded, the agent
         stopped for an update while its post waited for the lock; it kept "monitoring until 17:53" and live buttons."""
-        self.state.set_incident_sent(iid, chat, [*self.state.incident_sent(iid, chat), int(mid)])
+        mid = await self.send(chat, text, **how) if self.send is not None else None
+        if mid:
+            kb = how.get("keyboard")
+            self.state.add_incident_sent(iid, chat, int(mid), {"parts": parts, "buttons": bool(kb),
+                                                              **({"kb": kb} if kb else {}),
+                                                              **({"sheet": sheet} if sheet else {})})
+        return mid
+
+    async def _retire(self, iid: int | str, chat: int, mid: int) -> bool:
+        """Copy `mid` of `iid` in `chat`, no longer its copy there, goes: deleted, or — past Telegram's 48 hours, it
+        cannot be — cut down to a pointer to the newer one, its buttons gone. True when it was deleted."""
+        gone = bool(self.delete and await self.delete(chat, mid))
+        if not gone and self.edit:
+            await self.edit(chat, mid, f"{self.name(iid)} · see the newer message below.")
+        return gone
 
     async def _strays(self, iid: int | str, only: int | None = None) -> int:
-        """Under the incident's lock: every copy of `iid` sent but never recorded (`sent`), in chat `only` or every
-        chat, deleted, or past Telegram's 48 hours made a pointer to the recorded one (its buttons gone), then
-        remembered as replaced. A copy whose `post` is still on the way is left to it; one in a chat that holds no
-        record is the chat's only copy and stays. How many went."""
+        """Under the incident's lock: every copy of `iid` sent but never recorded (`_send`), in chat `only` or every
+        chat. In a chat that holds a record it goes (`_retire`) and is remembered as replaced. In a chat that holds none
+        it is the chat's only copy: the newest becomes the chat's record as it was sent (a row from before 0.12.525,
+        what it shows not kept, stays as it is). A copy whose post is still on the way is left to it. How many went or
+        were recorded.
+
+        ⚠️ A FIRST COPY CUT BEFORE ITS RECORD IS STILL ITS CHAT'S COPY (architecture review, 2026-11-20): an approval
+        request's copy, or an alert's first in a chat, sent and never recorded was in no record — no press settled it,
+        no close reached it, its buttons live for good."""
         n = 0
-        for chat_iid, chat, mids in self.state.incidents_sent():
+        for chat_iid, chat, sent in self.state.incidents_sent():
             if str(chat_iid) != str(iid) or (only is not None and int(chat) != int(only)):
                 continue
+            mids = sorted(sent)
             rec = self.state.incident_message(iid, chat)
             if not rec or not rec.get("mid"):
+                if any((str(iid), int(chat), m) in self._flying for m in mids):
+                    continue                    # its post, on the way, records it
+                if kept := [m for m in mids if sent[m]]:
+                    m, was = kept[-1], sent[kept[-1]]
+                    log.info("%s in chat %s: message %s sent but never recorded is its copy there now", iid, chat, m)
+                    await self._post(iid, chat, m, was.get("parts") or {}, buttons=bool(was.get("buttons")),
+                                     keyboard=was.get("kb"), sheet=was.get("sheet"), tell=False)
+                    n += 1
                 continue
             done = [m for m in mids if m == int(rec["mid"])]
             for m in mids:
                 if m == int(rec["mid"]) or (str(iid), int(chat), m) in self._flying:
                     continue
-                gone = bool(self.delete and await self.delete(chat, m))
-                if not gone and self.edit:
-                    await self.edit(chat, m, f"{self.name(iid)} · see the newer message below.")
+                gone = await self._retire(iid, chat, m)
                 log.info("%s in chat %s: message %s sent but never recorded %s (its message is %s)", iid, chat, m,
                          "deleted" if gone else "now a pointer" if self.edit else "kept", rec.get("mid"))
                 done.append(m)
                 n += 1
             if done:
-                # read again: a copy sent meanwhile (`sent` needs no lock) is kept for its own post
-                self.state.set_incident_sent(iid, chat, [m for m in self.state.incident_sent(iid, chat) if m not in done])
+                # read again: a copy sent meanwhile (`_send` needs no lock) is kept for its own post
+                self.state.drop_incident_sent(iid, chat, done)
                 rec = self.state.incident_message(iid, chat) or rec
                 gone = [m for m in done if m != int(rec["mid"]) and m not in (rec.get("replaced") or [])]
                 if gone:
@@ -285,13 +347,14 @@ class IncidentThread:
         return told
 
     async def _post(self, iid: int | str, chat: int, mid: int, parts: dict, *, buttons: bool = False,
-                    keyboard: dict | None = None, photo=None, sheet: str | None = None) -> None:
+                    keyboard: dict | None = None, photo=None, sheet: str | None = None, tell: bool = True) -> None:
+        """Under the incident's lock: message `mid`, in `chat` with these `parts`, is now `iid`'s copy there — the earlier
+        one goes (`_retire`). `photo`: the picture it carries ((base64, mime)), kept for the tablet; `sheet`: the
+        visit's sheet it carries (its fingerprint: `picture` leaves it as it is). `tell`: it is the thread's latest step
+        (a copy recorded late, by `_strays`, is not: the tablet already holds what came after it)."""
         old = self.state.incident_message(iid, chat)
         if old and old["mid"] != mid:
-            gone = bool(self.delete and await self.delete(chat, old["mid"]))
-            if not gone and self.edit:
-                # past Telegram's 48 hours: the old message cannot go, so it stops repeating the incident
-                await self.edit(chat, old["mid"], f"{self.name(iid)} · see the newer message below.")
+            gone = await self._retire(iid, chat, old["mid"])
             # what happened to the earlier copy, said (owner, 2026-10-10: two messages of #14 stayed in the group)
             log.info("%s in chat %s: message %s replaced by %s (%s)", iid, chat, old["mid"], mid,
                      "deleted" if gone else "kept, now a pointer" if self.edit else "kept")
@@ -305,12 +368,13 @@ class IncidentThread:
                                                     **({"kb": keyboard} if buttons and keyboard else {}),
                                                     **({"replaced": replaced} if replaced else {}),
                                                     **({"sheet": sheet} if sheet else {})})
-        self.tell(iid, parts, keyboard if buttons else None, photo)
+        if tell:
+            self.tell(iid, parts, keyboard if buttons else None, photo)
         want, tr = self._wanted.pop((str(iid), int(chat)), None), self._translations()
         if want and tr is not None:
             tr.later(int(iid), chat, want)      # recorded now: its translation redraws this very copy
-        # recorded now; a copy sent before it and never recorded (a stop in between: `sent`) goes
-        self.state.set_incident_sent(iid, chat, [m for m in self.state.incident_sent(iid, chat) if m != int(mid)])
+        # recorded now; a copy sent before it and never recorded (a stop in between: `_send`) goes
+        self.state.drop_incident_sent(iid, chat, [int(mid)])
         await self._strays(iid, chat)
 
     def own_words(self, iid: int | str, chat: int, p: dict) -> dict:
@@ -351,6 +415,13 @@ class IncidentThread:
             await self._post(iid, chat, mid, parts, buttons=bool(keyboard), keyboard=keyboard)
             return True
 
+    async def own(self, iid: int | str, chat: int, mid: int, parts: dict) -> None:
+        """Message `mid`, already in `chat` and never recorded as a copy (an approval request sent before 0.12.128,
+        pressed: its one copy), is `iid`'s copy there as it stands, its buttons live — what follows (a close) reaches
+        it as any copy."""
+        async with self._lock(iid):
+            await self._post(iid, chat, mid, parts, buttons=True)
+
     async def stray(self, iid: int | str, chat: int, mid: int) -> bool:
         """A message of incident `iid` in `chat` that is NOT its message there (a button pressed on it): it goes, or —
         past Telegram's 48 hours — points to the newer one, so no chat keeps two copies with live buttons. True when it
@@ -359,9 +430,7 @@ class IncidentThread:
             rec = self.state.incident_message(iid, chat)
             if not rec or int(rec.get("mid") or 0) == int(mid):
                 return False
-            gone = bool(self.delete and await self.delete(chat, mid))
-            if not gone and self.edit:
-                await self.edit(chat, mid, f"{self.name(iid)} · see the newer message below.")
+            gone = await self._retire(iid, chat, mid)
             log.info("%s in chat %s: stray message %s %s (its message is %s)", iid, chat, mid,
                      "deleted" if gone else "now a pointer" if self.edit else "kept", rec.get("mid"))
             return True
@@ -643,16 +712,15 @@ class IncidentThread:
             rec = self.state.incident_message(iid, chat)
             if (not rec or not rec.get("mid")) and like is not None:
                 rec = self.state.incident_message(iid, like)
-            if not rec or not rec.get("mid") or rec.get("settled") or not rec.get("buttons") or self.send is None:
-                return False
+            if not rec or not rec.get("mid") or rec.get("settled") or not rec.get("buttons") or self.edit is None:
+                return False            # nothing to send again, or Telegram off
             kb = (keyboard(chat) if keyboard else None) or rec.get("kb")
             p = {**layout.of(rec), **({"head": head} if head else {}),
                  "limit": telegram_caption_chars() if sheet else telegram_message_chars()}
-            mid = await self.send(chat, layout.render(p), keyboard=kb,
-                                  **({"photo": (base64.b64encode(sheet[0]).decode(), "image/jpeg")} if sheet else {}))
+            mid = await self._send(iid, chat, layout.render(p), p, keyboard=kb, sheet=sheet[1] if sheet else None,
+                                   **({"photo": (base64.b64encode(sheet[0]).decode(), "image/jpeg")} if sheet else {}))
             if not mid:
                 return False
-            self.sent(iid, chat, mid)
             await self._post(iid, chat, mid, p, buttons=bool(kb), keyboard=kb, sheet=sheet[1] if sheet else None)
             return True
 
@@ -681,11 +749,11 @@ class IncidentThread:
                     self.state.set_incident_message(iid, chat, {**rec, "parts": p, "text": text, "sheet": made,
                                                                 **({"kb": kb} if kb else {})})
                     n += 1
-                elif said == "not_media" and self.send:
-                    mid = await self.send(chat, text, keyboard=kb, photo=(base64.b64encode(jpeg).decode(), "image/jpeg"),
-                                          **({"silent": True} if ringing.PICTURE != ringing.RING_NEW else {}))
+                elif said == "not_media":
+                    mid = await self._send(iid, chat, text, p, keyboard=kb, sheet=made,
+                                           photo=(base64.b64encode(jpeg).decode(), "image/jpeg"),
+                                           **({"silent": True} if ringing.PICTURE != ringing.RING_NEW else {}))
                     if mid:
-                        self.sent(iid, chat, mid)
                         await self._post(iid, chat, mid, p, buttons=bool(kb), keyboard=kb, sheet=made)
                         n += 1
             return n
@@ -695,6 +763,45 @@ class IncidentThread:
         `mid`? Then `mid` is never taken over again."""
         rec = self.state.incident_message(iid, chat)
         return bool(rec) and (int(rec.get("mid") or 0) == int(mid) or int(mid) in (rec.get("replaced") or []))
+
+    # ------------------------------------------------------------------ what a chat shows, asked
+    # ⚠️ ASKED, NEVER READ FROM THE RECORD (architecture review, 2026-11-20): outcome, visit, the buttons and the
+    # approvals each read the record's keys (mid, settled, buttons, replaced) themselves; its shape is this module's.
+    def chats(self, iid: int | str) -> list[int]:
+        """The chats that hold a copy of `iid`."""
+        return [chat for chat, _rec in self.state.incident_chats(iid)]
+
+    def card(self, iid: int | str, chat: int) -> int | None:
+        """The message id of `iid`'s copy in `chat`; None when the chat holds none."""
+        rec = self.state.incident_message(iid, chat)
+        return int(rec["mid"]) if rec and rec.get("mid") else None
+
+    def cards(self, iid: int | str) -> list[tuple[int, int]]:
+        """(chat, message id) of every copy of `iid`."""
+        return [(chat, int(rec["mid"])) for chat, rec in self.state.incident_chats(iid) if rec.get("mid")]
+
+    def parts(self, iid: int | str, chat: int) -> dict | None:
+        """What `iid`'s copy in `chat` shows, as parts (layout.of); None when the chat holds none."""
+        rec = self.state.incident_message(iid, chat)
+        return layout.of(rec) if rec else None
+
+    def settled(self, iid: int | str, chat: int) -> bool:
+        """Is `iid`'s copy in `chat` answered already (its buttons gone)?"""
+        return bool((self.state.incident_message(iid, chat) or {}).get("settled"))
+
+    def settled_everywhere(self, iid: int | str) -> bool:
+        """Is every copy of `iid` answered already — and is there one?"""
+        copies = self.state.incident_chats(iid)
+        return bool(copies) and all(rec.get("settled") for _chat, rec in copies)
+
+    def answering(self, iid: int | str) -> list[int]:
+        """The chats whose copy of `iid` still asks to be answered (its buttons live), in chat order."""
+        return [chat for chat, rec in self.state.incident_chats(iid)
+                if rec.get("mid") and rec.get("buttons") and not rec.get("settled")]
+
+    def replaced(self, iid: int | str, chat: int, mid: int) -> bool:
+        """Was message `mid` a copy of `iid` in `chat` that a newer one replaced? Then it is never taken over again."""
+        return int(mid) in ((self.state.incident_message(iid, chat) or {}).get("replaced") or [])
 
     async def translated(self, iid: int | str, chat: int, draw: Callable[[int | str, int, dict], dict]) -> bool:
         """The copy of `iid` in `chat` drawn again now that its words are known in its language (`draw`: its parts as

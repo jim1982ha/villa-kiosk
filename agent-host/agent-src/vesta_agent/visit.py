@@ -506,8 +506,7 @@ class Visits:
                     continue
                 if self.thread.delete is not None and await self.thread.delete(chat, mid):
                     dropped.append(mid)
-            shown = [{"chat_id": int(c), "message_id": int(r["mid"]), "role": "card"}
-                     for c, r in self.state.incident_chats(iid) if r.get("mid")] if cards else []
+            shown = [{"chat_id": int(c), "message_id": m, "role": "card"} for c, m in self.thread.cards(iid)] if cards else []
             data = {**{k: v for k, v in fields.items() if v is not None}, **({"messages": shown} if cards else {}),
                     **({"name": name} if name else {}), **({"dropped": dropped} if dropped else {})}
             try:
@@ -519,8 +518,7 @@ class Visits:
     # ------------------------------------------------------------------ the siren of a visit
     def card(self, iid: int, chat: int) -> int | None:
         """The message id of the visit's card in `chat` (its question is a reply to it), None when it has none there."""
-        rec = self.state.incident_message(iid, chat)
-        return int(rec["mid"]) if rec and rec.get("mid") else None
+        return self.thread.card(iid, chat)
 
     async def snap(self, iid: int, cameras) -> int:
         """What each of `cameras` shows now, kept as a photo of the visit (its sheet carries it, the tablet's card too):
@@ -644,8 +642,7 @@ class Visits:
         rang = rang or ringing.Rang()
         again = [c for c in on_card if rang.question(iid, c) == ringing.RING_NEW]
         # an owner chat without the card: a copy still answering is its card there (its skill's buttons with it)
-        like = next((int(c) for c, r in self.state.incident_chats(iid)
-                     if r.get("mid") and r.get("buttons") and not r.get("settled")), None)
+        like = next(iter(self.thread.answering(iid)), None)
         lacking = {c: like for c in again if self.card(iid, c) is None and like is not None}
         for c in lacking:
             if (skill := self.state.alert_skill(iid, like)) and not self.state.alert_skill(iid, c):

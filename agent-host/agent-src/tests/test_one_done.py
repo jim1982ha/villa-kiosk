@@ -62,10 +62,10 @@ def test_a_press_on_the_tablets_notice_is_handed_to_the_desk_as_the_tablets(tmp_
     from vesta_agent.incidents import Incidents
     from vesta_agent.incident_thread import IncidentThread
     from vesta_agent import layout
-    from test_telegram_messages import GROUP, _delivery
+    from test_telegram_messages import GROUP, _copy, _delivery
     d, _ = _delivery(tmp_path)
-    thread = IncidentThread(d.state, "UTC", edit=d.edit, delete=d.delete)
-    run(thread.post(5, GROUP, 70, layout.parts(body="Incident #5 · leak"), buttons=True))
+    thread = IncidentThread(d.state, "UTC", edit=d.edit, delete=d.delete, send=d.send)
+    run(_copy(thread, 5, layout.parts(body="Incident #5 · leak")))
     handed = []
 
     async def run_job(skill, command, timeout, values, origin):
@@ -83,7 +83,7 @@ def test_a_press_on_the_tablets_notice_is_handed_to_the_desk_as_the_tablets(tmp_
     run(b.press(4503601096569778, ["5", "done"], person, toast, anywhere=True))
     assert [v["place"] for v in handed] == ["tablet"]
     # ...and its fault card in the Kiosk says it was the tablet (architecture review 21: "Need help on Telegram")
-    run(thread.post(6, GROUP, 71, layout.parts(body="Incident #6 · pump"), buttons=True))
+    run(_copy(thread, 6, layout.parts(body="Incident #6 · pump")))
     d.state.set_alert_skill(6, GROUP, "desk")
     run(b.press(4503601096569778, ["6", "need_help"], person, toast, anywhere=True))
     from vesta_agent.notice import Notices
@@ -167,3 +167,4 @@ def test_a_line_kept_before_says_the_vesta_ui_never_the_tablet():
     from vesta_shared.problems import Problems as P
     assert status_words.closed_where("Done on the tablet", "10:00", "Jim", "fr").startswith("Terminé dans VESTA UI")
     assert P.done_where({"close_note": "Not a problem on the tablet (Jim)."}) == "Not a problem in the VESTA UI"
+

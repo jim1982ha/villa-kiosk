@@ -155,7 +155,7 @@ class Approvals:
         """The answer `mid` (its words `text`) told the asker in `chat` of these requests: kept for the ones not shown
         there, so each step rewrites it (_tell_asker)."""
         for aid in approval_ids:
-            if mid and text and int(chat) not in self.thread.shown(approval_thread(aid)):
+            if mid and text and int(chat) not in self.thread.chats(approval_thread(aid)):
                 self.state.keep_approval_answer(aid, chat, mid, text)
 
     async def _tell_asker(self, aid: str, body: str = "") -> None:
@@ -174,7 +174,7 @@ class Approvals:
 
     def shown_in(self, approval_ids, chat: int) -> bool:
         """Is one of these requests shown in `chat`? Then it is the answer there (app._converse sends no other)."""
-        return any(int(chat) in self.thread.shown(approval_thread(a)) for a in approval_ids)
+        return any(int(chat) in self.thread.chats(approval_thread(a)) for a in approval_ids)
 
     # ------------------------------------------------------------------ a press
     async def press(self, p) -> None:
@@ -189,7 +189,7 @@ class Approvals:
         # it keeps, whoever's chat it was sent to (ticket 22 of "One inbox")
         on_card = self.visits.asked_in(aid) if self.visits is not None else None
         allowed = on_card if on_card is not None else (
-            None if not ap else [ap["chat_id"], *self.thread.shown(key)])
+            None if not ap else [ap["chat_id"], *self.thread.chats(key)])
         if allowed is not None and p.chat not in allowed and p.place != TABLET:
             self.state.log("press_refused", {"approval": aid, "by": p.presser, "reason": "button pressed from another chat"})
             return await p.toast("This button belongs to another chat.")
@@ -198,10 +198,10 @@ class Approvals:
         await p.toast(out["toast"])
         if not out.get("state"):
             return
-        if p.mid and p.chat not in self.thread.shown(key) and on_card is None:
+        if p.mid and p.chat not in self.thread.chats(key) and on_card is None:
             # a request sent before 0.12.128 has no thread: the pressed message is its one copy
             from .layout import legacy
-            await self.thread.post(key, p.chat, int(p.mid), legacy(p.words), buttons=True)
+            await self.thread.own(key, p.chat, int(p.mid), legacy(p.words))
         await self.thread.close(key, note(out["state"], out.get("by", ""), out.get("why", "")), out.get("body"))
         await self._tell_asker(aid, out.get("body") or "")
         if out.get("follow"):
@@ -265,7 +265,7 @@ class Approvals:
             if ap["status"] in ("approved", "moving", "undelivered") or not ap.get("decided_at"):
                 continue
             key = approval_thread(ap["id"])
-            if any(r.get("buttons") and not r.get("settled") for r in self.thread.shown(key).values()):
+            if self.thread.answering(key):
                 await self.thread.close(key, note(ap["status"], ap.get("decided_name"), time=self._at(ap["decided_at"])))
 
     @staticmethod

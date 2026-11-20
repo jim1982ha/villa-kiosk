@@ -87,10 +87,13 @@ def test_every_copy_says_it_and_loses_its_buttons_without_being_settled(tmp_path
     async def edit(chat, mid, text, keyboard=None):
         edits.append((chat, mid, text, keyboard))
         return True
-    th = IncidentThread(State(settings(str(tmp_path)).state_path), "UTC", edit=edit)
+
+    async def send(chat, text, **how):
+        return 501
+    th = IncidentThread(State(settings(str(tmp_path)).state_path), "UTC", edit=edit, send=send)
     kb = {"inline_keyboard": [[{"text": "Done", "callback_data": "i:7:done"}]]}
     parts = layout.parts(head="#7-P2 (new)\nTo: FM", body="Door unavailable", status="New alert")
-    run(th.post(7, 111, 501, parts, buttons=True, keyboard=kb))
+    run(th.deliver(7, 111, layout.render(parts), parts, keyboard=kb))
     assert run(th.restate(7, "Ticket opened in the Cockpit by Owner on 15/10/2026 00:40.")) == 1
     (chat, mid, text, keyboard), = edits
     assert keyboard is None and text.endswith("Ticket opened in the Cockpit by Owner on 15/10/2026 00:40.")
