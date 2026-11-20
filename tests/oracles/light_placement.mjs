@@ -223,6 +223,20 @@ console.log("\n  a room outline drawn with a repeated corner and points along a 
   ck("  ...and the room's highlight, drawn from the same triangles, fills it", Math.abs(area - 16) < 1e-9, area);
 }
 
+console.log("\n  a lamp over a tub, a lamp over a step:");
+{
+  const P = plan(0);
+  // A tub in the hall, its water 0.16 m up (x 2.5..3.5, z 4..5.6); the lamp above its end.
+  const tub = (x, y, z) => (x > 2.5 && x < 3.5 && z > 4 && z < 5.6 ? 0.16 : floorBelow(x, y, z));
+  const over = placeLight(3, 4.3, 2.3, 0, { below: tub, describeBelow: (x, y, z) => ({ y: tub(x, y, z) }) }, P);
+  ck("over a tub's end: the pool lies on the floor round it, not on the water (owner, 2026-11-20, the onsen)",
+     over.surfaceY === 0, [over.surfaceY, over.notes]);
+  // A raised platform 0.15 m up across the hall's end (x 0..10, z 4..8); the lamp in its middle.
+  const deck = (x, y, z) => (z > 4 && z < 8 ? 0.15 : floorBelow(x, y, z));
+  const step = placeLight(5, 6, 2.3, 0, { below: deck, describeBelow: (x, y, z) => ({ y: deck(x, y, z) }) }, P);
+  ck("  ...over a step, the step all round: the pool stays on the step", step.surfaceY === 0.15, [step.surfaceY, step.notes]);
+}
+
 console.log("\n  where a room's floor is read:");
 {
   // A garden round three sides of a house (x 2..8, z 0..6): its middle is on the house.

@@ -1,3 +1,9 @@
+## 2.496.850
+
+- **A lamp over a tub lights the floor round it.** Where a lamp hangs over a tub or another low object, its light on
+  the floor was laid at the object's height: a disc floating over the pebbles and glowing inside the tub. It now lies
+  on the floor around, wherever the object is moved; a lamp over a step still lights the step.
+
 ## 2.496.849
 
 - **A visit's photos in time order.** A photo whose time the villa wrote in another time zone no longer jumps ahead of
