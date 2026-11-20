@@ -26,7 +26,8 @@ import json
 import logging
 import os
 import shutil
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Awaitable, Callable
 
 from vesta_shared import visit_state
@@ -77,6 +78,20 @@ def pick_wait_s() -> int:
     return limit("visit.photo_pick_wait_s", 4, unit="seconds", group="run", lo=0, hi=30,
                  says="How long a visit's message waits for the best of a step's burst of photos to be chosen.",
                  reached="The message goes with the step's last photo; the chosen one replaces it once known.", told="")
+
+
+def look_again_s() -> int:
+    return limit("visit.photo_look_again_s", 6, unit="seconds", group="run", lo=0, hi=30,
+                 says="When none of a step's burst of photos shows anything moving, VESTA looks through that camera once "
+                      "more this long after the step (a camera's picture lags a few seconds behind the movement).",
+                 reached="The step keeps that later photo when it differs from the burst's first; otherwise none.", told="")
+
+
+def look_again_within_s() -> int:
+    return limit("visit.photo_look_again_within_s", 60, unit="seconds", group="run", lo=0, hi=600,
+                 says="How recent a step must be for VESTA to look through its camera again when its photos showed "
+                      "nothing moving.",
+                 reached="An older step (VESTA was away when it came) keeps no photo.", told="")
 
 
 def photos(state, iid) -> list[dict]:
@@ -257,6 +272,8 @@ class Visits:
         try:
             i = await self._pick(paths, str(live[0].get("pick") or "")) if self._pick is not None else len(paths) - 1
             keep = "" if i == NOTHING else paths[i if 0 <= i < len(paths) else -1]
+            if keep == "" and await self._look_again(iid, live):
+                keep = paths[-1]
         except Exception:  # noqa: BLE001 — the last frame stays, every frame kept
             log.exception("Incident #%s: the best photo of a step could not be chosen", iid)
             self._picked[(iid, key)] = paths[-1]
@@ -281,6 +298,49 @@ class Visits:
         if told and told[1]:
             await self._told(iid, told[0], {**told[1], DROPPED_PHOTOS: [p for p in every if p != keep]}, cards=False)
         return keep
+
+    async def _look_again(self, iid: int, live: list[dict]) -> bool:
+        """A burst in which nothing moved (`live`, its frames): what its camera shows `look_again_s` after the step,
+        written over its last frame when it differs from the first (photo_pick.moved): True then, the step's photo
+        taken at its own moment after all. False, nothing written, for a step older than `look_again_within_s`, a
+        camera that gives no picture or a scene still unchanged.
+
+        ⚠️ THE CAMERA LAGS BEHIND THE STEP (owner, 2026-11-20, #204): the Living Room's burst at 12:08:54 came before its
+        picture caught up with the person the motion sensor saw, nothing moved in it, and the step kept no photo; the
+        card showed only the Living Room's photo of 12:08:25 (the lock's, an empty room). A photo of nothing is still
+        never kept: the later picture must differ from the burst's first."""
+        from .photo_pick import moved
+        cam, at = str(live[-1].get("camera") or ""), visit_state.when(live[-1].get("at"))
+        first, last = sheet._inside(live[0].get("path"), (sheet.MEDIA,)), sheet._inside(live[-1].get("path"), (sheet.MEDIA,))
+        if not cam.startswith("camera.") or at is None or not first or not last or first == last:
+            return False
+        wait = (at + timedelta(seconds=look_again_s()) - datetime.now(timezone.utc)).total_seconds()
+        if datetime.now(timezone.utc) - at > timedelta(seconds=look_again_within_s()):
+            return False
+        if wait > 0:
+            await asyncio.sleep(wait)
+        try:
+            got = await self.photo(cam)
+        except Exception as e:  # noqa: BLE001 — the step keeps no photo, as decided
+            log.info("Camera %s gave no picture (%s)", cam, type(e).__name__)
+            return False
+        if not got:
+            return False
+        later = f"{last}.later"
+        try:
+            await asyncio.to_thread(Path(later).write_bytes, base64.b64decode(got[0]))
+            if not await asyncio.to_thread(moved, [first, later]):
+                return False
+            os.replace(later, last)
+        except OSError as e:
+            log.warning("Incident #%s: a step's later photo could not be saved (%s)", iid, type(e).__name__)
+            return False
+        finally:
+            if os.path.exists(later):
+                _drop_file(later)
+        log.info("Incident #%s: nothing moved in a step's burst; %s showed it %ss after the step", iid, cam,
+                 look_again_s())
+        return True
 
     def _then(self, iid: int, key: str, task: asyncio.Task) -> None:
         """A choice that came after the message went (`kept`): the chosen frame in place."""

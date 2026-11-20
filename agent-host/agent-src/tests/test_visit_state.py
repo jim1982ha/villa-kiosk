@@ -93,3 +93,19 @@ def test_the_sheet_draws_the_tiles_the_list_marks(monkeypatch):
                                       "photos": [_ph("50"), _ph("52"), _ph("54", door), _ph("58")]}), 2)
     assert sheet.build(photos, 2, "UTC") is None
     assert drawn == [p["path"] for p in photos if p["onSheet"]] == ["/media/vesta/54.jpg", "/media/vesta/58.jpg"]
+
+
+def test_photos_are_in_time_order_whatever_zone_the_villa_wrote_their_moment_in():
+    # owner, 2026-11-20, #204: a camera step's moment in UTC, a room's in the villa's time; the sheet showed Parking 12:20
+    # before Staircase 2F 12:19 and Living Room 12:19
+    lock = "lock.example_entrance"
+    v = {"strongest": {"entity_id": lock},
+         "photos": [{"path": "/media/vesta/lock.jpg", "camera_name": "Living Room", "entity_id": lock,
+                     "at": "2026-11-20T04:18:36+00:00"},
+                    {"path": "/media/vesta/parking.jpg", "camera_name": "Parking", "at": "2026-11-20T04:20:12+00:00"},
+                    {"path": "/media/vesta/stairs.jpg", "camera_name": "Staircase 2F", "at": "2026-11-20T12:19:31+08:00"},
+                    {"path": "/media/vesta/door.jpg", "camera_name": "Main House Door", "at": "2026-11-20T04:19:39+00:00"},
+                    {"path": "/media/vesta/living.jpg", "camera_name": "Living Room", "at": "2026-11-20T12:19:38+08:00"}]}
+    got = VS.ordered(VS.photos_of(v), 9)
+    assert [p["label"] for p in got] == ["Living Room", "Staircase 2F", "Living Room", "Main House Door", "Parking"], got
+    assert [p["at"] for p in got[1:]] == sorted(p["at"] for p in got[1:]), "one form: the tablet orders them as text"

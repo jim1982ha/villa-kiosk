@@ -176,11 +176,18 @@ def photos_of(v: dict) -> list[dict]:
     for ph in v.get("photos") or []:
         if not isinstance(ph, dict) or not ph.get("path") or not when(ph.get("at")):
             continue
+        # its moment in UTC, as VESTA's own snapshots: one form for every reader that compares them as text (the
+        # tablet's photo row orders by it; owner, 2026-11-20, #204); its camera, which a late look snaps again
         out.append({"path": str(ph["path"]), "label": str(ph.get("camera_name") or ph.get("camera") or ""),
-                    "at": str(ph["at"]), **({"strongest": True} if top and ph.get("entity_id") == top else {}),
+                    "at": when(ph["at"]).astimezone(timezone.utc).isoformat(),
+                    **({"camera": str(ph["camera"])} if str(ph.get("camera") or "").startswith("camera.") else {}), **({"strongest": True} if top and ph.get("entity_id") == top else {}),
                     **({"burst": str(ph["burst"]), "frame": int(ph.get("frame") or 0), "pick": str(ph.get("pick") or "")}
                        if ph.get("burst") else {})})
     return ordered(out)
+
+
+#: where a photo with no moment sorts: first
+_NEVER = datetime.min.replace(tzinfo=timezone.utc)
 
 
 def ordered(photos, shown: int | None = None) -> list[dict]:
@@ -190,7 +197,10 @@ def ordered(photos, shown: int | None = None) -> list[dict]:
     photos = [{k: x for k, x in p.items() if k not in ("lead", "onSheet")} for p in photos or [] if isinstance(p, dict)]
     if not photos:
         return []
-    by_time = sorted(photos, key=lambda p: str(p.get("at")))
+    # ⚠️ BY THE MOMENT, NEVER ITS TEXT (owner, 2026-11-20, #204): the villa writes a lock's or a camera's moment in UTC
+    # ("…T04:20:12+00:00") and a room's in its own time ("…T12:19:31+08:00"); sorted as text, Parking 12:20 came
+    # before Staircase 2F 12:19 on the sheet
+    by_time = sorted(photos, key=lambda p: when(p.get("at")) or _NEVER)
     lead = next((p for p in by_time if p.get("strongest")), by_time[0])
     rest = [p for p in by_time if p is not lead]
     out = [{**lead, "lead": True}, *rest]

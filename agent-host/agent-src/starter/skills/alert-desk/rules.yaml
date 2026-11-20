@@ -20,7 +20,9 @@ routes:
   - blueprint: critical_presence_guard
     severity: P1
     intrusion: true  # its visits may offer the siren (desk.visit_siren); a visit groups its own signals, so no cooldown
-    check: "Activity while the villa is marked empty. Look at the camera before anything else."
+    # ⚠️ NO STAGE HERE (owner, 2026-11-20, #204): the villa was only waiting for indoor quiet, not empty; the alert's own
+    # title says the stage, as the villa saw it at the step
+    check: "Look at the camera before anything else."
   - blueprint: critical_condition
     severity: P2
     cooldown_min: 120  # How long after an alert of a device in a wrong state a repeat on the same device is counted, not sent again.

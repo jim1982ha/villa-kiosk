@@ -1,3 +1,17 @@
+## 0.12.523
+
+- **The alert says the villa's real state.** When a door is unlocked while the villa is only waiting for the house to
+  go quiet (not yet empty), the alert says "opened while the villa waits for indoor quiet" instead of "while the
+  villa is empty", and "What to do" no longer claims the villa was empty.
+- **A lock opened by someone else is said honestly.** VESTA no longer writes "opened at the lock": it only knows the
+  villa's system did not open it, so the line reads "Outdoor entrance Lock unlocked, not by the villa's system". Each
+  unlock shows on its own line with its own "locked again" time.
+- **Each step gets its own photo.** When the photos of a step show nothing moving yet (the camera's picture lags a few
+  seconds behind the movement), VESTA looks through that camera once more a few seconds later and keeps that picture
+  if something is there. A photo of an empty scene is still never kept.
+- **Photos in time order.** The alert's photo sheet, "All photos" and the VESTA UI show the photos strictly in time
+  order after the main one: an outdoor camera's photo no longer jumps ahead of a room's photo taken earlier.
+
 ## 0.12.522
 
 - **Each Telegram chat lists only its own steps.** Under "Status:", the facility manager's chat no longer lists the

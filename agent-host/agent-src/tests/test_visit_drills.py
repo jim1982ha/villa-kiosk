@@ -170,7 +170,7 @@ def test_a_step_after_vesta_holds_the_visit_the_villa_never_told_still_rings(tmp
     play(v, send(vi.event()))
     rang = [c for c, t, k in v.tg.sent if not siren_question(t, k)]
     assert sorted(rang) == [OWNER, FM], "the lock, stronger and the villa's never: sent again, it rings"
-    assert "- Outdoor entrance Lock opened at the lock, 03:33: alert sent again (to: Owner & FM)" in \
+    assert "- Outdoor entrance Lock unlocked, not by the villa's system, 03:33: alert sent again (to: Owner & FM)" in \
         lines(copy(v, OWNER)["text"])
 
 

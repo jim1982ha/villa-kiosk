@@ -406,17 +406,19 @@ visit_seen:
   ja: "{places} で検知、{span}"
   ko: "{places}에서 감지, {span}"
 
+# a lock the villa's system did not open (no person's app, no automation of the villa): all it knows. ⚠️ NEVER "AT
+# THE LOCK" (owner, 2026-11-20, #204): a code, a key, a fingerprint or another app (Apple Home) all read the same
 visit_lock_here:
-  en: "{name} opened at the lock, {time}"
-  fr: "{name} ouverte sur la serrure, {time}"
-  id: "{name} dibuka di kunci, {time}"
-  de: "{name} am Schloss geöffnet, {time}"
-  es: "{name} abierta en la cerradura, {time}"
-  it: "{name} aperta dalla serratura, {time}"
-  nl: "{name} geopend aan het slot, {time}"
-  zh: "{name} 在锁上被打开，{time}"
-  ja: "{name} が錠で開けられました、{time}"
-  ko: "{name} 잠금장치에서 열림, {time}"
+  en: "{name} unlocked, not by the villa's system, {time}"
+  fr: "{name} déverrouillée, pas par le système de la villa, {time}"
+  id: "{name} dibuka kuncinya, bukan oleh sistem vila, {time}"
+  de: "{name} entriegelt, nicht durch das System der Villa, {time}"
+  es: "{name} desbloqueada, no por el sistema de la villa, {time}"
+  it: "{name} sbloccata, non dal sistema della villa, {time}"
+  nl: "{name} ontgrendeld, niet door het systeem van de villa, {time}"
+  zh: "{name} 已开锁，并非别墅系统所为，{time}"
+  ja: "{name} が解錠されました（ヴィラのシステムではありません）、{time}"
+  ko: "{name} 잠금 해제됨, 빌라 시스템이 한 것이 아님, {time}"
 
 # an open visit's last line on every copy and the tablet's pill: until when it is monitored (the villa's record's
 # closes_at), moved later at each step (owner, 2026-11-07: "⚠️ New alert, monitoring until 06:40")
@@ -483,6 +485,20 @@ visit_title_opened:
   zh: "别墅无人时 {name} 被打开"
   ja: "ヴィラが無人の間に {name} が開きました"
   ko: "빌라가 비어 있는 동안 {name} 열림"
+
+# the same, the strongest step having come while the villa only waited for indoor quiet (its empty sensor's stage
+# "waiting", not yet empty): ⚠️ NEVER "EMPTY" THEN (owner, 2026-11-20, #204)
+visit_title_opened_waiting:
+  en: "{name} opened while the villa waits for indoor quiet"
+  fr: "{name} ouverte alors que la villa attend le calme à l’intérieur"
+  id: "{name} dibuka saat vila menunggu dalam rumah tenang"
+  de: "{name} geöffnet, während die Villa auf Ruhe im Haus wartet"
+  es: "{name} abierta mientras la villa espera calma en el interior"
+  it: "{name} aperta mentre la villa attende la quiete all’interno"
+  nl: "{name} geopend terwijl de villa wacht op rust binnen"
+  zh: "别墅等待室内安静期间 {name} 被打开"
+  ja: "ヴィラが屋内の静けさを待つ間に {name} が開きました"
+  ko: "빌라가 실내가 조용해지기를 기다리는 동안 {name} 열림"
 
 # after a lock's line, once it was locked again within the visit
 visit_locked_again:

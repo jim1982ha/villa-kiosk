@@ -663,7 +663,7 @@ ALERT_DESK_SKILL = os.path.join(os.path.dirname(ALERT_DESK_RULES), "skill.yaml")
 VISIT_WORDS = ("visit_seen", "visit_lock_here", "visit_lock_app", "visit_lock_app_plain", "visit_opened", "visit_locked_again", "visit_inside",
                "visit_person", "visit_changed_lock", "visit_changed_door", "visit_changed_inside",
                "visit_changed_motion", "visit_changed_person", "visit_expected", "visit_ended", "visit_home", "no_answer",
-               "visit_title_opened", "visit_noted", "visit_noise", "visit_changed_noise", "visit_drill", "visit_monitoring")
+               "visit_title_opened", "visit_title_opened_waiting", "visit_noted", "visit_noise", "visit_changed_noise", "visit_drill", "visit_monitoring")
 
 
 _DESK_WORDS: dict | None = None

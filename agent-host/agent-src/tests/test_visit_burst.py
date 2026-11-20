@@ -245,3 +245,63 @@ def test_someone_coming_into_a_small_part_of_the_view_still_keeps_a_photo(tmp_pa
         im.save(p, "JPEG")
     play(v, send(vi.event("opened")))
     assert len(v.visits.every_photo(1)) == 1, "a photo kept"
+
+
+def _still_burst_now(vi, media, ago_s=10):
+    """A step of the visit `ago_s` ago whose three frames show the same empty scene (the camera's picture behind the
+    movement): their paths."""
+    from datetime import datetime, timedelta, timezone
+    s = vi.add("motion", PARKING, "18:34:10")
+    s["at"] = (datetime.now(timezone.utc) - timedelta(seconds=ago_s)).isoformat()
+    key = f"vesta_alert_example_now_{s['seq']}"
+    paths = []
+    for n in (1, 2, 3):
+        path = media / f"{key}_f{n}.jpg"
+        frame(path, (90 + n, 90, 90))
+        paths.append(str(path))
+        vi.photos.append({"path": str(path), "camera": "camera.example_parking", "camera_name": "Parking",
+                          "entity_id": PARKING, "kind": "motion", "at": s["at"], "burst": key, "frame": n, "pick": "diff"})
+    return paths
+
+
+def _camera_shows(v, shade):
+    import base64
+    import io
+    from PIL import Image
+    buf = io.BytesIO()
+    Image.new("RGB", (64, 48), shade).save(buf, "JPEG")
+    v.reader.images["camera.example_parking"] = base64.b64encode(buf.getvalue()).decode()
+
+
+def test_a_burst_that_came_before_the_camera_caught_up_keeps_the_cameras_later_picture(tmp_path, kiosk, media):
+    # owner, 2026-11-20 (#204): the Living Room's burst at 12:08:54 showed the room before the person the motion sensor
+    # saw, nothing moved in it, and the step had no photo of its own
+    from PIL import Image
+    v = villa(tmp_path, kiosk)
+    vi = Visit(media=media)
+    vi.add("motion", PARKING, "18:20:16", photo=True)
+    play(v, send(vi.event("opened")))
+    f1, f2, f3 = _still_burst_now(vi, media)
+    _camera_shows(v, (230, 230, 230))                   # someone in view now
+    play(v, send(vi.event()))
+    play(v, lambda v: v.visits.idle())
+    paths = [p["path"] for p in v.visits.every_photo(1)]
+    assert f3 in paths and f1 not in paths and f2 not in paths, ("the step has its one photo", paths)
+    with Image.open(f3) as im:
+        assert im.convert("RGB").getpixel((32, 24))[0] > 200, "what the camera showed after the step"
+    assert not os.path.exists(f1) and not os.path.exists(f2)
+    assert any(p["path"] == f3 for p in kiosk.messages["incident:1"]["photos"]), "the tablet's card shows it too"
+
+
+def test_a_scene_still_empty_when_looked_at_again_keeps_no_photo(tmp_path, kiosk, media):
+    v = villa(tmp_path, kiosk)
+    vi = Visit(media=media)
+    vi.add("motion", PARKING, "18:20:16", photo=True)
+    play(v, send(vi.event("opened")))
+    still = _still_burst_now(vi, media)
+    _camera_shows(v, (91, 90, 90))                      # the same empty scene
+    play(v, send(vi.event()))
+    play(v, lambda v: v.visits.idle())
+    paths = [p["path"] for p in v.visits.every_photo(1)]
+    assert len(paths) == 1 and not set(paths) & set(still), ("the step stays, without a photo", paths)
+    assert not any(os.path.exists(p) for p in still)

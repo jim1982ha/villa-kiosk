@@ -223,7 +223,7 @@ def test_the_evening_of_06_11_is_one_alert_one_message_per_chat_one_story(tmp_pa
         assert "- Same time as the last 4 evenings (18:18–18:33)" in st, st
         assert "- Seen at Parking → Entrance Left → Waterwall Buddha → Main House Door, 18:34–18:35" in st, st
         # its stronger step rang: said on its own line, never a line of its own (owner, 2026-11-07, drill #135)
-        assert "- Outdoor entrance Lock opened at the lock, 18:35, locked again 18:36: alert sent again " \
+        assert "- Outdoor entrance Lock unlocked, not by the villa's system, 18:35, locked again 18:36: alert sent again " \
                "(to: Owner & FM)" in st, st
         assert "- Someone is inside (Living Room) at 18:36" in st, st
         assert not [ln for ln in st if "Still-there" in ln or "Cleared" in ln], st
@@ -635,7 +635,7 @@ def test_vesta_restarted_mid_visit_carries_on_the_same_card(tmp_path, kiosk, med
     # the owner's card sent again only for the siren's question (it rings: owner, 2026-11-08), never for the step
     assert copy(v, OWNER, 1)["mid"] == 500 or siren_question("", copy(v, OWNER, 1).get("kb"))
     assert copy(v, FM, 1)["mid"] == 501
-    assert "- Outdoor entrance Lock opened at the lock, 18:35" in lines(copy(v, OWNER, 1)["text"])
+    assert "- Outdoor entrance Lock unlocked, not by the villa's system, 18:35" in lines(copy(v, OWNER, 1)["text"])
     # the card is taken over once: a step is an edit, never a notice of its own ("Update sent")
     assert not [ln for ln in lines(copy(v, OWNER, 1)["text"]) if "Update sent" in ln]
     assert [h["stage"] for h in v.state.incident_history(1) if not h.get("fold")] == ["new"]
@@ -655,7 +655,7 @@ def test_vesta_back_after_the_villa_held_the_visit_takes_over_the_same_card_send
     assert {(c, m) for c, m, _t in v.tg.edits} >= {(OWNER, 500), (FM, 501)}
     assert v.tg.media_edits and {(c, m) for c, m, *_ in v.tg.media_edits} == {(OWNER, 500), (FM, 501)}
     st = lines(copy(v, OWNER, 1)["text"])
-    assert "- Outdoor entrance Lock opened at the lock, 18:35" in st, st
+    assert "- Outdoor entrance Lock unlocked, not by the villa's system, 18:35" in st, st
     assert copy(v, OWNER, 1)["text"].startswith("#1-P1"), "numbered now"
     assert told(v)[-1]["owner"] == "vesta"
     # its reminder was sent by the villa: VESTA's chase does not send it again
@@ -857,8 +857,24 @@ def test_a_long_visit_keeps_one_line_per_place_in_time_order_and_a_second_lock_n
     play(v, send(capped(vi)))
     assert len([s for s in v.tg.sent if s[0] == FM]) == rang, "the lock at 17:52 is no new, stronger step"
     st = [ln for ln in lines(copy(v, FM)["text"]) if not ln.startswith(("- Alert sent", "- Siren", "⚠️"))]
-    assert [ln.split(",")[0] if "Seen at" in ln else ln.split(" (")[0] if "inside" in ln else ln[:30] for ln in st] == [
-        "- Seen at Parking → Entrance Left", "- Outdoor entrance Lock opened", "- Someone is inside",
-        "- Seen at Waterwall Buddha", "- Outdoor entrance Lock opened"], st
+    assert [ln.split(" (")[0] if "inside" in ln else ln.split(",")[0] for ln in st] == [
+        "- Seen at Parking → Entrance Left", "- Outdoor entrance Lock unlocked", "- Someone is inside",
+        "- Seen at Waterwall Buddha", "- Outdoor entrance Lock unlocked"], st
     assert "17:00–17:01" in st[0] and "17:20" in st[1] and "locked again 17:21" in st[1], st
     assert "17:22–17:50" in st[2] and "17:23–17:30" in st[3] and "17:52" in st[4], st
+
+
+def test_each_unlock_of_a_lock_is_its_own_line_with_its_own_relock(tmp_path, kiosk, media):
+    # owner, 2026-11-20, #204: unlocked 12:08:25, locked 12:08:40, unlocked 12:18:36, locked 12:18:52 read as one line,
+    # "opened at the lock, 12:08, locked again 12:18"
+    v = villa(tmp_path, kiosk)
+    vi = Visit(media=media)
+    vi.add("lock", LOCK, "12:08:25", how="lock")
+    play(v, send(vi.event("opened")))
+    for kind, hms in (("relock", "12:08:40"), ("lock", "12:18:36"), ("relock", "12:18:52")):
+        vi.add(kind, LOCK, hms, **({"how": "lock"} if kind == "lock" else {}))
+        play(v, send(vi.event()))
+    st = [ln for ln in lines(copy(v, FM)["text"]) if ln.startswith("- Outdoor entrance Lock")]
+    assert len(st) == 2, st
+    assert "12:08" in st[0] and "locked again 12:08" in st[0] and "12:18" not in st[0], st
+    assert "12:18" in st[1] and "locked again 12:18" in st[1], st
