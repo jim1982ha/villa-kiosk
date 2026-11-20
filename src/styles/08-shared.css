@@ -109,6 +109,11 @@
 }
 .vesta-notice > svg:first-child { flex: 0 0 auto; color: var(--tone); }
 .vesta-notice-text { min-width: 0; overflow-wrap: anywhere; }
+/* ⚠️ THE ✕ ON THE TITLE'S LINE (owner, 2026-11-20, the doorbell's notice: "in the header, next to the title, on the
+   right", for every notice): centred on the notice's height it stood beside the photo. Pinned to the top right corner,
+   on the first line whatever follows; a one-line notice reads as before, its ✕ centred on that line. */
+.vesta-notice.closable { position: relative; padding-right: 44px; }
+.vesta-notice-close { position: absolute; top: 6px; right: 10px; display: flex; }
 /* ⚠️ AN ALERT'S NOTICE IS ITS CARD'S HEAD (UI scan, 2026-11-10; RecordCard RecordHead): the card's own strip and first
    line, in the strip's colour (--tone is its --strip: 07-facility.css .strip-*). The notice is the band: the strip
    brings no band, padding or height of its own, the first line reads on, at the notice's size, from the left. */
@@ -131,6 +136,14 @@
 /* the visit's strongest step's photo (owner, 2026-11-07): twice a tile, the others wrapping after it; never wider than
    the card on a phone */
 .photo-tile-strongest { --tile-w: 248px; max-width: 100%; }
+/* ⚠️ TWO ROWS BESIDE IT (owner, 2026-11-20, #199's card on a computer): the row wrapped after the large photo, its
+   right a single row of tiles and a gap under them. On a grid of tile-wide columns it takes two columns and two rows,
+   the next tiles fill the two rows to its right, then full rows. Its picture fills those two rows: its height is
+   theirs (the tiles' captions), never its own. */
+.photo-row-led { --cell: 120px; display: grid; grid-template-columns: repeat(auto-fill, var(--cell)); justify-content: center; align-items: start; }
+.photo-row-led > .photo-tile-strongest { grid-column: span 2; grid-row: span 2; align-self: stretch; width: auto; }
+.photo-row-led > .photo-tile-strongest > .photo-tile-open { position: relative; flex: 1 1 auto; height: auto; min-height: calc(var(--cell) * 3 / 4); }
+.photo-row-led > .photo-tile-strongest > .photo-tile-open img { position: absolute; inset: 0; }
 .photo-tile figcaption { font-size: var(--text-2xs); color: var(--text-secondary); text-align: center; overflow-wrap: anywhere; }
 /* in a notice: centred, under the words (owner, 2026-11-19: title and description at the top; they were over them,
    2026-10-29), smaller; one photo alone as it was (240px by 160px) */
@@ -219,6 +232,8 @@ body:has(.camera-fullscreen) .vesta-notice.below-camera { display: none; }
 @media (max-width: 640px) {
   .notice-stack { max-width: calc(100% - 120px); }
   .vesta-notice { padding: 6px 12px; gap: 6px; font-size: var(--text-xs); }
+  .vesta-notice.closable { padding-right: 36px; }
+  .vesta-notice-close { top: 4px; right: 6px; }
   .conn-banner-full { display: none; }
   .conn-banner-short { display: inline; white-space: nowrap; }
 }

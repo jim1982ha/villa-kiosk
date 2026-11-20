@@ -226,7 +226,7 @@ ck("  ...the notice says it so too (it showed the title alone)",
 console.log("\n  drawn as every notice, for 10s, in the villa view's column:");
 const html = draw(h(AnnouncementNoticeView, { announcement: { ...a(1), title: "🔔 Visitor", text: "At the door\nmore" } }));
 ck("the one notice, news tone, title then the first line of what it says",
-   /class="vesta-notice"/.test(html) && html.includes("--tone:var(--accent)")
+   /class="vesta-notice( closable)?"/.test(html) && html.includes("--tone:var(--accent)")
    && html.includes("🔔 Visitor · At the door") && !html.includes("more"), html);
 ck("  ...shown for 10s", ANNOUNCEMENT_NOTICE_MS === 10_000, ANNOUNCEMENT_NOTICE_MS);
 globalThis.window = { location: { pathname: "/" } };   // the add-on's own address (no Ingress prefix)

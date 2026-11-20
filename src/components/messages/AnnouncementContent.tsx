@@ -28,10 +28,15 @@ import type { PressState } from "@/messages/presses";
  * frames once they were not. `lead`: the main photo as large as the place allows, the others in a row under it (the
  * full screen). The same row on every screen: the notice, the full screen, the Inbox's card, an issue's, VESTA's
  * conversation. The visit's strongest step's photo (flagged by the VESTA Agent) leads the row, drawn about twice a tile's
- * size (owner, 2026-11-07), the others after it in time order; the notice keeps its small tiles (08-shared.css).
+ * size (owner, 2026-11-07), the others after it in time order, two rows of them beside it before the full rows
+ * (owner, 2026-11-20); the notice keeps its small tiles (08-shared.css).
  * Pure: a check draws it.
  */
-export function PhotoRow({ photos, lead = false }: { photos: readonly AnnouncementPhoto[]; lead?: boolean }) {
+export function PhotoRow({ photos, lead = false, beside = true }: {
+  photos: readonly AnnouncementPhoto[]; lead?: boolean;
+  /** Two rows of tiles beside the strongest photo (a card); false: one row of small tiles (the notice). */
+  beside?: boolean;
+}) {
   const [refused, setRefused] = useState<ReadonlySet<string>>(() => new Set());
   const [viewing, setViewing] = useState<number | null>(null);
   // the strongest step's photo first and larger, the others in time order (photoOrder); none flagged: as recorded
@@ -52,7 +57,7 @@ export function PhotoRow({ photos, lead = false }: { photos: readonly Announceme
   };
   const tiles = shown.map(tile);
   return (
-    <div className={`photo-row${lead ? " photo-row-lead" : ""}`}>
+    <div className={`photo-row${lead ? " photo-row-lead" : big && beside && shown.length > 1 ? " photo-row-led" : ""}`}>
       {lead ? <>{tiles[0]}{tiles.length > 1 && <div className="photo-row-rest">{tiles.slice(1)}</div>}</> : tiles}
       {viewing !== null && (
         <PhotoLightbox photos={shown.map((p) => ({ src: announcementPhotoUrl(p.id), label: photoCaption(p) }))}
