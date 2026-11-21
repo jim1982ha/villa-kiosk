@@ -1,3 +1,10 @@
+## 2.496.856
+
+- **The (?) pill on an issue card now says only who made the card.** It no longer repeats the problem or says when
+  the card goes away or is checked again (the card's words and its next-check pill already say that). A device that
+  is offline, no longer in the villa's system, partly not answering or showing an alarm reads: "Shown by VESTA from
+  this device's live state in the villa's system, not opened by a person or an automation."
+
 ## 2.496.855
 
 - **Logout shows a power sign.** In the menu, the "Logout" line now has a power icon like the other lines' icons,
