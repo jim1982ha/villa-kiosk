@@ -31,7 +31,8 @@ import type { HassEntity } from "@/types/ha.types";
 import { alertStage, statusWords, type Announcement } from "@/messages/announcements";
 import { labelOf } from "./EntityMap";
 import type { VillaDevices } from "./deviceGroups";
-import { attentionSeverity, cardDevice, cardHead, type AttentionGroup, type AttentionItem, type AttentionSeverity } from "./attention";
+import { faultOrigin, lineOrigin } from "@/fm/faultOrigin";
+import { attentionSeverity, cardDevice, cardHead, friendlyIn, type AttentionGroup, type AttentionItem, type AttentionSeverity } from "./attention";
 
 /** The records of one line — its fault, or the fault folded onto its live state, with their copies. A copy shares its
  *  line's standing Need help: one press on the card asks about every record of it, the copies included. */
@@ -192,6 +193,7 @@ export function lineStrip(line: CardLine): { status: RecordStatus[]; number?: st
  *  own; both draw this now (cockpit/IssueCard, hud/AnnouncementNotice). Pure. */
 export function cardTop(card: Pick<CardView, "lines" | "status" | "tone" | "look" | "nextCheck">): {
   status: RecordStatus[]; statusTip?: string; number?: string; tone: string; when?: string; check?: { pill: string; tip: string };
+  origin?: string[];
 } {
   const strip = cardStrip(card);
   const watch = card.look === "watched" && card.nextCheck ? card.nextCheck : null;
@@ -200,6 +202,8 @@ export function cardTop(card: Pick<CardView, "lines" | "status" | "tone" | "look
     ...(watch ? { status: [{ text: watch.when, tone: ACCENT_PILL }], statusTip: watch.tip } : {}),
     ...(card.lines.length ? { when: rowWhen(card) } : {}),
     ...(card.nextCheck && !watch ? { check: { pill: card.nextCheck.pill, tip: card.nextCheck.tip } } : {}),
+    // what made it (the (?) pill): the card's for one problem, each part's own on a card of several (cardFace)
+    ...(card.lines.length === 1 ? { origin: lineOrigin(card.lines[0].origin) } : {}),
   };
 }
 
@@ -212,6 +216,8 @@ export interface PartFace {
   when?: string;
   tone: string;
   check?: { pill: string; tip: string };
+  /** What made it (its (?) pill's words: fm/faultOrigin), on a part of a card of several. */
+  origin?: string[];
   icons: LineSources | null;
   who: string | null;
 }
@@ -245,6 +251,7 @@ export function cardFace(card: CardView): CardFace {
       return {
         key: line.key, status: own.status, number: own.number, when: at, tone: own.tone,
         ...(line.check ? { check: { pill: line.check.pill, tip: line.check.tip } } : {}),
+        ...(alone ? {} : { origin: lineOrigin(line.origin) }),
         icons: icons[i] ?? null,
         // the record's own ending (the villa's visit card), a Watch card's how it was cleared, else who moved it
         who: line.who ?? (card.look === "watched" ? line.closing : whoUnder(line.move, said, at)),
@@ -370,6 +377,9 @@ export interface CardLine {
   /** Its own pill on its header, on a card of several whose pill says another check: "checked live" for a problem
    *  watched live (faultTiming.LIVE_CHECK). */
   check?: CheckSaid;
+  /** What made it, one sentence per record it holds (a device's live state and its fault: two), its (?) pill's words
+   *  (fm/faultOrigin, owner 2026-11-21); absent or empty: "Source not recorded.". */
+  origin?: string[];
 }
 
 /** `{ alertNumber }` when there is one, else nothing (an optional field stays absent). */
@@ -448,6 +458,7 @@ export function othersFirst(card: CardView, hasMessage: (line: CardLine) => bool
   return { ...card, lines: [
     ...others.filter((l) => l.text && !alerts.some((a) => tells(a, l))).map((l) => ({ ...l, text: ALSO + l.text })),
     ...alerts.map((a) => others.filter((l) => tells(a, l)).reduce((line, l) => ({ ...line, own: mergedSources(line.own, l.own),
+      origin: [...new Set([...(line.origin ?? []), ...(l.origin ?? [])])],
       ...lineWork([...line.records, ...l.records], card.entityId) }), a)),
   ] };
 }
@@ -478,6 +489,7 @@ export function cockpitCard(group: AttentionGroup, cadence: AgentCadence | null,
     ...(!item.fault && item.openedBefore ? { openedBefore: true as const } : {}),
     ...alertNumberIn(item.alertNumber ?? item.fault?.alertNumber),
     closing: closingText(item.closing ?? item.fault?.closing, now),
+    origin: [item.origin, item.fault?.origin].filter((o): o is string => !!o),
   });
   const lead = cardSources(group.items), nextCheck = cardCheck(group.items, cadence, now);
   // ⚠️ A PROBLEM WATCHED LIVE ON A CARD OF SEVERAL (owner, 2026-11-06): its own "checked live" pill on its header when
@@ -568,7 +580,7 @@ function clearedCard(t: FmTicket, did: string, opts: CardsOpts, own: Pick<CardVi
     // the check is the Watch card's alone; a closed one wears where it came from, as an open issue does, in the status
     // vocabulary's grey of what is over (its strip's tone)
     lead: own.look === "closed" ? { sources: [faultSource(t)], severities: ["lost"] } : null,
-    lines: [{ key: `fault:${t.id}`, records: [], actions: own.look === "closed" ? closedActions(workRecord(t), closedTold(t).reopen) : [], asked: null, text: device && title !== device.label ? title : "", story: [], openedAt: faultBegan(t),
+    lines: [{ key: `fault:${t.id}`, origin: [faultOrigin(t, friendlyIn(entities))], records: [], actions: own.look === "closed" ? closedActions(workRecord(t), closedTold(t).reopen) : [], asked: null, text: device && title !== device.label ? title : "", story: [], openedAt: faultBegan(t),
       closing: own.look === "closed" ? null : did, state: [],
       ...(own.look === "closed" ? { move: faultMove(t) } : {}),
       ...alertNumberIn(alertNumberOf(t)),

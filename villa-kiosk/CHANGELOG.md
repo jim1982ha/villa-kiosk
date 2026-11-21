@@ -1,3 +1,13 @@
+## 2.496.853
+
+- **Every issue card says what made it.** A small (?) pill now sits just left of the "next check" pill. Hover it, or
+  tap it on a tablet or phone, to read where the card came from: the villa's automation that raised the alert (its
+  name and its id), VESTA's maintenance check that found it (for example "Missing device", PM-MISSING), the person
+  who opened it in the Cockpit, a guest's report, a chat, an overdue task, or a device the villa's system reports
+  offline right now. When nothing tells, it says "Source not recorded."
+- The automation and the check are named once the VESTA Agent's next update is installed; until then an alert's
+  card says which automation sent it was not recorded.
+
 ## 2.496.852
 
 - **One upload button.** It reads "Upload Model" on the no-model screen and in Advanced Settings, and a failed upload

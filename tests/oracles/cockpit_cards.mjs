@@ -76,9 +76,11 @@ ck("  ...its name opens the device, no line says it again", /fm-title-link/.test
 // owner, 2026-10-22: a refresh icon, not "Next check:"; 2026-11-06: a pill (the app's), on the card's first line, at its
 // right under the strip's time, never on the quiet line
 const stateLine = (html) => inside(html, "fm-record-state");
-const PILL = /<span class="fm-entity-chip fm-chip-static fm-record-check" aria-label="Next check: within 5min \([^"]+\)"[^>]*><svg[^>]*lucide-refresh-cw[\s\S]*?<\/svg>next check within 5min<\/span><\/div>$/;
+const PILL = /<span class="fm-entity-chip fm-chip-static fm-record-check" aria-label="Next check: within 5min \([^"]+\)"[^>]*><svg[^>]*lucide-refresh-cw[\s\S]*?<\/svg>next check within 5min<\/span><\/span><\/div>$/;
 ck("  ...its next check a pill, the last thing of its first line (after its state), never on its quiet line",
    PILL.test(stateLine(issue)) && stateLine(issue).indexOf("fm-record-status") < stateLine(issue).indexOf("fm-record-check")
+   // owner, 2026-11-21: what made it, a (?) pill just at its left (tests/oracles/fault_origin.mjs)
+   && stateLine(issue).indexOf("What made this card") < stateLine(issue).indexOf("fm-record-check")
    && !/fm-record-check|next check/.test(meta(issue)), [stateLine(issue), meta(issue)]);
 {
   // owner, 2026-11-07: an open visit's pill says until when it is monitored, as Telegram's last line, never its next look
@@ -89,8 +91,8 @@ ck("  ...its next check a pill, the last thing of its first line (after its stat
     monitoredUntil: at.toISOString(), device: { key: "lock.example", label: "Test lock", room: "Hall" } }]);
     return stateLine(draw(h(AttentionCard, { card: cockpitCard(g, CADENCE), onOpenEntity: () => {} }))); };
   ck("an open visit's pill: \"monitoring until\" its time on the alert's day, its day and time another day; never its next look",
-     visit(until).endsWith(`</svg>monitoring until ${clockTime(until)}</span></div>`)
-     && visit(later).endsWith(`</svg>monitoring until ${dayShort(later)} ${clockTime(later)}</span></div>`)
+     visit(until).endsWith(`</svg>monitoring until ${clockTime(until)}</span></span></div>`)
+     && visit(later).endsWith(`</svg>monitoring until ${dayShort(later)} ${clockTime(later)}</span></span></div>`)
      && !/next check/.test(visit(until)) && /fm-record-check/.test(visit(until)), [visit(until), visit(later)]);
 }
 {
@@ -106,7 +108,7 @@ ck("  ...its next check a pill, the last thing of its first line (after its stat
     .filter((f) => /<CheckPill\b|fm-record-check/.test(readFileSync(new URL(f, root), "utf8")));
   const bare = draw(h(RecordCard, { title: "T", room: "Hall", check: { pill: "next check 02:00", tip: "Next check: 02:00" } }));
   ck("  ...every next check drawn by the card itself (no other file draws the pill); a card with no state still has its first line for it",
-     using.length === 0 && /^<div class="fm-record-state strip-neutral"><span class="fm-entity-chip fm-chip-static fm-record-check"/.test(stateLine(bare))
+     using.length === 0 && /^<div class="fm-record-state strip-neutral"><span class="fm-record-pills"><span class="fm-entity-chip fm-chip-static fm-record-check"/.test(stateLine(bare))
      && !/fm-record-check/.test(meta(bare)), [using, bare]);
 }
 // the card's pill (cardCheck): its faults' timed check, else "checked live" for a card all live
@@ -172,7 +174,7 @@ ck("  ...and hovering it says when: the nightly check's next run, the Agent's ne
   const drawn = (items) => draw(h(AttentionCard, { card: cockpitCard(groupAttention(items)[0], CADENCE), onOpenEntity: () => {} }));
   const alone = drawn([liveItem]);
   ck("  ...drawn: a live-only card has the pill at the right of its first line, saying \"checked live\"",
-     /<span class="fm-entity-chip fm-chip-static fm-record-check" aria-label="The VESTA UI watches it all the time[^"]*"[^>]*><svg[^>]*lucide-refresh-cw[\s\S]*?<\/svg>checked live<\/span><\/div>$/.test(stateLine(alone)), stateLine(alone));
+     /<span class="fm-entity-chip fm-chip-static fm-record-check" aria-label="The VESTA UI watches it all the time[^"]*"[^>]*><svg[^>]*lucide-refresh-cw[\s\S]*?<\/svg>checked live<\/span><\/span><\/div>$/.test(stateLine(alone)), stateLine(alone));
   // a live state and a fault of another problem on one card: the card's pill is the fault's (the later check, the one
   // to wait for); the live part its own "checked live" on its header, before its time
   const fault = { id: "fault:f9", kind: "fault", title: "Storage camera storage full", detail: "Fault", entityId: "sensor.example_storage_card", ticketId: "f9",
@@ -181,8 +183,8 @@ ck("  ...and hovering it says when: the nightly check's next run, the Agent's ne
   const mixed = draw(h(AttentionCard, { card: both, onOpenEntity: () => {} }));
   const heads = [...mixed.matchAll(/<div class="fm-record-part-head[\s\S]*?<\/div>/g)].map((m) => m[0]);
   ck("  ...a card of several: the card's pill its fault's next check, the live part's header its own \"checked live\" before its time",
-     both.lines.length === 2 && /next check 02:00<\/span><\/div>$/.test(stateLine(mixed))
-     && heads.filter((x) => /checked live<\/span><span class="fm-record-when">/.test(x)).length === 1
+     both.lines.length === 2 && /next check 02:00<\/span><\/span><\/div>$/.test(stateLine(mixed))
+     && heads.filter((x) => /checked live<\/span><\/span><span class="fm-record-when">/.test(x)).length === 1
      && heads.filter((x) => /fm-record-check/.test(x)).length === 1, [stateLine(mixed), heads]);
   const twoLive = cockpitCard(groupAttention([liveItem, { ...liveItem, id: "alarm:camera.example_storage", kind: "alarm", detail: "Unlocked" }])[0], CADENCE);
   ck("  ...a card all live: one pill, the card's, none repeated on its parts",
@@ -485,7 +487,7 @@ console.log("\n  a card's state is one pill, everywhere (owner, 2026-11-01, opti
   const without = draw(h(AttentionCard, { card: unavailable, onOpenEntity: () => {} }));
   const first = (html) => inside(html, "fm-record-state");
   ck("a card's states its first line, joined: the device's and how it was last moved; its bar only its buttons",
-     text(first(withButtons)) === "|Unavailable · Reopened|" && /fm-record-state strip-warn/.test(withButtons) && /strip-warn/.test(strip(withButtons))
+     text(first(withButtons)).startsWith("|Unavailable · Reopened|") && /fm-record-state strip-warn/.test(withButtons) && /strip-warn/.test(strip(withButtons))
      && text(bar(withButtons)) === "|Done|" && !/Unavailable|Reopened/.test(strip(withButtons) + inside(withButtons, "fm-record-meta")
        + inside(withButtons, "cockpit-attention-sub-text")), withButtons);
   ck("  ...who moved it its who line, its time and its word dropped when the strip says them",
