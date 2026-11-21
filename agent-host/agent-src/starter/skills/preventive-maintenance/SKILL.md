@@ -49,6 +49,7 @@ closure, and never raise the same thing twice.
 - `scripts/recheck.py`   every few minutes (`jobs.every_minutes`): every open finding read again by its check; devices gone offline get their
                          fault, those back close it; deleted ones closed.
 - `scripts/rules.py`     the checks per family with their ids (PM-xxx)
+- `words.yaml`           the names the VESTA UI gives this skill and each check (a fault card's (?) pill)
 - `scripts/features.py`  feature extraction from statistics and raw history
 - `scripts/replay.py`    replays N nights and prints the findings timeline
 - Shared code: `vesta_shared`, part of the engine (the villa's system's client, store, params, pack)

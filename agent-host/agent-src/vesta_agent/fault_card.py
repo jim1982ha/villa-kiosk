@@ -131,6 +131,9 @@ FIELDS: tuple[Field, ...] = (
     Field("confirms_by", "confirmsBy", ANY, REMOVED, value=lambda w, _h: None if w.get("open") else w.get("confirms_by")),
     # a closed fault nothing watches says so: Closed on the tablet at once (drill #136-P1); a reopening takes it away
     Field("not_watched", "notWatched", CLOSED, KEPT, read=lambda v: v is True),
+    # what made it (its card's (?) pill, owner 2026-11-21): the villa automation of its alert, the skill's check of a
+    # finding; on a closed fault too (the Watch and Closed cards say it)
+    Field("raised_by", "raisedBy", ANY, KEPT),
     # what to do on site, as its problem says it NOW (Problems.card todo) — only a note this agent wrote, or none
     Field("todo", "note", OPEN, KEPT, value=_note, read=lambda v: str(v or ""),
           theirs=lambda v: bool(v) and not str(v).startswith(TODO_LABELS)),

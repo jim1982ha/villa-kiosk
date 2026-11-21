@@ -1,0 +1,26 @@
+# What the VESTA UI says of this skill's faults (owner, 2026-11-21): a card's (?) pill names the skill and the check
+# that found it ("Found by VESTA's preventive maintenance check "Missing device" (PM-MISSING)."). The engine reads
+# this file as the villa has it now (vesta_shared.skill_words): change a name here and every card says it at the
+# engine's next look. A check left out is named by its id alone.
+
+name:
+  en: "preventive maintenance"
+
+# Each check's name, by its id (the ids of SKILL.md's table, what a fault carries)
+checks:
+  PM-POWER-CHANGE: {en: "Pump draw changed"}
+  PM-RUNHOURS: {en: "Run hours off schedule"}
+  PM-ENERGY-CHANGE: {en: "Daily energy changed"}
+  PM-RUN-SAG: {en: "Draw falls during a run"}
+  PM-EXPECTED-SILENT: {en: "Scheduled run did not happen"}
+  PM-COUNTER-RESET: {en: "Energy counter went backwards"}
+  PM-BATTERY-LOW: {en: "Battery low"}
+  PM-BATTERY-CRIT: {en: "Battery critical"}
+  PM-BATTERY-TREND: {en: "Battery falling fast"}
+  PM-UNAVAILABLE: {en: "Device offline"}
+  PM-MISSING: {en: "Missing device"}
+  PM-SILENT: {en: "Sensor not reporting"}
+  PM-LEVEL-HIGH: {en: "Temperature or humidity too high"}
+  PM-RECONNECT-LOOP: {en: "Device keeps reconnecting"}
+  PM-HIDDEN-IN-RULE: {en: "Automation names a hidden device"}
+  PM-PARAM-MISSING: {en: "Setting missing for a check"}

@@ -85,3 +85,25 @@ def test_the_repair_says_where_an_open_fault_made_before_came_from(tmp_path):
     store.set_task_uid(task, uid)
     run(t.repair())
     assert kiosk.origins == {uid: "night"} and uid not in kiosk.numbers
+
+
+# ---------------------------------------------------------------------- what made it (owner, 2026-11-21)
+def test_each_fault_names_what_made_it_the_villas_automation_or_the_skills_check(tmp_path, monkeypatch):
+    # the skills as shipped: the maintenance skill names its checks in its words.yaml
+    import os
+    from vesta_shared import skill_words
+    starter = os.path.join(os.path.dirname(__file__), "..", "starter", "skills")
+    monkeypatch.setattr(skill_words, "_locate", lambda name: os.path.join(starter, name))
+    kiosk = FakeKiosk()
+    t, store = desk(tmp_path, kiosk)
+    iid = store.new_incident("k1", "automation.example_door_unlocked", "lock.example_door", "P1", {})
+    alert, _ = Problems(store).open_task("incident", iid, "automation.example_door_unlocked", "lock.example_door", "Door unlocked")
+    fid, _ = store.raise_finding("PM-MISSING", "light.example_garden", "availability", "2026-11-21", "P3", "Garden light missing", {})
+    night, _ = Problems(store).open_task("finding", fid, "PM-MISSING", "light.example_garden", "Garden light missing")
+    a = run(t.create("Door unlocked", "lock.example_door", None, alert))
+    n = run(t.create("Garden light missing", "light.example_garden", None, night))
+    c = run(t.create("Water heater on the night of 9 October", None, None))     # a chat's: nothing made it but a person
+    run(t.repair())
+    assert kiosk.ticket(a)["raisedBy"] == {"automation": "automation.example_door_unlocked"}
+    assert kiosk.ticket(n)["raisedBy"] == {"skill": "preventive maintenance", "check": "PM-MISSING", "name": "Missing device"}
+    assert "raisedBy" not in kiosk.ticket(c)

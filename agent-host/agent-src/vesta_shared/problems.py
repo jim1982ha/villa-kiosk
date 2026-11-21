@@ -28,7 +28,7 @@ from . import agreement, restart, result
 from .limits import limit
 from .messaging import headline, incident_tag, problem_title_chars
 from .store import Incident, Notes, Store, notes_of
-from . import alert_watch, kiosk_words, maintenance, visit_state
+from . import alert_watch, kiosk_words, maintenance, skill_words, visit_state
 from . import message_format as mf
 from .help_link import HelpLink
 from .timeutil import moment
@@ -914,7 +914,10 @@ class Problems:
                 # ⚠️ ITS FIRST MOMENT IS ITS ALERT'S (owner, 2026-11-07, #134-P1: the tablet's card said 04:12, when
                 # VESTA took the visit over after a restart, while the villa sent it at 04:10 and Telegram's Status says
                 # "Alert sent" then): when its incident opened, or opened again — the fault's openedAt at its making
-                "began": began(self.store.incident(sid)) if kind == "incident" else None}
+                "began": began(self.store.incident(sid)) if kind == "incident" else None,
+                # what made it, its card's (?) pill (owner, 2026-11-21): the villa automation of its alert, or the
+                # skill's check that found it
+                "raised_by": raised_by(kind, self.store.incident(sid) if kind == "incident" else row)}
 
     # ⚠️ A PERSON'S CLOSE IS WATCHED, AND THE COCKPIT SAYS SO (owner, 2026-10-23: "keep the Fault card visible in the
     # Cockpit when a fault is still being monitored … until VESTA finally closes it"): a Done, or a Close in the Cockpit,
@@ -1096,6 +1099,37 @@ class Problems:
         src = (task or {}).get("source") or ""
         kind, _, sid = src.partition(":")
         return (kind, int(sid)) if sid.isdigit() else (None, None)
+
+
+#: The skill whose checks write findings (its nightly.py and recheck.py, through Problems.record_night / record).
+FINDINGS_SKILL = "preventive-maintenance"
+
+
+def skill_check(skill: str, check: str) -> dict:
+    """A skill's check as a fault's `raisedBy` says it (agent-contract.json ticket.fields.raisedBy): {skill: the skill's
+    name as its words.yaml `name` says it in English (else its folder's name in words), check: its id, name: the
+    check's name as its words.yaml `checks` says it, when it does}."""
+    said = skill_words.words(skill, "name").get("en") or skill.replace("-", " ")
+    entry = (skill_words.file(skill).get("checks") or {})
+    entry = entry.get(check) if isinstance(entry, dict) else None
+    name = entry.get("en") if isinstance(entry, dict) else entry if isinstance(entry, str) else None
+    return {"skill": said, "check": check, **({"name": str(name)} if name else {})}
+
+
+def raised_by(kind: str | None, row: dict | None) -> dict | None:
+    """What made a fault, for its card's (?) pill: {"automation": entity id} for an alert of a villa automation or
+    script; the alert desk's own check (its rule id) for an alert it raised itself (the villa silent); the findings
+    skill's check for a finding; None for anything else (a chat's fault, a person's) or a row no longer there."""
+    rule = str((row or {}).get("rule_id") or "")
+    if not rule:
+        return None
+    if kind == "incident":
+        if rule.split(".", 1)[0] in ("automation", "script") and "." in rule:
+            return {"automation": rule}
+        return skill_check(mf.ALERT_DESK, rule)
+    if kind == "finding":
+        return skill_check(FINDINGS_SKILL, rule)
+    return None
 
 
 def _check_word(kind, rule_id, rechecked, judged_day=False) -> str:

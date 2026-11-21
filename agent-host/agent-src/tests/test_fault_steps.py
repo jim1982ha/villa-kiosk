@@ -520,6 +520,9 @@ def test_a_kiosk_that_lists_everything_gets_every_kind_and_field_the_agent_write
     hid = run(k.add_ticket("Pump has not run", entity_id="sensor.example_power", number=9))
     run(k.amend(hid, write({"expected": "Expected: Pump runs only when people are in."})))
     fields |= _kinds_and_fields(k.ticket(hid))[1]
+    # what made it, its card's (?) pill (owner, 2026-11-21)
+    run(k.amend(hid, write({"raisedBy": {"automation": "automation.example_pump_run"}})))
+    fields |= _kinds_and_fields(k.ticket(hid))[1]
     agreed = json.load(open(CONTRACT))
     # every kind but a person's own (Need help: the Kiosk's card writes it, the agent reads it)
     from vesta_agent.kiosk import PERSON_KINDS

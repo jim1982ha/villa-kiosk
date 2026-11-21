@@ -1,3 +1,10 @@
+## 0.12.535
+
+- **Each fault card in the VESTA UI says what made it.** VESTA now tells the VESTA UI which villa automation raised an
+  alert, or which maintenance check found a problem ("Missing device", PM-MISSING, …): the card's (?) pill shows it
+  (VESTA UI 2.496.854 or later). Faults already open get it within a few minutes.
+- The maintenance check names live in the preventive-maintenance skill's new words.yaml, editable there.
+
 ## 0.12.534
 
 - **The villa's all-clear joins its alert's card, even after a restart.** When the villa's system restarted while a
