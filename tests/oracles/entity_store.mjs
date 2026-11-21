@@ -86,12 +86,18 @@ console.log("\n  a live change:");
 {
   pushed.length = 0;
   const before = changes;
+  const was = store.getState().entities;
   sockets[0].event("state_changed", { entity_id: "light.a", new_state: { entity_id: "light.a", state: "on", last_updated: "t2", attributes: {} } });
   ck("the 3D map hears it AT ONCE", pushed.join() === "light.a=on", pushed.join());
   ck("  ...React does not yet (one batch per window)", store.getState().entities["light.a"].state === "off" && changes === before);
   ck("  ...but the snapshot is never behind the socket", store.snapshot()["light.a"].state === "on");
   await until(() => store.getState().entities["light.a"].state === "on");
   ck("  ...and after the window React has it, in one change", store.getState().entities["light.a"].state === "on" && changes === before + 1, changes - before);
+  const { pushedChange } = await import("@/ha/entityStore");
+  const pc = pushedChange(store.getState().entities);
+  ck("  ...the new entities say what the push set, over which entities (only light.a is looked at again)",
+     pc?.from === was && pc.ids.join() === "light.a", pc && { ids: pc.ids, sameFrom: pc.from === was });
+  ck("  ...the first read, made by no push, says nothing", pushedChange(was) === undefined);
 }
 
 console.log("\n  a reconnect:");

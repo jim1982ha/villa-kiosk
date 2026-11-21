@@ -1,3 +1,8 @@
+## 2.496.876
+
+- **A little less work on each update from the villa.** When readings arrive, the list of battery sensors is no longer
+  rebuilt from every device; only the devices that just reported are looked at. Nothing changes on screen.
+
 ## 2.496.875
 
 - **An object can no longer be hidden from its device's card; the unused code is removed.** Since 2.496.868 the

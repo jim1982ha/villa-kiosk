@@ -12,8 +12,10 @@
 // Cockpit / SummaryBar / Facility → SummaryGroupPanel. One provider now; each
 // reader asks it (useVillaModel).
 
-import { createContext, useContext, useMemo, type ReactNode } from "react";
+import { createContext, useContext, useMemo, useRef, type ReactNode } from "react";
 import { useHA } from "@/ha/HAStateStore";
+import { pushedChange } from "@/ha/entityStore";
+import { batteryTracker } from "./batteryIds";
 import { useStateSince } from "@/hooks/useStateSince";
 import { useConfig } from "./ConfigContext";
 import { useFmData } from "@/fm/FmDataContext";
@@ -196,10 +198,12 @@ export function useDeviceIdentity() {
 }
 
 /** The entities that are batteries (device_class "battery"), as one set that changes only when that list does — never
- *  per state push, so the parts built on it (devicePartsOf) and the map's marks stay the same objects. */
+ *  per state push, so the parts built on it (devicePartsOf) and the map's marks stay the same objects. Only the entities
+ *  that changed are looked at again (batteryIds.ts). */
 function useBatteryIds(entities: Record<string, HassEntity>): ReadonlySet<string> {
-  const key = Object.keys(entities).filter((id) => entities[id]?.attributes?.device_class === "battery").sort().join("\n");
-  return useMemo(() => new Set(key ? key.split("\n") : []), [key]);
+  const tracker = useRef<ReturnType<typeof batteryTracker> | null>(null);
+  tracker.current ??= batteryTracker();
+  return tracker.current(entities, pushedChange(entities));
 }
 
 
