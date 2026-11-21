@@ -1,3 +1,9 @@
+## 2.496.873
+
+- **Nothing changes on screen.** A badge's reading line (a device group's readings joined, "24°C  ·  58%", and cut
+  with "…" when it would not fit) is now its own small piece that a check runs with real values. The badges read
+  exactly as before.
+
 ## 2.496.872
 
 - **Small buttons are easier to hit with a finger.** Every choice and tab (Settings, the Cockpit, a device's modes and
