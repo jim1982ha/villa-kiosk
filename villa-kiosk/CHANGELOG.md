@@ -1,3 +1,9 @@
+## 2.496.855
+
+- **Logout shows a power sign.** In the menu, the "Logout" line now has a power icon like the other lines' icons,
+  instead of the profile's round badge. The badge at the top right of the bar stays as it was.
+- **On a phone, Settings comes first in the gear menu**, right above Cockpit. Larger screens keep their menu as it was.
+
 ## 2.496.854
 
 - **Every issue card says what made it.** A small (?) pill now sits just left of the "next check" pill. Hover it, or

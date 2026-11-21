@@ -31,7 +31,7 @@ import {
   // MapIcon, not Map: the bare name shadows the global Map constructor,
   // which this file also uses.
   Settings, Map as MapIcon, PersonStanding,
-  Minus, Plus, CircleHelp, TriangleAlert, Bot, Wrench, LayoutGrid,
+  Minus, Plus, CircleHelp, TriangleAlert, Bot, Wrench, LayoutGrid, Power,
 } from "lucide-react";
 import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
@@ -337,8 +337,6 @@ export default function HUD({
 
   const connClass =
     connection === "connected" ? "online" : connection === "connecting" ? "connecting" : "offline";
-  // The same status as a .status-dot's tone — the phone menu's role badge.
-  const connTone = connClass === "online" ? "on" : connClass === "connecting" ? "pending" : "danger";
 
   /** Rooms, Settings, then "Logout (<role>)": the rows the phone's menu ends with and
    *  the desktop's account menu holds — written once (owner, 2026-10-12). The
@@ -347,7 +345,7 @@ export default function HUD({
    *  pad). `close`: the menu it sits in.
    *  ⚠️ "Rooms" IS THE ROOMS WINDOW'S VISIBLE WAY IN (UI scan, 2026-11-10): it was reached only by holding a floor
    *  button and then pressing the dial's own button, which nobody on a phone finds. The hold still opens the dial. */
-  const accountRows = (close: () => void) => (
+  const settingsRow = (close: () => void) => (
     <>
       {doors.settings && (
         <button
@@ -359,6 +357,12 @@ export default function HUD({
           <span>Settings</span>
         </button>
       )}
+    </>
+  );
+  // `settings`: false where the menu shows Settings itself, first (the phone's gear menu: owner, 2026-11-21)
+  const accountRows = (close: () => void, settings = true) => (
+    <>
+      {settings && settingsRow(close)}
       {/* after Settings (owner, 2026-11-14: Settings, Rooms, Logout) */}
       <button
         role="menuitem"
@@ -376,10 +380,8 @@ export default function HUD({
           data-tip={`Signed in as ${ROLE_LABELS[role]} · Connection: ${connection}`}
           aria-label={`Signed in as ${ROLE_LABELS[role]}, connection ${connection}, log out`}
         >
-          <span className="hud-menu-glyph" aria-hidden="true">
-            <span className={`role-glyph${ROLE_INITIALS[role].length > 1 ? " two" : ""}`}>{ROLE_INITIALS[role]}</span>
-            <span className={`status-dot ${connTone}`} />
-          </span>
+          {/* a power sign, as every row's icon (owner, 2026-11-21: it wore the role's badge; the top bar's keeps it) */}
+          <Power size={18} aria-hidden="true" />
           <span>Logout ({ROLE_LABELS[role]})</span>
         </button>
       )}
@@ -671,6 +673,9 @@ export default function HUD({
             </Button>
             {menuOpen && (
               <div className="hud-menu" role="menu" aria-label="Settings and profile">
+                {/* Settings first on the phone's menu (owner, 2026-11-21: "move the Settings line right above Cockpit");
+                    the roomy screen's account menu keeps Settings, Rooms, Logout */}
+                {settingsRow(() => setMenuOpen(false))}
                 {/* Cockpit/Facility — the same two buttons that sit beside
                     the profile chip on a roomy screen (see
                     .hud-right-inline), collapsed into menu items here so a
@@ -748,7 +753,7 @@ export default function HUD({
                 </button>
                 {/* Settings, then Logout — the rows the desktop's account
                     menu holds too (accountRows). */}
-                {accountRows(() => setMenuOpen(false))}
+                {accountRows(() => setMenuOpen(false), false)}
               </div>
             )}
           </div>
