@@ -454,6 +454,33 @@ function badgeImageDataUrl(
   return url;
 }
 
+/**
+ * A badge's corner mark ALONE, as the badge bakes it (drawPill, at pillGeometry's size), for a DOM chip that draws its
+ * own face: the summary bar's tiles (owner, 2026-11-21: a problem is the map badges' amber "!" mark, never the tile's
+ * colour). `size` and `out` are fractions of the chip's side: the picture's side, and how far it stands outside the
+ * chip's top and right edges, so the mark sits where it sits on a badge at any chip size. Cached per theme.
+ */
+export function markImage(mark: Exclude<BadgeMark, "active">, bakePx = 96): { src: string; size: number; out: number } {
+  const unit = pillGeometry(0, 1);
+  const size = 2 * (unit.r + unit.ring);
+  const out = unit.r + unit.ring - unit.top.cy;
+  const theme = typeof document !== "undefined" ? document.documentElement.getAttribute("data-theme") ?? "" : "";
+  const cacheKey = `mark:${mark}:${theme}:${bakePx}`;
+  let src = cache.get(cacheKey);
+  if (src === undefined) {
+    const g = pillGeometry(0, bakePx);
+    const side = Math.ceil(2 * (g.r + g.ring));
+    const canvas = document.createElement("canvas");
+    canvas.width = side;
+    canvas.height = side;
+    const ctx = canvas.getContext("2d");
+    if (ctx) drawPill(ctx, g, { cx: side / 2, cy: side / 2 }, mark, "");
+    src = ctx ? canvas.toDataURL("image/png") : "";
+    cache.set(cacheKey, src);
+    evictOldest();
+  }
+  return { src, size, out };
+}
 
 /**
  * One pill: ringed in the badge's ground, then a mark (its colour, its symbol in its ink — EntityCategories.markSurface),

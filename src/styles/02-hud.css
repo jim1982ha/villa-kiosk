@@ -675,15 +675,14 @@
    accent. An inset underline rather than a full border, so it reads as a
    status cue on the flush tile rather than reintroducing a per-tile card. */
 .summary-tile.tone-on { box-shadow: inset 0 -2px 0 var(--tile-ring, var(--accent)); }
-/* Reads --tile-ring, exactly like tone-on above, so the underline and the icon
-   chip it sits under are ONE value rather than two answers to one question.
-   It was a literal --status-warning while the chip took categorySurface's
-   "alert" surface, i.e. --status-danger: the Energy tile drew a red chip with
-   an amber underline on the same tile (reported from a screenshot). Amber was
-   also simply the wrong meaning — a tile turns "warn" for an unlocked lock or
-   a high energy draw, which is a confirmed condition needing attention, not
-   Home Assistant losing contact. */
-.summary-tile.tone-warn { box-shadow: inset 0 -2px 0 var(--tile-ring, var(--status-warning)); }
+/* A problem (an unlocked lock, a high energy draw): the status amber, the one "needs attention" colour, as the
+   underline and the chip's corner mark (.summary-tile-mark); the chip itself keeps its family's colour (owner,
+   2026-11-21: "Locks 1 Unlocked" looked like "Lights 3 On" when the whole chip was amber). */
+.summary-tile.tone-warn { box-shadow: inset 0 -2px 0 var(--status-warning); }
+/* The map badges' own corner mark, baked by the badge renderer (badgeIcons.markImage): its size and its place outside
+   the chip's top-right corner come with it, as fractions of the chip. */
+.summary-tile-icon { position: relative; }
+.summary-tile-mark { position: absolute; height: auto; pointer-events: none; }
 .summary-tile.tone-off .summary-tile-value { color: var(--text-secondary); }
 
 
