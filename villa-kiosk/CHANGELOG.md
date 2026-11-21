@@ -1,3 +1,9 @@
+## 2.496.871
+
+- **Smoother moves over the villa.** While you turn, pan or walk, the frosted buttons and bars over the villa keep
+  their colour but drop their blur, so the screen has less to redraw on each frame. The moment the view is still,
+  the frosted look is back: at rest nothing changes.
+
 ## 2.496.870
 
 - **The villa's first screen has less to read before it starts.** Settings, Advanced Settings and the Cockpit are now

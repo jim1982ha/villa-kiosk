@@ -42,6 +42,8 @@ export interface ResolutionPort {
   unsharpen(): void;
   /** Whether the scaling is currently overridden to native. */
   isSharp(): boolean;
+  /** The camera moved within the last `stillMs` (true) or has been still that long (false). Told every tick. */
+  moving(on: boolean): void;
 }
 
 interface FrameDecision {
@@ -130,6 +132,7 @@ export class FrameScheduler implements FrameRequests {
       res.unsharpen();
     }
     const still = now - this.lastMotionAt >= this.stillMs;
+    res.moving(!still);
     const capped = (): boolean => {
       if (now - this.lastCappedAt < this.animationFrameMs) return false;
       this.lastCappedAt = now;
