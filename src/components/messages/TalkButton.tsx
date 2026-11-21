@@ -22,7 +22,7 @@ const SAYS = {
   sending: "Sending your question to VESTA",
 } as const;
 
-export default function TalkButton({ place, onOpen, onTap, className, idle, children }: {
+export default function TalkButton({ place, onOpen, onTap, className, idle, caption, children }: {
   place: TalkPlace;
   /** Shows the conversation (after a hold, and for a tap of the top bar's button). */
   onOpen: () => void;
@@ -33,6 +33,8 @@ export default function TalkButton({ place, onOpen, onTap, className, idle, chil
   className?: string;
   /** What the button says while nothing is pressed. */
   idle: string;
+  /** The word under its icon (the top bar's captions for the Guest profile, as every other top-bar button). */
+  caption?: string;
   /** Drawn beside the icon (the conversation's button names itself). */
   children?: ReactNode;
 }) {
@@ -51,7 +53,14 @@ export default function TalkButton({ place, onOpen, onTap, className, idle, chil
       <Button
         on={place === "bar" ? "map" : menu ? "menu" : undefined} role={menu ? "menuitem" : undefined}
         className={`${className ? `${className} ` : ""}talk-btn${phase !== "idle" ? ` talk-${phase}` : ""}`}
-        tip={label} label={label}
+        tip={label} label={label} caption={caption}
+        // the icon in Button's own slot, so a caption comes under it as under every other top-bar icon
+        icon={(
+          <span className={menu ? "hud-menu-glyph" : "talk-btn-glyph"}>
+            {talker && <Mic size={menu ? 18 : place === "bar" ? 24 : 16} aria-hidden />}
+            {!talker && <MessageCircle size={menu ? 18 : 24} aria-hidden />}
+          </span>
+        )}
         onPointerDown={(e) => {
           // a finger that slides off while talking still sends on release
           if (talker && e.button === 0 && talker.down(place, onOpen)) {
@@ -66,10 +75,6 @@ export default function TalkButton({ place, onOpen, onTap, className, idle, chil
         onClick={() => { if (!talker || talker.clicked()) onTap(); }}
       >
         {place === "thread" && phase === "listening" && <VoiceOrb size="small" />}
-        <span className={menu ? "hud-menu-glyph" : "talk-btn-glyph"}>
-          {talker && <Mic size={menu ? 18 : place === "bar" ? 24 : 16} aria-hidden />}
-          {!talker && <MessageCircle size={menu ? 18 : 24} aria-hidden />}
-        </span>
         {children}
       </Button>
       {place !== "thread" && phase === "listening" && pressed && <ListeningOverScreen />}

@@ -635,7 +635,7 @@ export default function HUD({
                 tap to open it, hold to talk where the page can record (ticket 23 of "One inbox") */}
             {thread.shown && (
               <TalkButton place="bar" onOpen={onAskVesta} onTap={onAskVesta}
-                idle={talker ? "Ask VESTA: tap to open, hold to talk" : "Ask VESTA"} />
+                idle={talker ? "Ask VESTA: tap to open, hold to talk" : "Ask VESTA"} caption={caption("Voice")} />
             )}
             <Button on="map" icon={robot ? <Bot size={24} /> : <TriangleAlert size={24} />}
               className={`${robot ? "agent-btn" : ""}${HEALTH_CLASS[health.level]}`.trim() || undefined}
@@ -686,7 +686,7 @@ export default function HUD({
                 held: VESTA listens), only while VESTA runs and the bar has room; the menu's row shows only without it */}
             {barMic && (
               <TalkButton place="bar" onOpen={onAskVesta} onTap={onAskVesta} className="hud-bar-mic"
-                idle={talker ? "Ask VESTA: tap to open, hold to talk" : "Ask VESTA"} />
+                idle={talker ? "Ask VESTA: tap to open, hold to talk" : "Ask VESTA"} caption={caption("Voice")} />
             )}
             {searchButton}
             <Button on="map" lit={menuOpen} className="hud-gear" onClick={() => setMenuOpen((o) => !o)}
