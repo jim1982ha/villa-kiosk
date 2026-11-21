@@ -1,3 +1,9 @@
+## 2.496.864
+
+- **The Guest profile's top bar has a word under each icon**: Comfort, Lights, Network, Access, Help, Smaller,
+  Bigger, Cockpit and Account, and Menu on a phone. The bar is a little taller for it, and the floor buttons and the
+  notices sit just below it. The Owner and Operations profiles keep the bar as it was.
+
 ## 2.496.863
 
 - **"Show the tips again" in Map colours & keys.** The window opened by the "?" now has a button at the bottom left
