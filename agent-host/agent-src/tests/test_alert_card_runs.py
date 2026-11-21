@@ -160,6 +160,20 @@ def test_not_a_problem_is_closed_at_once_and_its_rules_repeats_are_lines_of_its_
     assert status_lines(card(agent, GROUP)) == lines
 
 
+def test_the_all_clear_of_a_run_restarted_after_not_a_problem_is_its_cards(agent):
+    # owner, 2026-11-21 (#210): the villa's system restarted while the door stayed unlocked; its all-clear, from the
+    # restarted run, stayed a message of its own ("Cleared on 14:07") under the card it ends
+    rule(agent, "opened", 1, 500, priority="P1")
+    run(agent.on_ha_event("telegram_callback", {"id": "cb", "data": "i:1:not_a_problem", "chat_id": GROUP,
+                                                "user_id": OWNER, "message": {"message_id": 500, "chat": {"id": GROUP}},
+                                                "bot": BOT}))
+    rule(agent, "opened", 2, 501)                                         # the restarted run's repeat: the same card
+    rule(agent, "resolved", 2, 502)                                       # its all-clear
+    shown = agent.thread.shown(1)[GROUP]
+    assert shown["mid"] == 502 and "(closed)" in shown["text"].split("\n")[0], shown
+    assert re.fullmatch(rf"✅ Not a problem (?:on|at) {T} \(Owner\)\.", status_lines(shown["text"])[-1]), shown
+
+
 def test_a_lasting_repeat_is_a_line_of_the_chats_first_told_never_of_the_owner_escalated_to(agent):
     # owner, 2026-11-20 (#201): a P2 to the facility manager, escalated to the owner, then "Not a problem" — the rule's
     # repeats are lines of the FM's card; the owner's chats, joined at the escalation, list closes and presses only

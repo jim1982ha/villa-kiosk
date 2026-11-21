@@ -879,11 +879,17 @@ def answer_said(ans: dict, when: str, who: str, end: bool = False) -> Said:
 def _closed_already(store: Store, st) -> dict | None:
     """An all-clear (or a rule giving up) of no open alert (`st`: its alert_watch.standing): the problem a person said
     was "Not a problem" while it lasts is over when it says so (alert_watch.lasted: its next alert is a new
-    occurrence), and the incident of its run closed lately (LATE), read as it stands now — or None."""
+    occurrence), and the incident of its run closed lately (LATE), read as it stands now — or None.
+
+    ⚠️ ITS PROBLEM'S END, WHATEVER RUN SAYS IT (owner, 2026-11-21, #210): the villa's system restarted while the door
+    stayed unlocked, so its all-clear came from another run than the alert's; it stayed a message of its own in the
+    group beside the card. The incident it ends takes it, as its own run's would."""
     if st.ends is not None:
         W.lasted(store, st.ends)
         store.audit("alert-desk", "lasting_over", {"incident": st.ends["id"]})
-    return store.incident(st.incident["id"]) if st.verdict == W.LATE else None
+    if st.verdict == W.LATE:
+        return store.incident(st.incident["id"])
+    return store.incident(st.ends["id"]) if st.ends is not None else None
 
 
 def _said_again(late: dict, ev: dict, out: dict, decision: str, stage: str = "closed", since: str | None = None) -> None:
