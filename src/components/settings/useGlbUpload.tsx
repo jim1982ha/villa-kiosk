@@ -8,7 +8,10 @@
 // state, adopts the uploaded room data into this device's config, and tells
 // modelLifecycle the model was replaced (which reloads the villa once).
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { Upload } from "lucide-react";
+import Button from "@/components/common/Button";
+import ProblemLine from "@/components/common/ProblemLine";
 import { useConfig } from "@/config/ConfigContext";
 import { roomDataPatch } from "@/config/roomData";
 import { uploadCentralModel } from "@/utils/centralModel";
@@ -128,4 +131,38 @@ export function ModelFileInput({ upload }: { upload: ReturnType<typeof useGlbUpl
       }}
     />
   );
+}
+
+/** THE "Upload Model" button (architecture review, owner approved 2026-11-20: Advanced Settings' and the no-model
+ *  screen's were two buttons, "Upload Model" and "Upload .glb model", each with its own result box): the file picker,
+ *  its words, and an upload's progress said on itself (uploadProgress). `tool`: a tool of Advanced Settings' header
+ *  group (common/ToolGroup), its words hidden on a phone where the progress stays on its icon; otherwise the screen's
+ *  main action, its words at every width. What went wrong is its one line, UploadProblem, where its place puts it. */
+export function UploadModelButton({ upload, tool = false, style }: {
+  upload: ReturnType<typeof useGlbUpload>;
+  tool?: boolean;
+  /** Its place's layout (the no-model screen's full width), never its look. */
+  style?: CSSProperties;
+}) {
+  const words = upload.progress.words ?? "Upload Model";
+  return (
+    <>
+      <ModelFileInput upload={upload} />
+      <Button on={tool ? "tools" : undefined} look={tool ? undefined : "main"} icon={<Upload size={18} aria-hidden />}
+        label={words} tip="Upload a GLB model" shortOnPhone={tool} mark={tool ? upload.progress.mark : null}
+        disabled={upload.uploadBusy !== null} onClick={upload.openPicker} style={style}>
+        {words}
+      </Button>
+    </>
+  );
+}
+
+/** What went wrong with the last upload, the one line that says it (common/ProblemLine): a progress, a retry and a
+ *  landed upload are said on the button (owner, 2026-11-13). */
+export function UploadProblem({ upload, className }: {
+  upload: ReturnType<typeof useGlbUpload>;
+  /** Its place under what it follows, never its look. */
+  className?: string;
+}) {
+  return <ProblemLine className={className}>{upload.uploadMsg?.text}</ProblemLine>;
 }

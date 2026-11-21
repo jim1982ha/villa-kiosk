@@ -32,7 +32,7 @@
 // and this one place swaps its text for that cut line, so no card can fold its own way.
 
 import type { ReactNode } from "react";
-import { RefreshCw, Trash2, UserRound } from "lucide-react";
+import { CircleHelp, RefreshCw, Trash2, UserRound } from "lucide-react";
 import Tip from "@/components/common/Tip";
 import InfoTip from "@/components/common/InfoTip";
 import BinButton from "@/components/common/BinButton";
@@ -42,6 +42,7 @@ import ErasableRow from "./ErasableRow";
 import EvidenceRow from "./EvidenceRow";
 import { RecordNotes } from "./RecordMeta";
 import { PageLink } from "@/components/messages/AnnouncementContent";
+import Button from "@/components/common/Button";
 
 /** A Settings card's remove, a small round bin at the right of its strip (owner, 2026-11-06: ONE remove icon on every
  *  card, the bin; it had been an ✕ on a card taking a thing off a list). `label` is its tooltip and its accessible
@@ -67,6 +68,8 @@ export interface CardPart {
   tone?: string;
   /** Its own check, a pill on its header before its time (a problem watched live on a card whose pill says a fault's). */
   check?: { pill: string; tip: string };
+  /** What made it, its (?) pill before its check (OriginPill). */
+  origin?: readonly string[];
   text?: ReactNode;
   who?: string | null;
   actions?: ReactNode;
@@ -90,6 +93,8 @@ export interface RecordCardProps {
   /** Its next check: a pill at the right of its first line, under the strip's time, its words `pill` ("next check
    *  within 5min", "checked live"), `tip` on hover (CheckPill). */
   check?: { pill: string; tip: string };
+  /** What made it, in sentences: a (?) pill at the left of its next check, its words on hover or a tap (OriginPill). */
+  origin?: readonly string[];
   /** Its tags on that line ("guest report", "by VESTA Agent", a task's interval…). */
   pills?: ReactNode;
   /** When, at the right of its strip, on every card (owner, 2026-11-01). */
@@ -173,8 +178,8 @@ export function CardAsk({ question, icon, confirmLabel, onConfirm, onCancel }: {
   return (
     <>
       <div className="fm-record-ask">{icon}<span>{question}</span></div>
-      <button type="button" className="btn fm-bar-main" onClick={() => { void onConfirm(); }}>{confirmLabel}</button>
-      <button type="button" className="btn" onClick={onCancel}>Cancel</button>
+      <Button className="fm-bar-main" onClick={() => { void onConfirm(); }}>{confirmLabel}</Button>
+      <Button onClick={onCancel}>Cancel</Button>
     </>
   );
 }
@@ -189,6 +194,30 @@ export function CheckPill({ pill, tip }: { pill: string; tip: string }) {
         <RefreshCw size={12} aria-hidden="true" />{pill}
       </span>
     </Tip>
+  );
+}
+
+/** ⚠️ WHAT MADE THIS CARD (owner, 2026-11-21: "a dedicated (?) pill icon on the left of the next checked pill, so the
+ *  tooltip indicates what has generated this fault card"): the app's pill with a (?) alone, at the left of the next
+ *  check; its words (fm/faultOrigin, a sentence per record) in the one (i) card (common/InfoTip): on hover with a mouse,
+ *  on a tap on a tablet or a phone, closed by a tap outside it. */
+export function OriginPill({ origin }: { origin: readonly string[] }) {
+  return (
+    <InfoTip label="What made this card" className="fm-record-origin"
+      trigger={<span className="fm-entity-chip fm-chip-static fm-record-origin-pill"><CircleHelp size={13} aria-hidden="true" /></span>}>
+      <div className="fm-origin-tip">{origin.map((o) => <p key={o}>{o}</p>)}</div>
+    </InfoTip>
+  );
+}
+
+/** A card's pills at the right of its first line (or a part's header): what made it, then its next check. */
+function HeadPills({ origin, check }: { origin?: readonly string[]; check?: { pill: string; tip: string } }) {
+  if (!origin?.length && !check) return null;
+  return (
+    <span className="fm-record-pills">
+      {origin?.length ? <OriginPill origin={origin} /> : null}
+      {check && <CheckPill {...check} />}
+    </span>
   );
 }
 
@@ -257,16 +286,17 @@ function CardStrip({ lead, number, name, when, tone, remove }: {
 /** A card's first line: where it stands, in its tone's colour (rule 2), its (i) after it, its next check a pill at
  *  its right; `children`: the first of its words after its state, " · " between (the head a notice draws: RecordHead).
  *  None when it says nothing. */
-function StateLine({ status, tip, check, tone, children }: {
-  status: readonly RecordStatus[]; tip?: string; check?: { pill: string; tip: string }; tone: StripTone; children?: ReactNode;
+function StateLine({ status, tip, check, origin, tone, children }: {
+  status: readonly RecordStatus[]; tip?: string; check?: { pill: string; tip: string }; origin?: readonly string[]; tone: StripTone;
+  children?: ReactNode;
 }) {
   const said = status.some((s) => s.text);
-  if (!said && !check && !children) return null;
+  if (!said && !check && !origin?.length && !children) return null;
   return (
     <div className={`fm-record-state strip-${tone}`}>
       <StateWords status={status} tip={tip} />
       {children && <span className="fm-record-words">{said && " · "}{children}</span>}
-      {check && <CheckPill {...check} />}
+      <HeadPills origin={origin} check={check} />
     </div>
   );
 }
@@ -289,15 +319,16 @@ export function RecordHead({ title, lead, number, when, status, statusTip, tone,
 }
 
 /** A part's header line, in a card of several problems: its icons, its alert's name, its state, its check, its time. */
-function PartHead({ lead, number, status, check, when, tone }: {
-  lead?: ReactNode; number?: string; status: readonly RecordStatus[]; check?: { pill: string; tip: string }; when?: string; tone: StripTone;
+function PartHead({ lead, number, status, check, origin, when, tone }: {
+  lead?: ReactNode; number?: string; status: readonly RecordStatus[]; check?: { pill: string; tip: string };
+  origin?: readonly string[]; when?: string; tone: StripTone;
 }) {
   return (
     <div className={`fm-record-part-head strip-${tone}`}>
       {lead && <span className="fm-record-lead">{lead}</span>}
       {number && <span className="fm-record-number">{number}</span>}
       <StateWords status={status} />
-      {check && <CheckPill {...check} />}
+      <HeadPills origin={origin} check={check} />
       {when && <span className="fm-record-when">{when}</span>}
     </div>
   );
@@ -318,7 +349,7 @@ function BinnedBar({ bin, children }: { bin: CardBin; children: ReactNode }) {
   );
 }
 
-export default function RecordCard({ title, status, statusTip, lead, number, device, room, when, check, pills,
+export default function RecordCard({ title, status, statusTip, lead, number, device, room, when, check, origin, pills,
   notes, body, folded, photoIds, pages, amount, who, parts, actions, remove, bin, erase, onOpen, framed = true, tone }: RecordCardProps) {
   const whole = folded === undefined;
   const statuses = [status ?? []].flat();
@@ -344,7 +375,7 @@ export default function RecordCard({ title, status, statusTip, lead, number, dev
     <>
       <CardStrip lead={lead} number={number} name={title} when={when} tone={strip} remove={remove} />
       <div className="fm-record-main">
-        <StateLine status={statuses} tip={statusTip} check={check} tone={strip} />
+        <StateLine status={statuses} tip={statusTip} check={check} origin={origin} tone={strip} />
         {/* its quiet line: " · " between its pieces (07-facility.css), nothing drawn when it has none */}
         {(device || room || pills) && (
           <div className="fm-record-meta">
@@ -361,7 +392,7 @@ export default function RecordCard({ title, status, statusTip, lead, number, dev
       </div>
       {whole && several.map((p) => (
         <section key={p.key} className="fm-record-part">
-          <PartHead lead={p.lead} number={p.number} status={p.status ?? []} check={p.check} when={p.when} tone={stripTone(p.status ?? [], p.tone)} />
+          <PartHead lead={p.lead} number={p.number} status={p.status ?? []} check={p.check} origin={p.origin} when={p.when} tone={stripTone(p.status ?? [], p.tone)} />
           {(p.text || p.who) && <div className="fm-record-part-text">{p.text}<WhoLine who={p.who} /></div>}
           {p.actions && <ActionsRow>{p.actions}</ActionsRow>}
         </section>

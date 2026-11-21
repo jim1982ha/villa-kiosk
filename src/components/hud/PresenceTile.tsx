@@ -14,6 +14,7 @@ import { profileView } from "@/auth/permissions";
 import LastDayTimeline from "@/components/panels/LastDayTimeline";
 import InfoTip from "@/components/common/InfoTip";
 import EmptyLine from "@/components/common/EmptyLine";
+import Button from "@/components/common/Button";
 
 const ICON = { occupied: Users, empty: House, unknown: CircleQuestionMark };
 /** The tile's own short word (a 50 px rail): the panel's heading says it in full. */
@@ -60,14 +61,13 @@ export function PresenceButton({ presence: p, when, onClick }: { presence: Prese
   const Icon = ICON[p.state];
   const said = p.state === "empty" && when ? `Empty since ${when}` : p.label;
   return (
-    <button type="button" className="icon-btn hud-presence-btn" data-presence={p.state}
+    <Button on="map" icon={<Icon size={18} aria-hidden />} className="hud-presence-btn" data-presence={p.state}
       // empty: the rail's own icon colour, as the walk button above it (owner, 2026-11-14: its status colour read as a signal);
       // occupied and an unknown presence keep their state's colour
       style={p.state === "empty" ? undefined : { "--tone": STATUS_COLOR[p.tone] } as React.CSSProperties}
-      data-tip={`${said}, tap to see why`} aria-label={`${said}. Tap to see why.`} onClick={onClick}>
-      <Icon size={18} aria-hidden />
+      tip={`${said}, tap to see why`} label={`${said}. Tap to see why.`} onClick={onClick}>
       <span className="hud-presence-word">{SHORT[p.state]}</span>
-    </button>
+    </Button>
   );
 }
 

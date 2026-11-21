@@ -14,7 +14,7 @@ import { ShowAll, useTruncated } from "@/components/common/TruncatedList";
 import EntityPicker from "./EntityPicker";
 import SearchOrAdd, { SearchEmpty, useSearchHit } from "@/components/common/SearchOrAdd";
 import type { AddOffer } from "@/config/searchOrAdd";
-import Fold from "./Fold";
+import Fold, { type SectionStart } from "./Fold";
 import { useConfig } from "@/config/ConfigContext";
 import { useHA } from "@/ha/HAStateStore";
 import {
@@ -27,11 +27,16 @@ import { countOf } from "@/utils/countOf";
 import { groupMatches } from "@/config/deviceRecord";
 import { useDeviceSearch } from "@/hooks/useDeviceSearch";
 import EmptyLine from "@/components/common/EmptyLine";
+import Button from "@/components/common/Button";
 
 /** The list Grouped devices shows: its groups, or the groups it suggests. */
-type GroupView = "groups" | "suggested";
+export type GroupView = "groups" | "suggested";
 
-export default function GroupedDevices({ title, tip }: { title: string; tip?: ReactNode }) {
+export default function GroupedDevices({ title, tip, start }: {
+  title: string; tip?: ReactNode;
+  /** How it starts: folded, nothing typed, its groups shown, unless said. */
+  start?: SectionStart & { list?: GroupView };
+}) {
   const { config, update } = useConfig();
   const { entityDeviceIds } = useHA();
   const entityLabel = useEntityLabel();
@@ -40,8 +45,8 @@ export default function GroupedDevices({ title, tip }: { title: string; tip?: Re
   const [notice, setNotice] = useState<string | null>(null);
   // ⚠️ ITS TWO LISTS ARE ITS TITLE'S COUNTS (owner, 2026-11-06: "Show fewer" and the suggestions' own "15 suggested
   // groups" toggle sat side by side on one line): "N groups · N suggested", one shown at a time, the groups first
-  const [picked, setPicked] = useState<GroupView>("groups");
-  const [search, setSearch] = useState("");
+  const [picked, setPicked] = useState<GroupView>(start?.list ?? "groups");
+  const [search, setSearch] = useState(start?.search ?? "");
 
   // ⚠️ EVERY DEVICE OF THE GROUP, BY WHAT ANY DEVICE IS FOUND BY (deviceRecord.deviceSearchTexts: the name on screen,
   // the villa's system's name, the room, the id), its lead and its members alike: it matched only ids and names
@@ -115,10 +120,10 @@ export default function GroupedDevices({ title, tip }: { title: string; tip?: Re
           { key: "suggested", words: `${suggestions.length} suggested` },
         ],
         shown: view, onShow: (k) => setPicked(k as GroupView),
-      } : undefined}>
+      } : undefined} startOpen={start?.open}>
 
       <SearchOrAdd query={search} onQuery={typed} placeholder="Search groups, or a device to group…"
-        offer={offer} onAdd={createGroup} onFound={showGroup} />
+        offer={offer} onAdd={createGroup} onFound={showGroup} startOpen={start?.picking} />
 
       {view === "groups" && config.deviceGroups.length === 0 && !search.trim() && <EmptyLine>No grouped devices yet.</EmptyLine>}
 
@@ -165,9 +170,8 @@ export default function GroupedDevices({ title, tip }: { title: string; tip?: Re
             <EntityCard key={`${s.primaryEntityId}|${s.memberEntityId}`} entityId={s.primaryEntityId} also={[s.memberEntityId]}
               lead={<Sparkles size={16} aria-hidden />}
               actions={
-                <button type="button" className="btn fm-bar-main" onClick={() => acceptSuggestion(s.primaryEntityId, s.memberEntityId)}>
-                  <Plus size={16} aria-hidden />Create this group
-                </button>
+                <Button icon={<Plus size={16} aria-hidden />} className="fm-bar-main"
+                  onClick={() => acceptSuggestion(s.primaryEntityId, s.memberEntityId)}>Create this group</Button>
               } />
           ))}
         </div>

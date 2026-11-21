@@ -31,17 +31,14 @@ export default function CoverPanel({ entity, mapping, onClose }: PanelProps) {
 
       <div className="row-buttons">
         {/* each in the colour of where it leads (stateColors.actionColor); Stop leads nowhere: plain */}
-        <CommandButton className="btn action" style={{ flex: 1, ["--state" as string]: actionColor(mapping.entityId, "open") }}
-          watch={moves} send={() => HAServices.openCover(ws, mapping.entityId)}>
-          <ChevronUp size={20} /> Open
-        </CommandButton>
-        <CommandButton className="btn plain" style={{ flex: 1 }} watch={moves} send={() => HAServices.stopCover(ws, mapping.entityId)}>
-          <Square size={16} /> Stop
-        </CommandButton>
-        <CommandButton className="btn action" style={{ flex: 1, ["--state" as string]: actionColor(mapping.entityId, "closed") }}
-          watch={moves} send={() => HAServices.closeCover(ws, mapping.entityId)}>
-          <ChevronDown size={20} /> Close
-        </CommandButton>
+        <CommandButton look="action" icon={<ChevronUp size={20} />}
+          style={{ flex: 1, ["--state" as string]: actionColor(mapping.entityId, "open") }}
+          watch={moves} send={() => HAServices.openCover(ws, mapping.entityId)}> Open</CommandButton>
+        <CommandButton icon={<Square size={16} />} style={{ flex: 1 }} watch={moves}
+          send={() => HAServices.stopCover(ws, mapping.entityId)}> Stop</CommandButton>
+        <CommandButton look="action" icon={<ChevronDown size={20} />}
+          style={{ flex: 1, ["--state" as string]: actionColor(mapping.entityId, "closed") }}
+          watch={moves} send={() => HAServices.closeCover(ws, mapping.entityId)}> Close</CommandButton>
       </div>
 
       {/* Position slider only when the device reports current_position. */}

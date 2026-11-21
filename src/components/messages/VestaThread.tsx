@@ -18,6 +18,7 @@ import { followOf, unanswered, vestaWorking } from "@/messages/conversationModel
 import { PageLink, PhotoRow, RecordButtons } from "./AnnouncementContent";
 import TalkButton from "./TalkButton";
 import EmptyLine from "@/components/common/EmptyLine";
+import Button from "@/components/common/Button";
 
 /** One line of the thread: who said it, when, its words, the camera pictures VESTA looked at and the page it attached
  *  ("Open the page" only for a profile the add-on serves pages to). A spoken question (hold to talk) carries the
@@ -88,9 +89,8 @@ export default function VestaWindow({ onClose, canOpenPage }: { onClose: () => v
   return (
     <Window kind="content" label="VESTA" onClose={onClose} className="settings-modal vesta-modal">
       <WindowHeader title="VESTA">
-        <button type="button" className="btn" disabled={sending} onClick={() => void send(NEW_CONVERSATION)}>
-          <RotateCcw size={16} aria-hidden /> New conversation
-        </button>
+        <Button icon={<RotateCcw size={16} aria-hidden />} disabled={sending}
+          onClick={() => void send(NEW_CONVERSATION)}> New conversation</Button>
       </WindowHeader>
       <div className="modal-body vesta-thread">
       <div className="vesta-thread-lines" role="log" aria-live="polite">
@@ -108,13 +108,12 @@ export default function VestaWindow({ onClose, canOpenPage }: { onClose: () => v
           onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); } }} />
         {/* a spoken question from the open conversation: this button's own orb, never the big one again */}
         {talker && (
-          <TalkButton place="thread" onOpen={() => undefined} onTap={() => tell(TALK_SAID.hold)} className="btn"
+          <TalkButton place="thread" onOpen={() => undefined} onTap={() => tell(TALK_SAID.hold)}
             idle="Hold to talk to VESTA" />
         )}
         {/* one question at a time: never typed while a spoken one is still sending (talk.phase) */}
-        <button type="submit" className="btn primary" disabled={sending || talk.phase === "sending" || !text.trim()}>
-          <Send size={16} aria-hidden /> Ask
-        </button>
+        <Button look="main" icon={<Send size={16} aria-hidden />} type="submit"
+          disabled={sending || talk.phase === "sending" || !text.trim()}> Ask</Button>
       </form>
       {said && <p className="muted body-text">{said}</p>}
       </div>

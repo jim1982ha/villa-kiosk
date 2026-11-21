@@ -39,6 +39,7 @@ import EntityPicker from "./EntityPicker";
 import { countOf } from "@/utils/countOf";
 import EmptyLine from "@/components/common/EmptyLine";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
+import Button from "@/components/common/Button";
 
 /** The list shown: the devices on the map, or those no 3D object shows. */
 type ListView = "on" | "off";
@@ -217,9 +218,9 @@ export default function ConfigEditor({ title, tip, initialSearch }: { title: str
               They do nothing except clutter this list.
             </div>
           </div>
-          <button className="btn" onClick={removeStale}>
+          <Button onClick={removeStale}>
             Remove {staleIds.length}
-          </button>
+          </Button>
         </div>
       )}
 
@@ -241,9 +242,8 @@ export default function ConfigEditor({ title, tip, initialSearch }: { title: str
               body={<EntityPicker value={repointTo[id]} onChange={(v) => setRepointTo((m) => ({ ...m, [id]: v }))}
                 placeholder="The entity this 3D object is now…" />}
               actions={
-                <button type="button" className="btn fm-bar-main" disabled={!repointTo[id] || repointTo[id] === id} onClick={() => repoint(id)}>
-                  <Link2 size={16} aria-hidden />Point it there
-                </button>
+                <Button icon={<Link2 size={16} aria-hidden />} className="fm-bar-main"
+                  disabled={!repointTo[id] || repointTo[id] === id} onClick={() => repoint(id)}>Point it there</Button>
               } />
           ))}
         </div>

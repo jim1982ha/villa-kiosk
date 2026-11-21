@@ -13,18 +13,22 @@ import { useDeviceSearch } from "@/hooks/useDeviceSearch";
 import EntityCard from "./EntityCard";
 import { useEntityLabel } from "@/hooks/useEntityLabel";
 import { Moon } from "lucide-react";
-import Fold from "./Fold";
+import Fold, { type SectionStart } from "./Fold";
 import { countOf } from "@/utils/countOf";
 import { withItem } from "@/utils/listToggle";
 
 
-export default function UnavailableByDesign({ title, tip }: { title: string; tip?: ReactNode }) {
+export default function UnavailableByDesign({ title, tip, start }: {
+  title: string; tip?: ReactNode;
+  /** How it starts: folded, nothing typed, unless said. */
+  start?: SectionStart;
+}) {
   const { config, update } = useConfig();
   const ids = config.unavailableByDesign;
   // as every screen names a device (owner, 2026-10-28: one owner of a device's name; it printed the platform's)
   const name = useEntityLabel();
   const set = (id: string, on: boolean) => update({ unavailableByDesign: withItem(ids, id, on) });
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(start?.search ?? "");
   const src = useDeviceSearch();
   const shown = useMemo(() => ids.filter((id) => deviceMatches(id, search, src)), [ids, search, src]);
   const { hit, marked, listRef } = useSearchHit();
@@ -37,9 +41,9 @@ export default function UnavailableByDesign({ title, tip }: { title: string; tip
   // folded under its title like Grouped devices (owner, 2026-10-22: the same chevron and closed line); its field first,
   // each device an EntityCard (owner, 2026-11-06): its name, its id, its ✕ at its strip's right
   return (
-    <Fold title={title} tip={tip} summary={countOf(ids.length, "device")}>
+    <Fold title={title} tip={tip} summary={countOf(ids.length, "device")} startOpen={start?.open}>
       <SearchOrAdd query={search} onQuery={(q) => { setSearch(q); hit(null); }} placeholder="Search, or a device to add…"
-        offer={offer} onAdd={add} onFound={showOne} />
+        offer={offer} onAdd={add} onFound={showOne} startOpen={start?.picking} />
       {shown.length === 0 && search.trim() !== "" && (
         <SearchEmpty query={search} noun="device on the list" offer={offer} onAdd={add} />
       )}

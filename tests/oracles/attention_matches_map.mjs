@@ -89,7 +89,7 @@ ck("a jammed lock alone is 'danger' (red on the map, red here)",
 const src = (f) => readFileSync(new URL(`../../src/${f}`, import.meta.url), "utf8");
 const hud = src("components/hud/HUD.tsx"), cockpit = (src("components/cockpit/CockpitModal.tsx") + src("components/cockpit/MessagesTab.tsx") + src("components/cockpit/IssueCard.tsx"));
 ck("the top-bar badge and the phone menu's \"Cockpit (N)\" read the open issues Messages lists (listedIssues: one row per device, 2.496.246, and the villa's own alerts)",
-   /const \{ unread, openIssues \} = useAnnouncements\(\);/.test(hud) && /formatCountBadge\(openIssues\)\}/.test(hud)
+   /const \{ unread, openIssues \} = useAnnouncements\(\);/.test(hud) && /count=\{openIssues > 0 \? formatCountBadge\(openIssues\)/.test(hud)
    && /withCount\("Cockpit", openIssues\)/.test(hud)
    && !/attentionItems/.test(hud)
    // the Cockpit's list: one card per row of that same view (config/cockpitIssues; its count by value: fault_confirm)

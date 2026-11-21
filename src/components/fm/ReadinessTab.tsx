@@ -18,6 +18,7 @@ import { CHECK_WORDS, VERDICT_WORDS, type CheckLink, type CheckState, type Check
 import { pillClass, toneClass } from "@/fm/tone";
 import RecordCard from "./RecordCard";
 import { ShowAll, useTruncated } from "@/components/common/TruncatedList";
+import Button from "@/components/common/Button";
 
 const ICON: Record<CheckState, typeof CheckCircle2> = {
   pass: CheckCircle2, warn: AlertTriangle, fail: XCircle,
@@ -60,10 +61,8 @@ export default function ReadinessTab({
       {snapshot.markdown && (
         <div className="fm-stack">
           <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
-            <button className="btn" onClick={snapshot.close}>Close snapshot</button>
-            <button className="btn" onClick={snapshot.download}>
-              <Download size={16} /> Download .md
-            </button>
+            <Button onClick={snapshot.close}>Close snapshot</Button>
+            <Button icon={<Download size={16} />} onClick={snapshot.download}> Download .md</Button>
           </div>
           <MarkdownPreview markdown={snapshot.markdown} />
         </div>
@@ -116,9 +115,9 @@ export function ReadinessChecks({ readiness, label, onOpenEntity, onOpenCheck, o
               lead={<span className={`fm-check-icon ${c.state}`}><Icon size={16} /></span>}
               title={c.label}
               actions={opens ? (
-                <button className="btn" onClick={() => onOpenCheck(opens)}>
+                <Button onClick={() => onOpenCheck(opens)}>
                   {opens.label} <ChevronRight size={16} />
-                </button>
+                </Button>
               ) : undefined}
               body={<>
                 <div className="fine-print"><CheckDetail check={c} onGo={onGo} /></div>

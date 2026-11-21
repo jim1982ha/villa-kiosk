@@ -629,8 +629,13 @@ V = json.loads((ROOT / "rootfs" / "usr" / "share" / "vesta" / "villa-settings.js
 row = V["settings"]["recordsKeptDays"]
 ck("the records' days: the server's default and bounds are the table's row",
    (proxy.RECORDS_KEPT_DAYS.default, proxy.RECORDS_KEPT_DAYS.lo, proxy.RECORDS_KEPT_DAYS.hi) == (row["default"], row["min"], row["max"])
-   and proxy._records_kept_days(proxy.NOT_STORED) == row["default"] and proxy._records_kept_days(row["max"] + 1) == row["max"]
-   and proxy._records_kept_days(-1) == row["min"], (proxy.RECORDS_KEPT_DAYS.default, proxy.RECORDS_KEPT_DAYS.hi))
+   and proxy._records_kept_days(proxy.NOT_STORED) == row["default"], (proxy.RECORDS_KEPT_DAYS.default, proxy.RECORDS_KEPT_DAYS.hi))
+# ⚠️ ONE RULE, BOTH SIDES (architecture review, owner approved 2026-11-20): out of range is kept at the nearest bound
+# (the Kiosk used to drop it, this server to clamp it); a value of another kind is not kept
+ck("  ...a number of days out of range is kept at the nearest bound, a fraction as its whole days, text not at all",
+   proxy._villa_keep("recordsKeptDays", row["max"] + 1) == row["max"] and proxy._villa_keep("recordsKeptDays", -1) == row["min"]
+   and proxy._villa_keep("recordsKeptDays", 1.5) == 1
+   and all(proxy._villa_keep("recordsKeptDays", v) is proxy.NOT_STORED for v in ("30", None, True, float("nan"))))
 ck("  ...the full-screen time's bounds too", proxy._full_screen_bounds() == tuple(V["fullScreenSeconds"][k] for k in ("default", "min", "max"))
    and proxy._seconds_ok(V["fullScreenSeconds"]["max"]) and not proxy._seconds_ok(V["fullScreenSeconds"]["max"] + 1)
    and not proxy._seconds_ok(V["fullScreenSeconds"]["min"] - 1))
@@ -679,6 +684,14 @@ async def migrated_on_load_and_put() -> None:
         ck("  ...a time out of range in today's shape: that item left out, as every tablet reads it",
            r.status == 200 and on_file == {"fullScreen": [{"title": "Example overload", "seconds": 600}]}, on_file)
         ck("  ...a document already in today's shape is not written again at start", not await proxy.DEVICE_CONFIG.settle())
+        r = await client.request("PUT", "/device-config", headers=owner, json={"config": {
+            "recordsKeptDays": 99999, "latitude": "0.5", "presenceSensor": "Example empty sensor", "maintenanceMode": True,
+            "unavailableByDesign": ["binary_sensor.example_door", "Example door", "binary_sensor.example_door"]}})
+        on_file = json.loads((data / "device-config.json").read_text())
+        ck("the save keeps each villa setting by its rule: the days at the most allowed, a value of another kind and an id "
+           "that is none dropped, a list's ids each once",
+           r.status == 200 and on_file == {"recordsKeptDays": 3650, "maintenanceMode": True,
+                                           "unavailableByDesign": ["binary_sensor.example_door"]}, on_file)
     finally:
         await client.close()
 

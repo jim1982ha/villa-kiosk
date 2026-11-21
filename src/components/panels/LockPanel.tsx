@@ -13,6 +13,7 @@ import ControlFrame from "./ControlFrame";
 import InlineConfirm from "@/components/common/InlineConfirm";
 import { useAskFirst } from "@/hooks/useAskFirst";
 import { switchAsk } from "@/utils/devicePower";
+import Button from "@/components/common/Button";
 
 export default function LockPanel({ entity, mapping, onClose }: PanelProps) {
   const { ws } = useHA();
@@ -89,9 +90,8 @@ export default function LockPanel({ entity, mapping, onClose }: PanelProps) {
           </button>
         ) : (
           <div key={b} className="mt">
-            <button className="btn action" style={{ width: "100%", ...leads }} onClick={ask.request}>
-              <Icon size={18} /> {b === "lock" ? "Lock door" : "Unlock door…"}
-            </button>
+            <Button look="action" icon={<Icon size={18} />} style={{ width: "100%", ...leads }}
+              onClick={ask.request}> {b === "lock" ? "Lock door" : "Unlock door…"}</Button>
           </div>
         );
       })}

@@ -10,8 +10,9 @@ import Window, { WindowHeader } from "@/components/common/Window";
 import { roleCan } from "@/auth/permissions";
 import { useState, type ReactNode } from "react";
 import { FIELD_COMMIT_MS, PendingFields, typedNumber, usePendingField, type PendingField } from "@/hooks/usePendingField";
-import { RECORDS_KEPT_DAYS_MAX, type AppConfig } from "@/config/AppConfig";
-import { Boxes, CalendarClock, Home, LogOut, Upload, Wrench } from "lucide-react";
+import type { AppConfig } from "@/config/AppConfig";
+import { villaBounds } from "@/config/villaSettings";
+import { Boxes, CalendarClock, Home, LogOut, Wrench } from "lucide-react";
 import SettingRow, { SettingSlider, settingValue } from "@/components/common/SettingRow";
 import ToolGroup from "@/components/common/ToolGroup";
 import InfoTip, { TipTitle } from "@/components/common/InfoTip";
@@ -20,7 +21,7 @@ import { DialogEdits, useConfig } from "@/config/ConfigContext";
 import { northOffsetFacing } from "@/babylon/skyMoment";
 import { useProfile } from "@/auth/ProfileContext";
 import CentralModelInfo from "./CentralModelInfo";
-import { useGlbUpload, ModelFileInput } from "./useGlbUpload";
+import { useGlbUpload, UploadModelButton, UploadProblem } from "./useGlbUpload";
 import ConfigEditor from "./ConfigEditor";
 import TelemetryPanel from "./TelemetryPanel";
 import GroupedDevices from "./GroupedDevices";
@@ -34,6 +35,7 @@ import { useAppNotice } from "@/components/hud/AppNotice";
 import { useDraftedSlice } from "@/hooks/useDraftedSlice";
 import { ADVANCED_SETTINGS_KEYS } from "@/config/configSlice";
 import ProblemLine from "@/components/common/ProblemLine";
+import Button from "@/components/common/Button";
 
 /** ⚠️ EVERY TAB CARRIES TWO PANELS, AND THAT IS A RULE RATHER THAN AN
  *  ACCIDENT. This screen was a stack of six collapsible sections and read as
@@ -140,13 +142,12 @@ function NorthOffset({ viewHeadingDeg }: { viewHeadingDeg?: () => number | null 
         onChange={(northOffsetDeg) => update({ northOffsetDeg })}
         before={
           // One control in two forms: the button measures it from the view, the slider sets it by hand.
-          <button className="btn" disabled={!viewHeadingDeg}
-            onClick={() => {
+          <Button disabled={!viewHeadingDeg} onClick={() => {
               const h = viewHeadingDeg?.();
               if (h != null) update({ northOffsetDeg: northOffsetFacing(h) });
             }}>
             Set North
-          </button>
+          </Button>
         } />
     </div>
   );
@@ -170,6 +171,10 @@ function PresenceSensor() {
   );
 }
 
+/** The days the field takes: the bounds of the setting's row (villa-settings.json `recordsKeptDays`), the ones the
+ *  server keeps a saved value within. */
+const DAYS_KEPT = villaBounds("recordsKeptDays");
+
 /** How long the Facility record is kept (config/recordsKeptDays): the villa's, applied by the server. Commits on
  *  blur/Enter or after a pause, like the coordinates; a value that is not a whole number of days in range commits
  *  nothing, the field falls back to the stored one and says so (typedNumber). */
@@ -178,7 +183,7 @@ function RecordsKept() {
   const field = usePendingField<string>("recordsKeptDays", FIELD_COMMIT_MS);
   const write = (text: string) => {
     const n = Number(text);
-    return text.trim() !== "" && Number.isInteger(n) && n >= 0 && n <= RECORDS_KEPT_DAYS_MAX ? { recordsKeptDays: n } : null;
+    return text.trim() !== "" && Number.isInteger(n) && n >= DAYS_KEPT.min && n <= DAYS_KEPT.max ? { recordsKeptDays: n } : null;
   };
   // label and field on one line, the field on the right (owner, 2026-10-22): a setting line like every other, its name
   // one line at every width (owner, 2026-11-06), the owner's whole sentence in the section's (i)
@@ -186,11 +191,10 @@ function RecordsKept() {
     <SettingRow className="setting-field" icon={<CalendarClock size={16} />} label={<label htmlFor="records-kept">Days records are kept</label>}>
       <input id="records-kept" inputMode="numeric" className="field-narrow"
         {...typedNumber(field, String(config.recordsKeptDays), write, "Days records are kept",
-          `a whole number from 0 to ${RECORDS_KEPT_DAYS_MAX}`)} />
+          `a whole number from ${DAYS_KEPT.min} to ${DAYS_KEPT.max}`)} />
     </SettingRow>
   );
 }
-
 
 /** "Log Out All": immediately signs every device out — a lost tablet, a PIN someone saw. Two-tap confirm, same idiom
  *  as Facility's "Delete all" buttons: this signs the person clicking it out too, so it's worth pausing on. At the
@@ -202,10 +206,9 @@ function LogoutAll() {
   return (
     <>
       {failed && <ProblemLine>Could not reach the server, no session was signed out.</ProblemLine>}
-      <AskFirstButton confirmLabel="Log out every device?" title="Log Out All" aria-label="Log Out All"
-        onConfirm={async () => setFailed(!(await logoutAll()))}>
-        <LogOut size={18} aria-hidden /><span className="btn-label">Log Out All</span>
-      </AskFirstButton>
+      <AskFirstButton on="tools" icon={<LogOut size={18} aria-hidden />} label="Log Out All"
+        tip="Log Out All" shortOnPhone
+        confirmLabel="Log out every device?" onConfirm={async () => setFailed(!(await logoutAll()))}>Log Out All</AskFirstButton>
     </>
   );
 }
@@ -224,23 +227,7 @@ export function HeaderActions({ glbUpload, logout }: {
       {/* ⚠️ ONE GROUP IN THE THEME CONTROL'S LOOK (owner, 2026-11-06: Advanced Settings' header buttons were filled
           squares beside Settings' pill): the one tool group (.tool-group), each word hidden on a phone */}
       <ToolGroup label="The model and the sessions">
-      {glbUpload && (
-        <>
-          <ModelFileInput upload={glbUpload} />
-          <button
-            type="button"
-            onClick={glbUpload.openPicker}
-            disabled={glbUpload.uploadBusy !== null}
-            data-tip="Upload a GLB model"
-            aria-label={glbUpload.progress.words ?? "Upload Model"}
-          >
-            <Upload size={18} aria-hidden />
-            <span className="btn-label">{glbUpload.progress.words ?? "Upload Model"}</span>
-            {/* on a phone the words are hidden: the progress stays on the icon */}
-            {glbUpload.progress.mark && <span className="icon-btn-count btn-mark" aria-hidden>{glbUpload.progress.mark}</span>}
-          </button>
-        </>
-      )}
+      {glbUpload && <UploadModelButton upload={glbUpload} tool />}
       {logout}
       </ToolGroup>
       <InfoTip label="About these buttons">
@@ -315,11 +302,7 @@ export default function ConfigEditorModal({ onBack, withinSettings, focusEntityI
       />
 
       <div className="modal-body">
-        {glbUpload.uploadMsg && (
-          <div className={`test-result ${glbUpload.uploadMsg.ok ? "ok" : "fail"}`}>
-            {glbUpload.uploadMsg.text}
-          </div>
-        )}
+        <UploadProblem upload={glbUpload} />
 
         {tab === "villa" && (
           <>
@@ -375,7 +358,7 @@ export default function ConfigEditorModal({ onBack, withinSettings, focusEntityI
           <>
             <TipTitle title="Maintenance records" tip={<>
               How many days faults, tickets, attachments and messages are kept: photos, repaired faults, work done, money
-              spent and messages older than this are deleted. 0 keeps them for ever, up to {RECORDS_KEPT_DAYS_MAX} days
+              spent and messages older than this are deleted. 0 keeps them for ever, up to {DAYS_KEPT.max} days
               otherwise; a task's latest completion is always kept.
             </>} />
             <RecordsKept />
@@ -389,7 +372,6 @@ export default function ConfigEditorModal({ onBack, withinSettings, focusEntityI
               Copy and Download give every detail; Clear empties the list.
             </>} />
             <TelemetryPanel />
-
 
           </>
         )}

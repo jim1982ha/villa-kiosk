@@ -4,12 +4,13 @@
 
 import ProblemLine from "@/components/common/ProblemLine";
 import { SIGN_IN_AGAIN, SIGN_IN_EXPIRED, signInAgain } from "@/auth/remoteSignIn";
+import Button from "@/components/common/Button";
 
 export default function SignInAgain({ className = "" }: { className?: string }) {
   return (
     <div className={`sign-in-again${className ? ` ${className}` : ""}`}>
       <ProblemLine>{SIGN_IN_EXPIRED}</ProblemLine>
-      <button type="button" className="btn" onClick={signInAgain}>{SIGN_IN_AGAIN}</button>
+      <Button onClick={signInAgain}>{SIGN_IN_AGAIN}</Button>
     </div>
   );
 }

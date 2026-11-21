@@ -62,11 +62,13 @@ console.log("\n  reading what the server holds:");
   const parsed = dc.parseSharedConfig({ ...base, fromANewerVersion: 1 });
   ck("every shared key is read back as stored", KEYS.every((k) => J(parsed[k]) === J(base[k])));
   ck("a key this version does not know is dropped", !("fromANewerVersion" in parsed));
-  const wrong = dc.parseSharedConfig({ entityMap: [], meshBindings: "x", deviceGroups: {}, teleportPoints: 3, dismissedEntityIds: "a", unavailableByDesign: 4, chatLanguages: [], fmContract: 5, latitude: "x", longitude: null, northOffsetDeg: NaN, presenceSensor: 3, recordsKeptDays: 1.5, roomGlowAndCones: "off", maintenanceMode: "on", fullScreen: "x" });
+  const wrong = dc.parseSharedConfig({ entityMap: [], meshBindings: "x", deviceGroups: {}, teleportPoints: 3, dismissedEntityIds: "a", unavailableByDesign: 4, chatLanguages: [], fmContract: 5, latitude: "x", longitude: null, northOffsetDeg: NaN, presenceSensor: 3, recordsKeptDays: "1.5", roomGlowAndCones: "off", maintenanceMode: "on", fullScreen: "x" });
   ck("a wrong-shaped value is left out, so the device keeps its own", Object.keys(wrong).length === 0, J(wrong));
   ck("a chat's language is kept only for a notify entity and a language of the agreement's menu",
      J(dc.parseSharedConfig({ chatLanguages: { "notify.a": "fr", "notify.b": "pt", "sensor.c": "de", "notify.d": 3 } }).chatLanguages) === J({ "notify.a": "fr" }));
-  ck("a dismissed list keeps only its ids", J(dc.parseSharedConfig({ dismissedEntityIds: ["a", 3, null, "b"] }).dismissedEntityIds) === J(["a", "b"]));
+  ck("a dismissed list keeps only its entity ids, each once (the server keeps it so)",
+     J(dc.parseSharedConfig({ dismissedEntityIds: ["light.a", 3, null, "Not an id", "light.b", "light.a"] }).dismissedEntityIds)
+     === J(["light.a", "light.b"]));
   ck("nothing usable reads as nothing", J(dc.parseSharedConfig(null)) === "{}" && J(dc.parseSharedConfig([1])) === "{}");
 }
 
@@ -164,11 +166,13 @@ console.log("\n  where the villa is and which way north lies — shared, never a
 // how long the Facility record is kept: the villa's, set in Advanced Settings (owner, 2026-10-20: it was an add-on
 // option). The server applies it, so the app's default and ceiling are the server's.
 {
-  const { RECORDS_KEPT_DAYS_DEFAULT: DEF, RECORDS_KEPT_DAYS_MAX: MAX } = await import("@/config/AppConfig");
+  const { RECORDS_KEPT_DAYS_DEFAULT: DEF } = await import("@/config/AppConfig");
+  const { min: MIN, max: MAX } = (await import("@/config/villaSettings")).villaBounds("recordsKeptDays");
   // the server reads the same row (tests/store-doors.py drives its reading from the JSON)
   const table = JSON.parse((await import("node:fs")).readFileSync(new URL("../../rootfs/usr/share/vesta/villa-settings.json", import.meta.url), "utf8"));
   const row = table.settings.recordsKeptDays;
-  ck("the app's default and ceiling are the row's, the one the server reads", row.default === DEF && row.max === MAX && row.min === 0, row);
+  ck("the app's default and bounds are the row's, the one the server reads", row.default === DEF && row.max === MAX && row.min === MIN
+     && MIN === 0, row);
   const nothing = dc.baselineFromServer({});
   ck("nothing stored: the default, one year", nothing.recordsKeptDays === DEF && DEF === 365, nothing.recordsKeptDays);
   ck("a device still on the default proposes nothing",
@@ -176,7 +180,10 @@ console.log("\n  where the villa is and which way north lies — shared, never a
   ck("the owner's \"keep for ever\" (0) is proposed, as an edit",
      J(dc.describeSharedConfigDiff(dc.diffSharedConfig(nothing, { ...nothing, recordsKeptDays: 0 }))) === J({ recordsKeptDays: 1 }));
   const read = (v) => dc.parseSharedConfig({ recordsKeptDays: v }).recordsKeptDays;
-  ck("whole days from 0 to the ceiling are read; anything else keeps the device's own",
-     read(0) === 0 && read(MAX) === MAX && [-1, MAX + 1, 1.5, "30", null].every((v) => read(v) === undefined));
+  // ⚠️ THE SERVER'S RULE TOO (architecture review, owner approved 2026-11-20): out of range is kept at the nearest
+  // bound, as the server keeps a save; it was dropped here and clamped there
+  ck("whole days are read; out of range at the nearest bound, a fraction as its whole days; anything else keeps the device's own",
+     read(0) === 0 && read(MAX) === MAX && read(-1) === MIN && read(MAX + 1) === MAX && read(1.5) === 1
+     && ["30", null, true].every((v) => read(v) === undefined));
 }
 done("✅ every shared key is read, diffed, replayed and baselined from its one row");

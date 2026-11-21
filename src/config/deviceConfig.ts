@@ -55,7 +55,7 @@
 
 import { ingressPath } from "@/ha/ingress";
 import { parseFullScreen, type AppConfig, type DeviceGroup, type FullScreenAnnouncement } from "./AppConfig";
-import { VILLA_DEFAULTS, readVillaSetting, type VillaSettingKey } from "./villaSettings";
+import { VILLA_DEFAULTS, keptEntityIds, readVillaSetting, type VillaSettingKey } from "./villaSettings";
 import type { FmContract } from "@/fm/fmTypes";
 import type { EntityMapping, TeleportPoint } from "@/types/scene.types";
 import { backendFetch } from "@/auth/sessionLost";
@@ -147,11 +147,12 @@ const fullScreenList: SharedKeyRow<FullScreenAnnouncement[], FullScreenAnnouncem
 };
 
 /** A plain list of entity ids: its own index — adding one on one device and removing a DIFFERENT one on another must
- *  not cancel each other out, which is exactly what comparing the two lists wholesale would do. */
+ *  not cancel each other out, which is exactly what comparing the two lists wholesale would do. Read as the server
+ *  keeps it (villaSettings keptEntityIds: entity ids, each once). */
 const idList: SharedKeyRow<string[], true> = {
   index: (arr) => Object.fromEntries(arr.map((id) => [id, true as const])),
   fromIndex: Object.keys,
-  parse: (raw) => (Array.isArray(raw) ? raw.filter((v): v is string => typeof v === "string") : undefined),
+  parse: keptEntityIds,
   empty: [],
 };
 

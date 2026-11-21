@@ -8,6 +8,7 @@
 import Window, { WindowHeader } from "@/components/common/Window";
 import { RotateCcw } from "lucide-react";
 import ModalFooter from "@/components/common/ModalFooter";
+import Button from "@/components/common/Button";
 
 // A spread of distinct, pleasant badge colours. Identity swatches (not a data
 // scale), so no ramp/validator needed — just visibly different from each other.
@@ -74,9 +75,8 @@ export default function BadgeColorModal({ current, categoryColor, onChange, onCl
             />
             <span>Custom…</span>
           </label>
-          <button className="btn" onClick={() => pickAndClose(null)} style={{ marginLeft: "auto" }}>
-            <RotateCcw size={16} /> Category default
-          </button>
+          <Button icon={<RotateCcw size={16} />} onClick={() => pickAndClose(null)} style={{ marginLeft: "auto" }}>
+            Category default</Button>
         </div>
       </div>
 

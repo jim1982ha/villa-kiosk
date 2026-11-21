@@ -39,6 +39,7 @@ import { readingOf, stateWords } from "@/config/reading";
 import { historyStateColor } from "@/utils/stateColors";
 import { useArrowStep } from "@/hooks/useArrowStep";
 import { feedHasSound } from "./feedSound";
+import Button from "@/components/common/Button";
 
 interface Props extends PanelProps {
   /** Lets the camera pin continuous rendering while the stream is open. */
@@ -616,21 +617,20 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
             controls the user is about to reach for (prev/next/fullscreen/
             close) while they're mid-gesture on the feed. */}
         {zoom.zoomed && (
-          <button className="media-btn worded camera-zoom-pill" onClick={zoom.reset} data-tip="Reset zoom" aria-label="Reset zoom">
-            <ZoomOut size={16} /> Zoomed in, tap to reset
-          </button>
+          <Button on="photo" icon={<ZoomOut size={16} />} className="camera-zoom-pill" onClick={zoom.reset}
+            tip="Reset zoom"
+            label="Reset zoom"> Zoomed in, tap to reset</Button>
         )}
         </div>
         {/* the device window's own pieces, at its top right as in every device window: the warning first */}
         <div className="camera-header-actions">
-          {warning && <FaultsButton onOpen={warning.open} severity={warning.severity} className="media-btn" />}
+          {warning && <FaultsButton onOpen={warning.open} severity={warning.severity} on="photo" />}
           {readings && readings.length > 0 && (
-            <button type="button" className={`media-btn${readingsOpen ? " on" : ""}`} onClick={() => setReadingsOpen((o) => !o)}
-              data-tip="Also on this device" aria-label="Also on this device" aria-expanded={readingsOpen}>
-              <ListTree size={16} aria-hidden="true" />
-            </button>
+            <Button on="photo" lit={readingsOpen} icon={<ListTree size={16} aria-hidden="true" />}
+              label="Also on this device"
+              aria-expanded={readingsOpen} onClick={() => setReadingsOpen((o) => !o)} />
           )}
-          <EditButton className="media-btn" icon />
+          <EditButton on="photo" />
           <OpenTicketButton />
         </div>
       </div>
@@ -779,16 +779,8 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
             <CameraDeviceButtons cameraId={mapping.entityId} order={vOrder} />
             {/* its sound, off until tapped (soundOn) — only a video feed that carries one (hasSound) */}
             {(mode === "webrtc" || mode === "hls") && hasSound && (
-              <button
-                className={`media-btn camera-sound-btn${soundOn ? " on" : ""}`}
-                onClick={toggleSound}
-                data-tip={soundOn ? "Mute" : "Sound on"}
-                aria-label={soundOn ? "Mute" : "Sound on"}
-                aria-pressed={soundOn}
-                style={vOrder(11)}
-              >
-                {soundOn ? <Volume2 /> : <VolumeX />}
-              </button>
+              <Button on="photo" lit={soundOn} icon={soundOn ? <Volume2 /> : <VolumeX />} className="camera-sound-btn"
+                label={soundOn ? "Mute" : "Sound on"} aria-pressed={soundOn} style={vOrder(11)} onClick={toggleSound} />
             )}
           </div>
           {/* Linked entity on/off — the camera's stand-in for the switch
@@ -803,15 +795,11 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
               every icon to the same share of its button, at every breakpoint,
               instead of a hand-picked pixel value per icon. */}
           {linked && (
-            <button
-              className={`media-btn camera-linked-btn${linked.isOn ? " on" : ""}`}
+            <Button on="photo" lit={linked.isOn} icon={<Power />} className="camera-linked-btn"
               {...linkedSwitchProps(linked)}
               // its word as the card windows say it (linkedStateWords: Unavailable only when lost, else Unknown)
-              data-tip={`${linked.label}: ${linkedStateWords(linked)}${linked.known ? `, ${linked.isOn ? "turn off" : "turn on"}` : ""}`}
-              style={vOrder(5)}
-            >
-              <Power />
-            </button>
+              tip={`${linked.label}: ${linkedStateWords(linked)}${linked.known ? `, ${linked.isOn ? "turn off" : "turn on"}` : ""}`}
+              style={vOrder(5)} />
           )}
           {canCycle && (
             <>
@@ -821,61 +809,27 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
                   directly rather than onCycleBtnClick, so it can't be
                   swallowed by the hook's consumeClick, which exists only to
                   suppress the click at the end of a hold. */}
-              <button
-                className="media-btn"
-                onClick={() => stepCamera(-1)}
-                data-tip="Previous camera"
-                aria-label="Previous camera"
-                style={vOrder(4)}
-              >
-                <ChevronLeft />
-              </button>
-              <button
-                className="media-btn has-hold-action"
-                {...pickerHold}
-                onContextMenu={(e) => e.preventDefault()}
-                onClick={() => onCycleBtnClick(1)}
-                data-tip="Next camera, hold to pick a camera"
-                aria-label="Next camera, hold to pick a camera"
-                style={vOrder(3)}
-              >
-                <ChevronRight />
-              </button>
+              <Button on="photo" icon={<ChevronLeft />} label="Previous camera" style={vOrder(4)}
+                onClick={() => stepCamera(-1)} />
+              <Button on="photo" icon={<ChevronRight />} className="has-hold-action" {...pickerHold}
+                onContextMenu={(e) => e.preventDefault()} onClick={() => onCycleBtnClick(1)}
+                label="Next camera, hold to pick a camera" style={vOrder(3)} />
               {/* The chooser's visible way in (UI scan, 2026-11-10): the hold on Next still opens it, and nobody on a
                   phone finds a hold. */}
-              <button
-                className={`media-btn${pickerOpen ? " on" : ""}`}
-                onClick={() => setPickerOpen(true)}
-                data-tip="Choose a camera"
-                aria-label="Choose a camera"
-                aria-haspopup="menu"
-                aria-expanded={pickerOpen}
-                style={vOrder(3)}
-              >
-                <List />
-              </button>
+              <Button on="photo" lit={pickerOpen} icon={<List />} label="Choose a camera" aria-haspopup="menu"
+                aria-expanded={pickerOpen} style={vOrder(3)} onClick={() => setPickerOpen(true)} />
             </>
           )}
           {fullscreenSupported && (
-            <button
-              className="media-btn"
-              onClick={toggleFullscreen}
-              data-tip={isFs ? "Exit fullscreen" : "Fullscreen"}
-              aria-label={isFs ? "Exit fullscreen" : "Fullscreen"}
-              style={vOrder(2)}
-            >
-              {isFs ? <Minimize2 /> : <Maximize2 />}
-            </button>
+            <Button on="photo" icon={isFs ? <Minimize2 /> : <Maximize2 />}
+              label={isFs ? "Exit fullscreen" : "Fullscreen"}
+              style={vOrder(2)} onClick={toggleFullscreen} />
           )}
           {back && (
-            <button className="media-btn" onClick={back.go} data-tip={`Back to ${back.label}`}
-              aria-label={`Back to ${back.label}`} style={vOrder(1)}>
-              <ArrowLeft />
-            </button>
+            <Button on="photo" icon={<ArrowLeft />} label={`Back to ${back.label}`} style={vOrder(1)}
+              onClick={back.go} />
           )}
-          <button className="media-btn" onClick={onClose} data-tip="Close" aria-label="Close" style={vOrder(1)}>
-            <X />
-          </button>
+          <Button on="photo" icon={<X />} label="Close" style={vOrder(1)} onClick={onClose} />
         </div>
       </div>
 
@@ -922,10 +876,8 @@ function Unavailable({ label, onRetry }: { label: string; onRetry?: () => void }
       <p>{label}</p>
       {onRetry && (
         // the press is the button's own: it does not also reach the picture, where a tap shows or hides the controls
-        <button type="button" className="media-btn worded" style={{ margin: "8px auto 0" }}
-          onPointerDown={(e) => e.stopPropagation()} onClick={onRetry}>
-          <RotateCw size={16} aria-hidden /> Try again
-        </button>
+        <Button on="photo" icon={<RotateCw size={16} aria-hidden />} style={{ margin: "8px auto 0" }}
+          onPointerDown={(e) => e.stopPropagation()} onClick={onRetry}> Try again</Button>
       )}
     </div>
   );

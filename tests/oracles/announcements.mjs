@@ -350,10 +350,11 @@ ck("each button drawn with the announcement's own label (the Kiosk names no devi
    /<button[^>]*class="[^"]*\bvesta-notice-action\b[^"]*"[^>]*>🔓 Unlock<\/button>/.test(btnHtml) && btnHtml.includes(">Later</button>")
    && !btnHtml.includes("/unlock"), btnHtml);
 {
-  const { CARD_BUTTON } = await import("@/components/fm/WorkButtons");
+  const { WorkButton } = await import("@/components/fm/WorkButtons");
   const cls = /<button[^>]*class="([^"]*)"[^>]*>🔓 Unlock<\/button>/.exec(btnHtml)?.[1] ?? "";
+  const work = /<button[^>]*class="([^"]*)"/.exec(draw(h(WorkButton, { kind: "openTicket", onClick: () => {} })))?.[1] ?? "?";
   ck("  ...in the one look of every button on a card, a work button's (owner, 2026-10-30: Done filled beside Open Ticket outlined)",
-     CARD_BUTTON.split(" ").every((c) => cls.split(" ").includes(c)) && !cls.split(" ").includes("primary"), cls);
+     work.split(" ").every((c) => cls.split(" ").includes(c)) && !cls.split(" ").includes("primary"), [cls, work]);
 }
 ck("  ...with its ✕ while it stays", btnHtml.includes('aria-label="Dismiss"'), btnHtml);
 // owner, 2026-10-30: "No, thanks" pressed left both buttons, the pressed one greyed, and its words again beside them —

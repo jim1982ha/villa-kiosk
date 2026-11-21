@@ -86,6 +86,15 @@
 /* ...and a part's (a problem watched live on a card of several), at the right of its header line, before its time */
 :is(.fm-record-state, .fm-record-part-head) .fm-record-check { flex: none; margin-left: auto; display: inline-flex; align-items: center; gap: 4px;
   padding: 2px 9px; font-weight: 500; line-height: 1.4; color: var(--text-secondary); white-space: nowrap; }
+/* what made it (OriginPill), a (?) pill at the left of its next check: the two at the right of the line, together
+   (owner, 2026-11-21); the check pill's own push to the right is the group's */
+:is(.fm-record-state, .fm-record-part-head) .fm-record-pills { flex: none; margin-left: auto; display: inline-flex; align-items: center; gap: 6px; }
+.fm-record-pills .fm-record-check { margin-left: 0; }
+.fm-record-part-head .fm-record-pills + .fm-record-when { margin-left: 0; }
+.fm-record-pills .info-tip { margin-block: 0; }
+.fm-record-origin-pill { display: inline-flex; align-items: center; padding: 3px 6px; line-height: 1; color: var(--text-secondary); }
+.fm-origin-tip { display: flex; flex-direction: column; gap: 6px; }
+.fm-origin-tip p { margin: 0; }
 /* 3-5. its quiet line, its words and who moved it, padded inside the frame; nothing to say, no padding */
 .fm-record-main { display: flex; flex-direction: column; gap: 4px; min-width: 0; padding: 12px 16px 14px; }
 .fm-record-main:empty { display: none; }

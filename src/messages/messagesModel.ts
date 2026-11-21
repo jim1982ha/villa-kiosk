@@ -5,6 +5,7 @@
 // Messages screen reads; the later tickets add the reports and VESTA's conversation to it. Pure:
 // tests/oracles/messages_model.mjs.
 
+import { VILLA_ALERT_ORIGIN } from "@/fm/faultOrigin";
 import { CARD_TONE_RANK, cardOfLine, cockpitCard, leadLine, othersFirst, saysWord, toldShown, type CardLine, type CardView } from "@/config/cockpitCard";
 import { groupAttention, type AttentionItem } from "@/config/attention";
 import { alertStage, incidentKey, statusWords, versionOf, VISIT_PRESS, type Announcement, type VillaCardFields } from "./announcements";
@@ -159,6 +160,7 @@ function villaCard(a: Announcement, f: VillaCardFields): CardView {
   const named = !!(a.device && a.entityId);
   const room = f.room || undefined;
   const item: AttentionItem = { id: `villa:${a.key}`, kind: "fault", title: named ? a.device! : f.title, source: "alert", stage: "fault",
+    origin: VILLA_ALERT_ORIGIN,
     ...(room ? { room } : {}), ...(named ? { entityId: a.entityId, device: { key: a.entityId!, label: a.device!, ...(room ? { room } : {}) } } : {}),
     ...(f.since ? { openedAt: f.since } : {}), ...(!over && f.until ? { monitoredUntil: f.until } : {}) };
   const base = cockpitCard(groupAttention([item])[0], null);

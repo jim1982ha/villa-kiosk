@@ -48,11 +48,13 @@ spec.loader.exec_module(proxy)
 FAIL = 0
 
 
-def ck(name: str, ok: bool) -> None:
+def ck(name: str, ok: bool, detail: object = "") -> None:
     global FAIL
     print(f"    {'PASS' if ok else 'FAIL'}  {name}")
     if not ok:
         FAIL += 1
+        if detail != "":
+            print(f"          got: {detail}")
 
 
 print(f"  loaded {PROXY.relative_to(ROOT)} "
@@ -141,54 +143,12 @@ ck("a superadmin failure lands in the superadmin bucket",
    and all(len(proxy._auth_failures_global[r]) == 0 for r in proxy.AUTH_ROLES))
 
 # ⚠️ AND THE CALL SITE, NOT JUST THE HELPER. The helper being right says nothing
-# about which bucket the handler charges — the superadmin code is entered by an
+# about which bucket the handler charges: the superadmin code is entered by an
 # owner or a facility manager, so passing that session's `role` would blame the
-# wrong tier AND leave the superadmin one never accumulating. Testing the helper
-# alone stays green straight through that; it did.
-_src = PROXY.read_text()
-# ⚠️ THE CALL SITE, AND THIS CHECK USED NOT TO FIND IT. It localised the
-# superadmin handler into `_elevate` and then searched `_src` — the whole
-# 2,200-line file — so it proved only that both strings exist SOMEWHERE. Move
-# the SUPERADMIN charge out of the handler into any other function and it stayed
-# green; a comment containing the text satisfied it too. `_elevate` was computed
-# and never read: the vestige of the check that was intended.
-# The old form searched for "def superadmin", which is not the handler's name —
-# it is `auth_elevate_handler` — so the guard clause was never true and the
-# check ALWAYS scanned the whole file. Asking which function ENCLOSES each call
-# is the question that was meant, and it cannot be fooled by a rename.
-_code = re.sub(r"#.*", "", _src)          # a mention in prose is not a call
-def _enclosing(needle: str) -> str:
-    """Which function contains the first CALL matching `needle`.
-
-    ⚠️ SKIPS THE DEFINITION. The first attempt matched
-    `def _note_global_failure(role: str, ...)` — the function's own signature —
-    and reported it as the call site, which is the same mistake as pinning a
-    symbol by its import line. Callers are matched by the argument list they
-    pass, and any line beginning `def`/`async def` is refused outright.
-    """
-    i = -1
-    while True:
-        i = _code.find(needle, i + 1)
-        if i < 0:
-            return ""
-        line_start = _code.rfind("\n", 0, i) + 1
-        if not _code[line_start:i].lstrip().startswith(("def ", "async def ")):
-            break
-    if i < 0:
-        return ""
-    j = _code.rfind("\ndef ", 0, i)
-    k = _code.rfind("\nasync def ", 0, i)
-    start = max(j, k)
-    if start < 0:
-        return ""
-    return _code[start + 1:_code.index("(", start)].replace("async def ", "").replace("def ", "")
-
-ck("  the SUPERADMIN charge sits in the elevation handler",
-   _enclosing("_auth_failed(SUPERADMIN,") == "auth_elevate_handler")
-ck("  ...and the caller's-role charge sits in the passcode handler",
-   _enclosing("_auth_failed(role,") == "auth_verify_handler")
-ck("  ...and the agent's in the agent's gate",
-   _enclosing("_auth_failed(AGENT,") == "_agent_refuse")
+# wrong tier AND leave the superadmin one never accumulating. Each door that
+# takes a secret is driven over HTTP at the end of this file ("which bucket a
+# wrong secret charges"); it was a search of the source text before
+# (architecture review, 2026-11-20).
 
 # ── the limiter's interface: ask, fail, succeed ───────────────────────────
 # Every door that takes a secret goes through `_lockout_remaining`,
@@ -598,37 +558,10 @@ ck("an unreadable table grants nothing to anyone",
    all(not caps for r, caps in proxy._role_capabilities({}).items()))
 
 # ── every route is gated, or public on purpose (round 11, 2.496.169) ──────
-# The gate was written out by hand at twelve handlers and had drifted into two
-# 403 shapes; it is one call now (_refuse). A NEW handler that forgets it is an
-# open endpoint with every other check green — so each routed handler must
-# call _refuse (or the model gate, which adds the public_model_access option,
-# or the VESTA Agent's bearer gate _agent_refuse — /agent/v1/*, and store
-# handlers built with gate=_agent_refuse), or be named here with the reason it
-# answers without a session.
-PUBLIC_HANDLERS = {
-    "auth_roles_handler": "the profile screen lists the roles before anyone signs in",
-    "auth_session_handler": "answers 'is there a session' — to anyone, by design",
-    "auth_verify_handler": "the sign-in itself (rate-limited)",
-    "auth_logout_handler": "clears the caller's own cookie",
-    "healthz_handler": "the image's Docker HEALTHCHECK carries no session; it answers 'ok' and nothing else",
-}
-routed = re.findall(r'app\.router\.add_\w+\(\s*(?:"[A-Z*]+"\s*,\s*)?"[^"]+"\s*,\s*(\w+)',
-                    PROXY.read_text())
-ungated = sorted({h for h in routed if h not in PUBLIC_HANDLERS
-                  and not re.search(r"\b_refuse\(request|\b_model_authorized\(request"
-                                    r"|\b_agent_refuse\(request|\bgate\(request",
-                                    inspect.getsource(getattr(proxy, h)))})
-ck(f"all {len(set(routed))} routed handlers are gated (_refuse), or named public with a reason",
-   len(routed) > 10 and not ungated)
-if ungated:
-    print(f"          answer without a session: {', '.join(ungated)}")
-stale_public = sorted(h for h in PUBLIC_HANDLERS if h not in routed)
-ck("  ...and every handler named public is still routed", not stale_public)
-hand = [n for n, f in vars(proxy).items() if n.endswith("_handler") and callable(f)
-        and re.search(r"if not _authorized\(request\)", inspect.getsource(f))]
-ck("  ...no handler writes the gate out by hand again", not hand)
-if hand:
-    print(f"          by hand: {', '.join(hand)}")
+# Driven over HTTP at the end of this file ("every door, over HTTP"): each
+# route's door is named once in the proxy's route table now (architecture
+# review, 2026-11-20), and what a request with no session, or with a profile
+# outside the route's rights, is answered is what is checked.
 
 # ── a guest reads NOTHING of the Facility record (round 13, 2.496.182) ────
 # The GET was open to every session, so every guest phone downloaded every
@@ -895,15 +828,9 @@ ck("  ...and then the newest that FIT the byte cap", 0 < len(small) < 50
 ck("  ...never trimming to nothing (one event always fits)", len(proxy._telemetry_ring_after(ring, 50, 1)) == 1)
 ck("the ceiling the options allow is under the byte cap by construction",
    proxy.TELEMETRY_MAX_RING_BYTES < 5000 * proxy.TELEMETRY_MAX_BODY)
-src = PROXY.read_text()
-_update = inspect.getsource(proxy.JsonStore.update)
-ck("a store change reads and writes OFF the event loop, inside its lock",
-   "async with self.lock:" in _update and "await asyncio.to_thread(self.read_status)" in _update
-   and "await _write_json_store_async(self.path, payload)" in _update
-   and "asyncio.to_thread(_write_json_store, path, payload)" in src
-   and "await asyncio.to_thread(after, stored, new)" in _update)
-ck("  ...and the telemetry append is a change to its store (ONE lock)",
-   "await TELEMETRY.update(" in inspect.getsource(proxy.telemetry_post_handler))
+# A store change reads and writes OFF the event loop, inside its lock, and the
+# telemetry append is one such change: driven at the end of this file ("a store
+# change, off the event loop and inside its lock").
 
 # ── the lockout bucket is keyed by what the caller CANNOT write ───────────
 # _client_ip used to take the FIRST X-Forwarded-For hop — the one address in
@@ -1229,6 +1156,203 @@ for _on in (True, False):
                _sup.saved == {"owner_pin": "1234", "remove_model": False})
         else:
             ck("remove_model off: the model stays and no option is written", _left == sorted(_names) and _sup.saved is None)
+
+
+# ══ Over HTTP: the doors, the lockout buckets, the store's lock ══════════════
+# Served by `build_app(data_dir=<a temp dir>)`, the function main() serves, from
+# a FRESH copy of the module: the checks above replace some of its functions.
+# These replaced searches of the source text (architecture review, owner
+# approved 2026-11-20): a gate moved, renamed or called from somewhere else
+# fooled them, a request does not.
+from aiohttp.test_utils import TestClient, TestServer  # noqa: E402
+import json as _hjson  # noqa: E402
+import threading  # noqa: E402
+
+_hspec = importlib.util.spec_from_file_location("vk_proxy_http", PROXY)
+http = importlib.util.module_from_spec(_hspec)
+_hspec.loader.exec_module(http)
+TOKEN = "agent-token-for-tests-0123456789"
+
+# Who each route answers: the contract, written here rather than read from the
+# proxy's table, so a door changed there turns this red. "public": anyone;
+# "probe": nginx's /model/ check, whose answer is the verdict itself; "model":
+# a session or public_model_access; "session": any profile; "session:<cap>":
+# the profiles holding it; "agent:<cap>": the VESTA Agent's token.
+_visit = "session:" + str(http.VISIT_PRESS.get("capability") or "administer")
+DOORS = {
+    ("GET", "/healthz"): "public", ("GET", "/auth/roles"): "public", ("GET", "/auth/session"): "public",
+    ("POST", "/auth/verify"): "public", ("POST", "/auth/logout"): "public", ("GET", "/auth/check"): "probe",
+    ("GET", "/addon-config"): "model",
+    ("POST", "/model-upload"): "session:manageModel",
+    ("GET", "/device-config"): "session", ("PUT", "/device-config"): "session:editConfig",
+    ("GET", "/fm-data"): "session", ("PUT", "/fm-data"): "session:reportFault",
+    ("POST", "/fm-evidence"): "session:reportFault", ("GET", "/fm-evidence/{id}"): "session:manageFacility",
+    ("GET", "/fm-document/{id}"): "session:manageFacility",
+    ("POST", "/telemetry"): "session", ("GET", "/telemetry"): "session:administer",
+    ("POST", "/auth/elevate"): "session", ("POST", "/auth/logout-all"): "session:administer",
+    ("GET", "/core/websocket"): "session", ("*", "/core/api/{path}"): "session",
+    ("GET", "/critical-devices"): "session", ("GET", "/agent-status"): "session:viewAgent",
+    ("PUT", "/kiosk-rooms"): "session:viewAgent",
+    ("GET", "/announcements"): "session", ("GET", "/announcement-photo/{id}"): "session",
+    ("GET", "/vesta-messages"): "session", ("POST", "/announcement-press"): "session",
+    ("POST", "/visit-press"): _visit, ("POST", "/message-erase"): "session",
+    ("POST", "/vesta-ask"): "session", ("GET", "/vesta-conversation"): "session",
+    ("GET", "/vesta-speech/{name}"): "session", ("POST", "/vesta-press"): "session",
+    ("GET", "/agent/v1/info"): "agent:agentRead", ("GET", "/agent/v1/villa-model"): "agent:agentRead",
+    ("GET", "/agent/v1/fm-data"): "agent:agentRead", ("PUT", "/agent/v1/fm-data"): "agent:agentWrite",
+    ("POST", "/agent/v1/fm-evidence"): "agent:agentWrite", ("POST", "/agent/v1/fm-document"): "agent:agentWrite",
+    ("POST", "/agent/v1/vesta-message"): "agent:agentWrite", ("GET", "/agent/v1/inbox"): "agent:agentRead",
+    ("GET", "/agent/v1/voice/{name}"): "agent:agentRead", ("POST", "/agent/v1/conversation-turn"): "agent:agentWrite",
+    ("POST", "/agent/v1/speech"): "agent:agentWrite", ("POST", "/agent/v1/heartbeat"): "agent:agentPresence",
+}
+
+
+def _forget_failures() -> None:
+    """A wrong or missing secret charges the lockout; each check starts clean."""
+    http._auth_failures.clear()
+    for hits in http._auth_failures_global.values():
+        hits[:] = []
+
+
+async def _over_http() -> None:
+    data = Path(tempfile.mkdtemp(prefix="vk-rules-"))
+    (data / "www").mkdir()
+    options = {"owner_pin": "1234", "guest_pin": "2345", "ops_pin": "3456", "superadmin_pin": "123456",
+               "agent_enabled": True, "vesta_agent": {"token": TOKEN}}
+    (data / "options.json").write_text(_hjson.dumps(options))
+    http.SUPERVISOR = "127.0.0.1:9"            # no Supervisor: the start-up's reads fail fast, as they may
+    app = http.build_app(data_dir=str(data))
+    client = TestClient(TestServer(app))
+    await client.start_server()
+
+    def cookie(role: str) -> dict:
+        return {"Cookie": f"{http.SESSION_COOKIE}={http._make_session_token(role)}"}
+
+    async def ask(method: str, path: str, headers: dict, body=b"{}"):
+        _forget_failures()
+        r = await client.request("GET" if method == "*" else method, re.sub(r"\{[^}]*\}", "x", path),
+                                 headers=headers, data=body)
+        text = await r.text()
+        try:
+            return r.status, _hjson.loads(text)
+        except ValueError:
+            return r.status, text
+
+    print("\n  every door, over HTTP:")
+    served = {(r.method, r.resource.canonical) for r in app.router.routes() if r.method != "HEAD"}
+    ck(f"the {len(served)} routes served are exactly the ones whose door is named here",
+       served == set(DOORS) and len(served) > 40)
+    for extra in sorted(served - set(DOORS)):
+        print(f"          served but not named here: {extra}")
+    for gone in sorted(set(DOORS) - served):
+        print(f"          named here but not served: {gone}")
+
+    gated = {k: d for k, d in DOORS.items() if d not in ("public", "probe")}
+    open_doors = []
+    for (method, path), _door in gated.items():
+        status, body = await ask(method, path, {})
+        if (status, body) != (401, {"error": "unauthorized"}):
+            open_doors.append(f"{method} {path} -> {status}")
+    ck(f"all {len(gated)} gated routes answer 401 to a request with no session and no token", not open_doors)
+    for o in open_doors:
+        print(f"          {o}")
+
+    answered = [(m, p, (await ask(m, p, {}))[0]) for (m, p), d in DOORS.items() if d == "public"]
+    ck("the public ones answer without a session (health, roles, session, sign-in, sign-out)",
+       len(answered) == 5 and all(s not in (401, 403) for _, _, s in answered), answered)
+    status, _ = await ask("GET", "/auth/check", {})
+    status_in, _ = await ask("GET", "/auth/check", cookie("guest"))
+    ck("  ...and nginx's /model/ probe says 401 without a session, 200 with one", (status, status_in) == (401, 200))
+
+    beyond = wrong = 0
+    for role in http.AUTH_ROLES:
+        for (method, path), door in DOORS.items():
+            cap = door.split(":", 1)[1] if door.startswith("session:") else None
+            if cap is None or http._may(role, cap):
+                continue
+            beyond += 1
+            status, body = await ask(method, path, cookie(role))
+            if status != 403 or not (isinstance(body, dict) and body.get("error")):
+                wrong += 1
+                print(f"          {role} {method} {path} -> {status} {body}")
+    ck(f"every route outside a profile's rights answers 403 with its reason ({beyond} cases)",
+       beyond > 10 and wrong == 0)
+    status, body = await ask("PUT", "/device-config", cookie("guest"))
+    ck("  ...the shared settings say who may edit them", (status, body) == (
+        403, {"error": "Only the owner profile may edit device configuration."}))
+
+    agent_routes = [k for k, d in DOORS.items() if d.startswith("agent:")]
+    by_cookie = [(m, p) for m, p in agent_routes if (await ask(m, p, cookie("owner")))[0] != 401]
+    by_ingress = [(m, p) for m, p in agent_routes if (await ask(m, p, {"X-VK-Ingress": "1"}))[0] != 401]
+    ck("the Agent's routes refuse an owner's cookie and the villa's sidebar alike (401)",
+       not by_cookie and not by_ingress, by_cookie + by_ingress)
+    bearer = {"Authorization": f"Bearer {TOKEN}"}
+    by_token = [(m, p) for (m, p), d in DOORS.items() if d.startswith("session")
+                and (await ask(m, p, bearer))[0] != 401]
+    ck("  ...and the Agent's token opens no profile's route (401)", not by_token, by_token)
+    status, _ = await ask("GET", "/agent/v1/info", bearer)
+    ck("  ...while it opens its own", status == 200, status)
+    status, body = await ask("PUT", "/fm-data", {**cookie("owner"), "Sec-Fetch-Site": "cross-site"})
+    ck("a write the browser calls cross-site is refused at the door, signed in or not",
+       (status, body) == (403, {"error": "cross-site request refused"}))
+    (data / "options.json").write_text(_hjson.dumps({**options, "public_model_access": True}))
+    status, _ = await ask("GET", "/addon-config", {})
+    ck("public_model_access opens the model's paths to anyone", status == 200, status)
+    (data / "options.json").write_text(_hjson.dumps({**options, "agent_enabled": False}))
+    status, _ = await ask("GET", "/agent/v1/info", bearer)
+    ck("the Agent's routes are not there (404) while it is not connected", status == 404, status)
+    (data / "options.json").write_text(_hjson.dumps(options))
+
+    print("\n  which bucket a wrong secret charges:")
+
+    async def charged(method: str, path: str, headers: dict, body: dict) -> set:
+        _forget_failures()
+        await client.request(method, path, headers=headers, data=_hjson.dumps(body))
+        return {bucket for bucket, _ip in http._auth_failures}
+
+    ck("a wrong passcode charges that profile's bucket",
+       await charged("POST", "/auth/verify", {}, {"role": "guest", "pin": "0000"}) == {"guest"})
+    ck("a wrong superadmin code, entered by an owner, charges the superadmin bucket and not the owner's",
+       await charged("POST", "/auth/elevate", cookie("owner"), {"pin": "000000"}) == {http.SUPERADMIN})
+    ck("a wrong Agent token charges the Agent's own bucket",
+       await charged("GET", "/agent/v1/info", {"Authorization": "Bearer wrong"}, {}) == {http.AGENT})
+
+    print("\n  a store change, off the event loop and inside its lock:")
+    loop_thread = threading.current_thread()
+    seen = {"read": set(), "write": set(), "after": set()}
+    real_read, real_write = http.JsonStore.read_status, http._write_json_store
+
+    def read_status(self):
+        seen["read"].add(threading.current_thread() is loop_thread)
+        return real_read(self)
+
+    def write(path, payload):
+        seen["write"].add(threading.current_thread() is loop_thread)
+        return real_write(path, payload)
+
+    http.JsonStore.read_status, http._write_json_store = read_status, write
+    try:
+        store = http.JsonStore("lock-test.json", [], 100_000)
+        await asyncio.gather(*(store.update(lambda doc, i=i: doc + [i],
+                                            lambda _s, _n: seen["after"].add(threading.current_thread() is loop_thread))
+                               for i in range(20)))
+        on_loop = {k: set(v) for k, v in seen.items()}       # before the check's own read, made here on the loop
+        ck("twenty changes at once: all twenty land (one lock, no change lost)", sorted(store.read()) == list(range(20)))
+        ck("  ...each read, write and after-step ran on a worker thread, never the event loop",
+           on_loop == {"read": {False}, "write": {False}, "after": {False}}, on_loop)
+        _forget_failures()
+        replies = await asyncio.gather(*(client.post("/telemetry", headers=cookie("guest"), json={"kind": "t", "n": i})
+                                         for i in range(20)))
+        status, body = await ask("GET", "/telemetry", cookie("owner"), None)
+        ck("  ...and twenty telemetry events posted at once are all in the ring",
+           all(r.status == 200 for r in replies)
+           and sorted(e.get("n") for e in body.get("events", []) if e.get("kind") == "t") == list(range(20)))
+    finally:
+        http.JsonStore.read_status, http._write_json_store = real_read, real_write
+    await client.close()
+
+
+asyncio.run(_over_http())
 
 
 print("✅ the proxy's pure rules hold" if FAIL == 0

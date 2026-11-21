@@ -7,8 +7,9 @@
 // and the telemetry's "Clear" erased every event the server keeps at one press. The two steps are hooks/useAskFirst's,
 // as a device's switch; a card's bin asks in its bar instead (fm/RecordCard `bin`).
 
-import type { ButtonHTMLAttributes, ReactNode } from "react";
+import type { ReactNode } from "react";
 import { useAskFirst } from "@/hooks/useAskFirst";
+import Button, { type ButtonProps } from "./Button";
 import InlineConfirm from "./InlineConfirm";
 
 export default function AskFirstButton({ confirmLabel, question, onConfirm, children, ...button }: {
@@ -18,10 +19,10 @@ export default function AskFirstButton({ confirmLabel, question, onConfirm, chil
   question?: string;
   onConfirm: () => unknown;
   children: ReactNode;
-} & Omit<ButtonHTMLAttributes<HTMLButtonElement>, "onClick" | "type">) {
+} & Omit<ButtonProps, "onClick" | "type" | "children">) {
   const { asking, request, confirm, cancel } = useAskFirst({ question: question ?? confirmLabel, confirmLabel },
     () => { void onConfirm(); });
   return asking
     ? <InlineConfirm question={question} confirmLabel={confirmLabel} onConfirm={confirm} onCancel={cancel} />
-    : <button type="button" {...button} onClick={request}>{children}</button>;
+    : <Button {...button} onClick={request}>{children}</Button>;
 }

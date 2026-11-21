@@ -28,6 +28,7 @@ import WorkerName from "./WorkerName";
 import { useWorkFields } from "./useWorkFields";
 import FmForm from "./FmForm";
 import { useListEditor } from "./ListEditor";
+import Button from "@/components/common/Button";
 
 export default function TodayTab({ onOpenEntity }: { onOpenEntity: (id: string) => void }) {
   const { data, logCompletion, removeSchedule, removeAllSchedules } = useFmData();
@@ -93,10 +94,8 @@ export default function TodayTab({ onOpenEntity }: { onOpenEntity: (id: string) 
             data.schedules.length, not board.length: the board only shows ENABLED tasks (scheduleBoard filters paused
             ones out), but removeAllSchedules clears every schedule regardless — the confirm count must match what
             actually gets deleted. */}
-        <AskFirstButton className="btn" confirmLabel={`Delete all ${data.schedules.length} tasks?`}
-          onConfirm={removeAllSchedules}>
-          <Trash2 size={16} /> Delete all
-        </AskFirstButton>
+        <AskFirstButton icon={<Trash2 size={16} />} confirmLabel={`Delete all ${data.schedules.length} tasks?`}
+          onConfirm={removeAllSchedules}> Delete all</AskFirstButton>
       </div>
 
       <div className="fm-list">
@@ -105,9 +104,8 @@ export default function TodayTab({ onOpenEntity }: { onOpenEntity: (id: string) 
           {/* THE task's card, the Schedule tab's too (TaskCard): Log and the bin in its bar */}
           <TaskCard status={s} room={roomOf(s.schedule)} onRemove={() => removeSchedule(s.schedule.id)}
             actions={
-              <button className="btn" onClick={() => (log.editing === s.schedule.id ? log.close() : log.edit(s.schedule.id))}>
-                <Check size={16} /> Log
-              </button>
+              <Button icon={<Check size={16} />}
+                onClick={() => (log.editing === s.schedule.id ? log.close() : log.edit(s.schedule.id))}> Log</Button>
             } />
           {/* ⚠️ ITS LOG UNDER ITS CARD (owner, 2026-11-01: a form opened away from what it was asked on): it was drawn
               under Recent work, below every task */}

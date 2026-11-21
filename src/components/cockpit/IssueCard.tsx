@@ -108,6 +108,8 @@ export function AttentionCard({ card, onOpenEntity, buttons, focused, erase }: {
       // when its problems are read again: a pill at the right of its first line (owner, 2026-11-06); hovering it says it
       // in words, with its date and time (owner, 2026-10-19). On the Watch list the first line says when it closes.
       check={face.check}
+      // what made it, a (?) pill at the left of its check (owner, 2026-11-21); a card of several: each part's own
+      origin={face.origin}
       parts={parts}
       erase={erase}
       // its strip's colour when nothing is said (cardStrip); a fault being confirmed: its frame marked (owner, 2026-10-23)

@@ -16,6 +16,7 @@ import { validWarnPercent, WARN_DEFAULT_PERCENT } from "@/fm/fmTypes";
 import { formatMoney } from "@/utils/money";
 import FormActions from "./FormActions";
 import FmForm from "./FmForm";
+import Button from "@/components/common/Button";
 
 export default function ContractTermsEditor() {
   const { config, update } = useConfig();
@@ -43,14 +44,13 @@ export default function ContractTermsEditor() {
 
   if (!open) {
     return (
-      <button className="btn" onClick={start} style={{ alignSelf: "flex-start" }}>
-        <Settings2 size={16} /> Spend settings
+      <Button icon={<Settings2 size={16} />} onClick={start} style={{ alignSelf: "flex-start" }}> Spend settings
         <span className="muted" style={{ marginLeft: 6 }}>
           {terms.monthlyCap > 0
             ? `minor spend capped at ${formatMoney(terms.monthlyCap, terms.currency)} a month`
             : "no monthly cap"}
         </span>
-      </button>
+      </Button>
     );
   }
   return (
@@ -79,7 +79,7 @@ export default function ContractTermsEditor() {
           sits with Cancel and Save, drawn as they are (owner, 2026-10-14) */}
       <FormActions onCancel={() => setOpen(false)} onSave={save} saveLabel="Save"
         extra={cap.trim() !== "" && (
-          <button type="button" className="btn" onClick={() => setCap("")}><Trash2 size={16} aria-hidden /> Remove cap</button>
+          <Button icon={<Trash2 size={16} aria-hidden />} onClick={() => setCap("")}> Remove cap</Button>
         )} />
     </FmForm>
   );

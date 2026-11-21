@@ -9,19 +9,14 @@
 // different rules. Owner-only, like Settings' (the screen shows it to a
 // profile with "manageModel").
 
-import { Upload } from "lucide-react";
-import { useGlbUpload, ModelFileInput } from "./useGlbUpload";
+import { useGlbUpload, UploadModelButton, UploadProblem } from "./useGlbUpload";
 
 export default function ModelUploader() {
   const up = useGlbUpload(true);
   return (
     <div>
-      <ModelFileInput upload={up} />
-      <button className="btn primary" style={{ width: "100%" }} disabled={up.uploadBusy !== null} onClick={up.openPicker}>
-        <Upload size={18} />{" "}
-        {up.progress.words ?? "Upload .glb model"}
-      </button>
-      {up.uploadMsg && <div className={`test-result ${up.uploadMsg.ok ? "ok" : "fail"}`}>{up.uploadMsg.text}</div>}
+      <UploadModelButton upload={up} style={{ width: "100%" }} />
+      <UploadProblem upload={up} className="mt" />
     </div>
   );
 }

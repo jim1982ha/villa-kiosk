@@ -9,7 +9,8 @@
 // back once (supervisor-proxy.py _device_config_today, the same examples: villa-settings.json `examples`). This table
 // is for a config this tablet holds itself (its localStorage) and anything put into memory.
 
-import { FULL_SCREEN_SECONDS } from "./villaSettings";
+import { parseChatLanguages } from "@/messages/recipients";
+import { FULL_SCREEN_SECONDS, VILLA_LISTS, VILLA_SETTING_KEYS, keptEntityIds, keptVillaValue } from "./villaSettings";
 
 /** One announcement that takes the whole screen (AppConfig.fullScreen): its title, as the villa writes it, and how long
  *  it holds the screen, in seconds. */
@@ -71,7 +72,38 @@ export const MIGRATIONS: readonly Migration[] = [
       return { ...stored, fullScreen };
     },
   },
+  {
+    // each villa setting as its one rule keeps it (2026-11-20): what the server's file holds, read alike here
+    name: "the villa's settings as their rules keep them",
+    retires: [],
+    read: villaSettingsKept,
+  },
 ];
+
+/**
+ * The villa's settings a config holds, each as its one rule keeps it (architecture review, owner approved 2026-11-20):
+ * a single-value setting by its row (villaSettings keptVillaValue), a list of devices as entity ids each once, each
+ * chat's language as recipients reads it; a value not kept is dropped, so it reads its default. The add-on's server
+ * keeps the villa's file the same way on every save (supervisor-proxy.py _device_config_today), through the same
+ * examples (villa-settings.json `examples`). As it is when nothing changes. Pure.
+ */
+export function villaSettingsKept(stored: Record<string, unknown>): Record<string, unknown> {
+  const rules: [string, (raw: unknown) => unknown][] = [
+    ...VILLA_SETTING_KEYS.map((k): [string, (raw: unknown) => unknown] => [k, (raw) => keptVillaValue(k, raw)]),
+    ...VILLA_LISTS.map((k): [string, (raw: unknown) => unknown] => [k, keptEntityIds]),
+    ["chatLanguages", parseChatLanguages],
+  ];
+  let out: Record<string, unknown> | null = null;
+  for (const [key, keep] of rules) {
+    if (!(key in stored)) continue;
+    const kept = keep(stored[key]);
+    if (kept !== undefined && JSON.stringify(kept) === JSON.stringify(stored[key])) continue;
+    out ??= { ...stored };
+    if (kept === undefined) delete out[key];
+    else out[key] = kept;
+  }
+  return out ?? stored;
+}
 
 /** Keys an older version stored and nothing reads any more: each migration's. */
 export const RETIRED_KEYS: readonly string[] = MIGRATIONS.flatMap((m) => m.retires);

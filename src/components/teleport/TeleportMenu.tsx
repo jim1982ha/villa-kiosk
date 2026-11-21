@@ -22,6 +22,7 @@ import AskDialog from "@/components/common/AskDialog";
 import { addRoom, removeRoom as roomRemoved } from "@/config/mappingEdits";
 import type { TeleportPoint, Vec3 } from "@/types/scene.types";
 import type { SceneManager } from "@/babylon/SceneManager";
+import Button, { buttonClass } from "@/components/common/Button";
 
 interface Props {
   manager: SceneManager | null;
@@ -35,12 +36,13 @@ interface Props {
   onListDevices: (room: string, entityIds: string[]) => void;
 }
 
-/** A room card's corner button (.media-btn small, the button over a photo): a press on it is not a press on the card. */
+/** A room card's corner button (the small button over a photo, common/Button's drawing; a span, as a card is a button
+ *  and a button holds no other): a press on it is not a press on the card. */
 function CornerButton({ label, danger = false, onPress, children }: {
   label: string; danger?: boolean; onPress: () => void; children: ReactNode;
 }) {
   return (
-    <span role="button" tabIndex={-1} className={`media-btn small${danger ? " danger" : ""}`}
+    <span role="button" tabIndex={-1} className={buttonClass({ on: "photo", small: true, wordless: true, look: danger ? "danger" : undefined })}
       onClick={(e) => { e.stopPropagation(); onPress(); }} data-tip={label} aria-label={label}>
       {children}
     </span>
@@ -144,18 +146,12 @@ export default function TeleportMenu({ manager, currentFloor, onClose, onTelepor
       />
     )}
     <div className="teleport-grid" ref={dialog} role="dialog" aria-modal="true" aria-label="Rooms">
-      <button
-        className="icon-btn"
+      <Button on="map" icon={<X size={22} />} label="Close rooms menu" onClick={onClose}
         style={{
           position: "absolute",
           top: "calc(16px + env(safe-area-inset-top, 0px))",
           right: "calc(20px + env(safe-area-inset-right, 0px))",
-        }}
-        onClick={onClose}
-        aria-label="Close rooms menu"
-      >
-        <X size={22} />
-      </button>
+        }} />
       <h2>Rooms</h2>
       <div className="tp-cards">
         {points.map((p) => {

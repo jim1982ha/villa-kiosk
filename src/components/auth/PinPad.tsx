@@ -18,6 +18,7 @@ import { fmtDuration } from "@/components/panels/chartUtils";
 import { ChevronLeft, Delete } from "lucide-react";
 import ProblemLine from "@/components/common/ProblemLine";
 import SignInAgain from "./SignInAgain";
+import Button from "@/components/common/Button";
 
 const KEYS = ["1", "2", "3", "4", "5", "6", "7", "8", "9"];
 
@@ -121,9 +122,8 @@ export default function PinPad({
 
   return (
     <div className="pinpad" role="group" aria-label={`Passcode for ${roleLabel}`}>
-      <button type="button" className="btn pinpad-back" onClick={onBack} aria-label={`Back, ${backLabel}`}>
-        <ChevronLeft size={18} aria-hidden /> {backLabel}
-      </button>
+      <Button icon={<ChevronLeft size={18} aria-hidden />} className="pinpad-back" onClick={onBack}
+        label={`Back, ${backLabel}`}> {backLabel}</Button>
       <h2 className="pinpad-title">{roleLabel}</h2>
       <p className="pinpad-sub">{subtitle ?? `Enter the ${PIN_LENGTH}-digit passcode`}</p>
 

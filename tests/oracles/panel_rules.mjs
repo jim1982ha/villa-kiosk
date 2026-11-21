@@ -68,6 +68,27 @@ ck("the light's sliders and the cover's follow the device (useLiveDraft, one set
      && JSON.stringify(R.cameraControlsOf("camera.ptz2", reg)) === JSON.stringify({ moves: { left: "button.ptz2_pan_left", up: "button.ptz2_tilt_up" }, siren: null }));
 }
 
+// THE SIREN NEEDS A PERSON (CLAUDE.md, owner 2026-10-25: sounding it asks first, stopping never does): the camera's
+// siren button's press, pressed here (CameraDeviceButtons pressSiren)
+{
+  const { pressSiren } = await import("@/components/panels/CameraDeviceButtons");
+  const press = (sounding) => {
+    const calls = [], asked = [];
+    pressSiren({ sounding, siren: "siren.cam_siren", name: "Example Gate Camera", ask: (q) => asked.push(q),
+      callService: (domain, service, _data, target) => calls.push(`${domain}.${service} ${target.entity_id}`) });
+    return { calls, asked };
+  };
+  const quiet = press(false);
+  ck("a press on a quiet siren sounds nothing: it asks, naming the camera",
+     quiet.calls.length === 0 && quiet.asked.length === 1 && quiet.asked[0].confirmLabel === "Sound siren"
+     && quiet.asked[0].message.includes("Example Gate Camera"), quiet);
+  quiet.asked[0].run();
+  ck("  ...and only the person's yes sounds it, once", JSON.stringify(quiet.calls) === JSON.stringify(["siren.turn_on siren.cam_siren"]), quiet.calls);
+  const loud = press(true);
+  ck("a press on a sounding siren stops it at once, asking nothing",
+     JSON.stringify(loud.calls) === JSON.stringify(["siren.turn_off siren.cam_siren"]) && loud.asked.length === 0, loud);
+}
+
 // owner, 2026-10-21: "why do I see Tapo Storage Room HD Stream (Direct) in the list … since the one configured in the
 // villa is HD Stream?" — a Tapo camera gives two streams of ONE device; the picker lists one per device, the placed one
 {

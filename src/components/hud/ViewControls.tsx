@@ -6,6 +6,7 @@
 // with the rest of the inline controls (05-layout.css, .hud-view-btn).
 
 import { Map, PersonStanding } from "lucide-react";
+import Button from "@/components/common/Button";
 
 interface ViewControlsProps {
   viewMode: "first-person" | "overview";
@@ -20,13 +21,7 @@ export default function ViewControls({ viewMode, onToggleViewMode, className }: 
   // a plain mode SWITCH, not a lit "this is on" state, so it stays neutral in
   // both modes.
   return (
-    <button
-      className={`icon-btn ${className}`}
-      onClick={onToggleViewMode}
-      data-tip={overviewActive ? "Switch to first-person view" : "Switch to overview (bird's-eye) view"}
-      aria-label={overviewActive ? "Switch to first-person view" : "Switch to overview (bird's-eye) view"}
-    >
-      {overviewActive ? <PersonStanding size={19} /> : <Map size={18} />}
-    </button>
+    <Button on="map" icon={overviewActive ? <PersonStanding size={19} /> : <Map size={18} />} className={className}
+      label={overviewActive ? "Switch to first-person view" : "Switch to overview (bird's-eye) view"} onClick={onToggleViewMode} />
   );
 }

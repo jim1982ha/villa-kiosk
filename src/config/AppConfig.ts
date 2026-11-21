@@ -7,7 +7,7 @@ import { ENTITY_MAP } from "./EntityMap";
 import { TELEPORT_POINTS } from "./TeleportPoints";
 import { DEFAULT_EYE_HEIGHT } from "@/babylon/walkerSpawn";
 import type { FmContract } from "@/fm/fmTypes";
-import { FULL_SCREEN_SECONDS, VILLA_DEFAULTS, villaBounds } from "./villaSettings";
+import { FULL_SCREEN_SECONDS, VILLA_DEFAULTS } from "./villaSettings";
 import { migrate, type FullScreenAnnouncement } from "./migrations";
 import { readJson, writeJson } from "@/utils/storedJson";
 import { isDomain } from "@/utils/entityDomain";
@@ -377,8 +377,6 @@ const env = (import.meta.env ?? {}) as Partial<ImportMetaEnv>;
 
 /** One year of history (owner, 2026-10-20); the server applies the same (villa-settings.json `recordsKeptDays`). */
 export const RECORDS_KEPT_DAYS_DEFAULT: number = VILLA_DEFAULTS.recordsKeptDays;
-/** The longest window the field accepts — ten years, the server's clamp (the same row). */
-export const RECORDS_KEPT_DAYS_MAX: number = villaBounds("recordsKeptDays").max;
 
 /** How long a newly picked full-screen announcement holds the screen, in seconds (owner, 2026-10-28: 60s;
  *  villa-settings.json `fullScreenSeconds`). */

@@ -1,3 +1,35 @@
+## 2.496.856
+
+- **The (?) pill on an issue card now says only who made the card.** It no longer repeats the problem or says when
+  the card goes away or is checked again (the card's words and its next-check pill already say that). A device that
+  is offline, no longer in the villa's system, partly not answering or showing an alarm reads: "Shown by VESTA from
+  this device's live state in the villa's system, not opened by a person or an automation."
+
+## 2.496.855
+
+- **Logout shows a power sign.** In the menu, the "Logout" line now has a power icon like the other lines' icons,
+  instead of the profile's round badge. The badge at the top right of the bar stays as it was.
+- **On a phone, Settings comes first in the gear menu**, right above Cockpit. Larger screens keep their menu as it was.
+
+## 2.496.854
+
+- **Every issue card says what made it.** A small (?) pill now sits just left of the "next check" pill. Hover it, or
+  tap it on a tablet or phone, to read where the card came from: the villa's automation that raised the alert (its
+  name and its id), VESTA's maintenance check that found it (for example "Missing device", PM-MISSING), the person
+  who opened it in the Cockpit, a guest's report, a chat, an overdue task, or a device the villa's system reports
+  offline right now. When nothing tells, it says "Source not recorded."
+- The automation and the check are named once the VESTA Agent's next update is installed; until then an alert's
+  card says which automation sent it was not recorded.
+
+## 2.496.852
+
+- **One upload button.** It reads "Upload Model" on the no-model screen and in Advanced Settings, and a failed upload
+  shows one red line in both places.
+- **Buttons answer the mouse the same way.** "Unlock door…" and a blind's Open/Close brighten in their own colour; a
+  few icon buttons (a task's pencil, the photo viewer's ✕ and arrows, the rooms menu's ✕) now show their name.
+- **The villa's shared settings are checked when saved**: a number out of range is kept at the nearest allowed value.
+- Behind the scenes: every door of the VESTA UI's server is checked in one place, and every button is one definition.
+
 ## 2.496.851
 
 - **The upper terrace's highlight sits on its deck.** Its floor was read 12 cm low, on a surface under the deck.

@@ -13,7 +13,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { usePaged, Pager } from "@/components/common/Paged";
 import { downloadFile } from "@/utils/download";
-import { RefreshCw, Trash2, Copy, Check, Download, Stethoscope, Activity, ChevronDown, Info } from "lucide-react";
+import { RefreshCw, Trash2, Copy, Check, Download, Stethoscope, Activity, Info } from "lucide-react";
 import { ingressPath } from "@/ha/ingress";
 import { momentText } from "@/utils/dateText";
 import ToolGroup from "@/components/common/ToolGroup";
@@ -26,6 +26,7 @@ import { backendFetch } from "@/auth/sessionLost";
 import { refusalOf } from "@/utils/storeSave";
 import { useOutsideClose } from "@/hooks/useOutsideClose";
 import { ERROR_COLOR, STATUS_COLOR } from "@/utils/stateColors";
+import Button from "@/components/common/Button";
 
 interface TelemetryEvent {
   // ⚠️ `string`, not TelemetryKind, and deliberately (2.427.0): these events are
@@ -344,7 +345,6 @@ export function TelemetryRow({ e }: { e: TelemetryEvent }) {
   );
 }
 
-
 /** The table only ever RENDERS this many rows (newest first) — the add-on
  *  already caps the underlying log server-side (the telemetry_max_events
  *  option, 500 by default — supervisor-proxy.py's ring), but 500 rows of
@@ -472,23 +472,20 @@ export default function TelemetryPanel() {
           its name as aria-label and title. ⚠️ THE ONE TOOL GROUP (owner, 2026-11-06: outlined squares here, filled squares
           in the header): Advanced Settings' header's look (.tool-group), each word hidden on a phone. */}
       <ToolGroup label="Device telemetry" className="telemetry-actions">
-        <button type="button" onClick={() => void load()} disabled={busy}
-          data-tip="Re-read the events from the server" aria-label="Refresh">
-          <RefreshCw size={16} aria-hidden /><span className="btn-label">Refresh</span>
-        </button>
-        <button type="button" onClick={() => void copyAll()} disabled={busy || !events?.length}
-          data-tip="Copy every event, every field, as JSON" aria-label="Copy">
-          {copied ? <Check size={16} aria-hidden /> : <Copy size={16} aria-hidden />}<span className="btn-label">{copied ? "Copied" : "Copy"}</span>
-        </button>
-        <button type="button" onClick={downloadAll} disabled={busy || !events?.length}
-          data-tip="Save every event as a .json file" aria-label="Download">
-          <Download size={16} aria-hidden /><span className="btn-label">Download</span>
-        </button>
+        <Button on="tools" icon={<RefreshCw size={16} aria-hidden />} label="Refresh"
+          tip="Re-read the events from the server"
+          shortOnPhone onClick={() => void load()} disabled={busy}>Refresh</Button>
+        <Button on="tools" icon={copied ? <Check size={16} aria-hidden /> : <Copy size={16} aria-hidden />} label="Copy"
+          tip="Copy every event, every field, as JSON" shortOnPhone onClick={() => void copyAll()} disabled={busy || !events?.length}>
+          {copied ? "Copied" : "Copy"}
+        </Button>
+        <Button on="tools" icon={<Download size={16} aria-hidden />} label="Download"
+          tip="Save every event as a .json file"
+          shortOnPhone onClick={downloadAll} disabled={busy || !events?.length}>Download</Button>
         {/* it erases what nothing brings back: it asks first, as every such button (owner, 2026-11-10) */}
-        <AskFirstButton confirmLabel="Erase every event?" onConfirm={() => load(true)} disabled={busy}
-          title="Erase every event the server keeps. Copy or Download first if you want to keep them." aria-label="Clear">
-          <Trash2 size={16} aria-hidden /><span className="btn-label">Clear</span>
-        </AskFirstButton>
+        <AskFirstButton on="tools" icon={<Trash2 size={16} aria-hidden />} label="Clear" shortOnPhone
+          tip="Erase every event the server keeps. Copy or Download first if you want to keep them."
+          confirmLabel="Erase every event?" onConfirm={() => load(true)} disabled={busy}>Clear</AskFirstButton>
         {/* THIS device, right now, and the frame-cost probe — one "Diagnose" menu (owner, 2026-10-14), each result
             copied where the button was pressed.
             The device report is the one ErrorReport shows after a crash — same builder, so the two cannot describe
@@ -496,12 +493,11 @@ export default function TelemetryPanel() {
             limits that explain a slow load). The probe has a console form too, and neither an iPad nor an iPhone
             has a console — nor, inside the companion app or an installed PWA, a URL `?debug` can be added to. */}
         <div className="telemetry-diag" ref={diagRef}>
-          <button type="button" aria-haspopup="menu" aria-expanded={diagOpen} disabled={probing}
-            onClick={() => setDiagOpen((o) => !o)} data-tip="This device's report, or the frame-cost probe"
-            aria-label="Diagnose">
-            <Stethoscope size={16} aria-hidden /><span className="btn-label">{probing ? "Measuring…" : "Diagnose"}</span>
-            <ChevronDown size={14} aria-hidden />
-          </button>
+          <Button on="tools" icon={<Stethoscope size={16} aria-hidden />} label="Diagnose"
+            tip="This device's report, or the frame-cost probe" shortOnPhone menu aria-expanded={diagOpen}
+            disabled={probing} onClick={() => setDiagOpen((o) => !o)}>
+            {probing ? "Measuring…" : "Diagnose"}
+          </Button>
           {diagOpen && (
             <div className="hud-menu telemetry-diag-menu" role="menu">
               <button role="menuitem" className="hud-menu-item" onClick={runDevice}
@@ -522,7 +518,8 @@ export default function TelemetryPanel() {
         <div className="field">
           <label className="eyebrow row spread">
             Frame cost on this device, what each thing was costing
-            <button className="btn" onClick={() => void copyResult(probeText, "Frame-cost probe")}><Copy size={14} /> Copy</button>
+            <Button icon={<Copy size={14} />}
+              onClick={() => void copyResult(probeText, "Frame-cost probe")}> Copy</Button>
           </label>
           <pre className="diag-report">{probeText}</pre>
         </div>
@@ -533,8 +530,9 @@ export default function TelemetryPanel() {
           <label className="eyebrow row spread">
             This device, screen, viewport, WebGL, model
             <span className="row" style={{ gap: 6 }}>
-              <button className="btn" onClick={() => void copyResult(selfReport, "Device report")}><Copy size={14} /> Copy</button>
-              <button className="btn" onClick={() => setSelfReport(null)}>Hide</button>
+              <Button icon={<Copy size={14} />}
+                onClick={() => void copyResult(selfReport, "Device report")}> Copy</Button>
+              <Button onClick={() => setSelfReport(null)}>Hide</Button>
             </span>
           </label>
           <pre className="diag-report">{selfReport}</pre>

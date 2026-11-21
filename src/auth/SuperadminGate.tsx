@@ -48,6 +48,7 @@ import { requestElevation } from "./elevation";
 import type { PinOutcome } from "./pinOutcome";
 import DialogLayer from "@/components/common/DialogLayer";
 import ProblemLine from "@/components/common/ProblemLine";
+import Button from "@/components/common/Button";
 
 export interface ElevationIntent {
   /** What is about to be destroyed, in the operator's words: "Delete fault". */
@@ -155,7 +156,7 @@ function SuperadminPrompt({
               No superadmin code is set for this installation, so records
               cannot be erased. It is set in the VESTA app&apos;s options, in the villa&apos;s system.
             </ProblemLine>
-            <button className="btn" onClick={onCancel}>Close</button>
+            <Button onClick={onCancel}>Close</Button>
           </>
         ) : (
           <PinPad

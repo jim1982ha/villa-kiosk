@@ -11,7 +11,17 @@ import { useState, type ReactNode } from "react";
 import InfoTip from "@/components/common/InfoTip";
 import { ListSection, type SectionViews } from "@/components/common/FoldedList";
 
-export default function Fold({ title, tip, summary, views, children }: {
+/** How a section starts (architecture review, owner approved 2026-11-20): unfolded, with a search typed, its field's
+ *  list open. Unsaid: today's start, folded, nothing typed, the list closed. A screen's check or picture starts it
+ *  elsewhere through this, never by rewriting its source (tests/oracles/settings_cards.mjs did). */
+export interface SectionStart {
+  open?: boolean;
+  search?: string;
+  /** The field's list of offers open, as a tap opens it. */
+  picking?: boolean;
+}
+
+export default function Fold({ title, tip, summary, views, startOpen = false, children }: {
   /** The section's title. */
   title: string;
   /** Its (i): what the section is for (owner, 2026-10-22: no visible description). */
@@ -21,9 +31,11 @@ export default function Fold({ title, tip, summary, views, children }: {
   /** In place of the summary: its counts, each showing its own list ("9 groups · 15 suggested"); a count pressed
    *  while folded opens the section on its list. */
   views?: SectionViews;
+  /** Unfolded from the start (SectionStart `open`); folded unless said. */
+  startOpen?: boolean;
   children: ReactNode;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(startOpen);
   return (
     <ListSection title={title} summary={summary} open={open} onToggle={() => setOpen((v) => !v)} bare
       views={views && { ...views, onShow: (key) => { setOpen(true); views.onShow(key); } }}

@@ -17,6 +17,7 @@ import PinPad from "./PinPad";
 import ProblemLine from "@/components/common/ProblemLine";
 import SignInAgain from "./SignInAgain";
 import { signInExpired } from "@/auth/remoteSignIn";
+import Button from "@/components/common/Button";
 
 const ROLE_ICONS: Record<Role, typeof UserRound> = {
   guest: UserRound,
@@ -188,7 +189,7 @@ export default function ProfileGate({ children }: { children: ReactNode }) {
               </div>
               {!access && !gateError && <div className="muted">Loading profiles…</div>}
               {cancel && (
-                <button className="btn mt" onClick={cancel}>Cancel</button>
+                <Button className="mt" onClick={cancel}>Cancel</Button>
               )}
             </div>
           )}

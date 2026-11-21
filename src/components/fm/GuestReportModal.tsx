@@ -31,6 +31,7 @@ import ModalFooter from "@/components/common/ModalFooter";
 import { useRecordPlace } from "./useRecordPlace";
 import ProblemLine from "@/components/common/ProblemLine";
 import Tip from "@/components/common/Tip";
+import Button from "@/components/common/Button";
 
 export default function GuestReportModal({
   entityId, onClose,
@@ -135,15 +136,14 @@ export default function GuestReportModal({
                   to undo is what is honestly available here. */}
               <div className="fm-chiprow">
                 {/* a button, as the operator's strip's (EvidenceRow): a label around a hidden input took no key */}
-                <button className="btn" disabled={photos.busy} onClick={() => photoInput.current?.click()}>
-                  <Camera size={16} aria-hidden /> {photos.busy ? "Adding…" : photoIds.length ? "Add another" : "Add a photo"}
-                </button>
+                <Button icon={<Camera size={16} aria-hidden />} disabled={photos.busy}
+                  onClick={() => photoInput.current?.click()}> {photos.busy ? "Adding…" : photoIds.length ? "Add another" : "Add a photo"}</Button>
                 <input ref={photoInput} type="file" accept="image/*" capture="environment" multiple hidden
                   onChange={(e) => { const el = e.target; void photos.add(el.files).then(() => { el.value = ""; }); }} />
                 {photoIds.length > 0 && (
-                  <button className="btn" onClick={() => setPhotoIds([])}>
+                  <Button onClick={() => setPhotoIds([])}>
                     {photoIds.length} attached, remove
-                  </button>
+                  </Button>
                 )}
               </div>
               <ProblemLine>{photos.error}</ProblemLine>

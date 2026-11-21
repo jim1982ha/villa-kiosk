@@ -37,6 +37,7 @@ import { FullScreenAnnouncements } from "./MessagesSettings";
 import WhoGetsMessages from "./WhoGetsMessages";
 import { LISTS_TITLE } from "@/messages/recipients";
 import { ROLE_LABELS } from "@/auth/roles";
+import Button from "@/components/common/Button";
 
 /** Settings' tabs (ticket 16 of "One inbox", owner 2026-10-28): General, all it held before; Messages, how this
  *  tablet shows the villa's announcements, and (owner, 2026-11-03) the villa's message settings, for a profile that may
@@ -336,9 +337,8 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor, ta
       <ModalFooter
         leading={can("editConfig") ? (
           // the footer's own button: the same pill, size, icon and word as Save and Cancel (owner, 2026-10-22)
-          <button className="btn" onClick={onOpenConfigEditor} aria-label="Advanced Settings">
-            <Sliders size={18} aria-hidden /><span className="btn-label">Advanced Settings</span>
-          </button>
+          <Button icon={<Sliders size={18} aria-hidden />} onClick={onOpenConfigEditor} label="Advanced Settings"
+            shortOnPhone>Advanced Settings</Button>
         ) : undefined}
         commit={commit}
         onClose={onClose}

@@ -15,6 +15,7 @@ import AgentMark from "./AgentMark";
 import { Pager, usePaged, PAGE_CARDS } from "@/components/common/Paged";
 import RecordCard from "./RecordCard";
 import { withCount } from "@/utils/countBadge";
+import Button from "@/components/common/Button";
 
 export default function SavedDocumentsList({
   kind, onOpen,
@@ -62,9 +63,7 @@ export function SavedDocumentRows({ kind, docs: all, onOpen, onRemove }: {
             bin={{ label: `Delete saved ${noun} for ${title(doc)}`, question: `Delete this saved ${noun}?`,
               confirmLabel: "Delete", run: () => onRemove(doc.id) }}
             actions={
-              <button className="btn" onClick={() => onOpen(doc)}>
-                <Eye size={16} /> Reopen
-              </button>
+              <Button icon={<Eye size={16} />} onClick={() => onOpen(doc)}> Reopen</Button>
             } />
         ))}
       </div>

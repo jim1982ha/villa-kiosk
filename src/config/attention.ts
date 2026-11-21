@@ -23,6 +23,7 @@ import type { ConfirmingFault } from "@/fm/faultConfirm";
 import { faultMove, notedStory, type FaultMove } from "@/fm/faultNotes";
 import { deviceWorkKey, groupByDevice } from "@/fm/deviceWork";
 import { faultSource, type IssueSource } from "@/fm/issueSource";
+import { faultOrigin, LIVE_ORIGIN, scheduleOrigin } from "@/fm/faultOrigin";
 import type { FmData, FmTicketCheck } from "@/fm/fmTypes";
 import type { HassEntity } from "@/types/ha.types";
 import type { EntityMapping } from "@/types/scene.types";
@@ -37,6 +38,8 @@ export interface AttentionItem {
   kind: AttentionKind;
   /** Where it comes from (fm/issueSource): its icon on the card. Live for a state; a fault's own (faultSource). */
   source?: IssueSource;
+  /** What made it, in words (fm/faultOrigin): its card's (?) pill, owner 2026-11-21. */
+  origin?: string;
   title: string;
   /** Short status word — "Unavailable", "Overdue", "Leak detected", etc. Absent on a fault: what its line says of its
    *  status is its stage's word (faultStatus, fmEngine.STAGE_WORDS), never one of its own. */
@@ -482,12 +485,19 @@ interface AttentionInputs {
   now?: number;
 }
 
+/** An entity's friendly name in the villa's live states (an automation's, for a fault's (?) pill: fm/faultOrigin). */
+export const friendlyIn = (entities: Record<string, HassEntity>) => (id: string): string | undefined => {
+  const name = entities[id]?.attributes?.friendly_name;
+  return typeof name === "string" ? name : undefined;
+};
+
 /** What needs attention (`attentionItems`), and the devices whose live state is held as "Not a problem while it lasts"
  *  (`held`: their fault a person closed so, the state begun before that close) — the ONE answer the open issues and the
  *  Recap's checks read (owner, 2026-11-04: the Recap still said "1 unlocked" of a door closed "Not a problem"). */
 export function attentionOf(opts: AttentionInputs): Pick<VillaProblems, "attentionItems" | "held" | "clearing"> {
   const { devices, entities, entityMap, resolvedRooms, fmData } = opts;
   const sinceOf = opts.sinceOf ?? (() => null);
+  const friendlyOf = friendlyIn(entities);
   const items: AttentionItem[] = [];
 
   for (const id of devices.unavailable) {
@@ -500,6 +510,7 @@ export function attentionOf(opts: AttentionInputs): Pick<VillaProblems, "attenti
       // an object the model names whose entity Home Assistant does not have says so, as everywhere (NOT_IN_HA)
       detail: missingFromHa(entities, id) ? NOT_IN_HA : "Unavailable",
       source: "live",
+      origin: LIVE_ORIGIN,
       room: deviceRoom(resolvedRooms, id),
       entityId: id,
       ...beganAt(id, entities[id], sinceOf),
@@ -523,6 +534,7 @@ export function attentionOf(opts: AttentionInputs): Pick<VillaProblems, "attenti
       title: labelOf(id, entityMap, entities),
       detail: lostPartsLine(devices, id, entityMap, entities),
       source: "live",
+      origin: LIVE_ORIGIN,
       room: deviceRoom(resolvedRooms, id),
       entityId: lost[0],
       ...began,
@@ -548,6 +560,7 @@ export function attentionOf(opts: AttentionInputs): Pick<VillaProblems, "attenti
       openedAt: faultBegan(t),
       ...(alertNumberOf(t) !== undefined ? { alertNumber: alertNumberOf(t), alertLabel: faultAlertLabel(t) } : {}),
       source: faultSource(t),
+      origin: faultOrigin(t, friendlyOf),
       check: t.check,
       ...(t.monitoredUntil ? { monitoredUntil: t.monitoredUntil } : {}),
       ...(t.expected ? { expected: t.expected } : {}),
@@ -567,6 +580,7 @@ export function attentionOf(opts: AttentionInputs): Pick<VillaProblems, "attenti
       title: s.schedule.title,
       detail: DUE_WORDS[s.state].word,   // its state's ONE word (the Schedule's pill's, the recap's)
       source: "schedule",
+      origin: scheduleOrigin(s.schedule.title),
       room: s.schedule.room,
       entityId: s.schedule.entityId,
       // the day it was due; one never done counts from when it was set up (its first due day may still be to come)
@@ -598,6 +612,7 @@ export function attentionOf(opts: AttentionInputs): Pick<VillaProblems, "attenti
       // "Jammed", "92 %") — config/reading, as every reading.
       detail: alarmText(id, entity),
       source: "live",
+      origin: LIVE_ORIGIN,
       room: deviceRoom(resolvedRooms, id),
       entityId: id,
       ...beganAt(id, entity, sinceOf),

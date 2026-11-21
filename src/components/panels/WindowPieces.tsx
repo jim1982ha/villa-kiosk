@@ -9,6 +9,7 @@ import { LineChart as LineChartIcon } from "lucide-react";
 import BasePanel from "./BasePanel";
 import BackButton from "@/components/common/BackButton";
 import type { Observation } from "@/config/observation";
+import Button from "@/components/common/Button";
 
 /**
  * A data window from the summary bar (Weather, Energy): a NOW screen and a
@@ -44,9 +45,7 @@ export function DataWindow({ title, icon, live, picker, className, onClose, now,
       onClose={onClose}
       headerActions={view === "now" ? live : picker}
       footerLeading={view === "now" && (
-        <button type="button" className="btn" onClick={() => setView("history")}>
-          <LineChartIcon size={18} /> History and trends
-        </button>
+        <Button icon={<LineChartIcon size={18} />} onClick={() => setView("history")}> History and trends</Button>
       )}
     >
       <div ref={topRef} />

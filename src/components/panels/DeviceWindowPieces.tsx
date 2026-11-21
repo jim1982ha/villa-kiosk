@@ -10,6 +10,7 @@
 
 import { Pencil, TriangleAlert } from "lucide-react";
 import { WorkButton } from "@/components/fm/WorkButtons";
+import Button from "@/components/common/Button";
 import { usePanelActions } from "./PanelActionsContext";
 import { useDeviceIssue } from "@/components/cockpit/useVillaAttention";
 import type { AttentionSeverity } from "@/config/attention";
@@ -26,26 +27,26 @@ export function useDeviceWarning(): { open: () => void; severity: AttentionSever
 /** The device window's warning (header, top right, owner 2026-10-24): the Cockpit's own sign in the colour of the
  *  most serious issue its Overview lists for the device (attention severity: .cockpit-attention-danger red, -warn
  *  amber, -lost grey, as the Overview's cards). Pure: a check draws it. */
-export function FaultsButton({ onOpen, severity, className = "btn icon-only" }: {
-  onOpen: () => void; severity: AttentionSeverity; className?: string;
+export function FaultsButton({ onOpen, severity, on }: {
+  onOpen: () => void; severity: AttentionSeverity;
+  /** Over the camera's picture; a window's header button unless said. */
+  on?: "photo";
 }) {
   return (
-    <button type="button" className={`${className} panel-faults-btn cockpit-attention-${severity}`} onClick={onOpen}
-      data-tip="Open this device's issues in the Cockpit" aria-label="Open this device's issues in the Cockpit">
-      <TriangleAlert size={18} aria-hidden="true" />
-    </button>
+    <Button on={on} icon={<TriangleAlert size={18} aria-hidden="true" />}
+      label="Open this device's issues in the Cockpit"
+      className={`panel-faults-btn cockpit-attention-${severity}`} onClick={onOpen} />
   );
 }
 
 /** Edit: this device's row in Advanced Settings, for a profile that may edit devices. The card window words it; the
- *  camera's chrome, all icons, draws the pencil (`icon`). */
-export function EditButton({ className = "btn", icon = false }: { className?: string; icon?: boolean }) {
+ *  camera's chrome, all icons over its picture, draws the pencil (`on="photo"`). */
+export function EditButton({ on }: { on?: "photo" }) {
   const { may, onEdit } = usePanelActions();
   if (!may.edit) return null;
-  return icon
-    ? <button type="button" className={className} onClick={onEdit} data-tip="Edit this device" aria-label="Edit this device">
-        <Pencil size={16} aria-hidden="true" /></button>
-    : <button type="button" className={className} onClick={onEdit}>Edit</button>;
+  return on
+    ? <Button on={on} icon={<Pencil size={16} aria-hidden="true" />} label="Edit this device" tip="Edit this device" onClick={onEdit} />
+    : <Button onClick={onEdit}>Edit</Button>;
 }
 
 /** ⚠️ THE COCKPIT'S OPEN TICKET (owner, 2026-11-06: an icon-only wrench sat beside Edit, a second look for the act the

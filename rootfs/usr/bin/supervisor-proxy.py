@@ -102,6 +102,7 @@ import base64
 import hashlib
 import hmac
 import json
+import math
 import os
 import re
 import secrets
@@ -640,14 +641,15 @@ def _forbidden(message: str = "forbidden") -> web.Response:
 
 def _refuse(request: web.Request, capability: str | None = None,
             message: str = "forbidden") -> web.Response | None:
-    """The gate at the top of a handler: 401 without a valid session, 403
-    (with `message`) when its role lacks `capability`, None to proceed.
+    """The signed-in door (see Door): 401 without a valid session, 403 (with
+    `message`) when its role lacks `capability`, None to proceed.
 
     ⚠️ WRITTEN OUT BY HAND AT TWELVE HANDLERS BEFORE (round 11, 2.496.169),
     as `_authorized` then `_may(_role_for(...))`, and they had drifted into
     two 403 shapes — `_forbidden(message)` at most, a bare {"error":
-    "forbidden"} at two. tests/proxy-rules.py requires every routed handler
-    to call this (or to be named there as public, with its reason)."""
+    "forbidden"} at two. Then it was called by hand at some thirty handlers;
+    since the architecture review of 2026-11-20 (owner approved) only a Door
+    calls it, from the route table (_routes)."""
     if request.method not in ("GET", "HEAD", "OPTIONS") and _cross_site(request):
         return _forbidden("cross-site request refused")
     if not _authorized(request):
@@ -655,6 +657,70 @@ def _refuse(request: web.Request, capability: str | None = None,
     if capability is not None and not _may(_role_for(request), capability):
         return _forbidden(message)
     return None
+
+
+# ── The doors: who each route answers ───────────────────────────────────────
+# Every route names its door once, in the route table (_routes), and one
+# adapter (_behind) checks it before the handler runs; no handler checks who is
+# calling. A route cannot be added to the table without a door.
+class Door:
+    """Who a route answers.
+
+    kind "public": anyone, no session (the sign-in itself, the health check);
+    "session": a signed-in profile, or the villa's own sidebar (Ingress), and
+    only the profiles holding `capability` when one is named; "model": a
+    session, or anyone while the public_model_access option is on; "agent":
+    the VESTA Agent's bearer token (404 while it is not connected), and only
+    with `capability`. `refusal`: the 403's words when the capability is
+    missing."""
+    __slots__ = ("kind", "capability", "refusal")
+
+    def __init__(self, kind: str, capability: str | None = None, refusal: str = "forbidden"):
+        if kind not in ("public", "session", "model", "agent"):
+            raise ValueError(f"no such door: {kind}")
+        self.kind, self.capability, self.refusal = kind, capability, refusal
+
+    def refused(self, request: web.Request) -> web.Response | None:
+        """The answer that stops this request at the door, or None to let it in."""
+        if self.kind == "public":
+            return None
+        if self.kind == "model":
+            return None if _model_authorized(request) else _unauthorized()
+        if self.kind == "agent":
+            return _agent_refuse(request, self.capability, self.refusal)
+        return _refuse(request, self.capability, self.refusal)
+
+
+PUBLIC = Door("public")
+SIGNED_IN = Door("session")
+MODEL_DOOR = Door("model")
+
+
+def _profiles(capability: str, refusal: str = "forbidden") -> Door:
+    """Signed in, as a profile holding `capability`."""
+    return Door("session", capability, refusal)
+
+
+def _store_editors(capability: str, what: str) -> Door:
+    """A shared store's write door: its refusal says "Only the owner profile"
+    when the owner alone holds `capability`."""
+    owner_only = [r for r in AUTH_ROLES if _may(r, capability)] == ["owner"]
+    return _profiles(capability, f"Only the owner profile may edit {what}." if owner_only
+                     else f"You do not have permission to edit {what}.")
+
+
+def _agent_door(capability: str, refusal: str = "forbidden") -> Door:
+    """The VESTA Agent's token, holding `capability`."""
+    return Door("agent", capability, refusal)
+
+
+def _behind(door: Door, handler):
+    """The adapter: `handler`, run only once `door` lets the request in."""
+    async def gated(request: web.Request):
+        if (refused := door.refused(request)) is not None:
+            return refused
+        return await handler(request)
+    return gated
 
 
 async def _json_body(request: web.Request) -> object:
@@ -709,9 +775,8 @@ HOP_BY_HOP = {
 async def ws_handler(request: web.Request):
     """Bridge the browser websocket to Core, injecting the Supervisor token."""
     # Cookies ARE sent on a same-origin WS handshake, so an unauthenticated
-    # direct caller is rejected before any socket to Core is opened.
-    if (refused := _refuse(request)) is not None:
-        return refused
+    # direct caller is refused at its door (the route table) before any socket
+    # to Core is opened.
     role = _role_for(request)
     # ⚠️ THE SESSION IS RE-RESOLVED FOR THE LIFE OF THE SOCKET, AND IT USED NOT
     # TO BE. `role` was decided here, at the handshake, and captured into the
@@ -966,8 +1031,6 @@ def _rest_call_allowed(role: str, tail: str) -> bool:
 
 async def rest_handler(request: web.Request) -> web.StreamResponse:
     """Relay a REST call to Core, adding the Supervisor Bearer token."""
-    if (refused := _refuse(request)) is not None:
-        return refused
     role = _role_for(request)
     tail = request.match_info.get("path", "")
     if not _rest_call_allowed(role, tail):
@@ -1361,8 +1424,6 @@ async def addon_config_handler(request: web.Request) -> web.Response:
     are returned, so options with credentials (the profile PINs) stay
     server-side.
     """
-    if not _model_authorized(request):
-        return _unauthorized()
     # Same reasoning as the shared-store GETs above: this changes the moment
     # an owner uploads a new model, every client is expected to notice within
     # one refresh, and the standalone/direct-hostname path is exactly where a
@@ -1768,8 +1829,6 @@ async def auth_elevate_handler(request: web.Request) -> web.Response:
     Rate-limited on the same two-tier limiter as the profile PINs (per client
     IP and globally), and requires an already-authorized session — the code is
     an extra factor on top of a normal profile, never a way in from nothing."""
-    if (refused := _refuse(request)) is not None:
-        return refused
     configured = _configured_superadmin_pin()
     if not configured:
         # Capability disabled (no code set). Say so plainly: this is an
@@ -2454,9 +2513,6 @@ async def auth_logout_all_handler(request: web.Request) -> web.Response:
     and replaces the signing key, so nothing copied from /data before this
     moment can sign a session either. This is the answer to "a device was
     lost / a PIN was seen"."""
-    if (refused := _refuse(request, "administer",
-                           "Only the owner profile may sign every device out.")) is not None:
-        return refused
     epoch = _bump_session_epoch()
     try:
         _rotate_session_secret()
@@ -2649,9 +2705,6 @@ async def model_upload_handler(request: web.Request) -> web.Response:
     # manageModel is an owner-only capability in permissions.ts — a
     # guest/ops session could otherwise overwrite the villa model every
     # kiosk loads. (Ingress requests resolve to "owner" — see _role_for.)
-    if (refused := _refuse(request, "manageModel",
-                           "Only the owner profile may upload a model.")) is not None:
-        return refused
     kind = request.query.get("kind", "")
     if kind not in ("glb", "rooms"):
         return web.json_response({"error": "kind must be 'glb' or 'rooms'"}, status=400)
@@ -2892,9 +2945,9 @@ class JsonStore:
     lock, and two locks on one file is no lock — the read-check-write of one
     door could interleave with the other's. The lock now lives with the file.
 
-    Doors (_store_get_handler, _store_put_handler, and the append door for
-    telemetry) decide WHO may do WHAT; this decides nothing
-    about callers.
+    The route table's doors (_routes) decide WHO may reach a store, and its
+    handlers (_store_get_handler, _store_put_handler, the append for
+    telemetry) WHAT they may do; this decides nothing about callers.
     """
 
     def __init__(self, name: str, empty, max_bytes: int, migrate=None):
@@ -2986,26 +3039,17 @@ def _store_unreadable_response(key: str) -> web.Response:
         status=409, headers={"Cache-Control": "no-store"})
 
 
-def _store_get_handler(store: JsonStore, key: str, what: str, *,
-                       capability: str | None = None, view=None, gate=None, tidy=None, published=None):
-    """The GET door of one store: `{key: document, "rev": revision}`.
+def _store_get_handler(store: JsonStore, key: str, *, view=None, tidy=None, published=None):
+    """The GET door of one store: `{key: document, "rev": revision}`. Who may
+    read it is its route's door (_routes), checked before this runs.
 
-    `capability` gates it (None = any authorized caller — a guest still has to
-    read the device config to see the right badges and rooms at all).
     `view(request, stored)` is what THIS caller may read (default: the whole
-    document). `gate(request, capability, message)` replaces _refuse for a
-    caller that is not a browser session — the VESTA Agent's bearer token
-    (_agent_refuse). `tidy(stored)` drops what the store no longer keeps (the
+    document). `tidy(stored)` drops what the store no longer keeps (the
     closed faults past their window, _fm_expire) before anyone sees it.
     `published()` is what the store says ABOUT itself beside the document (the
     Facility record's retention windows, _fm_retention) — never inside it, so
     a client writing its copy back never stores it."""
-    gate = gate or _refuse
-
     async def get_handler(request: web.Request) -> web.Response:
-        if (refused := gate(request, capability,
-                            f"You do not have permission to read {what}.")) is not None:
-            return refused
         # This store changes on every edit from any device and every client
         # is expected to see the current value within one heartbeat (see
         # useStoreRefresh) — not "eventually", and never a stale copy served
@@ -3028,15 +3072,15 @@ def _store_get_handler(store: JsonStore, key: str, what: str, *,
     return get_handler
 
 
-def _store_put_handler(store: JsonStore, key: str, what: str, *,
-                       capability: str = "editConfig", merge=None, guard=None,
-                       after=None, view=None, require_rev: bool = False, gate=None, tidy=None, landed=None):
+def _store_put_handler(store: JsonStore, key: str, *, merge=None, guard=None,
+                       after=None, view=None, require_rev: bool = False, tidy=None, landed=None):
     """The whole-document PUT door of one store: `{key: document, "rev"?}`.
 
-    `capability` defaults to editConfig — owner-only, because shared state is
-    exactly what a non-owner profile must not rewrite for everyone else. The FM
-    store asks for reportFault instead, which every profile holds, and its
-    guard then confines what a write may contain.
+    Who may write it is its route's door (_routes): editConfig, owner-only,
+    for the device configuration, because shared state is exactly what a
+    non-owner profile must not rewrite for everyone else. The FM store asks for
+    reportFault instead, which every profile holds, and its guard then confines
+    what a write may contain.
 
     `merge(request, stored, sent)` turns what a restricted caller sent into
     the document to write; `guard(request, body, stored, new)` then judges the
@@ -3077,14 +3121,7 @@ def _store_put_handler(store: JsonStore, key: str, what: str, *,
     concurrency protection at all while the device-config store did. The
     protections now live in JsonStore.update, which no door can skip.
     """
-    gate = gate or _refuse
-    owner_only = [r for r in AUTH_ROLES if _may(r, capability)] == ["owner"]
-    refusal = (f"Only the owner profile may edit {what}." if owner_only
-               else f"You do not have permission to edit {what}.")
-
     async def put_handler(request: web.Request) -> web.Response:
-        if (refused := gate(request, capability, refusal)) is not None:
-            return refused
         # any JSON: a store takes its bare value as well as {key: value, rev}
         body = await _json_body(request)
         if isinstance(body, web.Response):
@@ -3194,8 +3231,6 @@ async def telemetry_post_handler(request: web.Request) -> web.Response:
     """Append one client event. Open to ANY authorized session (a guest's
     iPhone failing is exactly the case worth capturing), unlike the owner-only
     config stores. Silently bounded so a looping client can't fill /data."""
-    if (refused := _refuse(request)) is not None:
-        return refused
     body = await _json_object(request)
     if isinstance(body, web.Response):
         return body
@@ -3306,9 +3341,6 @@ async def _publish_render(app: web.Application, body: dict) -> None:
 async def telemetry_get_handler(request: web.Request) -> web.Response:
     """Read the ring back (owner only — it carries other people's user-agents
     and error text). `?clear=1` empties it after reading."""
-    if (refused := _refuse(request, "administer",
-                           "Only the owner profile may read telemetry.")) is not None:
-        return refused
     if request.query.get("clear") == "1":
         try:
             events, _, _ = await TELEMETRY.update(lambda _events: [])
@@ -3391,9 +3423,6 @@ async def fm_evidence_post_handler(request: web.Request) -> web.Response:
     it. What a guest may then DO with it stays narrow — see _fm_guest_write_ok.
     A refusal says why in its `error` (the app shows it: utils/storeSave
     refusalOf)."""
-    if (refused := _refuse(request, "reportFault",
-                           "You do not have permission to add evidence.")) is not None:
-        return refused
     return await _store_evidence(request)
 
 
@@ -3447,9 +3476,6 @@ async def fm_evidence_get_handler(request: web.Request) -> web.StreamResponse:
     decision. The stated reason for the open rule — "so a report can show the
     pictures behind each claim" — is unaffected: reports are opened by owner
     and facility-manager profiles, both of which still pass."""
-    if (refused := _refuse(request, "manageFacility",
-                           "Only the owner and facility-manager profiles may view evidence.")) is not None:
-        return refused
     photo_id = request.match_info.get("id", "")
     if not FM_EVIDENCE_ID_RE.fullmatch(photo_id):
         return web.json_response({"error": "bad photo id"}, status=400)
@@ -3467,9 +3493,6 @@ async def fm_evidence_get_handler(request: web.Request) -> web.StreamResponse:
 async def fm_document_get_handler(request: web.Request) -> web.StreamResponse:
     """Serve one document of a fault (an investigation report) — owner and facility manager only, as a photo is, and
     sandboxed (FM_DOCUMENT_CSP): it opens on the iPad from the fault's card, offline, and can run nothing."""
-    if (refused := _refuse(request, "manageFacility",
-                           "Only the owner and facility-manager profiles may view evidence.")) is not None:
-        return refused
     doc_id = request.match_info.get("id", "")
     if not FM_EVIDENCE_ID_RE.fullmatch(doc_id):
         return web.json_response({"error": "bad document id"}, status=400)
@@ -3489,23 +3512,21 @@ async def fm_document_get_handler(request: web.Request) -> web.StreamResponse:
 
 
 DEVICE_CONFIG = JsonStore("device-config.json", {}, DEVICE_CONFIG_MAX_BYTES, migrate=lambda doc: _device_config_today(doc))
-device_config_get_handler = _store_get_handler(
-    DEVICE_CONFIG, "config", "device configuration")
-device_config_put_handler = _store_put_handler(
-    DEVICE_CONFIG, "config", "device configuration")
+device_config_get_handler = _store_get_handler(DEVICE_CONFIG, "config")
+device_config_put_handler = _store_put_handler(DEVICE_CONFIG, "config")
 # Facility Manager working set — a whole-document store like the device
 # config, so it gets the same revision check, lock and validation. The only
 # difference is who may write it. /agent/v1/fm-data opens the SAME store.
 FM_DATA = JsonStore("fm-data.json", {}, FM_DATA_MAX_BYTES)
 fm_data_get_handler = _store_get_handler(
-    FM_DATA, "data", "facility manager data", view=_fm_reader_view, tidy=_fm_expire, published=_fm_retention)
+    FM_DATA, "data", view=_fm_reader_view, tidy=_fm_expire, published=_fm_retention)
 fm_data_put_handler = _store_put_handler(
-    FM_DATA, "data", "facility manager data",
-    # "guest" is admitted at the ROLE gate but constrained by the write guard
-    # to appending a fault report (see _fm_guest_write_ok) — the role check
-    # alone would be far too broad. Everything else about the maintenance
-    # record stays owner/ops.
-    capability="reportFault", view=_fm_reader_view, merge=_fm_writer_merge,
+    FM_DATA, "data",
+    # "guest" is admitted at the ROLE gate (its door asks reportFault) but
+    # constrained by the write guard to appending a fault report (see
+    # _fm_guest_write_ok): the role check alone would be far too broad.
+    # Everything else about the maintenance record stays owner/ops.
+    view=_fm_reader_view, merge=_fm_writer_merge,
     guard=_fm_write_guard, after=_fm_after_write, tidy=_fm_expire,
     # a person's step the VESTA Agent acts on wakes it at once (_fm_wake_agent, defined with the inbox below). Only on
     # the people's door: the Agent's own writes (/agent/v1/fm-data) never wake it again.
@@ -3599,8 +3620,8 @@ def _iso_epoch(value) -> float | None:
 
 def _agent_refuse(request: web.Request, capability: str | None = None,
                   message: str = "forbidden") -> web.Response | None:
-    """The gate at the top of every /agent/v1 handler — _refuse's twin for a
-    caller that is not a browser.
+    """The agent's door (see Door) on every /agent/v1 route: _refuse's twin
+    for a caller that is not a browser.
 
     404 while no token is configured: the interface does not exist, and says
     nothing about why. Otherwise `Authorization: Bearer <agent_token>`,
@@ -3706,18 +3727,14 @@ def _fm_agent_write_guard(request: web.Request, body, old, new):
     return None
 
 
-agent_fm_get_handler = _store_get_handler(
-    FM_DATA, "data", "the Facility records", capability="agentRead", gate=_agent_refuse, tidy=_fm_expire)
+agent_fm_get_handler = _store_get_handler(FM_DATA, "data", tidy=_fm_expire)
 agent_fm_put_handler = _store_put_handler(
-    FM_DATA, "data", "the Facility records", capability="agentWrite",
-    merge=_fm_agent_merge, guard=_fm_agent_write_guard, after=_fm_after_write,
-    require_rev=True, gate=_agent_refuse, tidy=_fm_expire)
+    FM_DATA, "data", merge=_fm_agent_merge, guard=_fm_agent_write_guard, after=_fm_after_write,
+    require_rev=True, tidy=_fm_expire)
 
 
 async def agent_fm_evidence_handler(request: web.Request) -> web.Response:
     """Attach a photo: the same checks and limits as the app's upload."""
-    if (refused := _agent_refuse(request, "agentWrite")) is not None:
-        return refused
     return await _store_evidence(request)
 
 
@@ -3725,8 +3742,6 @@ async def agent_fm_document_handler(request: web.Request) -> web.Response:
     """Store one HTML page: a fault's (the investigation report a person asked to keep with it: owner, 2026-10-11),
     referenced by its documentIds and deleted with it (_fm_after_write); or a report's (ticket 20 of "One inbox"), named
     by a kept VESTA message's `page` and kept while that message is (_report_pages), then the records-kept days."""
-    if (refused := _agent_refuse(request, "agentWrite")) is not None:
-        return refused
     return await _store_evidence(request, ".html")
 
 
@@ -3738,8 +3753,6 @@ async def agent_heartbeat_handler(request: web.Request) -> web.Response:
     ⚠️ PERSISTED, SO A RESTART NEVER SHOWS A FALSE "ONLINE". Presence is
     computed from the last heartbeat's time on every read; an in-memory flag
     would come back from a restart either stale or wrong."""
-    if (refused := _agent_refuse(request, "agentPresence")) is not None:
-        return refused
     status = cadence = None
     if request.can_read_body:
         # any JSON: a beat whose body is not an object still counts (no status, no cadence)
@@ -3793,13 +3806,73 @@ def _asleep_ids(raw) -> list[str]:
 CHAT_LANGUAGES: dict = (AGENT_CONTRACT_TABLE.get("recipients") or {}).get("languages") or {}
 
 
-def _chat_languages(raw) -> dict[str, str]:
-    """Each chat's language (Settings › Messages › Who gets the messages): a notify entity id → a code of
-    CHAT_LANGUAGES, sorted by id; any other entry left out; not stored or another shape: none (every chat English)."""
+def _kept_chat_languages(raw):
+    """Each chat's language as it is kept (the app's recipients parseChatLanguages): a notify entity id → a code of
+    CHAT_LANGUAGES, in their order, any other entry left out; another shape: NOT_STORED."""
     if not isinstance(raw, dict):
-        return {}
-    return {k: v for k, v in sorted(raw.items()) if isinstance(k, str) and k.startswith("notify.")
+        return NOT_STORED
+    return {k: v for k, v in raw.items() if isinstance(k, str) and k.startswith("notify.")
             and AGENT_ENTITY_RE.fullmatch(k) and isinstance(v, str) and v in CHAT_LANGUAGES}
+
+
+def _chat_languages(raw) -> dict[str, str]:
+    """Each chat's language (Settings › Messages › Who gets the messages), sorted by id; not stored or another shape:
+    none (every chat English)."""
+    kept = _kept_chat_languages(raw)
+    return dict(sorted(kept.items())) if kept is not NOT_STORED else {}
+
+
+def _entity_ids(raw):
+    """A villa list of devices as it is kept (villa-settings.json `lists`, the app's keptEntityIds): entity ids
+    (AGENT_ENTITY_RE), each once, in their order; no list: NOT_STORED."""
+    if not isinstance(raw, list):
+        return NOT_STORED
+    return list(dict.fromkeys(e for e in raw if isinstance(e, str) and AGENT_ENTITY_RE.fullmatch(e)))
+
+
+def _villa_keep(name: str, raw):
+    """⚠️ THE ONE RULE FOR A VILLA SETTING'S VALUE (architecture review, owner approved 2026-11-20): what is kept of a
+    value sent or stored for the row `name` (villa-settings.json `settings`), by its kind; NOT_STORED: not kept (the
+    setting reads its default). The app's own copy is kept by the same rule (src/config/villaSettings.ts
+    keptVillaValue), through the same examples. A number out of range is kept at the nearest bound and a fraction as
+    its whole part, as this server always read one: an owner's "keep 99999 days" keeps the most allowed, never the
+    default's one year, which would delete more. Before, the Kiosk dropped such a number and this server clamped it,
+    and the file held whatever was sent."""
+    row = _villa_row(name)
+    kind = row.get("kind")
+    is_number = isinstance(raw, (int, float)) and not isinstance(raw, bool) and math.isfinite(raw)
+    if kind == "number":
+        return raw if is_number else NOT_STORED
+    if kind == "int":
+        lo, hi = row.get("min"), row.get("max")
+        if not is_number or not all(isinstance(b, int) and not isinstance(b, bool) for b in (lo, hi)):
+            return NOT_STORED
+        return max(lo, min(hi, int(raw)))
+    if kind == "text":
+        return raw if isinstance(raw, str) else NOT_STORED
+    if kind == "entity":
+        return raw if isinstance(raw, str) and (raw == "" or AGENT_ENTITY_RE.fullmatch(raw)) else NOT_STORED
+    if kind == "switch":
+        return raw if isinstance(raw, bool) else NOT_STORED
+    if kind == "record":
+        return raw if isinstance(raw, dict) else NOT_STORED
+    return raw                               # a row this server cannot read: kept as sent (nothing dropped on a guess)
+
+
+def _villa_kept(doc: dict) -> dict:
+    """`doc` with every villa setting it holds as its rule keeps it (_villa_keep for each row, _entity_ids for each
+    list, _kept_chat_languages); a value not kept is dropped."""
+    table = VILLA_SETTINGS_TABLE if isinstance(VILLA_SETTINGS_TABLE, dict) else {}
+    rules = {**{name: (lambda raw, n=name: _villa_keep(n, raw)) for name in (table.get("settings") or {})},
+             **{name: _entity_ids for name in (table.get("lists") or ())},
+             "chatLanguages": _kept_chat_languages}
+    out = dict(doc)
+    for name, keep in rules.items():
+        if name in out and (kept := keep(out[name])) is not NOT_STORED:
+            out[name] = kept
+        else:
+            out.pop(name, None)
+    return out
 
 
 def _villa_empty_sensor(raw) -> str:
@@ -3837,8 +3910,10 @@ def _full_screen_items(raw: list) -> list:
 
 def _device_config_today(doc):
     """The villa's settings (device-config.json) in today's shape: what an older Kiosk stored read into it, then the
-    keys it retired dropped (villa-settings.json `retired`). The app's own copy is read the same way
-    (src/config/migrations.ts), through the same examples (villa-settings.json `examples`: tests/store-doors.py).
+    keys it retired dropped (villa-settings.json `retired`), then each villa setting as its rule keeps it (_villa_kept):
+    the PUT door's write goes through this (JsonStore migrate), so the file only ever holds kept values. The app's own
+    copy is read the same way (src/config/migrations.ts), through the same examples (villa-settings.json `examples`:
+    tests/store-doors.py).
 
     ⚠️ ONE PLACE, AND THIS SERVER'S (architecture review round 17): the file is this server's, so it migrates it on
     every read and every write, and writes it back once at start (JsonStore.settle). Each tablet migrated its copy by
@@ -3856,7 +3931,7 @@ def _device_config_today(doc):
     elif isinstance(doc.get("fullScreenFor"), list):
         seconds = doc.get("ringShownForS") if _seconds_ok(doc.get("ringShownForS")) else bounds[0]
         out["fullScreen"] = _full_screen_items([{"title": t, "seconds": seconds} for t in doc["fullScreenFor"]])
-    return out
+    return _villa_kept(out)
 
 
 def _full_screen_longest(raw) -> int:
@@ -3977,8 +4052,6 @@ def _agent_presence() -> dict:
 
 async def agent_status_handler(request: web.Request) -> web.Response:
     """The Kiosk's view of the agent, for owner and facility manager."""
-    if (refused := _refuse(request, "viewAgent")) is not None:
-        return refused
     return web.json_response(_agent_presence(), headers={"Cache-Control": "no-store"})
 
 
@@ -4580,8 +4653,6 @@ def _feed_handler(feed: "Feed", field: str, own=None, said=None):
     conversation's pictures (none is ever the current notification's). `own(record, profile)`: the records this session's profile reads, when a feed holds several
     profiles' (VESTA's conversation: each its own, never another's); `said()`: what else the read answers."""
     async def handler(request: web.Request) -> web.Response:
-        if (refused := _refuse(request)) is not None:
-            return refused
         if isinstance(after := _after_of(request), web.Response):
             return after
         profile = _role_for(request)
@@ -4615,8 +4686,6 @@ async def announcement_photo_handler(request: web.Request) -> web.StreamResponse
     review, 2026-10-30): the pictures an answer carries share the folder, and any profile that may view cameras could
     fetch another profile's by its id — guarded only by an id no one can guess. One named by a conversation turn alone
     (no announcement nor VESTA message names it) goes to the profile whose turn it is, as an answer's sound does."""
-    if (refused := _refuse(request)) is not None:
-        return refused
     name = request.match_info.get("id", "")
     path = PHOTOS.path(name)
     if path is None or not os.path.isfile(path):
@@ -4815,8 +4884,6 @@ MESSAGED = Feed(MESSAGES, _vesta_messages_tidy, after=_sweep_announcement_photos
 async def agent_vesta_message_handler(request: web.Request) -> web.Response:
     """The Agent's push of one message as it stands (token-gated, `agentWrite`): added, or replacing the record of its
     key. 404 when the agreement names no limits (the door says nothing); 400 for a body with no key or no words."""
-    if (refused := _agent_refuse(request, "agentWrite")) is not None:
-        return refused
     if not VESTA_MESSAGE_LIMITS:
         return web.json_response({"error": "not found"}, status=404)
     body = await _json_object(request)
@@ -5085,8 +5152,6 @@ async def vesta_ask_handler(request: web.Request) -> web.Response:
     profile's conversation at once. Or an `audio/wav` body — a spoken question (ticket 23, hold to talk): the sound kept
     for the Agent, the line shown as spoken, its words written by the Agent once heard. 503 while VESTA is not running
     (nobody would answer), 429 past ASKS_PER_MINUTE, 400 for anything but words or such a WAV."""
-    if (refused := _refuse(request)) is not None:
-        return refused
     data = None
     if request.content_type == "audio/wav":
         data = await request.read()
@@ -5146,8 +5211,6 @@ async def vesta_press_handler(request: web.Request) -> web.Response:
     the Agent, stamped with this session's profile, as a question is. 409 when no kept record offers that button (any
     more), 403 for a guest's button that acts (agent-contract.json vestaMessage.buttonKinds), 503 while VESTA is not
     running. Answers the press's number: VESTA's short answer comes back in the conversation as `answers`."""
-    if (refused := _refuse(request)) is not None:
-        return refused
     body = await _json_object(request)
     if isinstance(body, web.Response):
         return body
@@ -5237,8 +5300,6 @@ async def agent_inbox_handler(request: web.Request) -> web.Response:
     """The Agent's long read of the tablets' questions (token-gated, `agentRead`): `{"asks": [...], "last", "first"}`,
     with `?after=<seq>` the newer ones, held open up to the agreement's waitSeconds for one to come. 404 when the agreement
     names no conversation (the door says nothing)."""
-    if (refused := _agent_refuse(request, "agentRead")) is not None:
-        return refused
     if not CONVERSATION_PROFILES:
         return web.json_response({"error": "not found"}, status=404)
     if isinstance(after := _after_of(request), web.Response):
@@ -5253,8 +5314,6 @@ async def agent_inbox_handler(request: web.Request) -> web.Response:
 async def agent_voice_handler(request: web.Request) -> web.Response:
     """A spoken question's WAV, for the Agent (token-gated, `agentRead`), ONCE: deleted as it is read. 404 when there is
     none by that name (read already, older than askKeptSeconds, or not one of the add-on's names)."""
-    if (refused := _agent_refuse(request, "agentRead")) is not None:
-        return refused
     data = await asyncio.to_thread(_take_voice, request.match_info.get("name", "")) if VOICE else None
     if data is None:
         return web.json_response({"error": "not found"}, status=404)
@@ -5265,8 +5324,6 @@ async def agent_speech_handler(request: web.Request) -> web.Response:
     """An answer's sound (ticket 24 of "One inbox", VESTA answers aloud), from the Agent (token-gated, `agentWrite`):
     kept for the turn that names it, `{"name"}`. 404 when the agreement names no answer's sound, 413 past its
     answerBytes, 400 for anything that is not one of its answerTypes."""
-    if (refused := _agent_refuse(request, "agentWrite")) is not None:
-        return refused
     if not CONVERSATION_LIMITS or not VOICE.get("answerTypes"):
         return web.json_response({"error": "not found"}, status=404)
     data = bytearray()
@@ -5282,8 +5339,6 @@ async def agent_speech_handler(request: web.Request) -> web.Response:
 async def vesta_speech_handler(request: web.Request) -> web.StreamResponse:
     """One answer's sound, to the profile whose turn names it (every other is told there is none: a guest never hears
     the owner's answers)."""
-    if (refused := _refuse(request)) is not None:
-        return refused
     name, profile = request.match_info.get("name", ""), _role_for(request)
     path = _data(SPEECH_DIR, name)
     mine = SPEECH_RE.match(name) and any(isinstance(t, dict) and t.get("speech") == name and t.get("profile") == profile
@@ -5298,8 +5353,6 @@ async def agent_conversation_turn_handler(request: web.Request) -> web.Response:
     """The Agent's answer as a turn (token-gated, `agentWrite`): added, or replacing the turn of its key. 404 when the
     agreement names no conversation; 400 for a body that is not a turn (a person's key, a profile it does not name, no
     words)."""
-    if (refused := _agent_refuse(request, "agentWrite")) is not None:
-        return refused
     if not CONVERSATION_LIMITS:
         return web.json_response({"error": "not found"}, status=404)
     body = await _json_object(request)
@@ -5340,8 +5393,6 @@ ERASABLE_FEEDS = {"villa": ANNOUNCED, "vesta": MESSAGED}
 async def message_erase_handler(request: web.Request) -> web.Response:
     """`{"feed": "villa"|"vesta", "seq", "elevation"}` — 200 once removed, 403 without a fresh superadmin authorisation
     (or none configured), 404 when no such record is kept, 400 for anything else."""
-    if (refused := _refuse(request)) is not None:
-        return refused
     body = await _json_object(request)
     if isinstance(body, web.Response):
         return body
@@ -5396,8 +5447,6 @@ async def _fire_press(app: web.Application, data: dict) -> bool:
 async def announcement_press_handler(request: web.Request) -> web.Response:
     """`{"key", "command"}` — every profile: 200 once the press is on the villa's bus, 409 when no kept announcement
     offers that button (any more), 502 when the villa's system was not reached."""
-    if (refused := _refuse(request)) is not None:
-        return refused
     body = await _json_object(request)
     if isinstance(body, web.Response):
         return body
@@ -5465,9 +5514,6 @@ async def visit_press_handler(request: web.Request) -> web.Response:
     """`{"key", "command"}` — a button of the villa's own visit card (`command` its option), an owner's or a facility
     manager's (visitPress `capability`): 200 once the event is on the villa's bus, 409 when the visit is over, held by
     VESTA or the card names no record, 400 for any other button, 502 when the villa's system was not reached."""
-    if (refused := _refuse(request, str(VISIT_PRESS.get("capability") or "administer"),
-                           "Only the owner or the facility manager answers an alert.")) is not None:
-        return refused
     body = await _json_object(request)
     if isinstance(body, web.Response):
         return body
@@ -5548,8 +5594,6 @@ async def _critical_read(session: ClientSession) -> dict:
 async def critical_devices_handler(request: web.Request) -> web.Response:
     """GET /critical-devices: {entities, rules, at} (+ error when the read failed:
     the last good answer, else an empty list — never a 500)."""
-    if (refused := _refuse(request)) is not None:
-        return refused
     now = time.monotonic()
     body = _critical_cache["body"]
     if body is None or now - _critical_cache["at"] >= CRITICAL_TTL_SECONDS:
@@ -5592,8 +5636,7 @@ def _kiosk_rooms_guard(request: web.Request, body, old, new):
 
 
 kiosk_rooms_put_handler = _store_put_handler(
-    KIOSK_ROOMS, "data", "the shared rooms", capability="viewAgent",
-    merge=_kiosk_rooms_merge, guard=_kiosk_rooms_guard)
+    KIOSK_ROOMS, "data", merge=_kiosk_rooms_merge, guard=_kiosk_rooms_guard)
 
 
 # ── Info and the villa model (PLAN A4) ───────────────────────────────────────
@@ -5611,8 +5654,6 @@ async def _learn_own_version(session: ClientSession) -> None:
 
 async def agent_info_handler(request: web.Request) -> web.Response:
     """The compatibility check: contract version, Kiosk version, capabilities."""
-    if (refused := _agent_refuse(request, "agentRead")) is not None:
-        return refused
     return web.json_response({
         "contract": AGENT_CONTRACT,
         "version": _own_version,
@@ -5675,8 +5716,6 @@ async def agent_villa_model_handler(request: web.Request) -> web.Response:
     """Rooms, devices, entity ids, names and the room of each device, as this
     Kiosk models the villa — read-only, derived from the shared device
     configuration, the floor plan's room file and Home Assistant's areas."""
-    if (refused := _agent_refuse(request, "agentRead")) is not None:
-        return refused
     cfg = DEVICE_CONFIG.read()
     cfg = cfg if isinstance(cfg, dict) else {}
     entity_map = cfg.get("entityMap") if isinstance(cfg.get("entityMap"), dict) else {}
@@ -5735,6 +5774,84 @@ async def agent_villa_model_handler(request: web.Request) -> web.Response:
     }, headers={"Cache-Control": "no-store"})
 
 
+def _routes() -> tuple:
+    """Every route this process serves: (method, path, door, handler), each
+    route's door named once here (Door) and checked by _behind before its
+    handler runs. ⚠️ ONE TABLE, ONE CHECK (architecture review, owner approved
+    2026-11-20): the gate used to be called by hand at the top of some thirty
+    handlers and two store factories, so a new handler that forgot it was an
+    open endpoint with every other check green."""
+    owner_or_fm = "Only the owner and facility-manager profiles may view evidence."
+    return (
+        # Public on purpose: the image's health check carries no session and the
+        # answer says nothing; the profile screen lists the roles and asks "is
+        # there a session" before anyone signs in; the sign-in itself
+        # (rate-limited); clearing the caller's own cookie; and nginx's probe
+        # for /model/, whose answer IS the model door's verdict (200 or 401).
+        ("GET", "/healthz", PUBLIC, healthz_handler),
+        ("GET", "/auth/roles", PUBLIC, auth_roles_handler),
+        ("GET", "/auth/session", PUBLIC, auth_session_handler),
+        ("POST", "/auth/verify", PUBLIC, auth_verify_handler),
+        ("POST", "/auth/logout", PUBLIC, auth_logout_handler),
+        ("GET", "/auth/check", PUBLIC, auth_check_handler),
+        ("GET", "/addon-config", MODEL_DOOR, addon_config_handler),
+        # manageModel is owner-only: a guest or ops session could otherwise
+        # overwrite the villa model every kiosk loads.
+        ("POST", "/model-upload", _profiles("manageModel", "Only the owner profile may upload a model."),
+         model_upload_handler),
+        # a guest still reads the device config, to see the right badges and rooms at all
+        ("GET", "/device-config", SIGNED_IN, device_config_get_handler),
+        ("PUT", "/device-config", _store_editors("editConfig", "device configuration"), device_config_put_handler),
+        ("GET", "/fm-data", SIGNED_IN, fm_data_get_handler),
+        ("PUT", "/fm-data", _store_editors("reportFault", "facility manager data"), fm_data_put_handler),
+        ("POST", "/fm-evidence", _profiles("reportFault", "You do not have permission to add evidence."),
+         fm_evidence_post_handler),
+        ("GET", "/fm-evidence/{id}", _profiles("manageFacility", owner_or_fm), fm_evidence_get_handler),
+        ("GET", "/fm-document/{id}", _profiles("manageFacility", owner_or_fm), fm_document_get_handler),
+        ("POST", "/telemetry", SIGNED_IN, telemetry_post_handler),
+        ("GET", "/telemetry", _profiles("administer", "Only the owner profile may read telemetry."),
+         telemetry_get_handler),
+        ("POST", "/auth/elevate", SIGNED_IN, auth_elevate_handler),
+        ("POST", "/auth/logout-all", _profiles("administer", "Only the owner profile may sign every device out."),
+         auth_logout_all_handler),
+        ("GET", "/core/websocket", SIGNED_IN, ws_handler),
+        ("*", "/core/api/{path:.*}", SIGNED_IN, rest_handler),
+        # The Kiosk's side of the VESTA Agent (owner and facility manager).
+        ("GET", "/critical-devices", SIGNED_IN, critical_devices_handler),
+        ("GET", "/agent-status", _profiles("viewAgent"), agent_status_handler),
+        ("PUT", "/kiosk-rooms", _store_editors("viewAgent", "the shared rooms"), kiosk_rooms_put_handler),
+        # The villa's announcements, kept by this process (every profile).
+        ("GET", "/announcements", SIGNED_IN, announcements_handler),
+        ("GET", "/announcement-photo/{id}", SIGNED_IN, announcement_photo_handler),
+        ("GET", "/vesta-messages", SIGNED_IN, vesta_messages_handler),
+        ("POST", "/announcement-press", SIGNED_IN, announcement_press_handler),
+        ("POST", "/visit-press", _profiles(str(VISIT_PRESS.get("capability") or "administer"),
+                                           "Only the owner or the facility manager answers an alert."),
+         visit_press_handler),
+        ("POST", "/message-erase", SIGNED_IN, message_erase_handler),
+        # Talking to VESTA (every profile, each its own conversation).
+        ("POST", "/vesta-ask", SIGNED_IN, vesta_ask_handler),
+        ("GET", "/vesta-conversation", SIGNED_IN, vesta_conversation_handler),
+        ("GET", "/vesta-speech/{name}", SIGNED_IN, vesta_speech_handler),
+        ("POST", "/vesta-press", SIGNED_IN, vesta_press_handler),
+        # The VESTA Agent interface v1 (bearer token; 404 while the Agent is not connected).
+        ("GET", "/agent/v1/info", _agent_door("agentRead"), agent_info_handler),
+        ("GET", "/agent/v1/villa-model", _agent_door("agentRead"), agent_villa_model_handler),
+        ("GET", "/agent/v1/fm-data", _agent_door("agentRead", "You do not have permission to read the Facility records."),
+         agent_fm_get_handler),
+        ("PUT", "/agent/v1/fm-data", _agent_door("agentWrite", "You do not have permission to edit the Facility records."),
+         agent_fm_put_handler),
+        ("POST", "/agent/v1/fm-evidence", _agent_door("agentWrite"), agent_fm_evidence_handler),
+        ("POST", "/agent/v1/fm-document", _agent_door("agentWrite"), agent_fm_document_handler),
+        ("POST", "/agent/v1/vesta-message", _agent_door("agentWrite"), agent_vesta_message_handler),
+        ("GET", "/agent/v1/inbox", _agent_door("agentRead"), agent_inbox_handler),
+        ("GET", "/agent/v1/voice/{name}", _agent_door("agentRead"), agent_voice_handler),
+        ("POST", "/agent/v1/conversation-turn", _agent_door("agentWrite"), agent_conversation_turn_handler),
+        ("POST", "/agent/v1/speech", _agent_door("agentWrite"), agent_speech_handler),
+        ("POST", "/agent/v1/heartbeat", _agent_door("agentPresence"), agent_heartbeat_handler),
+    )
+
+
 def build_app(data_dir: str | None = None) -> web.Application:
     """The application with every route — what main() serves.
 
@@ -5777,56 +5894,11 @@ def build_app(data_dir: str | None = None) -> web.Application:
 
     app.on_startup.append(on_start)
     app.on_cleanup.append(on_cleanup)
-    app.router.add_get("/healthz", healthz_handler)
-    app.router.add_get("/addon-config", addon_config_handler)
-    app.router.add_post("/model-upload", model_upload_handler)
-    app.router.add_get("/device-config", device_config_get_handler)
-    app.router.add_get("/fm-data", fm_data_get_handler)
-    app.router.add_put("/fm-data", fm_data_put_handler)
-    app.router.add_post("/fm-evidence", fm_evidence_post_handler)
-    app.router.add_get("/fm-evidence/{id}", fm_evidence_get_handler)
-    app.router.add_get("/fm-document/{id}", fm_document_get_handler)
-    app.router.add_post("/telemetry", telemetry_post_handler)
-    app.router.add_get("/telemetry", telemetry_get_handler)
-    app.router.add_put("/device-config", device_config_put_handler)
-    app.router.add_get("/auth/roles", auth_roles_handler)
-    app.router.add_get("/auth/session", auth_session_handler)
-    app.router.add_post("/auth/verify", auth_verify_handler)
-    app.router.add_post("/auth/elevate", auth_elevate_handler)
-    app.router.add_post("/auth/logout", auth_logout_handler)
-    app.router.add_post("/auth/logout-all", auth_logout_all_handler)
-    app.router.add_get("/auth/check", auth_check_handler)
-    app.router.add_get("/core/websocket", ws_handler)
-    app.router.add_route("*", "/core/api/{path:.*}", rest_handler)
-    # The Kiosk's side of the VESTA Agent (owner and facility manager).
-    app.router.add_get("/critical-devices", critical_devices_handler)
-    app.router.add_get("/agent-status", agent_status_handler)
-    # The villa's announcements, kept by this process (every profile).
-    app.router.add_get("/announcements", announcements_handler)
-    app.router.add_get("/announcement-photo/{id}", announcement_photo_handler)
-    app.router.add_get("/vesta-messages", vesta_messages_handler)
-    app.router.add_post("/announcement-press", announcement_press_handler)
-    app.router.add_post("/visit-press", visit_press_handler)
-    app.router.add_post("/message-erase", message_erase_handler)
-    # Talking to VESTA (every profile, each its own conversation).
-    app.router.add_post("/vesta-ask", vesta_ask_handler)
-    app.router.add_get("/vesta-conversation", vesta_conversation_handler)
-    app.router.add_get("/vesta-speech/{name}", vesta_speech_handler)
-    app.router.add_post("/vesta-press", vesta_press_handler)
-    app.router.add_put("/kiosk-rooms", kiosk_rooms_put_handler)
-    # The VESTA Agent interface v1 (bearer token; 404 while agent_token is empty).
-    app.router.add_get("/agent/v1/info", agent_info_handler)
-    app.router.add_get("/agent/v1/villa-model", agent_villa_model_handler)
-    app.router.add_get("/agent/v1/fm-data", agent_fm_get_handler)
-    app.router.add_put("/agent/v1/fm-data", agent_fm_put_handler)
-    app.router.add_post("/agent/v1/fm-evidence", agent_fm_evidence_handler)
-    app.router.add_post("/agent/v1/fm-document", agent_fm_document_handler)
-    app.router.add_post("/agent/v1/vesta-message", agent_vesta_message_handler)
-    app.router.add_get("/agent/v1/inbox", agent_inbox_handler)
-    app.router.add_get("/agent/v1/voice/{name}", agent_voice_handler)
-    app.router.add_post("/agent/v1/conversation-turn", agent_conversation_turn_handler)
-    app.router.add_post("/agent/v1/speech", agent_speech_handler)
-    app.router.add_post("/agent/v1/heartbeat", agent_heartbeat_handler)
+    for method, path, door, handler in _routes():
+        if method == "GET":
+            app.router.add_get(path, _behind(door, handler))      # HEAD too, as aiohttp adds it
+        else:
+            app.router.add_route(method, path, _behind(door, handler))
     return app
 
 

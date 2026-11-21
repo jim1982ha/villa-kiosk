@@ -188,6 +188,9 @@ export const AGENT_SOURCE = AGENT_CONTRACT.ticket.source as "vesta_agent";
 export type FmTicketCheck = "minutes" | "nightly";
 export const AGENT_CHECKS = AGENT_CONTRACT.ticket.checks as readonly FmTicketCheck[];
 
+/** What made a fault (FmTicket.raisedBy): a villa automation's entity id, or a skill's check (its id, its name). */
+export interface FaultRaiser { automation?: string; skill?: string; check?: string; name?: string }
+
 /** A fault raised against a device or room. */
 export interface FmTicket extends FmProvenance {
   id: string;
@@ -242,6 +245,10 @@ export interface FmTicket extends FmProvenance {
   /** On a fault the VESTA Agent closed and watches NOTHING after (a visit, which ends once: owner's drills, 2026-11-06):
    *  Closed at once, never "about to be watched" (fm/faultStanding). Taken away with its close. */
   notWatched?: boolean;
+  /** What made it, written by the VESTA Agent (agent-contract.json ticket.fields.raisedBy): the villa automation of its
+   *  alert, or the skill's check that found it. Its card's (?) pill says it (fm/faultOrigin). Absent on a person's
+   *  fault, a chat's and an older one. */
+  raisedBy?: FaultRaiser;
   /** Every status change, in order. Optional because faults raised before
    *  this existed have none — read it as "no steps recorded", never as an
    *  error. */

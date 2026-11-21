@@ -6,8 +6,10 @@
 // kind, device, words). Devices' title counts show its two lists, and each device's "3D object" field holds the
 // objects that show it (owner, 2026-11-06: it replaced Villa's "Bound 3D objects" and the pencil on a device's id).
 //
-// The sections fold their content until tapped and keep their contexts private: a loader (below) opens the folds for
-// the drawing and exports the contexts, as the screenshot harness does. Nothing else of the code is changed.
+// The sections fold their content until tapped and keep their contexts private: a loader (below) exports the contexts,
+// as the screenshot harness does, and opens what has no start of its own yet (Devices' list, a field's list of
+// offers). Grouped devices and Unavailable by design take their start as a prop (Fold SectionStart: open, the search
+// typed, the field's list open, the list shown), so nothing of theirs is rewritten (architecture review, 2026-11-20).
 import { readFileSync } from "node:fs";
 import { register } from "node:module";
 import { ck, done } from "../consistency/check.mjs";
@@ -18,11 +20,7 @@ const HOOK = `
 const PATCH = {
   "/src/config/ConfigContext.tsx": [["", "export { ConfigContext as __Ctx };"]],
   "/src/ha/HAStateStore.tsx": [["", "export { HAStateContext as __Ctx };"]],
-  "/src/components/settings/Fold.tsx": [["useState(false)", "useState(true)"]],
-  "/src/components/settings/GroupedDevices.tsx": [['useState("groups")', 'useState(globalThis.__gview ?? "groups")'],
-    ['const [search, setSearch] = useState("")', 'const [search, setSearch] = useState(globalThis.__q ?? "")']],
   "/src/components/settings/ConfigEditor.tsx": [['useState("on")', 'useState(globalThis.__view ?? "on")']],
-  "/src/components/settings/UnavailableByDesign.tsx": [['const [search, setSearch] = useState("")', 'const [search, setSearch] = useState(globalThis.__q ?? "")']],
   "/src/components/common/SearchPicker.tsx": [["useState(!!startOpen)", "useState(!!startOpen || !!globalThis.__open)"]],
 };
 export async function load(url, context, next) {
@@ -118,13 +116,18 @@ const DEVICES = "Auto-detected entity settings";
 /** Devices, the list its title's count `view` shows ("on" the map, "off" it), `search` typed (as a panel's edit opens it). */
 const devices = (view = "on", search) => { globalThis.__view = view; try { return drawIn(h(ConfigEditor, { title: DEVICES, tip: "What it does.", initialSearch: search })); } finally { globalThis.__view = undefined; } };
 
-/** Grouped devices, the list its title's count `view` shows ("groups", "suggested"). */
-const grouped = (view = "groups") => { globalThis.__gview = view; try { return drawIn(h(GroupedDevices, { title: "Grouped devices" })); } finally { globalThis.__gview = undefined; } };
+/** Grouped devices, open, the list its title's count `view` shows ("groups", "suggested"), `search` typed, its field's
+ *  list open while `picking` (as a tap opens it). */
+const grouped = (view = "groups", search, picking) =>
+  drawIn(h(GroupedDevices, { title: "Grouped devices", start: { open: true, list: view, search, picking } }));
+/** Unavailable by design, open, `search` typed, its field's list open while `picking`. */
+const asleepList = (search, picking) =>
+  drawIn(h(UnavailableByDesign, { title: "Unavailable by design", start: { open: true, search, picking } }));
 // [kind, drawn, its name, its bar's words ("" no bar), its remove's tooltip at its strip's right, or none]
 const KINDS = [
   ["a device group", grouped(), "Kitchen Temperature", "", "Delete the group Kitchen Temperature"],
   ["  ...a suggested group, its main action first", grouped("suggested"), "Pool Pump", "Create this group"],   // the device placed first (deviceFolding PLACED_ORDER), never the name that sorts first,
-  ["a device unavailable by design", drawIn(h(UnavailableByDesign, { title: "Unavailable by design" })), "Back Door", "", "Take Back Door off Unavailable by design"],
+  ["a device unavailable by design", asleepList(), "Back Door", "", "Take Back Door off Unavailable by design"],
   ["a device of Devices", devices(), "Pool Pump", "", "Remove Pool Pump's settings"],
   ["a device not on the map (Devices' second list)", devices("off"), "Ceiling Fan", ""],
   ["a 3D object whose entity is gone", devices(), "Example Gone Fan", "Point it there"],
@@ -179,6 +182,7 @@ console.log("\n  the remove icon (owner, 2026-11-06): a press is the button's, S
     if (Array.isArray(el)) return el.flatMap(expand);
     if (!el || typeof el !== "object") return [];
     if (typeof el.type === "function") return expand(el.type.name === "Tip" ? el.props.children : el.type(el.props));
+    if (typeof el.type?.render === "function") return expand(el.type.render(el.props, null));   // a forwardRef (common/Button)
     return [el, ...expand(el.props?.children)];
   };
   const ran = [], opened = [];
@@ -217,8 +221,8 @@ console.log("\n  one field per list (owner, 2026-11-06): it narrows the list and
   const field = (html) => inside(html, "search-or-add");
   const offers = (html) => [...field(html).matchAll(/<button class="row picker-option( strong)?">([\s\S]*?)<\/button>/g)]
     .map((m) => (m[1] ? "! " : "") + text(m[2]).replace(/^\||\|$/g, "").replace(/\|/g, " / "));
-  const groups = (q) => typed(q, h(GroupedDevices, { title: "Grouped devices" }));
-  const asleep = (q) => typed(q, h(UnavailableByDesign, { title: "Unavailable by design" }));
+  const groups = (q) => grouped("groups", q, true);
+  const asleep = (q) => asleepList(q, true);
   const names = (html) => cards(html).map((c) => c.name);
   const SECTIONS = [
     ["Grouped devices", groups(""), "Search groups, or a device to group…"],
@@ -372,9 +376,9 @@ console.log("\n  every card for an entity: its friendly name in its strip, its i
   // baseline entity name" under it ("Other · <id> · primary (keeps the map badge)", "… · 3D object: …" were redundant)
   const { labelOf } = await import("@/config/EntityMap");
   const ENTITY = [
-    ["a device group", drawIn(h(GroupedDevices, { title: "Grouped devices" })), "sensor.example_kitchen_temperature"],
+    ["a device group", grouped(), "sensor.example_kitchen_temperature"],
     ["a device not on the map", devices("off"), "fan.example_ceiling_fan"],
-    ["a device unavailable by design", drawIn(h(UnavailableByDesign, { title: "Unavailable by design" })), "binary_sensor.example_back_door"],
+    ["a device unavailable by design", asleepList(), "binary_sensor.example_back_door"],
     ["a 3D object whose entity is gone", devices(), "fan.example_gone_fan"],
   ];
   for (const [kind, html, id] of ENTITY) {
@@ -395,7 +399,7 @@ console.log("\n  every card's field: its name in the one column, its control bes
   // UI scan, 2026-11-11: what a field is for was said on hover only (a title, a tip on its box), which a finger never sees
   const tipped = (html, name) => [...(cards(html).find((c) => c.name === name)?.card ?? "").matchAll(/aria-label="About ([^"]+)"/g)].map((m) => m[1]);
   const FIELDS = [
-    ["a device group", drawIn(h(GroupedDevices, { title: "Grouped devices" })), "Kitchen Temperature", ["Members"]],
+    ["a device group", grouped(), "Kitchen Temperature", ["Members"]],
     // owner, 2026-11-06: "3D object" first, right under the card's first line, above Type (it was the last)
     ["a device of Devices (a switch)", devices(), "Pool Pump", ["3D object", "Type", "Category", "Label", "Linked entity"]],
     ["  ...a light, its intensity too", devices("on", "terrace"), "Terrace Lamp", ["3D object", "Type", "Category", "Label", "Intensity", "Linked entity"]],
@@ -407,7 +411,7 @@ console.log("\n  every card's field: its name in the one column, its control bes
     ck(`${kind}: ${want.map((w) => `"${w}"`).join(", ")}`, JSON.stringify(named(html, name)) === JSON.stringify(want), named(html, name));
   ck("  ...what a light's fields are for is each name's (i), a tap away: Type, Category, Label, Intensity",
      JSON.stringify(tipped(devices("on", "terrace"), "Terrace Lamp")) === JSON.stringify(["Type", "Category", "Label", "Intensity"]), tipped(devices("on", "terrace"), "Terrace Lamp"));
-  const group = cards(drawIn(h(GroupedDevices, { title: "Grouped devices" }))).find((c) => c.name === "Kitchen Temperature")?.card ?? "";
+  const group = cards(grouped()).find((c) => c.name === "Kitchen Temperature")?.card ?? "";
   ck("  ...a group's members and its \"Add another entity…\" inside its Members field", /card-field-label">Members<\/span><div class="group-members">/.test(group), group);
 }
 
@@ -425,7 +429,7 @@ console.log("\n  Grouped devices: its title's counts show its groups or its sugg
   ck("  ...the suggested: the suggestion cards, Create this group their main action, no group",
      JSON.stringify(shown(suggestedHtml)) === JSON.stringify([["Pool Pump", "Create this group"]])
      && JSON.stringify(views(head(suggestedHtml))) === JSON.stringify([["1 group", false], ["1 suggested", true]]), [shown(suggestedHtml), views(head(suggestedHtml))]);
-  const typedIn = (q, view) => { globalThis.__q = q; try { return grouped(view); } finally { globalThis.__q = undefined; } };
+  const typedIn = (q, view) => grouped(view, q);
   ck("  ...the search narrows the list shown (a suggestion found by either of its devices)",
      shown(typedIn("pool pump power", "suggested")).length === 1 && shown(typedIn("pool", "suggested")).length === 1
      && shown(typedIn("kitchen", "suggested")).length === 0 && /No suggested group has “kitchen”\./.test(text(typedIn("kitchen", "suggested")))

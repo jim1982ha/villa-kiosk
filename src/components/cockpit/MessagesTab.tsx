@@ -37,6 +37,7 @@ import { CockpitAttentionRow } from "./IssueCard";
 import { useCockpitIssues } from "./useVillaAttention";
 import { withCount } from "@/utils/countBadge";
 import EmptyLine from "@/components/common/EmptyLine";
+import Button from "@/components/common/Button";
 
 /** ⚠️ ONE CARD OF THE INBOX, WHATEVER IT HOLDS (owner, 2026-11-01: "NEVER add dedicated lines of code for specific
  *  cards"): whole under Issues (`opened`, no `onToggle`: the card itself is not pressed, its buttons are); a notification
@@ -141,7 +142,7 @@ export default function MessagesTab({ onOpenEntity, doors, onRaiseTicket, onEdit
         {/* only while the issues are listed, as when it sat over Open issues */}
         {showsIssues && !canManage && canReport && (
           <div className="messages-toolbar-actions">
-            <button type="button" className="btn" onClick={onReportProblem}><Plus size={16} /> Report a problem</button>
+            <Button icon={<Plus size={16} />} onClick={onReportProblem}> Report a problem</Button>
           </div>
         )}
       </div>

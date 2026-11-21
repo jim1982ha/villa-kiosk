@@ -23,6 +23,7 @@ import FaultStageModal from "./FaultStageModal";
 import { CardAsk } from "./RecordCard";
 import { backendFetch } from "@/auth/sessionLost";
 import ProblemLine from "@/components/common/ProblemLine";
+import Button from "@/components/common/Button";
 
 /** How a press reaches what the card does not hold: `raised`, the fault Done or Need help raises on a card with no
  *  record; `onOpen`, the form a raise or an edit opens (the tab's). `confirmed`: its question was answered yes. */
@@ -75,11 +76,6 @@ export function useCardWork(): CardWork {
   };
 }
 
-/** ⚠️ ONE LOOK FOR EVERY BUTTON ON A CARD (owner, 2026-10-30: Done · Need help were filled green beside Open Ticket ·
- *  Close outlined, on the same Inbox): a card's work buttons and its record's buttons (AnnouncementContent.ButtonRow:
- *  VESTA's Done, the doorbell's Unlock) both draw with this. */
-export const CARD_BUTTON = "btn";
-
 /** ⚠️ EVERY WORK BUTTON CARRIES AN ICON (owner, 2026-11-04: "use 1 word label and icon in the button", on a phone,
  *  and "consistently adjust cards on laptop screens"): it had been Open Ticket's wrench (owner, 2026-10-14) and Edit
  *  Ticket's pencil only. The same icon for the same act on every card. */
@@ -107,15 +103,18 @@ function WorkLabel({ kind }: { kind: WorkActionKind }) {
 
 /** ⚠️ ONE WORK BUTTON (owner, 2026-11-06: a device window's wrench, beside Edit, opened the same ticket form as the
  *  Cockpit's Open Ticket under another look): a segment of a card's bar, the Tickets tab's own Open Ticket and a device
- *  window's are each this one button, its icon and words WorkLabel's, its look CARD_BUTTON's (`main`: the card's main
- *  action, green). A change to it changes every place. */
+ *  window's are each this one button, its icon and words WorkLabel's, its look the one button's (common/Button; `main`:
+ *  the card's main action, green, the bar's main segment: 07-facility.css .fm-bar-main, owner 2026-11-05). ⚠️ ONE LOOK
+ *  FOR EVERY BUTTON ON A CARD (owner, 2026-10-30: Done · Need help were filled green beside Open Ticket · Close
+ *  outlined, on the same Inbox): a card's record's buttons (AnnouncementContent.ButtonRow: VESTA's Done, the doorbell's
+ *  Unlock) are the same plain Button. A change to it changes every place. */
 export function WorkButton({ kind, onClick, main = false, ariaLabel }: {
   kind: WorkActionKind; onClick: () => void; main?: boolean; ariaLabel?: string;
 }) {
   return (
-    <button type="button" className={main ? `${CARD_BUTTON} fm-bar-main` : CARD_BUTTON} aria-label={ariaLabel} onClick={onClick}>
+    <Button className={main ? "fm-bar-main" : undefined} label={ariaLabel} onClick={onClick}>
       <WorkLabel kind={kind} />
-    </button>
+    </Button>
   );
 }
 
