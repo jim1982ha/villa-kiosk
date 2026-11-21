@@ -128,6 +128,7 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const attachFeed = useCallback((el: HTMLVideoElement | HTMLImageElement | null) => {
     videoRef.current = el instanceof HTMLVideoElement ? el : null;
+    setMedia(el);
     // a new element (another tier, another camera) starts silent: unmuted without a tap, the browser may not play it
     if (videoRef.current && soundRef.current) { soundRef.current = false; setSoundOn(false); }
     if (!player) return;
@@ -188,6 +189,11 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
   // goes back. Remembered on this device (viewPrefs), for every camera.
   const [fit, setFit] = useState(cameraFitsView);
   const toggleFit = () => setFit((f) => { setCameraFitsView(!f); return !f; });
+  // ⚠️ ONLY WHEN IT CHANGES SOMETHING (owner, 2026-11-22): a picture already as large as the view in one direction
+  // fills it either way, so the button shows only for a picture smaller than the view both ways (fitGrows)
+  const [media, setMedia] = useState<HTMLVideoElement | HTMLImageElement | null>(null);
+  const [viewport, setViewport] = useState<HTMLDivElement | null>(null);
+  const fitMatters = useFitGrows(media, viewport);
   // The status/controls row now OVERLAYS the feed and auto-hides (see
   // chromeVisible below), so the feed gets the entire screen and is centred
   // on it by construction. This removed a measured `margin-top: <row height>`
@@ -211,7 +217,7 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
   const railVertical = useRailLayout();
   // Reorders .camera-controls' vertical (phone-landscape) column ONLY — the
   // portrait row keeps its natural DOM order untouched. Close-top/fullscreen-
-  // 2nd/next-above-previous reads more natural for a one-handed reach down a
+  // 2nd/previous-then-next reads more natural for a one-handed reach down a
   // side rail than the portrait row's order does; flexbox `order` gets there
   // without a second copy of the buttons.
   const vOrder = (n: number): React.CSSProperties | undefined =>
@@ -665,6 +671,7 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
           aspect-ratio maths at all. Colour passed down as a custom property so
           it still comes from the shared vocabulary. */}
       <div
+        ref={setViewport}
         className={`camera-viewport${motionActive ? " camera-detecting" : ""}${fit ? " camera-fit" : ""}`}
         // motion seen is "on, doing something", never an alarm (owner, 2026-11-13: the camera's motion marks were red)
         style={{ ["--detect-color" as string]: STATUS_COLOR.active }}
@@ -795,7 +802,7 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
               badge's ring.
               Vertical (phone-landscape) rail order deliberately differs from
               this DOM/portrait order — see vOrder: Close top, Fullscreen 2nd,
-              Next above Previous, this detection toggle last. Portrait order
+              Previous right above Next (owner, 2026-11-22: the two arrows side by side), this detection toggle last. Portrait order
               (this DOM order) is untouched.
               No explicit icon `size` on any button below: .media-btn sizes
               every icon to the same share of its button, at every breakpoint,
@@ -815,7 +822,7 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
                   directly rather than onCycleBtnClick, so it can't be
                   swallowed by the hook's consumeClick, which exists only to
                   suppress the click at the end of a hold. */}
-              <Button on="photo" icon={<ChevronLeft />} label="Previous camera" style={vOrder(4)}
+              <Button on="photo" icon={<ChevronLeft />} label="Previous camera" style={vOrder(3)}
                 onClick={() => stepCamera(-1)} />
               <Button on="photo" icon={<ChevronRight />} className="has-hold-action" {...pickerHold}
                 onContextMenu={(e) => e.preventDefault()} onClick={() => onCycleBtnClick(1)}
@@ -826,8 +833,10 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
                 aria-expanded={pickerOpen} style={vOrder(3)} onClick={() => setPickerOpen(true)} />
             </>
           )}
-          <Button on="photo" lit={fit} icon={fit ? <Shrink /> : <Expand />} aria-pressed={fit}
-            label={fit ? "Actual size" : "Fit to screen"} style={vOrder(2)} onClick={toggleFit} />
+          {fitMatters && (
+            <Button on="photo" lit={fit} icon={fit ? <Shrink /> : <Expand />} aria-pressed={fit}
+              label={fit ? "Actual size" : "Fit to screen"} style={vOrder(2)} onClick={toggleFit} />
+          )}
           {fullscreenSupported && (
             <Button on="photo" icon={isFs ? <Minimize2 /> : <Maximize2 />}
               label={isFs ? "Exit fullscreen" : "Fullscreen"}
@@ -875,6 +884,28 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
       )}
     </div>
   );
+}
+
+/** Whether "Fit to screen" would make the picture larger: its own size is under the view's both ways (by more than 5%,
+ *  so a picture a few pixels short does not offer a button that changes nothing seen). Asked again as the stream's size
+ *  arrives or changes and as the view is resized. */
+function useFitGrows(media: HTMLVideoElement | HTMLImageElement | null, viewport: HTMLElement | null): boolean {
+  const [grows, setGrows] = useState(false);
+  useEffect(() => {
+    if (!media || !viewport) { setGrows(false); return; }
+    const check = () => {
+      const w = media instanceof HTMLVideoElement ? media.videoWidth : media.naturalWidth;
+      const h = media instanceof HTMLVideoElement ? media.videoHeight : media.naturalHeight;
+      setGrows(w > 0 && h > 0 && Math.min(viewport.clientWidth / w, viewport.clientHeight / h) > 1.05);
+    };
+    check();
+    const events = media instanceof HTMLVideoElement ? ["loadedmetadata", "resize"] : ["load"];
+    events.forEach((e) => media.addEventListener(e, check));
+    const seen = new ResizeObserver(check);
+    seen.observe(viewport);
+    return () => { events.forEach((e) => media.removeEventListener(e, check)); seen.disconnect(); };
+  }, [media, viewport]);
+  return grows;
 }
 
 function Unavailable({ label, onRetry }: { label: string; onRetry?: () => void }) {
