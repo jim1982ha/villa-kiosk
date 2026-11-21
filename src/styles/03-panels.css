@@ -213,6 +213,10 @@ button[aria-busy="true"] { animation: command-waiting 0.9s ease-in-out infinite;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
 }
 .camera-fullscreen img, .camera-fullscreen video { max-width: 100%; max-height: 100%; object-fit: contain; }
+/* "Fit to screen" (CameraPanel `fit`): the picture as large as the view allows, its shape kept (object-fit: contain
+   letterboxes it inside the element, which now fills the view), a small stream scaled up. The detection ring
+   (.camera-detecting) then frames the whole view. */
+.camera-fit :is(img, video) { width: 100%; height: 100%; }
 /* Groups the video + title watermark + loading spinner as one region — see
    the JSX comment. Gets its OWN region above a real (non-overlapping) status
    + controls bar on every screen size/orientation (previously this was

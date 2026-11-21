@@ -7,7 +7,8 @@
 // camera picker and the status bar.
 
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { ArrowLeft, X, VideoOff, Maximize2, Minimize2, ZoomOut, ChevronLeft, ChevronRight, Power, Check, Video, Volume2, VolumeX, ListTree, RotateCw, List } from "lucide-react";
+import { ArrowLeft, X, VideoOff, Maximize2, Minimize2, ZoomOut, ChevronLeft, ChevronRight, Power, Check, Video, Volume2, VolumeX, ListTree, RotateCw, List, Expand, Shrink } from "lucide-react";
+import { cameraFitsView, setCameraFitsView } from "@/utils/viewPrefs";
 import type { PanelProps } from "@/types/panel.types";
 import { useRailLayout } from "@/utils/railLayout";
 import { linkedSwitchProps, usePanelActions } from "./PanelActionsContext";
@@ -182,6 +183,11 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
   const rootRef = useModalA11y(back ? back.go : onClose);
   const zoom = useMediaZoom<HTMLDivElement>();
   const [isFs, setIsFs] = useState(false);
+  // ⚠️ A SMALL STREAM FITTED TO THE VIEW (owner, 2026-11-21: a 640x360 stream sat at its own size in the middle of a
+  // large black area): "Fit to screen" scales the picture up as large as the view allows, its shape kept; "Actual size"
+  // goes back. Remembered on this device (viewPrefs), for every camera.
+  const [fit, setFit] = useState(cameraFitsView);
+  const toggleFit = () => setFit((f) => { setCameraFitsView(!f); return !f; });
   // The status/controls row now OVERLAYS the feed and auto-hides (see
   // chromeVisible below), so the feed gets the entire screen and is centred
   // on it by construction. This removed a measured `margin-top: <row height>`
@@ -659,7 +665,7 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
           aspect-ratio maths at all. Colour passed down as a custom property so
           it still comes from the shared vocabulary. */}
       <div
-        className={`camera-viewport${motionActive ? " camera-detecting" : ""}`}
+        className={`camera-viewport${motionActive ? " camera-detecting" : ""}${fit ? " camera-fit" : ""}`}
         // motion seen is "on, doing something", never an alarm (owner, 2026-11-13: the camera's motion marks were red)
         style={{ ["--detect-color" as string]: STATUS_COLOR.active }}
         // On the FEED region, not the panel root: a tap on a control is that
@@ -820,6 +826,8 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
                 aria-expanded={pickerOpen} style={vOrder(3)} onClick={() => setPickerOpen(true)} />
             </>
           )}
+          <Button on="photo" lit={fit} icon={fit ? <Shrink /> : <Expand />} aria-pressed={fit}
+            label={fit ? "Actual size" : "Fit to screen"} style={vOrder(2)} onClick={toggleFit} />
           {fullscreenSupported && (
             <Button on="photo" icon={isFs ? <Minimize2 /> : <Maximize2 />}
               label={isFs ? "Exit fullscreen" : "Fullscreen"}

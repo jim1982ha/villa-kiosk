@@ -1,3 +1,9 @@
+## 2.496.867
+
+- **Camera: "Fit to screen".** A new button in the camera's bottom row makes the picture as large as the screen
+  allows, its shape kept, so a small stream no longer sits small in the middle of a black area. Press it again
+  ("Actual size") to go back. This device remembers the choice for every camera. Pinch and zoom work as before.
+
 ## 2.496.866
 
 - **Each screen's load time and smoothness are kept in the villa's system.** The "VESTA UI devices" sensor, which
