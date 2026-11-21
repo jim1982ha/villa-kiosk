@@ -82,7 +82,7 @@
    "all the notification formatted the same way, in the colours of Map colours & keys". */
 .notice-stack {
   position: absolute;
-  top: calc(var(--safe-top) + 52px + 8px);
+  top: calc(var(--safe-top) + var(--hud-bar-h) + 8px);
   left: 50%; transform: translateX(-50%); z-index: var(--z-notice);
   width: max-content; max-width: min(560px, calc(100% - 32px));
   display: flex; flex-direction: column; align-items: center; gap: 8px;

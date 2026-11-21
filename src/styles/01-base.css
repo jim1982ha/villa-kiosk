@@ -206,6 +206,9 @@
      brand guidelines' 40px without this would have overflowed the pill by 2px.
      The compact query's 42 is the same arithmetic at a 32px chip. */
   --hud-pill-h: 50px;
+  /* The top bar's height: what sits under it (the floor buttons, the notices, the loading screen's top) is placed
+     from it, so a taller bar (a guest's captions, below) moves them all. */
+  --hud-bar-h: 52px;
   /* The LEFT RAIL's one width (2.496.242): the app-icon tile at the top left
      and the 1F/2F floor block under it are both this wide, with the same
      radius and shadow, so they read as one column. The floor block's own
@@ -797,6 +800,13 @@ button {
   color: var(--text-primary);
 }
 .hud-group .icon-btn { width: 40px; height: 40px; }
+/* A word under each top-bar icon (common/Button `caption`; the Guest profile's bar, owner 2026-11-21): the bar, its
+   pills and their buttons 8px taller, each button as wide as its word. */
+:root.hud-captioned { --hud-bar-h: 60px; --hud-pill-h: 58px; }
+.hud-group .icon-btn.captioned {
+  flex-direction: column; gap: 2px; width: auto; min-width: 46px; height: 48px; padding: 4px 4px 3px;
+}
+.btn-caption { display: block; white-space: nowrap; font-size: 10.5px; line-height: 1.1; font-weight: 600; pointer-events: none; }
 .hud-stack .icon-btn { width: 40px; height: 38px; }
 @media (hover: hover) {
   .hud-group .icon-btn:hover, .hud-stack .icon-btn:hover { background: var(--bg-input); }

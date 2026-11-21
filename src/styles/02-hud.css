@@ -1,7 +1,7 @@
 /* --- HUD --- */
 /* Three zones: brand + time (left) · action icons (centre) · alerts + settings (right). */
 .hud-topbar {
-  position: absolute; top: 0; left: 0; right: 0; height: 52px;
+  position: absolute; top: 0; left: 0; right: 0; height: var(--hud-bar-h);
   /* The centre track is minmax(0, auto), NOT auto: the category filter's
      button count varies (role, config), so past the available width the
      track must be allowed to shrink and let .hud-group scroll internally —
@@ -385,7 +385,7 @@
    above the "Manage rooms" button. */
 .radial-list {
   position: fixed; z-index: var(--z-raised);
-  top: calc(var(--safe-top) + 64px);
+  top: calc(var(--safe-top) + var(--hud-bar-h) + 12px);
   bottom: calc(max(28px, var(--safe-bottom-float)) + 64px);
   display: flex; flex-direction: column; align-items: flex-start; gap: 8px;
   overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch;
@@ -421,7 +421,7 @@
    all aligned under the brand on the left edge. */
 .hud-left-col {
   position: absolute; z-index: var(--z-hud);
-  top: calc(52px + var(--safe-top) + 8px);
+  top: calc(var(--hud-bar-h) + var(--safe-top) + 8px);
   /* --hud-side-pad — the SAME value .hud-topbar pads its brand chip with
      (18px, 24px on desktop — see that variable's own comment) — so the floor
      stack's left edge always lines up exactly under the villa-name chip's
@@ -499,7 +499,7 @@
      used to sit at a flat 64px regardless of device, which on an iPhone with
      a Dynamic Island (a taller inset than a plain notch) let it render
      partially under/behind the island cutout instead of clear of it. */
-  position: absolute; top: calc(64px + var(--safe-top)); left: 50%; transform: translateX(-50%);
+  position: absolute; top: calc(var(--hud-bar-h) + 12px + var(--safe-top)); left: 50%; transform: translateX(-50%);
   padding: 8px 22px; border-radius: 999px; z-index: var(--z-room-label);
   animation: fadeSlide 0.4s ease-out;
   text-align: center; max-width: 86vw;
