@@ -1,3 +1,10 @@
+## 2.496.857
+
+- **The camera's siren button shows its command on its way.** After you confirm "Sound siren", or press it to stop
+  the siren, the button shows the same waiting sign as the camera's move buttons until the siren reports its new
+  state. If the villa's system refuses the command, the waiting sign stops at once. Sounding the siren still asks
+  first, every time.
+
 ## 2.496.856
 
 - **The (?) pill on an issue card now says only who made the card.** It no longer repeats the problem or says when
