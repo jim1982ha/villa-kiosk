@@ -10,6 +10,7 @@ dist.zip
 .vite
 tsconfig.tsbuildinfo
 villa-kiosk
+changelog-archive
 MODEL_PIPELINE.md
 CLAUDE.md
 tools
