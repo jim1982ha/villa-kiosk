@@ -1,3 +1,9 @@
+## 2.496.858
+
+- **The (?) pill of a device's live card names what made it.** A card for a device that is offline, no longer in
+  the villa's system, partly not answering or showing an alarm now reads: "Created by the VESTA UI's own live device
+  check."
+
 ## 2.496.857
 
 - **The camera's siren button shows its command on its way.** After you confirm "Sound siren", or press it to stop
