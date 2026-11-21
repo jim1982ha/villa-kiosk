@@ -1,3 +1,9 @@
+## 2.496.862
+
+- **The bottom bar's tiles keep their own colour when something needs attention.** "Door Lock: Unlocked" now keeps
+  the purple of doors and cameras, with the small amber "!" in its icon's corner that the map's badges wear, and its
+  amber underline. Before, the whole icon turned amber and looked like the Lights tile.
+
 ## 2.496.861
 
 - **Less work on every live update.** The camera, lock, blind, fan and media controls, the scene buttons and the 3D
