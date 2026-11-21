@@ -75,7 +75,7 @@ ck("the light's sliders and the cover's follow the device (useLiveDraft, one set
   const press = (sounding) => {
     const calls = [], asked = [];
     pressSiren({ sounding, siren: "siren.cam_siren", name: "Example Gate Camera", ask: (q) => asked.push(q),
-      callService: (domain, service, _data, target) => calls.push(`${domain}.${service} ${target.entity_id}`) });
+      callService: (domain, service, _data, target) => calls.push(`${domain}.${service} ${target.entity_id}`), sent: () => {} });
     return { calls, asked };
   };
   const quiet = press(false);
