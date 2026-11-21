@@ -207,7 +207,7 @@ button[aria-busy="true"] { animation: command-waiting 0.9s ease-in-out infinite;
    shared by the header's buttons above it so both line up (owner, 2026-10-27). */
 .camera-fullscreen {
   --cam-rail: 22px;
-  --cam-btn: clamp(34px, 12dvh, 56px);
+  --cam-btn: clamp(var(--touch-min), 12dvh, 56px);
   --cam-edge: calc(10px + env(safe-area-inset-right, 0px));
   position: absolute; inset: 0; z-index: var(--z-fullscreen); background: #000;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -413,19 +413,22 @@ button[aria-busy="true"] { animation: command-waiting 0.9s ease-in-out infinite;
 
   .camera-viewport { order: 0; flex: 1 1 auto; min-width: 0; }
 
-  /* Buttons in a column down the right edge. Sized from the VIEWPORT HEIGHT
-     so the whole column always fits without scrolling however short the
-     screen is, and clamped so it never becomes untappable or absurd. */
+  /* Buttons in columns down the right edge, sized from the viewport height and never under --touch-min.
+     ⚠️ A SECOND COLUMN WHEN ONE DOES NOT FIT (owner, 2026-11-21: on a phone held sideways, a camera with its moves,
+     siren and sound ran off the bottom, Close and the siren out of reach): a grid filled top to bottom, then a new
+     column to the left (direction: rtl places the first column at the edge), so every button is on screen at every
+     height and the first in the rail order (Close) is at the top of the edge column. */
   .camera-controls {
     order: 1;
-    flex: 0 0 auto;
-    flex-direction: column; flex-wrap: nowrap;
-    justify-content: center; align-items: center;
-    gap: clamp(6px, 1.6dvh, 12px);
+    display: grid; grid-auto-flow: column; grid-template-rows: repeat(auto-fill, var(--media-btn));
+    grid-auto-columns: var(--media-btn); direction: rtl;
+    align-content: start; justify-content: start;
+    gap: clamp(6px, 1.6dvh, 12px) 8px;
     margin-left: 0;
     padding: 8px var(--cam-edge) 8px 10px;
     background: #000;
   }
+  .camera-controls > * { direction: ltr; }
   /* the header's buttons (warning, readings, Edit, Open Ticket) right above the column: its size, its right edge */
   .camera-header { padding-right: var(--cam-edge); }
   .camera-controls, .camera-header { --media-btn: var(--cam-btn); }
@@ -485,6 +488,10 @@ button[aria-busy="true"] { animation: command-waiting 0.9s ease-in-out infinite;
   .camera-controls {
     right: 0;
     background: linear-gradient(to left, rgba(0, 0, 0, 0.8) 0%, transparent 100%);
+  }
+  /* never under the header's buttons (Open Ticket, the readings…) at the top right: the column starts below them */
+  .camera-fullscreen:has(.camera-header-actions > *) .camera-controls {
+    top: calc(var(--safe-top) + 20px + var(--cam-btn));
   }
   .camera-viewport { width: 100%; }
   /* Re-target the fade: .camera-bottom-row generates no box here (display:
