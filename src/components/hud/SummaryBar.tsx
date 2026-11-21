@@ -28,6 +28,7 @@ import { useProfile } from "@/auth/ProfileContext";
 import { isCategoryAllowed, listedDevices } from "@/auth/permissions";
 import { CATEGORY_ORDER, categorySurface, type DeviceSurfaceState } from "@/config/EntityCategories";
 import { useResolvedTheme } from "@/hooks/useResolvedTheme";
+import { markImage } from "@/babylon/badgeIcons";
 import type { HaSceneInfo } from "@/config/haScenes";
 import { findWeatherStation } from "@/config/weatherStation";
 import WeatherPanel from "@/components/panels/WeatherPanel";
@@ -50,9 +51,13 @@ function Tile({ t, onOpen }: { t: SummaryTile; onOpen: (t: SummaryTile) => void 
   const Icon = t.icon;
   // Neutral by default (VESTA-DESIGN.md §0): the icon chip only takes its
   // category's hue once the tile's own tone says something in it is
-  // actually on ("warn" — e.g. an unlocked lock or high energy draw — reads
-  // as alerting, same red as everywhere else that signal shows up).
-  const state: DeviceSurfaceState = t.tone === "warn" ? "alert" : t.tone === "on" ? "active" : "off";
+  // actually on. ⚠️ A PROBLEM IS NEVER THE CHIP'S COLOUR (owner, 2026-11-21):
+  // "warn" (an unlocked lock, a high energy draw) painted the whole chip amber,
+  // so "Locks 1 Unlocked" looked like "Lights 3 On". The chip keeps its family's
+  // colour, and the problem is the map badges' own amber "!" corner mark
+  // (badgeIcons.markImage) and the tile's amber underline.
+  const state: DeviceSurfaceState = t.tone === "warn" || t.tone === "on" ? "active" : "off";
+  const mark = t.tone === "warn" ? markImage("fault") : null;
   // categorySurface composites an OPAQUE fill in JS from the theme's tokens,
   // so unlike a plain var() it is frozen at render time. This bar is on screen
   // permanently, which makes it the worst place for that to go stale — an
@@ -75,7 +80,13 @@ function Tile({ t, onOpen }: { t: SummaryTile; onOpen: (t: SummaryTile) => void 
       onClick={() => onOpen(t)}
       data-tip={`${t.label}: ${t.value}, tap to see & control everything it includes`}
     >
-      <span className="summary-tile-icon"><Icon size={20} /></span>
+      <span className="summary-tile-icon">
+        <Icon size={20} />
+        {mark && (
+          <img className="summary-tile-mark" src={mark.src} alt="" aria-hidden="true" style={{
+            width: `${mark.size * 100}%`, top: `${-mark.out * 100}%`, right: `${-mark.out * 100}%` }} />
+        )}
+      </span>
       <span className="summary-tile-text">
         <span className="eyebrow summary-tile-label">{t.label}</span>
         <span className="summary-tile-value">{t.value}</span>

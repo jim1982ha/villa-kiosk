@@ -1,7 +1,7 @@
 /* --- HUD --- */
 /* Three zones: brand + time (left) · action icons (centre) · alerts + settings (right). */
 .hud-topbar {
-  position: absolute; top: 0; left: 0; right: 0; height: 52px;
+  position: absolute; top: 0; left: 0; right: 0; height: var(--hud-bar-h);
   /* The centre track is minmax(0, auto), NOT auto: the category filter's
      button count varies (role, config), so past the available width the
      track must be allowed to shrink and let .hud-group scroll internally —
@@ -11,7 +11,7 @@
   background: linear-gradient(180deg, var(--topbar-fade), transparent);
   /* Above the floating floor switch (z-21) so the dropdown menus, which live
      inside this bar's stacking context, paint OVER the 1F/2F selector when open. */
-  z-index: 22; pointer-events: none;
+  z-index: var(--z-hud-top); pointer-events: none;
 }
 .hud-topbar > * { pointer-events: auto; }
 /* The brand is its own self-contained, legible chip (same treatment as every
@@ -203,7 +203,7 @@
 }
 .hud-menu-item {
   display: flex; align-items: center; gap: 10px;
-  width: 100%; padding: 11px 10px;
+  width: 100%; min-height: var(--touch-min); padding: 11px 10px;
   background: transparent; border: none; border-radius: 10px;
   color: var(--text-primary); font-size: var(--text-base); text-align: left;
   cursor: pointer;
@@ -248,9 +248,9 @@
    from, growing UPWARD (the cluster sits at the bottom of the screen in
    every layout — mobile overlay or the ≥900px in-flow row — so a menu that
    dropped down like .hud-menu normally does would run straight off-screen). */
-.camera-picker-backdrop { position: absolute; inset: 0; z-index: 10; }
+.camera-picker-backdrop { position: absolute; inset: 0; z-index: var(--z-picker-backdrop); }
 .camera-picker-menu {
-  position: absolute; z-index: 11; top: auto;
+  position: absolute; z-index: var(--z-picker-menu); top: auto;
   right: calc(20px + env(safe-area-inset-right, 0px));
   bottom: max(96px, var(--safe-bottom));
   width: min(280px, calc(100vw - 40px));
@@ -260,7 +260,7 @@
 /* "Also on this device" over the camera feed: under the header's buttons it opened from, the readings list every
    device window draws (DeviceReadings) */
 .camera-readings-menu {
-  position: absolute; z-index: 11;
+  position: absolute; z-index: var(--z-picker-menu);
   top: calc(76px + var(--safe-top)); right: calc(20px + env(safe-area-inset-right, 0px));
   width: min(320px, calc(100vw - 40px)); max-height: min(60vh, 420px); overflow-y: auto;
 }
@@ -347,19 +347,13 @@
 /* Between 1F/2F and the view switch under them: the floor section's own
    hairline, horizontal (.hud-cat-sep is the category row's, vertical). */
 .hud-stack-sep { flex: 0 0 auto; height: 1px; margin: 0 4px; background: var(--hairline-strong); }
-/* The invisible 44px touch target of the floor buttons and the app-icon tile, one body (the phone tier's
-   category buttons use the same overlay on ::after, 05-layout.css). */
-.hud-floor-btn::before,
-.hud-home-btn::before {
-  content: ""; position: absolute; top: 50%; left: 50%;
-  width: var(--touch-min); height: var(--touch-min);
-  transform: translate(-50%, -50%);
-}
+/* The invisible 44px touch target of the floor buttons and the app-icon tile: every map button's ::before, one body
+   with every other small control's reach (01-base.css "A finger's reach"). */
 
 /* Rooms dial popup: tappable floating chips on arcs beside the button (see
    RadialRoomMenu). The full-screen backdrop catches an outside tap to dismiss;
    a faint scrim focuses attention and reads as "modal". */
-.radial-room-menu { position: fixed; inset: 0; z-index: 60; pointer-events: auto; background: var(--scrim); backdrop-filter: blur(1px); }
+.radial-room-menu { position: fixed; inset: 0; z-index: var(--z-fullscreen); pointer-events: auto; background: var(--scrim); backdrop-filter: blur(1px); }
 .radial-item {
   position: fixed; transform: translate(-50%, -50%);
   display: flex; align-items: center; justify-content: center;
@@ -384,8 +378,8 @@
    screen (a phone held upright, a long room list): never overlapping, always
    above the "Manage rooms" button. */
 .radial-list {
-  position: fixed; z-index: 1;
-  top: calc(var(--safe-top) + 64px);
+  position: fixed; z-index: var(--z-raised);
+  top: calc(var(--safe-top) + var(--hud-bar-h) + 12px);
   bottom: calc(max(28px, var(--safe-bottom-float)) + 64px);
   display: flex; flex-direction: column; align-items: flex-start; gap: 8px;
   overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch;
@@ -420,8 +414,8 @@
 /* Left-side control column: floor switch, then the Room + Switch View stack,
    all aligned under the brand on the left edge. */
 .hud-left-col {
-  position: absolute; z-index: 21;
-  top: calc(52px + var(--safe-top) + 8px);
+  position: absolute; z-index: var(--z-hud);
+  top: calc(var(--hud-bar-h) + var(--safe-top) + 8px);
   /* --hud-side-pad — the SAME value .hud-topbar pads its brand chip with
      (18px, 24px on desktop — see that variable's own comment) — so the floor
      stack's left edge always lines up exactly under the villa-name chip's
@@ -490,7 +484,7 @@
    stop a long villa name from wrapping (see its own comment), which would
    clip this too if it were nested inside. */
 .hud-home-hint {
-  position: absolute; top: calc(100% + 8px); z-index: 5;
+  position: absolute; top: calc(100% + 8px); z-index: var(--z-local-pop);
   left: calc(var(--hud-side-pad) + env(safe-area-inset-left, 0px));
 }
 
@@ -499,8 +493,8 @@
      used to sit at a flat 64px regardless of device, which on an iPhone with
      a Dynamic Island (a taller inset than a plain notch) let it render
      partially under/behind the island cutout instead of clear of it. */
-  position: absolute; top: calc(64px + var(--safe-top)); left: 50%; transform: translateX(-50%);
-  padding: 8px 22px; border-radius: 999px; z-index: 15;
+  position: absolute; top: calc(var(--hud-bar-h) + 12px + var(--safe-top)); left: 50%; transform: translateX(-50%);
+  padding: 8px 22px; border-radius: 999px; z-index: var(--z-room-label);
   animation: fadeSlide 0.4s ease-out;
   text-align: center; max-width: 86vw;
   border: 1px solid var(--hairline);
@@ -510,7 +504,7 @@
 /* Instant tap-acknowledgment ring for the in-scene quick-toggle gesture (see
    TapRipple.tsx) — fixed layer over the whole viewport, never intercepts
    input, sits above the 3D canvas but below any real UI (panels/menus). */
-.tap-ripple-layer { position: fixed; inset: 0; z-index: 12; pointer-events: none; }
+.tap-ripple-layer { position: fixed; inset: 0; z-index: var(--z-tap-ripple); pointer-events: none; }
 .tap-ripple {
   position: fixed; width: 16px; height: 16px; margin: -8px 0 0 -8px;
   border-radius: 50%; border: 2px solid var(--accent);
@@ -533,7 +527,7 @@
      the island itself. */
   padding: 16px calc(20px + env(safe-area-inset-right, 0px))
            max(16px, var(--safe-bottom)) calc(20px + env(safe-area-inset-left, 0px));
-  z-index: 23; pointer-events: none;
+  z-index: var(--z-bottom-bar); pointer-events: none;
   /* ABOVE .summary-bar (21): the bottom-right joystick (the only thing left
      in this bar — the view-mode toggle moved to .hud-left-col) can still sit
      under the summary bar's centred, near-full-width tile row on a narrow
@@ -568,7 +562,7 @@
      zone at all, so its own 20px stays as the plain breathing room it always
      was. */
   position: absolute; bottom: max(20px, var(--safe-bottom-float)); left: 50%; transform: translateX(-50%);
-  z-index: 21; pointer-events: auto;
+  z-index: var(--z-hud); pointer-events: auto;
   display: flex; gap: 8px; align-items: stretch;
   /* width:max-content is ESSENTIAL: a centred (left:50%) absolutely-positioned
      scroll container (overflow-x:auto) otherwise shrink-to-fits only into the
@@ -675,22 +669,21 @@
    accent. An inset underline rather than a full border, so it reads as a
    status cue on the flush tile rather than reintroducing a per-tile card. */
 .summary-tile.tone-on { box-shadow: inset 0 -2px 0 var(--tile-ring, var(--accent)); }
-/* Reads --tile-ring, exactly like tone-on above, so the underline and the icon
-   chip it sits under are ONE value rather than two answers to one question.
-   It was a literal --status-warning while the chip took categorySurface's
-   "alert" surface, i.e. --status-danger: the Energy tile drew a red chip with
-   an amber underline on the same tile (reported from a screenshot). Amber was
-   also simply the wrong meaning — a tile turns "warn" for an unlocked lock or
-   a high energy draw, which is a confirmed condition needing attention, not
-   Home Assistant losing contact. */
-.summary-tile.tone-warn { box-shadow: inset 0 -2px 0 var(--tile-ring, var(--status-warning)); }
+/* A problem (an unlocked lock, a high energy draw): the status amber, the one "needs attention" colour, as the
+   underline and the chip's corner mark (.summary-tile-mark); the chip itself keeps its family's colour (owner,
+   2026-11-21: "Locks 1 Unlocked" looked like "Lights 3 On" when the whole chip was amber). */
+.summary-tile.tone-warn { box-shadow: inset 0 -2px 0 var(--status-warning); }
+/* The map badges' own corner mark, baked by the badge renderer (badgeIcons.markImage): its size and its place outside
+   the chip's top-right corner come with it, as fractions of the chip. */
+.summary-tile-icon { position: relative; }
+.summary-tile-mark { position: absolute; height: auto; pointer-events: none; }
 .summary-tile.tone-off .summary-tile-value { color: var(--text-secondary); }
 
 
 
 /* Scene pop-up picker (portaled to <body>, anchored above the Scene tile). */
 .summary-scene-menu {
-  z-index: 40; pointer-events: auto;
+  z-index: var(--z-scene-menu); pointer-events: auto;
   display: flex; flex-direction: column; gap: 2px;
   min-width: 190px; max-width: 300px; max-height: 46vh; overflow-y: auto;
   padding: 6px; border-radius: 16px;

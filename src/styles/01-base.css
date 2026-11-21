@@ -10,7 +10,17 @@
  * redefining one block; component CSS never hardcodes a colour.
  *
  * Self-hosted (never a Google Fonts link — see CLAUDE.md's offline rule):
- * Jost for display/headlines/eyebrows, Public Sans for everything else. */
+ * Jost for display/headlines/eyebrows, Public Sans for everything else.
+ *
+ * SCREEN WIDTHS: a layout changes at these widths only (CSS px; src/config/breakpoints.ts is the table, and
+ * tests/oracles/breakpoints.mjs fails on any other). CSS has no named media queries, so each file writes the value:
+ *   phone         max-width: 640px   (min-width: 641px above it)   a phone held upright: one column, compact top bar
+ *   large phone   max-width: 720px   (min-width: 721px)            a phone held sideways
+ *   small tablet  max-width: 860px   (min-width: 861px)            the villa's name leaves the top bar
+ *   desktop       min-width: 1024px  (max-width: 1023px below it)  wider windows, more side padding
+ *   clock         max-width: 1180px  (min-width: 1181px)           the top bar's clock goes (iPads held sideways)
+ * Heights are a separate question: max-height: 560px is a short screen (a phone held sideways), with or without width.
+ * 480, 560 and 1000 joined phone and desktop on 2026-11-21. */
 
 @font-face { font-family: "Jost"; font-style: normal; font-weight: 400 600; font-display: swap; src: url("/fonts/jost-var.woff2") format("woff2"); }
 @font-face { font-family: "Public Sans"; font-style: normal; font-weight: 400 700; font-display: swap; src: url("/fonts/public-sans-var.woff2") format("woff2"); }
@@ -28,6 +38,33 @@
   --dur: 200ms;
   --ease: cubic-bezier(0.2, 0.6, 0.2, 1);
   --stroke-icon: 1.5px;
+
+  /* The stacking ladder: every z-index in the app is one of these, low to high, so a new layer is placed against
+   * the others by name. The first four stack within one component; the rest are the screen's layers. */
+  --z-behind: -1;
+  --z-raised: 1;
+  --z-above: 2;
+  --z-local-pop: 5;          /* a component's own menu or tip */
+  --z-picker-backdrop: 10;
+  --z-picker-menu: 11;
+  --z-tap-ripple: 12;
+  --z-room-label: 15;
+  --z-hud-low: 20;           /* the loading veil, a picker's dropdown */
+  --z-hud: 21;               /* the left column, the summary bar */
+  --z-hud-top: 22;
+  --z-bottom-bar: 23;
+  --z-center-overlay: 30;
+  --z-scene-menu: 40;
+  --z-teleport: 50;
+  --z-fullscreen: 60;        /* the fullscreen camera, the radial room menu */
+  --z-modal: 70;
+  --z-notice: 75;
+  --z-panel-modal: 80;       /* a window over a panel, a badge's tooltip */
+  --z-modal-screen: 90;      /* a question over everything modal */
+  --z-screen: 200;           /* sign-in, the photo lightbox */
+  --z-tip: 300;              /* chart and UI tips, notices over a dialog */
+  --z-popup: 400;            /* the info pop, a dropdown list */
+  --z-talk: 1000;
 
   /* Category hues — used ONLY when a device is active or alerting, never as
      an always-on gradient (see EntityCategories.ts's categorySurface()). */
@@ -179,6 +216,9 @@
      brand guidelines' 40px without this would have overflowed the pill by 2px.
      The compact query's 42 is the same arithmetic at a 32px chip. */
   --hud-pill-h: 50px;
+  /* The top bar's height: what sits under it (the floor buttons, the notices, the loading screen's top) is placed
+     from it, so a taller bar (a guest's captions, below) moves them all. */
+  --hud-bar-h: 52px;
   /* The LEFT RAIL's one width (2.496.242): the app-icon tile at the top left
      and the 1F/2F floor block under it are both this wide, with the same
      radius and shadow, so they read as one column. The floor block's own
@@ -596,6 +636,19 @@ button {
   color: var(--text-secondary); cursor: pointer; pointer-events: auto; }
 .icon-quiet.small { width: 24px; height: 24px; }
 .icon-quiet::after { content: ""; position: absolute; inset: -6px; }
+/* ⚠️ A FINGER'S REACH (--touch-min): a control drawn smaller than 44px keeps its look and gets an invisible box of at
+   least 44 x 44 centred on it, which is what a finger hits (measured as a touch screen, phone and tablet, 2026-11-21:
+   the choices and tabs were 40px tall, a chart's range pills 26, the map's buttons 40 on a tablet, a row's switch 28,
+   a chart's thumbs and fit mark 20). One body for all of them: a control big enough already is untouched (100%).
+   ::before on the map's buttons (.icon-btn), whose ::after is .has-hold-action's dot. */
+:is(.segmented button, .tool-group > button, .tool-group > div > button, .chart-fit-mark) { position: relative; }
+:is(.segmented button, .tool-group > button, .tool-group > div > button, .summary-entity-toggle, .chart-fit-mark,
+  .chart-range-thumb)::after,
+.icon-btn::before, .hud-home-btn::before {
+  content: ""; position: absolute; top: 50%; left: 50%;
+  width: max(100%, var(--touch-min)); height: max(100%, var(--touch-min));
+  transform: translate(-50%, -50%);
+}
 .icon-quiet:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 @media (hover: hover) {
   .icon-quiet:hover:not(:disabled) { background: color-mix(in srgb, var(--text-primary) 10%, transparent); color: var(--text-primary); }
@@ -667,6 +720,14 @@ button {
   background: var(--bg-panel);
   backdrop-filter: blur(20px) saturate(1.1);
   box-shadow: var(--elev-2);
+}
+/* While the camera moves (data-camera-moving, set by babylon/resolutionGovernor), every blurred box over the 3D view
+   keeps only its tint: a blur is redone on each frame the picture under it changes, which is every frame of a move.
+   The same picture at rest is unchanged. A new blurred box over the view joins this list. */
+:root[data-camera-moving] :is(.icon-btn, .hud-group, .hud-stack, .hud-menu, .room-label, .joystick-base, .summary-bar,
+  .summary-scene-menu, .overview-hint, .badge-tooltip, .spark-tip, .radial-room-menu, .radial-item, .radial-manage-btn,
+  .teleport-grid, .modal-backdrop, .talk-orb-overlay) {
+  backdrop-filter: none; -webkit-backdrop-filter: none;
 }
 
 /* Every HUD *section* (a container grouping controls) shares ONE glass level —
@@ -770,6 +831,13 @@ button {
   color: var(--text-primary);
 }
 .hud-group .icon-btn { width: 40px; height: 40px; }
+/* A word under each top-bar icon (common/Button `caption`; the Guest profile's bar, owner 2026-11-21): the bar, its
+   pills and their buttons 8px taller, each button as wide as its word. */
+:root.hud-captioned { --hud-bar-h: 60px; --hud-pill-h: 58px; }
+.hud-group .icon-btn.captioned {
+  flex-direction: column; gap: 2px; width: auto; min-width: 46px; height: 48px; padding: 4px 4px 3px;
+}
+.btn-caption { display: block; white-space: nowrap; font-size: 10.5px; line-height: 1.1; font-weight: 600; pointer-events: none; }
 .hud-stack .icon-btn { width: 40px; height: 38px; }
 @media (hover: hover) {
   .hud-group .icon-btn:hover, .hud-stack .icon-btn:hover { background: var(--bg-input); }

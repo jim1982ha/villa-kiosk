@@ -264,7 +264,7 @@
    itself a modal, and this opens from inside it) and inset by the safe area so
    the close button never lands under a notch. */
 .fm-lightbox {
-  position: fixed; inset: 0; z-index: 200;
+  position: fixed; inset: 0; z-index: var(--z-screen);
   display: flex; align-items: center; justify-content: center;
   background: var(--chip-scrim-solid);
   padding: calc(env(safe-area-inset-top, 0px) + 16px) 16px

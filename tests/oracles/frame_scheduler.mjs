@@ -23,6 +23,8 @@ function rig({ onDemand = true } = {}) {
     sharpen() { if (this.sharp) return false; this.sharp = true; this.sharpens++; return true; },
     unsharpen() { if (this.sharp) { this.sharp = false; this.unsharpens++; } },
     isSharp() { return this.sharp; },
+    movingNow: false,
+    moving(on) { this.movingNow = on; },
   };
   const f = new FrameScheduler({ stillMs: STILL, animationFrameMs: CAP, onDemand: () => onDemand, now: () => t });
   const tick = () => f.tick(t, res);
@@ -105,6 +107,28 @@ console.log("\n  pins and settings:");
   const r = rig({ onDemand: false });
   r.f.motion();
   eq("renderOnDemand off renders continuously", r.run(160).renders, 10);
+}
+
+console.log("\n  the glass over the view while the camera moves (data-camera-moving):");
+{
+  const { ResolutionGovernor } = await import("@/babylon/resolutionGovernor");
+  const told = [];
+  const gov = new ResolutionGovernor({ get: () => 0.5, set() {}, dpr: () => 2, moving: (on) => told.push(on) });
+  let t = 1000;
+  const f = new FrameScheduler({ stillMs: STILL, animationFrameMs: CAP, onDemand: () => true, now: () => t });
+  const run = (ms) => { for (const end = t + ms; t < end; t += 16) f.tick(t, gov); };
+  run(200);
+  eq("a still villa keeps the blur: nothing is told", told, []);
+  f.motion(); run(100);
+  eq("a move marks the page once, however many frames it lasts", told, [true]);
+  f.motion(); run(100); f.motion(); run(100);
+  eq("  ...and a drag that keeps moving keeps it marked", told, [true]);
+  run(STILL + 50);
+  eq("the camera still for the sharpening delay gives the blur back", told, [true, false]);
+  f.repaint(); f.animate(500); run(500);
+  eq("a repaint or an animation on a still camera does not drop the blur", told, [true, false]);
+  f.motion(); run(50); gov.reset();
+  eq("closing the villa while moving gives the blur back", told, [true, false, true, false]);
 }
 
 console.log(fail ? `\n❌ ${fail} failed` : "\n✅ one rule decides every frame");

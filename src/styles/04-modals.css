@@ -1,6 +1,6 @@
 /* --- Teleport menu --- */
 .teleport-grid {
-  position: absolute; inset: 0; z-index: 50;
+  position: absolute; inset: 0; z-index: var(--z-teleport);
   background: var(--bg-overlay); backdrop-filter: blur(14px);
   padding:
     calc(60px + var(--safe-top))
@@ -26,7 +26,7 @@
 .tp-card.tp-add { align-items: center; justify-content: center; flex-direction: column; gap: 8px; color: var(--accent); border-style: dashed; background: transparent; }
 .tp-card.tp-add span { font-family: var(--font-ui); font-size: var(--text-base); color: var(--accent); }
 /* --- Modals / wizard --- */
-.modal-backdrop { position: absolute; inset: 0; z-index: 70; background: var(--scrim-strong); backdrop-filter: blur(6px); display: flex; align-items: center; justify-content: center; padding: 24px; animation: modal-backdrop-in 0.16s ease-out; }
+.modal-backdrop { position: absolute; inset: 0; z-index: var(--z-modal); background: var(--scrim-strong); backdrop-filter: blur(6px); display: flex; align-items: center; justify-content: center; padding: 24px; animation: modal-backdrop-in 0.16s ease-out; }
 /* Solid, not frosted glass — every dialog (Settings, a device panel, the
    Config Editor…) reads as content to focus on, unlike the HUD's own glass
    chrome over the 3D scene (.icon-btn/.hud-group/.hud-stack/.hud-menu etc.,
@@ -148,7 +148,7 @@
   .modal.window-content { height: 90vh; }
 }
 /* the whole screen (Window kind "screen"), over every other window and the camera: no card, no gutter */
-.modal-backdrop.backdrop-screen { z-index: 90; padding: 0; }
+.modal-backdrop.backdrop-screen { z-index: var(--z-modal-screen); padding: 0; }
 .modal.window-screen { max-width: none; max-height: none; width: 100%; height: 100%; border: 0; border-radius: 0; box-shadow: none; background: var(--bg-base); }
 /* The header is a row (common/Window's WindowHeader, the only place its markup is written): the title left, its
    buttons right. */
@@ -169,7 +169,7 @@
 .settings-inline-label { font-size: var(--text-2xs); color: var(--text-secondary); white-space: nowrap; }
 /* Two fields side by side; stacks on narrow screens. */
 .slider-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 20px; align-items: start; }
-@media (max-width: 560px) { .slider-pair { grid-template-columns: 1fr; } }
+@media (max-width: 640px) { .slider-pair { grid-template-columns: 1fr; } }
 /* overflow-x hidden: setting only overflow-y computes overflow-x to auto,
    so any absolutely-positioned child poking past the right edge (the
    .info-pop tooltip on a narrow phone) put a horizontal scrollbar on the
@@ -247,7 +247,7 @@
 /* The line under each row's name. */
 .legend-note { display: block; }
 .legend-count { display: inline-flex; align-items: center; justify-content: center; font-size: var(--text-2xs); font-weight: 700; }
-@media (max-width: 480px) {
+@media (max-width: 640px) {
   .legend-grid { grid-template-columns: 1fr; }
 }
 
@@ -442,7 +442,7 @@
    translucent card, absolute inside the (i) and capped at 420 px, let the cards under it show through and cut its
    own last line (owner, 2026-10-14). Its width here is the one it is measured at before being placed. */
 .info-pop {
-  position: fixed; z-index: 400; width: min(510px, calc(100vw - 24px)); overflow-y: auto; overscroll-behavior: contain;
+  position: fixed; z-index: var(--z-popup); width: min(510px, calc(100vw - 24px)); overflow-y: auto; overscroll-behavior: contain;
   padding: 12px 14px;
   background: var(--bg-modal);
   border: 1px solid var(--hairline-strong); border-radius: 12px;
@@ -672,6 +672,20 @@
 /* a device group's members and its "Add another entity…", a device's 3D objects and its "Add a 3D object…": the pills
    and the compact search on one line, wrapping */
 .group-members { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+/* A device's "3D object" field (MappingFields.ObjectsField): one row per object, the model's object at the left,
+   greyed and fixed, the device that drives it at the right; one under the other on a phone. */
+.object-rows { display: flex; flex-direction: column; gap: 6px; }
+.object-row { display: grid; grid-template-columns: fit-content(50%) minmax(0, 1fr); gap: 8px; align-items: center; }
+.object-row .config-search { margin-bottom: 0; }
+.object-model {
+  /* the compact search's size and shape beside it (.config-search-compact), its box dashed and its words dim: fixed */
+  display: flex; align-items: center; gap: 6px; min-width: 0; box-sizing: border-box; min-height: 28px; padding: 0 10px;
+  border-radius: var(--radius-pill); border: 1px dashed var(--hairline); background: transparent;
+  color: var(--text-dim); font-size: var(--text-xs); cursor: default; flex-wrap: wrap; column-gap: 4px; padding-block: 3px;
+}
+.object-model > :first-child { min-width: 0; overflow-wrap: anywhere; }
+.object-model-words { white-space: nowrap; }
+@media (max-width: 640px) { .object-row { grid-template-columns: minmax(0, 1fr); gap: 4px; } }
 .group-members-add { flex: 1 1 180px; min-width: 140px; }
 
 /* THE "this opens more" (common/FoldedList FoldToggle): a chevron before the words, no box; a section's in its title's

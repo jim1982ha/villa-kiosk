@@ -17,7 +17,6 @@ import OnOffToggle from "@/components/common/OnOffToggle";
 import Dropdown from "@/components/common/Dropdown";
 import EntityPicker from "./EntityPicker";
 import CardField from "./CardField";
-import RemovablePill from "@/components/common/RemovablePill";
 import SearchPicker from "@/components/common/SearchPicker";
 import { ObjectName } from "@/components/common/IdText";
 import { useEntityLabel } from "@/hooks/useEntityLabel";
@@ -133,22 +132,22 @@ export const OBJECT_FIELD = "3D object";
 
 export interface ObjectsFieldProps {
   entityId: string;
-  /** The device's name on every screen (its ✕'s words). */
-  name: string;
   /** The objects that show it (deviceRecord.objectLinks' byDevice). */
   objects: readonly string[];
   /** Every object of the model and what it shows: the search's rows. */
   links: ObjectLinks;
   onAdd: (object: string, entityId: string) => void;
-  onTakeOff: (object: string, entityId: string) => void;
   /** A device on the map: its objects and settings moved to another entity of the villa's system (its search's pick). */
   onMoveTo?: (entityId: string, to: string) => void;
+  /** An object re-mapped to this device given back to the model's own device (mappingEdits.giveObjectBack). */
+  onGiveBack?: (object: string, entityId: string) => void;
 }
 
 /**
  * ⚠️ ONE PLACE FOR A DEVICE'S 3D OBJECTS (owner, 2026-11-06): the objects that show it, linked by their name or bound,
- * each a pill with its ✕ (the same for every object: one linked by its name then shows nothing, mappingEdits.
- * takeObjectOff), then a compact "Add a 3D object…" search, as a group's Members. The search lists the model's
+ * then a compact "Add a 3D object…" search, as a group's Members. ⚠️ NO OBJECT IS TAKEN OFF A DEVICE HERE (owner,
+ * 2026-11-21: "remove hide"): since 2.496.868 each object is a row whose ✕ gives a re-mapped object back to the
+ * model's own device; the hiding edit went with its pill. The search lists the model's
  * objects, those showing nothing first, each saying what it shows; picking one shows this device on it (bindMesh).
  * It replaced Villa's "Bound 3D objects" lists and Devices' "· 3D object: …" with its pencil.
  * ⚠️ SAID FOR WHAT IT IS, ON ITS ONE LINE (owner, 2026-11-12: "camera.storage_room" pointed at another camera read as
@@ -160,44 +159,47 @@ export interface ObjectsFieldProps {
  * moves them and its settings to the entity picked (mappingEdits.repointDevice, asked first); the model's objects are
  * the search of a device not on the map, or of one no object shows yet.
  */
-export function ObjectsField({ entityId, name, objects, links, onAdd, onTakeOff, onMoveTo }: ObjectsFieldProps) {
+export function ObjectsField({ entityId, objects, links, onAdd, onMoveTo, onGiveBack }: ObjectsFieldProps) {
   const nameOf = useEntityLabel();
+  // ⚠️ TWO FIELDS, WHAT THE MODEL HAS AND WHAT DRIVES IT (owner, 2026-11-21: "camera.server_room" beside "Re-mapped to
+  // this device · search to point it…" read as the old camera still linked): at the left the object's own name in the
+  // model, greyed and fixed, its hover saying which device it showed originally; at the right which device drives it:
+  // this one, a chosen value with its ✕ (back to the model's own device), when it was re-mapped here; empty, with its
+  // hint, when the object is this device's own.
+  if (onMoveTo && objects.length > 0) {
+    return (
+      <div className="object-rows">
+        {objects.map((o) => {
+          const remapped = o !== entityId;
+          return (
+            <div key={o} className="object-row">
+              <div className="object-model" aria-readonly="true" data-tip={`Originally: ${nameOf(o)}`}>
+                <ObjectName name={o} /><span className="object-model-words">in the 3D model</span>
+              </div>
+              <div className="object-device">
+                <EntityPicker compact exclude={entityId} value={remapped ? entityId : undefined}
+                  placeholder="Uses the model's own device · search to show another one"
+                  onChange={(to) => onMoveTo(entityId, to)}
+                  onClear={remapped && onGiveBack ? () => onGiveBack(o, entityId) : undefined} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
   return (
     <div className="group-members">
-      {objects.map((o) => (
-        <RemovablePill key={o} label={<ObjectName name={o} />} tip={objectTip(o, entityId, name)}
-          removeLabel={`Take ${o} off ${name}`} onRemove={() => onTakeOff(o, entityId)} />
-      ))}
       <div className="group-members-add">
-        {onMoveTo && objects.length > 0 ? (
-          <EntityPicker compact placeholder={movePlaceholder(objects, entityId)} exclude={entityId} onChange={(to) => onMoveTo(entityId, to)} />
-        ) : (
         <SearchPicker compact placeholder="Add a 3D object…" onPick={(o) => onAdd(o, entityId)}
           empty={links.shows.size === 0 ? "No 3D model loaded yet." : undefined}
           rows={(q) => objectOffers(q, links, entityId).map(({ object, shows }) => ({
             key: object, label: <ObjectName name={object} />,
             side: shows === null ? "shows nothing yet" : `shows ${nameOf(shows)}, moves it here`,
           }))} />
-        )}
       </div>
     </div>
   );
-}
-
-/** What hovering a 3D object's pill says: the model's object, and whom it shows (its own name, or another's). Pure. */
-export function objectTip(object: string, entityId: string, name: string): string {
-  return object === entityId
-    ? `3D object of the model, named after this device: it shows ${name}.`
-    : `3D object of the model, named ${object}: it shows ${name} (${entityId}) here.`;
-}
-
-/** The search of a device on the map whose objects show it: whether an object was re-mapped to this device (its name
- *  not this device's), and what picking an entity does. Pure. */
-export function movePlaceholder(objects: readonly string[], entityId: string): string {
-  const them = objects.length === 1 ? "it" : "them";
-  return objects.some((o) => o !== entityId)
-    ? `Re-mapped to this device · search to point ${them} at another entity…`
-    : `Search to point ${them} at another entity…`;
 }
 
 /**

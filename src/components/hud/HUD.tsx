@@ -31,7 +31,7 @@ import {
   // MapIcon, not Map: the bare name shadows the global Map constructor,
   // which this file also uses.
   Settings, Map as MapIcon, PersonStanding,
-  Minus, Plus, CircleHelp, TriangleAlert, Bot, Wrench, LayoutGrid, Power,
+  Minus, Plus, CircleHelp, TriangleAlert, Bot, Wrench, LayoutGrid, Power, Search,
 } from "lucide-react";
 import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
@@ -42,7 +42,7 @@ import { isCategoryAllowed } from "@/auth/permissions";
 import { ROLE_LABELS, ROLE_INITIALS } from "@/auth/roles";
 import { resolveSiteTitle } from "@/config/AppConfig";
 import { VestaAppIcon } from "@/components/VestaMark";
-import { CATEGORY_ORDER, CATEGORY_LABELS, CATEGORY_ICONS } from "@/config/EntityCategories";
+import { CATEGORY_ORDER, CATEGORY_LABELS, CATEGORY_ICONS, CATEGORY_WORDS } from "@/config/EntityCategories";
 import { categoryChipStyle } from "@/components/common/categoryChip";
 import { useResolvedTheme } from "@/hooks/useResolvedTheme";
 import { ENTITY_ICON_SCALE_MIN, ENTITY_ICON_SCALE_MAX, clampIconScale } from "@/config/AppConfig";
@@ -86,6 +86,10 @@ interface Props {
    *  whether its callback was passed. */
   doors: Doors;
   onOpenSettings: () => void;
+  /** Open the Quick tips card again (the map legend's "Show the tips again"). */
+  onShowTips: () => void;
+  /** Open Search (devices, rooms, scenes: hud/SearchWindow). */
+  onOpenSearch: () => void;
   onMove: (x: number, y: number) => void;
   viewMode: "first-person" | "overview";
   onToggleViewMode: () => void;
@@ -137,11 +141,25 @@ export default function HUD({
   doors, onOpenSettings, onMove,
   viewMode, onToggleViewMode,
   hasOverviewDefault, onApplyOverviewDefault, onSaveOverviewDefault,
-  onOpenCockpit, onAskVesta, onOpenCategory, onOpenPresence, families,
+  onOpenCockpit, onAskVesta, onOpenCategory, onOpenPresence, onShowTips, onOpenSearch, families,
 }: Props) {
   const { connection, haConfig } = useHA();
   const { config, update } = useConfig();
   const { role, beginSwitch } = useProfile();
+  // ⚠️ A WORD UNDER EACH TOP-BAR ICON, FOR A GUEST ONLY (owner, 2026-11-21, review P3-01): a walk-up guest cannot learn
+  // icon-only chrome by hovering. The bar grows for it (--hud-bar-h, 01-base.css), and what sits under the bar (the
+  // floor buttons, the notices) follows that one height. Other profiles keep the icon-only bar.
+  const captions = role === "guest";
+  const caption = (word: string) => (captions ? word : undefined);
+  const searchButton = (
+    <Button on="map" icon={<Search size={24} />} label="Search devices, rooms and scenes" onClick={onOpenSearch}
+      caption={caption("Search")} />
+  );
+  useEffect(() => {
+    if (!captions) return;
+    document.documentElement.classList.add("hud-captioned");
+    return () => document.documentElement.classList.remove("hud-captioned");
+  }, [captions]);
   const clock = useClock();
   const title = resolveSiteTitle(config, haConfig?.location_name);
   const { flash: homeFlash, buttonProps: homeButtonProps } =
@@ -539,6 +557,7 @@ export default function HUD({
                   onClick={onCatClick(cat)}
                   tip={`${hidden ? "Show" : "Hide"} ${CATEGORY_LABELS[cat]} devices on the map, hold to list them`}
                   label={`${CATEGORY_LABELS[cat]} devices on the map`}
+                  caption={caption(CATEGORY_WORDS[cat])}
                   aria-pressed={!hidden}
                 />
               );
@@ -551,7 +570,8 @@ export default function HUD({
             <span className="hud-cat-sep hud-cat-help" aria-hidden="true" />
             <Button on="map" icon={<CircleHelp size={24} />} className="hud-cat-help"
               onClick={() => setLegendOpen(true)}
-              tip="What do these colours mean, and the keyboard keys" label="Map colours and keyboard keys" />
+              tip="What do these colours mean, and the keyboard keys" label="Map colours and keyboard keys"
+              caption={caption("Help")} />
           </div>
 
           {/* Label size: steps the in-scene badge scale by 0.25 per click,
@@ -569,8 +589,10 @@ export default function HUD({
               the overflow button. */}
           <div className="hud-group hud-labelsize-group" role="toolbar" aria-label="Label size">
             <Button on="map" icon={<Minus size={24} />} className="hud-labelsize-btn" label="Decrease label size"
+              caption={caption("Smaller")}
               onClick={() => stepLabelScale(-LABEL_SCALE_STEP)} disabled={labelScale <= ENTITY_ICON_SCALE_MIN} />
             <Button on="map" icon={<Plus size={24} />} className="hud-labelsize-btn" label="Increase label size"
+              caption={caption("Bigger")}
               onClick={() => stepLabelScale(LABEL_SCALE_STEP)} disabled={labelScale >= ENTITY_ICON_SCALE_MAX} />
           </div>
         </div>
@@ -602,6 +624,9 @@ export default function HUD({
             </span>
           )}
           <div className="hud-right-inline hud-group">
+            {/* Search, first of this group on a roomy screen (owner-approved review P3-03, 2026-11-21); beside the gear on
+                a phone, below */}
+            {searchButton}
             {/* ONE button for the Cockpit and the agent (2.496.242): with an
                 agent configured the Cockpit's icon IS the robot — its count
                 (top right) stays the Cockpit's, the agent's presence dot sits
@@ -619,6 +644,7 @@ export default function HUD({
                 + (robot ? ` · ${agentTitle}` : "") + unreadSaid}
               label={`Open Cockpit, villa status at a glance${robot ? ` (${agentTitle})` : ""}${unreadSaid}`}
               count={openIssues > 0 ? formatCountBadge(openIssues) : null}
+              caption={caption("Cockpit")}
             >
               {robot && agentDot}
               {unreadMark}
@@ -636,7 +662,7 @@ export default function HUD({
                 <Button on="map" lit={account.open} className="hud-role-badge"
                   onClick={() => account.setOpen((o) => !o)}
                   label={`Signed in as ${ROLE_LABELS[role]}, settings and logout`} tip={`Signed in as ${ROLE_LABELS[role]}, settings and logout`}
-                  aria-haspopup="menu" aria-expanded={account.open}
+                  aria-haspopup="menu" aria-expanded={account.open} caption={caption("Account")}
                   icon={<span aria-hidden="true" className={`role-glyph${ROLE_INITIALS[role].length > 1 ? " two" : ""}`}>{ROLE_INITIALS[role]}</span>} />
                 {account.open && (
                   <div className="hud-menu" role="menu" aria-label="Settings and profile">
@@ -662,9 +688,10 @@ export default function HUD({
               <TalkButton place="bar" onOpen={onAskVesta} onTap={onAskVesta} className="hud-bar-mic"
                 idle={talker ? "Ask VESTA: tap to open, hold to talk" : "Ask VESTA"} />
             )}
+            {searchButton}
             <Button on="map" lit={menuOpen} className="hud-gear" onClick={() => setMenuOpen((o) => !o)}
               tip={`Menu${unreadSaid}`} label={`Menu${unreadSaid}`} aria-haspopup="menu" aria-expanded={menuOpen}
-              icon={<Settings size={24} />}
+              icon={<Settings size={24} />} caption={caption("Menu")}
             >
               {/* A gear: this button is where Settings lives on a phone (on a
                   roomy screen it is in the role badge's menu, with the same
@@ -762,7 +789,8 @@ export default function HUD({
 
       {legendOpen && (
         <LegendModal onClose={() => setLegendOpen(false)} listable={visibleCategories}
-          onListCategory={(category) => { setLegendOpen(false); onOpenCategory(category); }} />
+          onListCategory={(category) => { setLegendOpen(false); onOpenCategory(category); }}
+          onShowTips={() => { setLegendOpen(false); onShowTips(); }} />
       )}
 
 

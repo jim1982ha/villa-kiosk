@@ -142,9 +142,10 @@ import { applyBadgeFrame, badgeRing, badgeBakePx, BADGE_INSET_CARD, BADGE_CORNER
 import { DashableRectangle } from "./dashableRectangle";
 import { badgeText, countBadgeImage, guiTextWidth, tabBadgeImage } from "./badgeText";
 import { badgeShadow } from "./badgeShadow";
+import { groupValueText } from "./badgeValueText";
 import { cameraFrame } from "./cameraFrame";
 import {
-  cardLift, cardStruts, MAX_TOTAL_CHIPS, MAX_GRID_CHIPS, PHONE_MAX_GRID_CHIPS,
+  cardLift, MAX_TOTAL_CHIPS, MAX_GRID_CHIPS, PHONE_MAX_GRID_CHIPS,
   type CardArrangement,
 } from "./badgeCard";
 import { iconKeyFor } from "./badgeIconKeys";
@@ -5745,53 +5746,19 @@ export class EntityVisuals {
   // utils/deviceActivity.deviceLook / meshLookFor do both, through
   // `this.lookSource`, exactly as every panel and list does through the store.
 
-  /** For a device-group PRIMARY, combine its own reading with its members'
-   *  (e.g. a temp+humidity combo shows "24°C · 58%" on its one badge instead
-   *  of just the primary's temperature). A non-primary entity — or a primary
-   *  whose members have no readable value — passes through unchanged, so this
-   *  is a no-op for every ordinary single badge. Member states come from
-   *  lastState, which apply() now caches for hidden members too. */
+  /** For a device-group PRIMARY, its value line joins its own reading with its members' (badgeValueText, where the
+   *  join and its clamp are tested). A non-primary entity passes through unchanged, so this is a no-op for every
+   *  ordinary single badge. Member states come from lastState, which apply() caches for hidden members too. */
   private groupedValue(entityId: string, primaryValue: string): string {
     const group = groupForPrimary(this.config.deviceGroups, entityId);
     if (!group) return primaryValue;
-    const parts = primaryValue ? [primaryValue] : [];
+    const members: string[] = [];
     for (const member of group.memberEntityIds) {
       const st = this.lastState.get(member);
       if (!st) continue;
-      const t = deviceTypeOf(member, this.mapping.get(member), this.config.entityMap[member]);
-      const v = compactValue(t, st);
-      if (v) parts.push(v);
+      members.push(compactValue(deviceTypeOf(member, this.mapping.get(member), this.config.entityMap[member]), st));
     }
-    // ⚠️ THE JOIN IS CLAMPED, NOT JUST EACH PART. clampPill bounds a single
-    // value at 16 characters for tidiness; nothing bounded the JOIN, which
-    // grows at 21N-5 characters for an N-member group. labelBoxes then reserved
-    // that full width while the container could never draw past
-    // labelMaxWidthPx — ~384 CSS px reserved against 180 drawn at three
-    // members (/dry-audit 2.423.0). Two different questions, so both clamps
-    // stay: one keeps a value tidy, this one keeps the model honest.
-    return this.clampToLabelWidth(parts.join("  ·  "));
-  }
-
-  /**
-   * Truncate value text to what the label container can actually DRAW.
-   *
-   * Derived, not guessed: the ceiling is `labelMaxWidthPx` and the per-character
-   * advance is the one `labelBoxes` measures the very same string with, so the
-   * width the solver reserves and the width the renderer draws agree by
-   * construction rather than by a constant that happens to be big enough.
-   */
-  private clampToLabelWidth(text: string): string {
-    const m = this.metrics;
-    const card = this.isCardStyle();
-    // A card's fixed part is cardStruts' — the one width model; the older
-    // `cardPadLeftPx + cardHeightPx + cardValuePadPx` it retired survived here
-    // alone (round 8).
-    const st = card ? cardStruts(m.cardHeightPx, this.glyphPxFor(true), 1) : null;
-    const fixed = st ? st.width - st.value : m.pillValuePadPx;
-    const charPx = card ? m.cardValueCharPx : m.pillValueCharPx;
-    if (!(charPx > 0)) return text;
-    const max = Math.max(1, Math.floor((m.labelMaxWidthPx - fixed) / charPx));
-    return text.length > max ? `${text.slice(0, Math.max(1, max - 1))}…` : text;
+    return groupValueText(primaryValue, members, this.metrics, this.isCardStyle());
   }
 
   /* ⚠️ `compactValue`, `formatSensorValue` AND `clampPill` ALL LIVE IN

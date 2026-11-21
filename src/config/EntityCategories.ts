@@ -31,6 +31,17 @@ export const CATEGORY_LABELS: Record<Category, string> = {
   others: "Others",
 };
 
+/** A category in one word, as the top bar's captions say it under each icon (owner, 2026-11-21: the Guest profile's
+ *  bar; "Network", "Access"): CATEGORY_LABELS where it already is one word. */
+export const CATEGORY_WORDS: Record<Category, string> = {
+  comfort: CATEGORY_LABELS.comfort,
+  light: "Lights",
+  network: CATEGORY_LABELS.network,
+  energy: CATEGORY_LABELS.energy,
+  access_control: "Access",
+  others: CATEGORY_LABELS.others,
+};
+
 /** Icon per category — the HUD's filter row (tooltip-only, no text labels)
  *  and the category device-list modal (long-press a filter icon) both use
  *  this one mapping, so a category can't read as one glyph in the top bar

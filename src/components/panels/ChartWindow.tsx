@@ -17,7 +17,7 @@ export function chartWindowHeight(screenPx: number): number {
 export default function ChartWindow({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
   return (
     <Window kind="content" label={title} onClose={onClose} className="settings-modal cockpit-modal chart-modal"
-      layer="panel-modal-backdrop" zIndex={80}>
+      layer="panel-modal-backdrop" zIndex="var(--z-panel-modal)">
       <WindowHeader title={title} />
       <div className="modal-body">{children}</div>
       <ModalFooter onClose={onClose} />

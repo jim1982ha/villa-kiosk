@@ -82,8 +82,8 @@
    "all the notification formatted the same way, in the colours of Map colours & keys". */
 .notice-stack {
   position: absolute;
-  top: calc(var(--safe-top) + 52px + 8px);
-  left: 50%; transform: translateX(-50%); z-index: 75;
+  top: calc(var(--safe-top) + var(--hud-bar-h) + 8px);
+  left: 50%; transform: translateX(-50%); z-index: var(--z-notice);
   width: max-content; max-width: min(560px, calc(100% - 32px));
   display: flex; flex-direction: column; align-items: center; gap: 8px;
   /* Never eat a tap meant for the HUD underneath: only a notice that acts takes its own (below). */
@@ -91,7 +91,7 @@
 }
 .notice-stack:empty { display: none; }
 /* over the Settings dialog, not inside its scrolling body, where a fixed notice can be clipped */
-.notice-stack.over-dialog { position: fixed; z-index: 300; }
+.notice-stack.over-dialog { position: fixed; z-index: var(--z-tip); }
 .vesta-notice {
   display: flex; align-items: center; justify-content: center; gap: 8px;
   max-width: 100%; padding: 8px 16px;
@@ -163,7 +163,7 @@
 .announcement-full-to { margin: 0; color: var(--text-secondary); }
 .announcement-status-label { color: var(--text-primary); }
 .announcement-story-line { font-style: italic; }
-@media (max-width: 560px) { .announcement-full-text { font-size: var(--text-lg); } }
+@media (max-width: 640px) { .announcement-full-text { font-size: var(--text-lg); } }
 /* ⚠️ AN ANNOUNCEMENT PICKED FOR THE WHOLE SCREEN, THE NIGHT LOOK (owner, 2026-11-04, proposal 5: AnnouncementNotice's
    AnnouncementFullScreenView, in the Window kind "screen"): dark whatever the theme, so a camera's night picture reads
    on it; its title and words at the top, its photo as large as the screen allows, then its buttons and Close inside the
@@ -216,7 +216,7 @@
   display: flex; align-items: center; justify-content: center; background: var(--night-ink); color: var(--night-ground);
 }
 .announcement-night-words { color: var(--night-muted); font-size: var(--text-md); }
-@media (max-width: 560px) {
+@media (max-width: 640px) {
   .announcement-night .announcement-night-head, .announcement-night .announcement-night-body,
   .announcement-night .announcement-night-actions { padding-left: 16px; padding-right: 16px; }
   .announcement-night-head .announcement-full-title { font-size: var(--text-xl); }
@@ -252,7 +252,7 @@ body:has(.camera-fullscreen) .vesta-notice.below-camera { display: none; }
    line does. */
 .messages-toolbar { display: flex; flex-wrap: wrap; align-items: stretch; gap: 6px;
   padding: 4px var(--body-right, 0px) 8px var(--body-left, 0px); margin: -4px calc(-1 * var(--body-right, 0px)) 0 calc(-1 * var(--body-left, 0px));
-  position: sticky; top: calc(-1 * var(--body-top, 0px)); z-index: 2; background: var(--bg-modal); }
+  position: sticky; top: calc(-1 * var(--body-top, 0px)); z-index: var(--z-above); background: var(--bg-modal); }
 /* what brings itself into view stops under that line */
 .messages-card, .messages-toolbar ~ .fm-form { scroll-margin-top: 72px; }
 .messages-toolbar-actions { display: flex; align-items: stretch; gap: 6px; margin-left: auto; }
@@ -351,7 +351,7 @@ body:has(.camera-fullscreen) .vesta-notice.below-camera { display: none; }
 .telemetry-diag { position: relative; display: flex; }
 .telemetry-actions { margin-bottom: 12px; align-self: flex-start; width: fit-content; max-width: 100%; }
 .telemetry-diag-menu {
-  position: absolute; top: calc(100% + 6px); right: 0; z-index: 5;
+  position: absolute; top: calc(100% + 6px); right: 0; z-index: var(--z-local-pop);
   min-width: 220px; background: var(--bg-modal);
 }
 /* The copy notice, over the dialog (a fixed layer above its 70; portalled to <body>). */
@@ -425,7 +425,7 @@ body:has(.camera-fullscreen) .vesta-notice.below-camera { display: none; }
    tooltip that can be hovered becomes the hover target, which drops the badge
    and flickers the tooltip out from under the cursor. */
 .badge-tooltip {
-  position: fixed; z-index: 80; pointer-events: none;
+  position: fixed; z-index: var(--z-panel-modal); pointer-events: none;
   transform: translate(14px, -50%);
   max-width: 240px; padding: 5px 9px;
   border-radius: 10px;
@@ -489,7 +489,7 @@ body:has(.camera-fullscreen) .vesta-notice.below-camera { display: none; }
    one look, written inline in both until 2.496.263. Solid, the window's colour (2.496.723: it was see-through, and the
    cards of the list under a list's field read through its rows). */
 .picker-dropdown {
-  position: absolute; z-index: 20; left: 0; right: 0; margin-top: 6px;
+  position: absolute; z-index: var(--z-hud-low); left: 0; right: 0; margin-top: 6px;
   max-height: 260px; overflow-y: auto; background: var(--bg-modal); box-shadow: var(--card-shadow);
   border: 1px solid var(--hairline-strong); border-radius: 10px;
 }
@@ -521,7 +521,7 @@ body:has(.camera-fullscreen) .vesta-notice.below-camera { display: none; }
 .dropdown-caret { flex: none; color: var(--text-secondary); transition: transform 0.15s ease; }
 .dropdown.is-open .dropdown-caret { transform: rotate(180deg); }
 .dropdown-list {
-  z-index: 400; overflow-y: auto; overscroll-behavior: contain; padding: 4px;
+  z-index: var(--z-popup); overflow-y: auto; overscroll-behavior: contain; padding: 4px;
   background: var(--bg-modal); color: var(--text-primary);
   border: 1px solid var(--hairline-strong); border-radius: 12px; box-shadow: var(--elev-3);
   outline: none; animation: modal-backdrop-in 0.12s ease-out;

@@ -1104,6 +1104,17 @@ _devs = proxy._render_devices({"old": {"at": "2026-10-01T00:00:00+00:00"}, "mac"
 ck("a device's report replaces its last, a device silent for two weeks is dropped, only the render fields are kept",
    set(_devs) == {"mac", "phone"} and _devs["phone"] == {"v": "2.496.831", "lampsNoRoom": 55,
                                                         "at": "2026-11-16T12:00:00+00:00"})
+# owner, 2026-11-21: each device's latest load and frame timings beside its render facts
+_devs = proxy._render_devices(_devs, "phone", {"visibleMs": 4210, "totalMs": 3900, "bootMs": 1200, "reloadMs": 9, "ua": "x"},
+                              _now, "load")
+_devs = proxy._render_devices(_devs, "phone", {"p50": 16.7, "p95": 41.2, "worst": 120.5, "fps": 60, "mode": "orbit",
+                                               "drawCalls": 300}, _now, "frames")
+_devs = proxy._render_devices(_devs, "phone", {"v": "2.496.866", "lampsNoRoom": 0}, _now)
+ck("a device's load and frames reports sit beside its render facts, each its latest, each kept by the others",
+   _devs["phone"] == {"v": "2.496.866", "lampsNoRoom": 0, "at": "2026-11-16T12:00:00+00:00",
+                      "load": {"visibleMs": 4210, "totalMs": 3900, "bootMs": 1200, "at": "2026-11-16T12:00:00+00:00"},
+                      "frames": {"p50": 16.7, "p95": 41.2, "worst": 120.5, "fps": 60, "mode": "orbit",
+                                 "at": "2026-11-16T12:00:00+00:00"}}, _devs["phone"])
 
 print()
 

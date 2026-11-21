@@ -18,7 +18,8 @@ import { healthPill } from "@/babylon/colors";
 import type { RoomHealth } from "@/babylon/summaryLook";
 import ModalFooter from "@/components/common/ModalFooter";
 import IconButton from "@/components/common/IconButton";
-import { List } from "lucide-react";
+import { Lightbulb, List } from "lucide-react";
+import Button from "@/components/common/Button";
 import type { Category } from "@/types/scene.types";
 
 /** What the MAP badge says — drawn by the badge renderer itself (babylon/badgeIcons.badgeImage), so this legend
@@ -74,8 +75,10 @@ const STATUS_ITEMS: { label: string; swatch: string; note: string }[] = [
   { label: "Not kept", swatch: NOT_KEPT_COLOR, note: "A history older than the villa's system keeps" },
 ];
 
-export default function LegendModal({ onClose, listable, onListCategory }: {
+export default function LegendModal({ onClose, listable, onListCategory, onShowTips }: {
   onClose: () => void;
+  /** Open the Quick tips card again (FirstRunTips), as on a first sign-in; the device's "seen" mark is left as it is. */
+  onShowTips: () => void;
   /** The categories this profile may list. */
   listable: readonly Category[];
   /** A category's device list: what holding its icon in the top bar opens (UI scan, 2026-11-10: a list reached only
@@ -203,7 +206,11 @@ export default function LegendModal({ onClose, listable, onListCategory }: {
           ))}
         </div>
       </div>
-      <ModalFooter onClose={onClose} />
+      <ModalFooter onClose={onClose} leading={
+        // the footer's own button, as Settings' "Advanced Settings": it leaves this window for the tips card
+        <Button icon={<Lightbulb size={18} aria-hidden />} onClick={onShowTips} label="Show the tips again"
+          shortOnPhone>Show the tips again</Button>
+      } />
     </Window>
   );
 }

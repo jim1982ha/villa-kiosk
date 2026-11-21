@@ -3254,7 +3254,7 @@ async def telemetry_post_handler(request: web.Request) -> web.Response:
         # rather than lose every event from here on.
         ring = [body]
         await TELEMETRY.replace(ring)
-    if body.get("kind") == "render":
+    if body.get("kind") in DEVICE_REPORTS:
         await _publish_render(request.app, body)
     return web.json_response({"ok": True, "stored": len(ring)})
 
@@ -3268,6 +3268,15 @@ async def telemetry_post_handler(request: web.Request) -> web.Response:
 # (owner, 2026-11-16). No person, no IP: a device is named by its browser.
 RENDER_SENSOR = "sensor.vesta_ui_devices"
 RENDER_FIELDS = ("v", "gpu", "webgl", "ubo", "glow", "roomMap", "lamps", "lampsNoRoom")
+# ...and its latest load and frame timings beside them, each under its kind (owner, 2026-11-21: how long a device takes
+# to show the villa and how smooth it moves, readable without an export): `load` the first load's figures
+# (navigation to the villa drawn, to ready, to the scene's start), `frames` a burst of interactive frames (median,
+# 95th percentile, worst, frames a second, and what was being done).
+DEVICE_REPORTS = {
+    "render": RENDER_FIELDS,
+    "load": ("visibleMs", "totalMs", "bootMs"),
+    "frames": ("p50", "p95", "worst", "fps", "mode"),
+}
 RENDER_KEEP_DAYS = 14
 
 
@@ -3307,8 +3316,10 @@ def _device_label(ua: str, scrw: object, scrh: object) -> str:
     return f"{system} · {app} · {screen}"
 
 
-def _render_devices(devices: dict, label: str, body: dict, now: datetime) -> dict:
-    """The devices' reports with this one set, older than RENDER_KEEP_DAYS dropped. Pure."""
+def _render_devices(devices: dict, label: str, body: dict, now: datetime, kind: str = "render") -> dict:
+    """The devices' reports with this one set, older than RENDER_KEEP_DAYS dropped. A `render` report replaces the
+    device's render facts at the top level; a `load` or `frames` report replaces its own part (DEVICE_REPORTS), the
+    other parts kept. Pure."""
     out: dict = {}
     cutoff = now.timestamp() - RENDER_KEEP_DAYS * 86400
     for name, entry in (devices or {}).items():
@@ -3317,7 +3328,14 @@ def _render_devices(devices: dict, label: str, body: dict, now: datetime) -> dic
                 out[name] = entry
         except (AttributeError, ValueError):
             continue
-    out[label] = {k: body[k] for k in RENDER_FIELDS if k in body} | {"at": now.isoformat(timespec="seconds")}
+    at = now.isoformat(timespec="seconds")
+    prev = out.get(label) if isinstance(out.get(label), dict) else {}
+    fields = {k: body[k] for k in DEVICE_REPORTS[kind] if k in body}
+    parts = {k: prev[k] for k in DEVICE_REPORTS if k != "render" and k in prev}
+    if kind == "render":
+        out[label] = parts | fields | {"at": at}
+    else:
+        out[label] = {k: v for k, v in prev.items() if k not in DEVICE_REPORTS} | parts | {kind: fields | {"at": at}, "at": at}
     return out
 
 
@@ -3326,7 +3344,7 @@ async def _publish_render(app: web.Application, body: dict) -> None:
     current = await _villa_state(app, RENDER_SENSOR)
     devices = _render_devices(((current or {}).get("attributes") or {}).get("devices") or {},
                               _device_label(str(body.get("ua", "")), body.get("scrw"), body.get("scrh")),
-                              body, datetime.now(timezone.utc))
+                              body, datetime.now(timezone.utc), str(body.get("kind")))
     state = {"state": len(devices), "attributes": {
         "friendly_name": "VESTA UI devices", "icon": "mdi:monitor-cellphone", "devices": devices}}
     try:

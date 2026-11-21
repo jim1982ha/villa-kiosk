@@ -34,11 +34,13 @@ export interface ButtonShape {
   small?: boolean;
   /** What it opens is open. */
   lit?: boolean;
+  /** A word under its icon (over the map: the top bar's captions for the Guest profile). */
+  captioned?: boolean;
 }
 
 /** The classes of a button of this shape, then its place's: the one place they are written. */
-export function buttonClass({ look, wordless, on, quiet, small, lit }: ButtonShape, place?: string): string | undefined {
-  const c: string[] = [];
+export function buttonClass({ look, wordless, on, quiet, small, lit, captioned }: ButtonShape, place?: string): string | undefined {
+  const c: string[] = captioned ? ["captioned"] : [];
   if (on === "tools") c.push(lit ? "active" : "");
   else if (on === "menu") c.push("hud-menu-item", lit ? "active" : "");
   else if (on === "map") c.push("icon-btn", lit ? "active" : "");
@@ -50,12 +52,14 @@ export function buttonClass({ look, wordless, on, quiet, small, lit }: ButtonSha
   return c.filter(Boolean).join(" ") || undefined;
 }
 
-export interface ButtonProps extends Omit<ButtonShape, "wordless">,
+export interface ButtonProps extends Omit<ButtonShape, "wordless" | "captioned">,
   Omit<ButtonHTMLAttributes<HTMLButtonElement>, "className" | "aria-label" | "children"> {
   /** Its words; none: its icon alone, named by `label`. */
   children?: ReactNode;
   /** Its icon, before its words. */
   icon?: ReactNode;
+  /** One word under its icon, shown with it (the top bar for a guest); its `label` still names it. */
+  caption?: string;
   /** Its words hide on a phone, where its icon alone stays (a footer's, a header's tool). */
   shortOnPhone?: boolean;
   /** Its name for a screen reader, with what it acts on ("Remove Generator service"); its words name it otherwise. */
@@ -80,16 +84,17 @@ const hasWords = (children: ReactNode): boolean =>
   && !(typeof children === "string" && !children.trim());
 
 const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button({
-  children, icon, shortOnPhone = false, label, tip, look, count, mark, busy, menu, lit, on, quiet, small,
+  children, icon, caption, shortOnPhone = false, label, tip, look, count, mark, busy, menu, lit, on, quiet, small,
   className, type = "button", ...rest
 }, ref) {
   const wordless = !hasWords(children);
   const shownTip = tip === undefined ? (wordless ? label : undefined) : tip;
   return (
-    <button type={type} className={buttonClass({ look, wordless, on, quiet, small, lit }, className)}
+    <button type={type} className={buttonClass({ look, wordless, on, quiet, small, lit, captioned: !!caption }, className)}
       aria-label={label} data-tip={shownTip || undefined} aria-busy={busy || undefined}
       aria-haspopup={menu ? "menu" : undefined} ref={ref} {...rest}>
       {icon}
+      {caption && <span className="btn-caption" aria-hidden="true">{caption}</span>}
       {!wordless && (shortOnPhone ? <span className="btn-label">{children}</span> : children)}
       {menu && <ChevronDown size={14} aria-hidden />}
       {count !== undefined && count !== null && count !== false && <span className="icon-btn-count" aria-hidden="true">{count}</span>}

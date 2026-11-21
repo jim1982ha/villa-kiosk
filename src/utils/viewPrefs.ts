@@ -98,3 +98,15 @@ export function onChartFit(listener: () => void): () => void {
   chartFitListeners.add(listener);
   return () => { chartFitListeners.delete(listener); };
 }
+
+const CAMERA_FIT_KEY = "villa-kiosk:camera-fit";
+
+/** Whether a camera's picture is fitted to its view on this device (scaled up as large as the view allows, its shape
+ *  kept), or shown at its own size, never larger (the default). The camera window's "Fit to screen" button. */
+export function cameraFitsView(): boolean {
+  return readString(CAMERA_FIT_KEY) === "1";
+}
+
+export function setCameraFitsView(fit: boolean): void {
+  writeString(CAMERA_FIT_KEY, fit ? "1" : "0");
+}

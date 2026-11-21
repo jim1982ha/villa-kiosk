@@ -25,6 +25,13 @@ import { readBackFrom } from "./historySource";
 import { setVillaTimeZone } from "@/utils/villaClock";
 
 /** Subset of HA's `get_config` we use to auto-fill onboarding (location + name). */
+/** What a batch of pushes changed: the entities it was laid over, and the ids it set (nothing is removed by a push). */
+export interface PushedChange { from: Readonly<Record<string, HassEntity>>; ids: readonly string[] }
+const PUSHED = new WeakMap<object, PushedChange>();
+/** The push that made this entities object from the previous one, if a push did (a reconnect's full read is none):
+ *  a reader that kept the previous object looks again at these ids only (config/batteryIds). */
+export function pushedChange(entities: object): PushedChange | undefined { return PUSHED.get(entities); }
+
 export interface HAConfig {
   latitude: number;
   longitude: number;
@@ -160,6 +167,7 @@ export class EntityStore {
     this.batch = new PushBatch<HassEntity>(opts.pushWindowMs ?? 250, (drained) => {
       const next = { ...this.state.entities };
       for (const [id, e] of drained) next[id] = e;
+      PUSHED.set(next, { from: this.state.entities, ids: [...drained.keys()] });
       this.set({ entities: next });
     });
   }

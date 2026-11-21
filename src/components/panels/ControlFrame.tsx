@@ -15,7 +15,7 @@ import type { LucideIcon } from "lucide-react";
 import { PowerSection } from "./PowerToggle";
 import StatusPill from "./StatusPill";
 import { useStatusRule } from "./PanelActionsContext";
-import { useHA } from "@/ha/HAStateStore";
+import { useHAActions } from "@/ha/HAStateStore";
 import { HAServices } from "@/ha/HAServiceCalls";
 import { actionColor } from "@/utils/stateColors";
 import { isOffline } from "@/utils/deviceHealth";
@@ -40,7 +40,7 @@ interface Props {
 }
 
 export default function ControlFrame({ entity, mapping, power, beside, pill, children }: Props) {
-  const { ws } = useHA();
+  const { ws } = useHAActions();
   const rule = useStatusRule();
   // ⚠️ LOST CONTACT, NOT "UNKNOWN" (owner, 2026-10-18; architecture review 2026-10-19): a device whose state is
   // "unknown" is answering — it can be commanded (a toggle needs no value), so its controls stay, without the notice;

@@ -324,26 +324,29 @@ console.log("\n  a device of Devices: never folded, no room line, its toggle und
      && !/lucide-pencil|entity-id-tools|Redirect/.test(html) && !/3D object:/.test(text(html)), inside(card, "device-first-line"));
 }
 
-console.log("\n  a device's \"3D object\" field (owner, 2026-11-06): its objects, each with its ✕, then a search to add one:");
+console.log("\n  a device's \"3D object\" field (owner, 2026-11-21): the model's object, fixed, beside the device that drives it:");
 {
-  const field = (card) => inside(card.slice(card.indexOf('card-field-label">3D object<')), "group-members");
+  const at = (card) => card.slice(card.indexOf('card-field-label">3D object<'));
+  // a device on the map with objects: its rows; one with none (or not on the map): the search to add one
+  const field = (card) => inside(at(card), "object-rows") || inside(at(card), "group-members");
   if (globalThis.__peek) console.log(field(cards(devices("on", "terrace")).find((c) => c.name === "Terrace Lamp")?.card ?? "").slice(0, 1500));
-  // a pill: its object's name (after its cube, ObjectName) and its ✕'s words
-  const pills = (card) => [...field(card).matchAll(/<span class="fm-entity-chip fm-chip-static fm-chip-removable"[^>]*>[\s\S]*?<span class="object-name">[\s\S]*?<\/svg><span>([\s\S]*?)<\/span><\/span>[\s\S]*?aria-label="([^"]*)"/g)].map((m) => [m[1].replace(/<wbr\/>/g, ""), unescape(m[2])]);
   const lamp = cards(devices("on", "terrace")).find((c) => c.name === "Terrace Lamp")?.card ?? "", pump = cards(devices()).find((c) => c.name === "Pool Pump")?.card ?? "";
-  ck("an object bound by hand shows on its device's card, its ✕ \"Take <object> off <device>\"",
-     JSON.stringify(pills(lamp)) === JSON.stringify([["Lamp_Kitchen", "Take Lamp_Kitchen off Terrace Lamp"]]), pills(lamp));
-  ck("  ...an object linked by its name the same, with the same ✕", JSON.stringify(pills(pump)) === JSON.stringify([["switch.example_pool_pump", "Take switch.example_pool_pump off Pool Pump"]]), pills(pump));
-  // owner, 2026-11-11: on the map, the search gives the device another entity (renamed in the villa's system)
-  // owner, 2026-11-12: it says what it moves, and that an object was re-mapped to this device (its name not the device's)
-  const search = (card) => field(card).match(/<div class="group-members-add"><div class="picker"><div class="config-search config-search-compact">[\s\S]*?placeholder="([^"]*)"/)?.[1];
-  ck("  ...then the compact search in the same field, saying an object was re-mapped to the device",
-     search(lamp) === "Re-mapped to this device · search to point it at another entity…", search(lamp));
-  ck("  ...an object named after its device: the search alone", search(pump) === "Search to point it at another entity…", search(pump));
-  // each object by its cube, never as an entity: the model's object, whom it shows on hover
-  ck("  ...each object pill drawn as a 3D object (its cube) with the hover saying whom it shows",
-     /<span class="object-name"><svg[\s\S]*?Lamp_Kitchen/.test(field(lamp))
-     && /3D object of the model, named Lamp_Kitchen: it shows Terrace Lamp/.test(field(lamp)), field(lamp));
+  // at the left: the object's name in the model, "in the 3D model", greyed, no ✕, its hover the device it showed first
+  const model = (card) => inside(field(card), "object-model");
+  ck("each object at the left by its cube and its name \"in the 3D model\", fixed: no ✕, no field to type in",
+     text(model(lamp)).replace(/\|/g, "") === "[icon]Lamp_Kitchenin the 3D model"
+     && /aria-readonly="true"/.test(model(lamp)) && !/<(button|input)/.test(model(lamp))
+     && text(model(pump)).replace(/\|/g, "") === "[icon]switch.example_pool_pumpin the 3D model", [text(model(lamp)), text(model(pump))]);
+  ck("  ...its hover says which device it showed originally", /data-tip="Originally: Pool Pump"/.test(model(pump))
+     && /data-tip="Originally: Lamp Kitchen"/.test(model(lamp)), [model(pump).slice(0, 200), model(lamp).slice(0, 200)]);
+  // at the right: the device that drives it, a chosen value with its ✕ when re-mapped here, empty with its hint if its own
+  const device = (card) => inside(field(card), "object-device");
+  const hint = (card) => device(card).match(/placeholder="([^"]*)"/)?.[1]?.replace(/&#x27;/g, "'");
+  ck("  ...re-mapped here: this device at the right as a chosen value, with its ✕ (back to the model's own device)",
+     hint(lamp) === "Terrace Lamp" && /config-search-chosen/.test(device(lamp)) && /aria-label="Clear selection/.test(device(lamp)), device(lamp));
+  ck("  ...its own object: the right empty, saying it uses the model's own device, no ✕",
+     hint(pump) === "Uses the model's own device · search to show another one" && !/config-search-chosen/.test(device(pump))
+     && !/aria-label="Clear selection/.test(device(pump)), device(pump));
   const rowsOf = (card) => [...field(card).matchAll(/<button class="row picker-option">([\s\S]*?)<\/button>/g)].map((m) => text(m[1].replace(/<wbr\/>/g, "")).replace(/^\||\|$/g, "").replace(/\|/g, " / "));
   globalThis.__open = true;
   const open = cards(devices("on", "terrace")).find((c) => c.name === "Terrace Lamp")?.card ?? "";
@@ -359,15 +362,18 @@ console.log("\n  a device's \"3D object\" field (owner, 2026-11-06): its objects
      && objRows.slice(firstNothing).every((r) => r.endsWith("shows nothing yet")), objRows);
   const off = cards(devices("off")).find((c) => c.name === "Ceiling Fan")?.card ?? "";
   ck("a device not on the map: the same card, its id alone under its name, its \"3D object\" field empty, no box, no bin",
-     text(inside(off, "fm-record-meta")).replace(/\|/g, "") === "fan.example_ceiling_fan" && pills(off).length === 0 && /placeholder="Add a 3D object…"/.test(field(off))
+     text(inside(off, "fm-record-meta")).replace(/\|/g, "") === "fan.example_ceiling_fan" && !/fm-chip-removable|object-row/.test(field(off)) && /placeholder="Add a 3D object…"/.test(field(off))
      && !/type="checkbox"|fm-record-remove/.test(off), off);
   // pin the caller: what the field's add and ✕ write is the edit the model's check drives (mapping_edits.mjs)
   const { elements, parseTsx, propText } = await import("../consistency/jsx.mjs");
   const ed = parseTsx("components/settings/ConfigEditor.tsx");
   const rowsDrawn = elements(ed, "EntityMapRow");
-  ck("  ...both lists' cards are EntityMapRow, given the one add (bindMesh) and the one ✕ (takeObjectOff)",
-     rowsDrawn.length === 2 && rowsDrawn.every((r) => propText(r, "onAddObject") === "addObject" && propText(r, "onTakeObjectOff") === "takeOff")
-     && /bindMesh\(object, id, entitiesRef\.current\[id\]\)/.test(ed.getText()) && /takeObjectOff\(object, id\)/.test(ed.getText()), rowsDrawn.map((r) => r.getText().slice(0, 80)));
+  ck("  ...both lists' cards are EntityMapRow, given the one add (bindMesh), and no ✕ that hides an object (owner, 2026-11-21)",
+     rowsDrawn.length === 2 && rowsDrawn.every((r) => propText(r, "onAddObject") === "addObject" && !/onTakeObjectOff/.test(r.getText()))
+     && /bindMesh\(object, id, entitiesRef\.current\[id\]\)/.test(ed.getText()) && !/takeObjectOff/.test(ed.getText()), rowsDrawn.map((r) => r.getText().slice(0, 80)));
+  ck("  ...a device on the map's ✕ gives a re-mapped object back to the model's own device (giveObjectBack)",
+     rowsDrawn.some((r) => propText(r, "onGiveBack") === "giveBack")
+     && /giveObjectBack\(object, id, entitiesRef\.current\[object\]\)/.test(ed.getText()));
 }
 
 console.log("\n  every card for an entity: its friendly name in its strip, its id alone on its first line:");

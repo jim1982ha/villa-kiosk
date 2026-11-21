@@ -5,7 +5,7 @@ import { PresenceWindow } from "@/components/hud/PresenceTile";
 import { overlayOpen } from "@/hooks/useBackToClose";
 import { keyIsForCamera } from "@/babylon/overviewKeys";
 import { useInterval } from "@/hooks/useInterval";
-import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import BabylonCanvas from "@/components/canvas/BabylonCanvas";
 import SummaryGroupPanel from "@/components/panels/SummaryGroupPanel";
 import { Layers } from "lucide-react";
@@ -22,6 +22,7 @@ import AppNotice, { AppNoticeContext, useFailedCommandNotice, useRaisedNotices }
 import ProblemNotices from "@/components/hud/ProblemNotices";
 import { NoticeStack } from "@/components/hud/Notice";
 import FirstRunTips from "@/components/hud/FirstRunTips";
+import SearchWindow from "@/components/hud/SearchWindow";
 import SummaryBar from "@/components/hud/SummaryBar";
 import TapRipple, { RIPPLE_LIFETIME_MS, type Ripple } from "@/components/hud/TapRipple";
 import { hasSeenFirstRunTips } from "@/utils/viewPrefs";
@@ -30,8 +31,7 @@ import { openDevice } from "@/components/panels/openDevice";
 import PanelRouter from "@/components/panels/PanelRouter";
 import { PanelActionsProvider, NO_PANEL_ACTIONS } from "@/components/panels/PanelActionsContext";
 import { useOpenPanelActions } from "@/components/panels/useOpenPanelActions";
-import SettingsModal from "@/components/settings/SettingsModal";
-import ConfigEditorModal from "@/components/settings/ConfigEditorModal";
+import DialogLayer from "@/components/common/DialogLayer";
 import { useConfig } from "@/config/ConfigContext";
 import { loadSyncBaseline, locationToAdopt } from "@/config/deviceConfig";
 import { useEntityLabel } from "@/hooks/useEntityLabel";
@@ -50,7 +50,6 @@ import { deviceLook, lookMarks, storeLookSource } from "@/utils/deviceActivity";
 import { chipRooms, shown as surfaceShown, mergeTeleportPoints, roomChoicesFor, type Surface } from "./surfaces";
 import { START, screenReducer, type Screen, type ScreenAction } from "./screen";
 import type { Doors } from "@/auth/doors";
-import CockpitModal from "@/components/cockpit/CockpitModal";
 import { isMotionSensor } from "@/config/BinarySensorClasses";
 import { isQuickToggle } from "@/utils/quickAction";
 import { HAServices } from "@/ha/HAServiceCalls";
@@ -63,6 +62,18 @@ import { deviceOf } from "@/config/deviceGroups";
 import { categoryMembers, occupiedCategories, roomMembers, type ListSource } from "@/config/villaVisibility";
 import AskDialog from "@/components/common/AskDialog";
 import { readSceneMirror } from "./sceneMirror";
+
+// Settings, Advanced Settings and the Cockpit are their own files, fetched the first time one opens: the villa's
+// first screen no longer waits to read them. The service worker keeps every file of the build (asset-manifest.json),
+// so opening one without a network still works. While its file is read, the window's backdrop shows the spinner.
+const SettingsModal = lazy(() => import("@/components/settings/SettingsModal"));
+const ConfigEditorModal = lazy(() => import("@/components/settings/ConfigEditorModal"));
+const CockpitModal = lazy(() => import("@/components/cockpit/CockpitModal"));
+const OPENING = (
+  <DialogLayer className="modal-backdrop">
+    <div className="spinner" role="status" aria-label="Opening…" style={{ margin: "auto" }} />
+  </DialogLayer>
+);
 
 
 export default function Dashboard() {
@@ -206,6 +217,8 @@ export default function Dashboard() {
   // whatever was in localStorage when this component first mounted rather
   // than being re-evaluated (and potentially flipping on) on every render.
   const [showFirstRunTips, setShowFirstRunTips] = useState(() => !hasSeenFirstRunTips());
+  /** Search (hud/SearchWindow), from the top bar's magnifier. */
+  const [searchOpen, setSearchOpen] = useState(false);
   // Tap-acknowledgment ripples for the in-scene quick-toggle gesture (tap a
   // light/switch -> instant HA call, no panel) — see TapRipple's docstring
   // for why this exists instead of predicting the on/off outcome.
@@ -795,6 +808,8 @@ export default function Dashboard() {
         onOpenCockpit={() => go({ type: "openWindow", window: "cockpit", tab: "messages", inbox: "issues" })}
         onAskVesta={() => openSurface("vesta")}
         onOpenCategory={(category) => go({ type: "openList", list: { kind: "category", category } })}
+        onShowTips={() => setShowFirstRunTips(true)}
+        onOpenSearch={() => setSearchOpen(true)}
         families={families}
         onOpenPresence={() => openSurface("presence")}
       />
@@ -806,6 +821,10 @@ export default function Dashboard() {
         onOpenEntity={openDevicePanel}
         scenes={haScenes}
       />
+      {searchOpen && (
+        <SearchWindow scenes={haScenes} onClose={() => setSearchOpen(false)} onGoToRoom={handleTeleport}
+          onOpenEntity={openDevicePanel} />
+      )}
 
       {/* VESTA's conversation, its own window (owner, 2026-10-29: "a dedicated icon in the top bar, next to the robot") */}
       {shown("vesta") && <VestaWindow onClose={() => closeSurface("vesta")} canOpenPage={doors.facility} />}
@@ -908,6 +927,7 @@ export default function Dashboard() {
       )}
 
       {shown("cockpit") && (
+        <Suspense fallback={OPENING}>
         <CockpitModal
           onClose={() => closeSurface("cockpit")}
           onOpenEntity={(id) => handOver("cockpit", id)}
@@ -925,6 +945,7 @@ export default function Dashboard() {
           inboxStart={screen.inboxStart ?? undefined}
           onOpenFaults={(ids) => go({ type: "openFaults", ids })}
         />
+        </Suspense>
       )}
 
 
@@ -936,6 +957,7 @@ export default function Dashboard() {
       )}
 
       {shown("settings") && (
+        <Suspense fallback={OPENING}>
         <SettingsModal
           manager={manager}
           onClose={() => closeSurface("settings")}
@@ -953,11 +975,13 @@ export default function Dashboard() {
           tab={screen.settingsTab}
           onTab={(tab) => go({ type: "settingsTab", tab })}
         />
+        </Suspense>
       )}
 
       {/* Config Editor as a modal OVER the live villa (not a route) — leaving
           it returns to Settings with no GLB reload; edits already applied live. */}
       {shown("configEditor") && (
+        <Suspense fallback={OPENING}>
         <ConfigEditorModal
           focusEntityId={screen.editorFocus ?? undefined}
           // Just close this one. Settings is still mounted underneath if it
@@ -968,6 +992,7 @@ export default function Dashboard() {
           withinSettings={shown("settings")}
           viewHeadingDeg={manager ? () => manager.viewHeadingDeg() : undefined}
         />
+        </Suspense>
       )}
     </ConversationProvider>
     </AnnouncementsProvider>

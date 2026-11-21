@@ -14,7 +14,7 @@
 // and those two must not answer the same question differently. The dialog
 // and the haptic are useConfirmDialog's, shared with the camera's siren.
 
-import { useHA } from "@/ha/HAStateStore";
+import { useHAActions } from "@/ha/HAStateStore";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { sceneMessage, type HaSceneInfo } from "@/config/haScenes";
 
@@ -26,7 +26,7 @@ interface SceneConfirm {
 }
 
 export function useSceneConfirm(): SceneConfirm {
-  const { callService } = useHA();
+  const { callService } = useHAActions();
   const { ask, dialog } = useConfirmDialog();
   return {
     ask: (chosen) => ask({

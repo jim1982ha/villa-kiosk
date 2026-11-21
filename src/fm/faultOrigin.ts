@@ -78,8 +78,9 @@ export function faultOrigin(t: Pick<FmTicket, "source" | "origin" | "alertNumber
 }
 
 /** A device's live state with no record behind it (offline, no longer in the villa's system, parts not answering, an
- *  alarm reading): VESTA shows it from what the villa's system reports, nobody opened it. */
-export const LIVE_ORIGIN = "Shown by VESTA from this device's live state in the villa's system, not opened by a person or an automation.";
+ *  alarm reading): the VESTA UI's own check makes it (config/attention attentionOf). Its maker only: never what did
+ *  NOT make it (owner, 2026-11-21: "don't say what is NOT creating a fault card"), nor that the app shows it. */
+export const LIVE_ORIGIN = "Created by the VESTA UI's own live device check.";
 
 /** An overdue task of the Schedule: the task named. Pure. */
 export function scheduleOrigin(title: string): string {

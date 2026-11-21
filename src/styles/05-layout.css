@@ -12,17 +12,17 @@
    content on a notched phone still starts clear of the status bar, matching
    the topbar's own mobile treatment below. */
 .center-overlay {
-  position: absolute; inset: 0; z-index: 30;
+  position: absolute; inset: 0; z-index: var(--z-center-overlay);
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px;
   text-align: center;
-  padding: calc(52px + var(--safe-top) + 24px) 24px 24px;
+  padding: calc(var(--hud-bar-h) + var(--safe-top) + 24px) 24px 24px;
   background: var(--bg-base);
 }
 /* ⚠️ LOADING SITS UNDER THE TOP BAR AND THE LEFT COLUMN (owner, 2026-11-16): a 125 MB model never finished, and the
    loading screen above them hid Settings and its Upload Model button, the one way to replace that model from inside
    the app. Only loading: its spinner and line sit in the middle, clear of the top bar thanks to the padding above, so
    the clipping bug that put error and no-model screens on top cannot come back. */
-.center-overlay-loading { z-index: 20; }
+.center-overlay-loading { z-index: var(--z-hud-low); }
 /* will-change promotes this to its own compositing layer so WebKit runs the
    rotation on the COMPOSITOR rather than the main thread. That matters here
    more than almost anywhere else in the app: this spinner is on screen
@@ -67,7 +67,7 @@
    edge instead of lined up under it. */
 :root { --hud-side-pad: 18px; }
 .hud-topbar {
-  height: calc(52px + var(--safe-top));
+  height: calc(var(--hud-bar-h) + var(--safe-top));
   padding-top: var(--safe-top);
   padding-left: calc(var(--hud-side-pad) + env(safe-area-inset-left, 0px));
   padding-right: calc(var(--hud-side-pad) + env(safe-area-inset-right, 0px));
@@ -98,7 +98,7 @@
      thing in the bar. */
   .hud-clock { display: none; }
 }
-@media (max-width: 1000px) {
+@media (max-width: 1023px) {
   /* Then some chrome padding. */
   /* Sets --hud-side-pad too (not just padding) so .hud-left-col's left
      offset — which reads that same variable — stays lined up with the
@@ -456,4 +456,12 @@
   /* Room badge: smaller display type so longer names stay on one centred line. */
   .room-label { top: calc(58px + var(--safe-top)); padding: 7px 18px; }
   .room-title { font-size: var(--text-xl); }
+}
+
+/* The Guest profile's captioned top bar (01-base.css .icon-btn.captioned) at the compact tier above: its 32px buttons
+   grow by their word, the bar stays 8px taller than the plain one. */
+@media (max-width: 640px), (max-height: 560px) {
+  :root.hud-captioned { --hud-pill-h: 50px; }
+  .hud-group .icon-btn.captioned { height: 40px; min-width: 40px; padding: 2px 3px; gap: 1px; }
+  .hud-group .icon-btn.captioned svg { width: 20px; height: 20px; }
 }

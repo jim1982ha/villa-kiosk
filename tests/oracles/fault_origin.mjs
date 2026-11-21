@@ -55,8 +55,8 @@ ck("a chat's and a guest's say where they came from",
 const liveSaid = attentionOf({ devices: { ...devices, unavailable: ["lock.room"] }, entities, entityMap: {}, resolvedRooms: {},
   fmData: { schedules: [], completions: [], costs: [], tickets: [], savedDocuments: [] } }).attentionItems
   .find((i) => i.id === "unavailable:lock.room")?.origin;
-ck("a device offline right now says VESTA shows it from its live state, nobody opened it, and nothing more",
-   liveSaid === "Shown by VESTA from this device's live state in the villa's system, not opened by a person or an automation.", liveSaid);
+ck("a device offline right now names its maker, the VESTA UI's own check, and nothing more",
+   liveSaid === "Created by the VESTA UI's own live device check.", liveSaid);
 
 console.log("\n  the pill, drawn:");
 const [group] = groupAttention([{ id: "fault:a", kind: "fault", title: "Room unlocked", entityId: "lock.room", ticketId: "a",

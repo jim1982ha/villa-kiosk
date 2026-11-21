@@ -361,6 +361,7 @@ export class SceneManager {
         if (loud) this.requestRender();
       },
       dpr: () => window.devicePixelRatio,
+      moving: (on) => document.documentElement.toggleAttribute("data-camera-moving", on),
     });
 
     this.scene = new Scene(this.engine);

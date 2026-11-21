@@ -62,6 +62,8 @@ interface ScalingPort {
   set(level: number, loud: boolean): void;
   /** The panel's device pixel ratio, read when needed (it can change). */
   dpr(): number;
+  /** The camera started (true) or stopped (false) moving: told once per change. */
+  moving(on: boolean): void;
 }
 
 /** One burst of interactive frames, sorted, for the `frames` telemetry. */
@@ -85,6 +87,7 @@ export class ResolutionGovernor implements ResolutionPort {
   private resolutionRaised = false;
   private sharpMotionHw = 0;
   private sharpened = false;
+  private inMotion = false;
 
   constructor(port: ScalingPort) { this.port = port; }
 
@@ -413,8 +416,20 @@ export class ResolutionGovernor implements ResolutionPort {
 
   isSharp(): boolean { return this.sharpened; }
 
+  /**
+   * The camera's motion, told every tick by FrameScheduler; the port hears only the changes. SceneManager marks the
+   * page with it (`data-camera-moving` on the root), and the glass over the 3D view drops its blur while it is set
+   * (01-base.css): a blurred box is re-blurred on every frame the picture under it changes, which is every frame of
+   * a move, and the tint alone reads the same at that speed. A still camera keeps the full glass.
+   */
+  moving(on: boolean): void {
+    if (on === this.inMotion) return;
+    this.inMotion = on;
+    this.port.moving(on);
+  }
+
   /** Forget the burst in progress (teardown). */
-  reset(): void { this.gaps = []; this.renders = []; this.lastFrameAt = 0; }
+  reset(): void { this.gaps = []; this.renders = []; this.lastFrameAt = 0; this.moving(false); }
 
   private native(): number { return 1 / Math.max(1, this.port.dpr() || 1); }
 }
