@@ -1,3 +1,12 @@
+## 2.496.877
+
+- **Camera window: the two arrows that change camera sit together, and "Fit to screen" shows only when it helps.** On
+  a phone held sideways, "Previous camera" is now right above "Next camera". "Fit to screen" now appears only when the
+  stream's picture is smaller than the view in both directions; a picture that already fills the view one way looks the
+  same either way, so the button is left out.
+- **Guest profile: the microphone has its word too.** In the top bar, the microphone now reads "Voice" under its icon,
+  like Search and Menu beside it.
+
 ## 2.496.876
 
 - **A little less work on each update from the villa.** When readings arrive, the list of battery sensors is no longer
