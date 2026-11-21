@@ -1,3 +1,10 @@
+## 2.496.866
+
+- **Each screen's load time and smoothness are kept in the villa's system.** The "VESTA UI devices" sensor, which
+  already lists each screen's 3D drawing facts, now also shows for each one how long the villa took to appear the
+  last time it opened, and how smooth the last moves of the view were (typical and worst frame time, frames a
+  second). Nothing to export or set up.
+
 ## 2.496.865
 
 - **Search.** A magnifier in the top bar (beside the gear on a phone, before the Cockpit on a larger screen) opens
