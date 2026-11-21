@@ -795,6 +795,7 @@ export default function Dashboard() {
         onOpenCockpit={() => go({ type: "openWindow", window: "cockpit", tab: "messages", inbox: "issues" })}
         onAskVesta={() => openSurface("vesta")}
         onOpenCategory={(category) => go({ type: "openList", list: { kind: "category", category } })}
+        onShowTips={() => setShowFirstRunTips(true)}
         families={families}
         onOpenPresence={() => openSurface("presence")}
       />

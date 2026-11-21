@@ -1,3 +1,8 @@
+## 2.496.863
+
+- **"Show the tips again" in Map colours & keys.** The window opened by the "?" now has a button at the bottom left
+  that opens the Quick tips card shown at the first sign-in. On a phone it shows as a light bulb.
+
 ## 2.496.862
 
 - **The bottom bar's tiles keep their own colour when something needs attention.** "Door Lock: Unlocked" now keeps

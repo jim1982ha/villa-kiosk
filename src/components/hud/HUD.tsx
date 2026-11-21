@@ -86,6 +86,8 @@ interface Props {
    *  whether its callback was passed. */
   doors: Doors;
   onOpenSettings: () => void;
+  /** Open the Quick tips card again (the map legend's "Show the tips again"). */
+  onShowTips: () => void;
   onMove: (x: number, y: number) => void;
   viewMode: "first-person" | "overview";
   onToggleViewMode: () => void;
@@ -137,7 +139,7 @@ export default function HUD({
   doors, onOpenSettings, onMove,
   viewMode, onToggleViewMode,
   hasOverviewDefault, onApplyOverviewDefault, onSaveOverviewDefault,
-  onOpenCockpit, onAskVesta, onOpenCategory, onOpenPresence, families,
+  onOpenCockpit, onAskVesta, onOpenCategory, onOpenPresence, onShowTips, families,
 }: Props) {
   const { connection, haConfig } = useHA();
   const { config, update } = useConfig();
@@ -762,7 +764,8 @@ export default function HUD({
 
       {legendOpen && (
         <LegendModal onClose={() => setLegendOpen(false)} listable={visibleCategories}
-          onListCategory={(category) => { setLegendOpen(false); onOpenCategory(category); }} />
+          onListCategory={(category) => { setLegendOpen(false); onOpenCategory(category); }}
+          onShowTips={() => { setLegendOpen(false); onShowTips(); }} />
       )}
 
 
