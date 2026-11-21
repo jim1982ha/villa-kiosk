@@ -626,6 +626,19 @@ button {
   color: var(--text-secondary); cursor: pointer; pointer-events: auto; }
 .icon-quiet.small { width: 24px; height: 24px; }
 .icon-quiet::after { content: ""; position: absolute; inset: -6px; }
+/* ⚠️ A FINGER'S REACH (--touch-min): a control drawn smaller than 44px keeps its look and gets an invisible box of at
+   least 44 x 44 centred on it, which is what a finger hits (measured as a touch screen, phone and tablet, 2026-11-21:
+   the choices and tabs were 40px tall, a chart's range pills 26, the map's buttons 40 on a tablet, a row's switch 28,
+   a chart's thumbs and fit mark 20). One body for all of them: a control big enough already is untouched (100%).
+   ::before on the map's buttons (.icon-btn), whose ::after is .has-hold-action's dot. */
+:is(.segmented button, .tool-group > button, .tool-group > div > button, .chart-fit-mark) { position: relative; }
+:is(.segmented button, .tool-group > button, .tool-group > div > button, .summary-entity-toggle, .chart-fit-mark,
+  .chart-range-thumb)::after,
+.icon-btn::before, .hud-home-btn::before {
+  content: ""; position: absolute; top: 50%; left: 50%;
+  width: max(100%, var(--touch-min)); height: max(100%, var(--touch-min));
+  transform: translate(-50%, -50%);
+}
 .icon-quiet:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 @media (hover: hover) {
   .icon-quiet:hover:not(:disabled) { background: color-mix(in srgb, var(--text-primary) 10%, transparent); color: var(--text-primary); }

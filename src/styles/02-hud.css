@@ -203,7 +203,7 @@
 }
 .hud-menu-item {
   display: flex; align-items: center; gap: 10px;
-  width: 100%; padding: 11px 10px;
+  width: 100%; min-height: var(--touch-min); padding: 11px 10px;
   background: transparent; border: none; border-radius: 10px;
   color: var(--text-primary); font-size: var(--text-base); text-align: left;
   cursor: pointer;
@@ -347,14 +347,8 @@
 /* Between 1F/2F and the view switch under them: the floor section's own
    hairline, horizontal (.hud-cat-sep is the category row's, vertical). */
 .hud-stack-sep { flex: 0 0 auto; height: 1px; margin: 0 4px; background: var(--hairline-strong); }
-/* The invisible 44px touch target of the floor buttons and the app-icon tile, one body (the phone tier's
-   category buttons use the same overlay on ::after, 05-layout.css). */
-.hud-floor-btn::before,
-.hud-home-btn::before {
-  content: ""; position: absolute; top: 50%; left: 50%;
-  width: var(--touch-min); height: var(--touch-min);
-  transform: translate(-50%, -50%);
-}
+/* The invisible 44px touch target of the floor buttons and the app-icon tile: every map button's ::before, one body
+   with every other small control's reach (01-base.css "A finger's reach"). */
 
 /* Rooms dial popup: tappable floating chips on arcs beside the button (see
    RadialRoomMenu). The full-screen backdrop catches an outside tap to dismiss;

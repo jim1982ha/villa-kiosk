@@ -1,3 +1,10 @@
+## 2.496.872
+
+- **Small buttons are easier to hit with a finger.** Every choice and tab (Settings, the Cockpit, a device's modes and
+  speeds, On | Off), a chart's 1h · 24h · 1w pills, its two range handles and its "from 0" mark, a row's switch and,
+  on a tablet, the buttons over the villa now answer a tap anywhere in a 44px square around them. They look exactly
+  as before. The rows of the top-right menu are 2px taller, for the same reason.
+
 ## 2.496.871
 
 - **Smoother moves over the villa.** While you turn, pan or walk, the frosted buttons and bars over the villa keep
