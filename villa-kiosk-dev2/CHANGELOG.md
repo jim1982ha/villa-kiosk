@@ -1,3 +1,9 @@
+## 2.496.870
+
+- **The villa's first screen has less to read before it starts.** Settings, Advanced Settings and the Cockpit are now
+  read the first time you open one, not while the villa loads. The first opening of each shows a short spinner;
+  after that they open as before, also without a network.
+
 ## 2.496.869
 
 - **Camera on a phone held sideways: every button fits.** When the buttons do not fit in one column down the right
