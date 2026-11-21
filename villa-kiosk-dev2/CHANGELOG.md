@@ -1,3 +1,11 @@
+## 2.496.875
+
+- **An object can no longer be hidden from its device's card; the unused code is removed.** Since 2.496.868 the
+  "3D object" line of a device's card in Devices only offers the ✕ that gives a moved object back to the model's own
+  device; the old way to hide an object, which no screen offered any more, is gone. An object hidden that way before
+  still shows nothing on the map, and still appears, as "shows nothing yet", in the "Add a 3D object…" search of a
+  device not on the map, where picking it shows that device on it again.
+
 ## 2.496.874
 
 - **Screens change layout at fewer widths.** The app now switches between its phone, sideways-phone, small-tablet,
