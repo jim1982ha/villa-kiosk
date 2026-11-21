@@ -5,11 +5,11 @@
 
 import { useEffect } from "react";
 import { useConfig } from "@/config/ConfigContext";
-import { useHA } from "./HAStateStore";
+import { useHAActions } from "./HAStateStore";
 
 export default function UnavailableByDesignSync() {
   const { config } = useConfig();
-  const { setUnavailableByDesign } = useHA();
+  const { setUnavailableByDesign } = useHAActions();
   const ids = config.unavailableByDesign;
   useEffect(() => { setUnavailableByDesign(new Set(ids)); }, [ids, setUnavailableByDesign]);
   return null;

@@ -15,7 +15,7 @@ import { Sparkles, Power, PowerOff, MapPin, Building2 } from "lucide-react";
 import BasePanel from "./BasePanel";
 import EntityRowToggle from "./EntityRowToggle";
 import SummaryEntityRow from "./SummaryEntityRow";
-import { useHA } from "@/ha/HAStateStore";
+import { useHA, useHAActions } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
 import { useSceneConfirm } from "@/hooks/useSceneConfirm";
 import { useProfile } from "@/auth/ProfileContext";
@@ -93,7 +93,7 @@ interface Props {
  * (usePendingAck), until one of the devices it switches says so.
  */
 function BulkToggle({ devices, looks }: { devices: HassEntity[]; looks: LookSource }) {
-  const { callService } = useHA();
+  const { callService } = useHAActions();
   const [confirming, setConfirming] = useState(false);
   const anyOn = groupLook(devices.map((e) => deviceLook(e.entity_id, looks)), { showingDevices: true }).onCount > 0;
   // what it will change, said (owner, 2026-10-20): the devices now on when it turns off, else those now off

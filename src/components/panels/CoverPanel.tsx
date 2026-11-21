@@ -2,7 +2,7 @@
 import { Blinds, ChevronUp, ChevronDown, Square } from "lucide-react";
 import BasePanel from "./BasePanel";
 import type { PanelProps } from "@/types/panel.types";
-import { useHA } from "@/ha/HAStateStore";
+import { useHAActions } from "@/ha/HAStateStore";
 import { HAServices } from "@/ha/HAServiceCalls";
 import { coverPill } from "@/config/reading";
 import { useLiveDraft } from "@/hooks/useLiveDraft";
@@ -12,7 +12,7 @@ import CommandButton from "./CommandButton";
 import { actionColor } from "@/utils/stateColors";
 
 export default function CoverPanel({ entity, mapping, onClose }: PanelProps) {
-  const { ws } = useHA();
+  const { ws } = useHAActions();
   const pos = entity?.attributes.current_position;
   const hasPosition = typeof pos === "number";
   // Follows the device until dragged (useLiveDraft): a state event mid-drag

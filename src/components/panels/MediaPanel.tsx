@@ -4,11 +4,11 @@ import BasePanel from "./BasePanel";
 import ControlFrame from "./ControlFrame";
 import CommandButton from "./CommandButton";
 import type { PanelProps } from "@/types/panel.types";
-import { useHA } from "@/ha/HAStateStore";
+import { useHAActions } from "@/ha/HAStateStore";
 import { HAServices } from "@/ha/HAServiceCalls";
 
 export default function MediaPanel({ entity, mapping, onClose }: PanelProps) {
-  const { ws } = useHA();
+  const { ws } = useHAActions();
   const title = entity?.attributes.media_title as string | undefined;
 
   return (

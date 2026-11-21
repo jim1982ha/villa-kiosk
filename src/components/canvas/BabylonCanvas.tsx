@@ -10,7 +10,7 @@ import { formatProbe, registerProbeRunner } from "@/babylon/perfProbe";
 import { useConfig } from "@/config/ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
 import { filterConfigForRole, roleCan } from "@/auth/permissions";
-import { useHA } from "@/ha/HAStateStore";
+import { useHAActions } from "@/ha/HAStateStore";
 import { centralRoomsUrl, roomsPathFor } from "@/utils/centralModel";
 import { modelLifecycle, useModel, tooHeavyLine } from "@/utils/modelLifecycle";
 import { sha256Hex } from "@/utils/modelInfo";
@@ -60,7 +60,7 @@ function VillaScene({
   const managerRef = useRef<SceneManager | null>(null);
   const { config, update } = useConfig();
   const { role, beginSwitch } = useProfile();
-  const { subscribeAll, getEntitiesSnapshot } = useHA();
+  const { subscribeAll, getEntitiesSnapshot } = useHAActions();
   // What the SCENE is allowed to show for the active profile: role-denied
   // categories folded into the hidden set, denied entities stripped from the
   // entity map. The stored config stays complete (auto-detect below still

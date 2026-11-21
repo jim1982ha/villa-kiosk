@@ -1,3 +1,9 @@
+## 2.496.861
+
+- **Less work on every live update.** The camera, lock, blind, fan and media controls, the scene buttons and the 3D
+  view's live feed are no longer redrawn each time a device in the villa reports a change; they still act the
+  same. Nothing on screen changes.
+
 ## 2.496.860
 
 - **Behind the scenes: one list decides what is drawn over what.** Every layer of the screen (the bars, windows,

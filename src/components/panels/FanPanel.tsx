@@ -4,7 +4,7 @@ import BasePanel from "./BasePanel";
 import ControlFrame from "./ControlFrame";
 import DeviceChoice from "./DeviceChoice";
 import type { PanelProps } from "@/types/panel.types";
-import { useHA } from "@/ha/HAStateStore";
+import { useHAActions } from "@/ha/HAStateStore";
 import { HAServices } from "@/ha/HAServiceCalls";
 import { devicePower } from "@/utils/devicePower";
 import { fanLevels, nearestLevel } from "@/utils/panelRules";
@@ -14,7 +14,7 @@ import { fanLevels, nearestLevel } from "@/utils/panelRules";
 // see percentage_step). Anything else falls back to a plain "{pct}%" label.
 
 export default function FanPanel({ entity, mapping, onClose }: PanelProps) {
-  const { ws } = useHA();
+  const { ws } = useHAActions();
   const on = devicePower(entity, mapping.entityId).position === "on";
   const presets = (entity?.attributes.preset_modes ?? []) as string[];
   const currentPreset = entity?.attributes.preset_mode;

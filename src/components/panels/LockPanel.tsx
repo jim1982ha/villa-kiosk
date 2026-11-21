@@ -2,7 +2,7 @@
 import { Lock, Unlock } from "lucide-react";
 import BasePanel from "./BasePanel";
 import type { PanelProps } from "@/types/panel.types";
-import { useHA } from "@/ha/HAStateStore";
+import { useHAActions } from "@/ha/HAStateStore";
 import { HAServices } from "@/ha/HAServiceCalls";
 import { usePendingAck } from "@/hooks/usePendingAck";
 import { lockBolt, lockButtons, lockPill } from "@/config/reading";
@@ -16,7 +16,7 @@ import { switchAsk } from "@/utils/devicePower";
 import Button from "@/components/common/Button";
 
 export default function LockPanel({ entity, mapping, onClose }: PanelProps) {
-  const { ws } = useHA();
+  const { ws } = useHAActions();
   // where its bolt is — the one reading (stateColors.lockBolt): the header's icon, the pill's and the button agree
   const bolt = lockBolt(entity?.state);
   const buttons = lockButtons(bolt);

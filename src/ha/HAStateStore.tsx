@@ -4,6 +4,12 @@
 // imperative path the 3D canvas repaints from without a React render (the
 // Key 3Dash pattern) — is a plain module; this is only its adapter, and the
 // context shape every screen reads through useHA() is unchanged.
+//
+// ⚠️ TWO CONTEXTS: useHA() is rebuilt on every change of the store (a push of
+// live states every 250 ms at most), so every reader renders again. A reader
+// that only SENDS or subscribes (a panel's ws, a scene's callService, the 3D
+// canvas's subscribeAll) takes useHAActions(): the store's handles, one object
+// for the provider's life, so a push never renders it.
 
 import {
   createContext, useContext, useEffect, useMemo, useRef, useSyncExternalStore,
@@ -18,10 +24,8 @@ export type { HAConfig };
 
 type EntityCallback = (entity: HassEntity) => void;
 
-/** Everything the store's state carries (EntityStoreState — its fields are
- *  documented there, once: this interface restated all of them until
- *  2.496.263), plus the store's imperative handles. */
-interface HAStateContextType extends EntityStoreState {
+/** The store's imperative handles: the same functions and socket for the provider's whole life (useHAActions). */
+export interface HAActions {
   /**
    * Imperative, ALWAYS-current read of `entities` — for the rare caller that
    * needs the latest snapshot at some later moment rather than reacting to
@@ -39,7 +43,6 @@ interface HAStateContextType extends EntityStoreState {
    * state — including its icon — for a long time after the villa loaded.
    */
   getEntitiesSnapshot: () => Record<string, HassEntity>;
-  connected: boolean;
   ws: HAWebSocket;
   /** Imperative subscribe used by Babylon EntityVisuals; returns unsubscribe. */
   subscribe: (entityId: string, cb: EntityCallback) => () => void;
@@ -53,7 +56,15 @@ interface HAStateContextType extends EntityStoreState {
   setUnavailableByDesign: (ids: ReadonlySet<string>) => void;
 }
 
+/** Everything the store's state carries (EntityStoreState — its fields are
+ *  documented there, once: this interface restated all of them until
+ *  2.496.263), plus the store's imperative handles. */
+interface HAStateContextType extends EntityStoreState, HAActions {
+  connected: boolean;
+}
+
 const HAStateContext = createContext<HAStateContextType | null>(null);
+const HAActionsContext = createContext<HAActions | null>(null);
 
 export function HAStateProvider({ children }: { children: ReactNode }) {
   const storeRef = useRef<EntityStore>();
@@ -68,11 +79,9 @@ export function HAStateProvider({ children }: { children: ReactNode }) {
   // reclaim on its own.
   useEffect(() => () => store.dispose(), [store]);
 
-  const value = useMemo<HAStateContextType>(
+  const actions = useMemo<HAActions>(
     () => ({
-      ...state,
       getEntitiesSnapshot: store.snapshot,
-      connected: state.connection === "connected",
       ws: store.ws,
       subscribe: store.subscribe,
       subscribeAll: store.subscribeAll,
@@ -80,14 +89,29 @@ export function HAStateProvider({ children }: { children: ReactNode }) {
       connect: store.connect,
       setUnavailableByDesign: store.setUnavailableByDesign,
     }),
-    [state, store],
+    [store],
+  );
+  const value = useMemo<HAStateContextType>(
+    () => ({ ...state, ...actions, connected: state.connection === "connected" }),
+    [state, actions],
   );
 
-  return <HAStateContext.Provider value={value}>{children}</HAStateContext.Provider>;
+  return (
+    <HAActionsContext.Provider value={actions}>
+      <HAStateContext.Provider value={value}>{children}</HAStateContext.Provider>
+    </HAActionsContext.Provider>
+  );
 }
 
 export function useHA(): HAStateContextType {
   const ctx = useContext(HAStateContext);
   if (!ctx) throw new Error("useHA must be used within HAStateProvider");
+  return ctx;
+}
+
+/** The store's handles alone (HAActions): a reader that only sends or subscribes never renders again on a push. */
+export function useHAActions(): HAActions {
+  const ctx = useContext(HAActionsContext);
+  if (!ctx) throw new Error("useHAActions must be used within HAStateProvider");
   return ctx;
 }
