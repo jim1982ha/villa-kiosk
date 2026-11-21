@@ -31,7 +31,7 @@ import {
   // MapIcon, not Map: the bare name shadows the global Map constructor,
   // which this file also uses.
   Settings, Map as MapIcon, PersonStanding,
-  Minus, Plus, CircleHelp, TriangleAlert, Bot, Wrench, LayoutGrid, Power,
+  Minus, Plus, CircleHelp, TriangleAlert, Bot, Wrench, LayoutGrid, Power, Search,
 } from "lucide-react";
 import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
@@ -88,6 +88,8 @@ interface Props {
   onOpenSettings: () => void;
   /** Open the Quick tips card again (the map legend's "Show the tips again"). */
   onShowTips: () => void;
+  /** Open Search (devices, rooms, scenes: hud/SearchWindow). */
+  onOpenSearch: () => void;
   onMove: (x: number, y: number) => void;
   viewMode: "first-person" | "overview";
   onToggleViewMode: () => void;
@@ -139,7 +141,7 @@ export default function HUD({
   doors, onOpenSettings, onMove,
   viewMode, onToggleViewMode,
   hasOverviewDefault, onApplyOverviewDefault, onSaveOverviewDefault,
-  onOpenCockpit, onAskVesta, onOpenCategory, onOpenPresence, onShowTips, families,
+  onOpenCockpit, onAskVesta, onOpenCategory, onOpenPresence, onShowTips, onOpenSearch, families,
 }: Props) {
   const { connection, haConfig } = useHA();
   const { config, update } = useConfig();
@@ -149,6 +151,10 @@ export default function HUD({
   // floor buttons, the notices) follows that one height. Other profiles keep the icon-only bar.
   const captions = role === "guest";
   const caption = (word: string) => (captions ? word : undefined);
+  const searchButton = (
+    <Button on="map" icon={<Search size={24} />} label="Search devices, rooms and scenes" onClick={onOpenSearch}
+      caption={caption("Search")} />
+  );
   useEffect(() => {
     if (!captions) return;
     document.documentElement.classList.add("hud-captioned");
@@ -618,6 +624,9 @@ export default function HUD({
             </span>
           )}
           <div className="hud-right-inline hud-group">
+            {/* Search, first of this group on a roomy screen (owner-approved review P3-03, 2026-11-21); beside the gear on
+                a phone, below */}
+            {searchButton}
             {/* ONE button for the Cockpit and the agent (2.496.242): with an
                 agent configured the Cockpit's icon IS the robot — its count
                 (top right) stays the Cockpit's, the agent's presence dot sits
@@ -679,6 +688,7 @@ export default function HUD({
               <TalkButton place="bar" onOpen={onAskVesta} onTap={onAskVesta} className="hud-bar-mic"
                 idle={talker ? "Ask VESTA: tap to open, hold to talk" : "Ask VESTA"} />
             )}
+            {searchButton}
             <Button on="map" lit={menuOpen} className="hud-gear" onClick={() => setMenuOpen((o) => !o)}
               tip={`Menu${unreadSaid}`} label={`Menu${unreadSaid}`} aria-haspopup="menu" aria-expanded={menuOpen}
               icon={<Settings size={24} />} caption={caption("Menu")}

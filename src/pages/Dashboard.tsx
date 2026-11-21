@@ -22,6 +22,7 @@ import AppNotice, { AppNoticeContext, useFailedCommandNotice, useRaisedNotices }
 import ProblemNotices from "@/components/hud/ProblemNotices";
 import { NoticeStack } from "@/components/hud/Notice";
 import FirstRunTips from "@/components/hud/FirstRunTips";
+import SearchWindow from "@/components/hud/SearchWindow";
 import SummaryBar from "@/components/hud/SummaryBar";
 import TapRipple, { RIPPLE_LIFETIME_MS, type Ripple } from "@/components/hud/TapRipple";
 import { hasSeenFirstRunTips } from "@/utils/viewPrefs";
@@ -206,6 +207,8 @@ export default function Dashboard() {
   // whatever was in localStorage when this component first mounted rather
   // than being re-evaluated (and potentially flipping on) on every render.
   const [showFirstRunTips, setShowFirstRunTips] = useState(() => !hasSeenFirstRunTips());
+  /** Search (hud/SearchWindow), from the top bar's magnifier. */
+  const [searchOpen, setSearchOpen] = useState(false);
   // Tap-acknowledgment ripples for the in-scene quick-toggle gesture (tap a
   // light/switch -> instant HA call, no panel) — see TapRipple's docstring
   // for why this exists instead of predicting the on/off outcome.
@@ -796,6 +799,7 @@ export default function Dashboard() {
         onAskVesta={() => openSurface("vesta")}
         onOpenCategory={(category) => go({ type: "openList", list: { kind: "category", category } })}
         onShowTips={() => setShowFirstRunTips(true)}
+        onOpenSearch={() => setSearchOpen(true)}
         families={families}
         onOpenPresence={() => openSurface("presence")}
       />
@@ -807,6 +811,10 @@ export default function Dashboard() {
         onOpenEntity={openDevicePanel}
         scenes={haScenes}
       />
+      {searchOpen && (
+        <SearchWindow scenes={haScenes} onClose={() => setSearchOpen(false)} onGoToRoom={handleTeleport}
+          onOpenEntity={openDevicePanel} />
+      )}
 
       {/* VESTA's conversation, its own window (owner, 2026-10-29: "a dedicated icon in the top bar, next to the robot") */}
       {shown("vesta") && <VestaWindow onClose={() => closeSurface("vesta")} canOpenPage={doors.facility} />}

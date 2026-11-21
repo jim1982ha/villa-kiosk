@@ -15,7 +15,7 @@
 import type { Category, EntityMapping, EntityType } from "@/types/scene.types";
 import type { AppConfig } from "@/config/AppConfig";
 import { CATEGORY_ORDER, effectiveCategory, subjectOf } from "@/config/EntityCategories";
-import { mappingForEntityId } from "@/config/EntityMap";
+import { deviceTypeOf, mappingForEntityId } from "@/config/EntityMap";
 import type { Role } from "./roles";
 import ROLE_TABLE from "../../rootfs/usr/share/vesta/roles.json" with { type: "json" };
 
@@ -188,6 +188,18 @@ export function isMappingAllowed(
 ): boolean {
   const category = effectiveCategory(subjectOf(entityId, mapping, entity));
   return isEntityAllowed(role, mapping.type, category);
+}
+
+/** Whether this profile may SWITCH this device from a list (Search): it controls devices at all, and the device's
+ *  category and type are its own (isMappingAllowed's rule; a device with no stored mapping is typed from its id,
+ *  EntityMap.deviceTypeOf). No role: nothing. */
+export function mayControlDevice(
+  role: Role | null, entityId: string, mapping: EntityMapping | undefined,
+  entity: { attributes?: { device_class?: unknown } } | undefined,
+): boolean {
+  if (!role || !hasCapability(role, "controlEntities")) return false;
+  const type = deviceTypeOf(entityId, null, mapping);
+  return isEntityAllowed(role, type, effectiveCategory(subjectOf(entityId, mapping, entity, type)));
 }
 
 /**

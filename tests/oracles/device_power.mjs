@@ -50,7 +50,7 @@ ck("the quick tap and the linked switch throw through it; the linked switch know
   ck("the linked ring asks it: an UNLOCKED lock and an OPEN cover ring their devices, locked / closed do not",
      linked("unlocked", "open").join() === "true,true" && linked("locked", "closed").join() === "false,false", [linked("unlocked", "open"), linked("locked", "closed")]);
 }
-ck("the device-list rows throw through it", /const sw = deviceSwitch\(e, id,/.test(src("components/panels/SummaryGroupPanel.tsx")) && /const f = sw\.flip;/.test(src("components/panels/SummaryGroupPanel.tsx")));
+ck("the device-list rows throw through it", /const sw = deviceSwitch\(e, id,/.test(src("components/panels/useDeviceRows.tsx")) && /const f = sw\.flip;/.test(src("components/panels/useDeviceRows.tsx")));
 
 console.log("\n  asking first (2.496.259 — one tap in a room list unlocked a door):");
 const sw = (id, state, policy) => deviceSwitch(e(id, state), id, policy);
@@ -72,7 +72,7 @@ ck("the map's quick tap reads the SAME answer: a flagged switch opens its panel,
    && isQuickToggle({ entityId: "switch.lamp", type: "switch" }, e("switch.lamp", "off")) === true);
 // Every place that throws a switch renders that answer through the one hook.
 const row = src("components/panels/EntityRowToggle.tsx"), pt = src("components/panels/PowerToggle.tsx"),
-      lp = src("components/panels/LockPanel.tsx"), cf = src("components/panels/ControlFrame.tsx"), sg = src("components/panels/SummaryGroupPanel.tsx");
+      lp = src("components/panels/LockPanel.tsx"), cf = src("components/panels/ControlFrame.tsx"), sg = src("components/panels/useDeviceRows.tsx");
 ck("the list row passes deviceSwitch's ask, and its switch only requests (never toggles straight away)",
    /ask=\{sw\.ask\}/.test(sg) && /useAskFirst\(ask,/.test(row) && /onClick=\{request\}/.test(row) && !/onClick=\{\(\) => \{ tapFeedback\(\); toggle\(\); \}\}/.test(row));
 ck("the power button: its ask comes from deviceSwitch, through the one hook",

@@ -9,27 +9,18 @@
 // panel) and the shared gradient badge (badgeImage) so it feels native.
 
 import { roleCan } from "@/auth/permissions";
-import { useMemo, useState } from "react";
-import { rowText } from "@/config/reading";
+import { useState } from "react";
 import { Sparkles, Power, PowerOff, MapPin, Building2 } from "lucide-react";
 import BasePanel from "./BasePanel";
-import EntityRowToggle from "./EntityRowToggle";
-import SummaryEntityRow from "./SummaryEntityRow";
 import { useHA, useHAActions } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
 import { useSceneConfirm } from "@/hooks/useSceneConfirm";
 import { useProfile } from "@/auth/ProfileContext";
 import type { HaSceneInfo } from "@/config/haScenes";
-import { badgeImage } from "@/babylon/badgeIcons";
-import { useResolvedTheme } from "@/hooks/useResolvedTheme";
-import { iconKeyFor } from "@/babylon/badgeIconKeys";
-import { effectiveCategory, subjectOf } from "@/config/EntityCategories";
-import { badgeOwnerOf, deviceLook, groupLook, lookMarks, storeLookSource, type LookSource } from "@/utils/deviceActivity";
+import { deviceLook, groupLook, type LookSource } from "@/utils/deviceActivity";
 import { bulkSwitchPlan, bulkWords } from "@/config/activeDevices";
-import { useEntityLabel } from "@/hooks/useEntityLabel";
 import { ROW_SWITCH_DOMAINS } from "@/utils/quickAction";
 import type { HassEntity } from "@/types/ha.types";
-import type { Category } from "@/types/scene.types";
 import { listSections, offersGrouping, summaryRows, type Grouping } from "@/config/summaryRows";
 import SegmentedGroup from "@/components/common/SegmentedGroup";
 import { TipTitle } from "@/components/common/InfoTip";
@@ -39,13 +30,12 @@ import { deviceRoom, floorOfRoom } from "@/config/devicePlace";
 // The group's shape is config/summaryGroups' (this screen only draws one).
 import type { SummaryGroup } from "@/config/summaryGroups";
 import { useVillaModel } from "@/config/VillaModel";
-import { deviceSwitch } from "@/utils/devicePower";
 import InlineConfirm from "@/components/common/InlineConfirm";
-import { NOT_SENT, allSent } from "@/ha/serviceOutcome";
+import { allSent } from "@/ha/serviceOutcome";
 import { usePendingAck } from "@/hooks/usePendingAck";
-import { domainOf } from "@/utils/entityDomain";
 import { NOT_IN_HA } from "@/utils/deviceHealth";
 import EmptyLine from "@/components/common/EmptyLine";
+import { useDeviceRows } from "./useDeviceRows";
 import Button from "@/components/common/Button";
 
 interface Props {
@@ -130,23 +120,13 @@ export default function SummaryGroupPanel({
 }: Props) {
   // Entities on the 3D map; anything else exists only in Home Assistant and
   // is listed last and tinted (config/VillaModel).
-  const { mappedEntityIds, marksFor } = useVillaModel();
-  const { entities, suppressedEntityIds, hiddenInHaEntityIds, callService } = useHA();
+  const { mappedEntityIds } = useVillaModel();
+  const { entities, suppressedEntityIds } = useHA();
   const roomFloors = useRoomFloors();
-  const { config, resolvedRooms } = useConfig();
-  // Each row's badge is a PNG baked from the theme's tokens — see the hook.
-  const theme = useResolvedTheme();
-  /** How every row looks — utils/deviceActivity's deviceLook over the store,
-   *  the SAME rule and the same inputs the map badge is painted from (its
-   *  linked entity through devicePower, its device_class alarm). A
-   *  linked entity is frequently not itself in this group (a pump's switch
-   *  lives elsewhere), so this reads the whole store, not the group's list. */
-  // ...and the villa model's marks as THIS profile sees the villa (VillaModel marksFor): a critical device that lost
-  // contact is red, a hidden row keeps its "hidden" mark (never red or amber), a card its own Cockpit lists an amber "!".
+  const { resolvedRooms } = useConfig();
+  // every row, and how each device looks (the group's "Turn all on/off" reads it): useDeviceRows, shared with Search
+  const { looks, renderRow } = useDeviceRows();
   const { role } = useProfile();
-  const marks = useMemo(() => marksFor(role), [marksFor, role]);
-  const looks = storeLookSource(entities, { ...config, ...lookMarks(marks) });
-  const entityLabel = useEntityLabel();
   const { ask: askScene, dialog: sceneDialog } = useSceneConfirm();
 
   const roomOf = (id: string) => deviceRoom(resolvedRooms, id);
@@ -236,104 +216,9 @@ export default function SummaryGroupPanel({
             <span>{sec.title}</span>
             {bulk && <BulkToggle devices={toggleables.filter((e) => inSection.has(e.entity_id))} looks={looks} />}
           </div>
-          <div className="summary-entity-grid">{sec.items.map(renderRow)}</div>
+          <div className="summary-entity-grid">{sec.items.map((e) => renderRow(e, { canControl, onOpen: onOpenEntity }))}</div>
         </div>
       );
     });
-  }
-
-  function renderRow(e: HassEntity) {
-    const id = e.entity_id;
-    const domain = domainOf(id);
-    const look = deviceLook(id, looks);
-    const type = look.type;
-    // A device's LINKED entity wears that device's badge, as on the map (deviceActivity.badgeOwnerOf); its face is its own
-    const owner = badgeOwnerOf(id, config.entityMap);
-    const ownerType = owner === id ? type : looks.typeOf(owner);
-    const ownerEnt = owner === id ? e : entities[owner];
-    const cat: Category = effectiveCategory(subjectOf(owner, config.entityMap[owner], ownerEnt, ownerType));
-    const label = entityLabel(id);
-    // ⚠️ ONE OWNER, AND THIS ROW USED NOT TO USE IT. This was written out here
-    // as `pretty(state) + " " + unit` — no scaling — so the row printed
-    // "6570.989 W" beside a badge that said "6.6 kW". The climate arrow and the
-    // room-vs-setpoint reasoning moved with it; see config/reading's rowText.
-    const stateText = rowText(id, e);
-
-    // `rowInHa` gates every CONTROL on the row. A phantom is rendered so the
-    // device is reported, not so it can be operated: Home Assistant would
-    // reject the service call, and nothing would ever come back to change the
-    // row's state, so the control could only ever look broken.
-    const rowInHa = !!entities[id];
-    // ⚠️ THREE ANSWERS, AND THE THIRD WITHHOLDS THE CONTROL. This was
-    // `isLock ? e.state !== "locked" : !OFF.has(e.state)` — and `!== "locked"`
-    // is also true for `unavailable`, `unknown` and `jammed`, so a lock Home
-    // Assistant had lost contact with rendered its switch in the UNLOCKED
-    // position, announced as "on", while this same row's text said
-    // "Unavailable" and its badge was amber. A switch has two positions and
-    // the villa did not know which one was true, so it now offers none —
-    // the same reasoning `rowInHa` already applies one line up. See
-    // entityState.switchPosition, through devicePower.deviceSwitch — the one
-    // answer for which way it sits, what throws it, and whether to ask first
-    // (2.496.259: this row's switch unlocked a door in one tap, and ignored
-    // the owner's "ask before switching").
-    const sw = deviceSwitch(e, id, { label, requireConfirm: config.entityMap[id]?.requireConfirm });
-    const position = sw.position;
-    const canToggle = canControl && rowInHa && position !== "unknown"
-      && ROW_SWITCH_DOMAINS.has(domain);
-    // EXACTLY what the map paints: `look` above is deviceLook, the map's own
-    // rule with the map's own inputs. This used to re-derive the surface from
-    // classifyDeviceActivity plus its own unavailable check, which matched the
-    // map for most devices and silently disagreed for any entity with a
-    // `linkedEntityId`: a pump's power sensor is ringed on the map while its
-    // pump runs, and every one of them listed here as plain grey. And until
-    // 2.496.245 it resolved the LINKED entity as a raw `state === "on"`, where
-    // the map asks devicePower — so a device linked to a lock that was
-    // UNLOCKED, or a cover that was OPEN, was ringed on the map and plain here.
-    const badge = look;
-    const notInHaRow = !rowInHa;
-    // An id HA has no entity for is reported as THAT, not as "not on the map"
-    // — it may well have geometry, and saying it is missing from the model
-    // would send someone to fix the wrong thing.
-    const offMapRow = rowInHa && !mappedEntityIds.has(id);
-    // A user explicitly hid this in HA (registry hidden_by) — distinct from
-    // being merely diagnostic-category, and worth surfacing explicitly: a
-    // caller that opted out of filterSuppressed (the room/category browses)
-    // can now show this row at all, but the user should still be able to
-    // tell "HA itself says this is hidden" from an ordinary device at a
-    // glance, not just infer it silently.
-    const hiddenInHa = hiddenInHaEntityIds.has(id);
-    // The flip is deviceSwitch's (lock/unlock, open/close, a domain's toggle).
-    const doToggle = () => {
-      const f = sw.flip;
-      return f ? callService(f.domain, f.service, {}, { entity_id: id }) : Promise.resolve(NOT_SENT);
-    };
-
-    // The tile itself is SummaryEntityRow — a device that lost contact wears it whole (2.496.428).
-    return (
-      <SummaryEntityRow
-        key={id}
-        label={label}
-        stateText={stateText}
-        look={badge}
-        badgeSrc={badgeImage({
-          category: cat, iconKey: iconKeyFor(ownerType, ownerEnt), state: badge.face, mark: badge.mark, linkPill: badge.linkPill,
-          color: config.entityMap[owner]?.badgeColor ?? config.entityMap[id]?.badgeColor,
-        })}
-        badgeKey={theme}
-        notInHa={notInHaRow}
-        offMap={offMapRow}
-        hidden={hiddenInHa}
-        onOpen={() => onOpenEntity(id)}
-        toggle={canToggle && (
-          <EntityRowToggle
-            entityId={id}
-            actualOn={position === "on"}
-            ask={sw.ask}
-            label={label}
-            onToggle={doToggle}
-          />
-        )}
-      />
-    );
   }
 }

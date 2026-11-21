@@ -1,3 +1,13 @@
+## 2.496.865
+
+- **Search.** A magnifier in the top bar (beside the gear on a phone, before the Cockpit on a larger screen) opens
+  one box that finds rooms, devices and scenes. A room has a "Go" button that flies there, as in Rooms; a device has
+  its usual switch, which still asks before unlocking a door or switching a device set to ask first; a scene asks
+  before it runs. Each profile only sees what it may control: no siren is ever listed, nor a scene that only starts
+  an automation.
+- **Every search box finds each typed word on its own**, so "master AC" finds the master bedroom's AC, in either
+  order.
+
 ## 2.496.864
 
 - **The Guest profile's top bar has a word under each icon**: Comfort, Lights, Network, Access, Help, Smaller,

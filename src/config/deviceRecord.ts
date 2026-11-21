@@ -123,9 +123,12 @@ export function groupMatches(group: { primaryEntityId: string; memberEntityIds: 
 
 /** Does a typed search find any of these texts — trimmed, case-insensitive, a part of one is enough; an empty search
  *  finds everything, a missing text nothing. The rule of every search box over a list (Advanced Settings' rows and
- *  lost objects, the device groups, the fault form's device picker), written out at each until 2026-10-22. */
+ *  lost objects, the device groups, the fault form's device picker, Search), written out at each until 2026-10-22.
+ *  EACH TYPED WORD ON ITS OWN (owner, 2026-11-21: "master AC"): every word must be found, each in any of the texts,
+ *  so a room's word and a name's word find the device together, in either order. */
 export function matchesQuery(query: string, ...texts: (string | undefined | null)[]): boolean {
-  const q = query.trim().toLowerCase();
-  if (!q) return true;
-  return texts.some((s) => s != null && s.toLowerCase().includes(q));
+  const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return true;
+  const lower = texts.filter((s): s is string => s != null).map((s) => s.toLowerCase());
+  return words.every((w) => lower.some((s) => s.includes(w)));
 }
