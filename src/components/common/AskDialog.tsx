@@ -83,7 +83,7 @@ export default function AskDialog({
     // `.modal` rules, which are written for long full-screen sheets and would
     // render a two-line question edge-to-edge with square corners.
     <Window kind="question" label={title} onClose={onCancel} className="panel-modal" layer="panel-modal-backdrop"
-      zIndex={90} style={{ maxWidth: 420 }}>
+      zIndex="var(--z-modal-screen)" style={{ maxWidth: 420 }}>
       <WindowHeader title={title} />
       <div className="modal-body">
         {message && <p style={{ margin: input ? "0 0 14px" : 0 }}>{message}</p>}

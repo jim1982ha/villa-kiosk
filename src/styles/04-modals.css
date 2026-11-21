@@ -1,6 +1,6 @@
 /* --- Teleport menu --- */
 .teleport-grid {
-  position: absolute; inset: 0; z-index: 50;
+  position: absolute; inset: 0; z-index: var(--z-teleport);
   background: var(--bg-overlay); backdrop-filter: blur(14px);
   padding:
     calc(60px + var(--safe-top))
@@ -26,7 +26,7 @@
 .tp-card.tp-add { align-items: center; justify-content: center; flex-direction: column; gap: 8px; color: var(--accent); border-style: dashed; background: transparent; }
 .tp-card.tp-add span { font-family: var(--font-ui); font-size: var(--text-base); color: var(--accent); }
 /* --- Modals / wizard --- */
-.modal-backdrop { position: absolute; inset: 0; z-index: 70; background: var(--scrim-strong); backdrop-filter: blur(6px); display: flex; align-items: center; justify-content: center; padding: 24px; animation: modal-backdrop-in 0.16s ease-out; }
+.modal-backdrop { position: absolute; inset: 0; z-index: var(--z-modal); background: var(--scrim-strong); backdrop-filter: blur(6px); display: flex; align-items: center; justify-content: center; padding: 24px; animation: modal-backdrop-in 0.16s ease-out; }
 /* Solid, not frosted glass — every dialog (Settings, a device panel, the
    Config Editor…) reads as content to focus on, unlike the HUD's own glass
    chrome over the 3D scene (.icon-btn/.hud-group/.hud-stack/.hud-menu etc.,
@@ -148,7 +148,7 @@
   .modal.window-content { height: 90vh; }
 }
 /* the whole screen (Window kind "screen"), over every other window and the camera: no card, no gutter */
-.modal-backdrop.backdrop-screen { z-index: 90; padding: 0; }
+.modal-backdrop.backdrop-screen { z-index: var(--z-modal-screen); padding: 0; }
 .modal.window-screen { max-width: none; max-height: none; width: 100%; height: 100%; border: 0; border-radius: 0; box-shadow: none; background: var(--bg-base); }
 /* The header is a row (common/Window's WindowHeader, the only place its markup is written): the title left, its
    buttons right. */
@@ -442,7 +442,7 @@
    translucent card, absolute inside the (i) and capped at 420 px, let the cards under it show through and cut its
    own last line (owner, 2026-10-14). Its width here is the one it is measured at before being placed. */
 .info-pop {
-  position: fixed; z-index: 400; width: min(510px, calc(100vw - 24px)); overflow-y: auto; overscroll-behavior: contain;
+  position: fixed; z-index: var(--z-popup); width: min(510px, calc(100vw - 24px)); overflow-y: auto; overscroll-behavior: contain;
   padding: 12px 14px;
   background: var(--bg-modal);
   border: 1px solid var(--hairline-strong); border-radius: 12px;

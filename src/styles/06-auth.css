@@ -3,7 +3,7 @@
    a profile is active. Uses the theme tokens so WCAG contrast follows the
    palette (text-primary on bg-base ≥ 12:1 in both themes). */
 .auth-screen {
-  position: fixed; inset: 0; z-index: 200;
+  position: fixed; inset: 0; z-index: var(--z-screen);
   display: flex; align-items: center; justify-content: center;
   background: var(--bg-base); color: var(--text-primary);
   font-family: var(--font-ui);

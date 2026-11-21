@@ -48,7 +48,7 @@ export default function BadgeColorModal({ current, categoryColor, onChange, onCl
     // This is a short picker, same category as the device panel itself, so it
     // should get the same small centered rounded card on phones.
     <Window kind="question" label="Badge colour" onClose={onClose} className="panel-modal"
-      layer="panel-modal-backdrop" zIndex={80}>
+      layer="panel-modal-backdrop" zIndex="var(--z-panel-modal)">
       <WindowHeader title="Icon colour" />
 
       <div className="modal-body">

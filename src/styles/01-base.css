@@ -29,6 +29,33 @@
   --ease: cubic-bezier(0.2, 0.6, 0.2, 1);
   --stroke-icon: 1.5px;
 
+  /* The stacking ladder: every z-index in the app is one of these, low to high, so a new layer is placed against
+   * the others by name. The first four stack within one component; the rest are the screen's layers. */
+  --z-behind: -1;
+  --z-raised: 1;
+  --z-above: 2;
+  --z-local-pop: 5;          /* a component's own menu or tip */
+  --z-picker-backdrop: 10;
+  --z-picker-menu: 11;
+  --z-tap-ripple: 12;
+  --z-room-label: 15;
+  --z-hud-low: 20;           /* the loading veil, a picker's dropdown */
+  --z-hud: 21;               /* the left column, the summary bar */
+  --z-hud-top: 22;
+  --z-bottom-bar: 23;
+  --z-center-overlay: 30;
+  --z-scene-menu: 40;
+  --z-teleport: 50;
+  --z-fullscreen: 60;        /* the fullscreen camera, the radial room menu */
+  --z-modal: 70;
+  --z-notice: 75;
+  --z-panel-modal: 80;       /* a window over a panel, a badge's tooltip */
+  --z-modal-screen: 90;      /* a question over everything modal */
+  --z-screen: 200;           /* sign-in, the photo lightbox */
+  --z-tip: 300;              /* chart and UI tips, notices over a dialog */
+  --z-popup: 400;            /* the info pop, a dropdown list */
+  --z-talk: 1000;
+
   /* Category hues — used ONLY when a device is active or alerting, never as
      an always-on gradient (see EntityCategories.ts's categorySurface()). */
   --cat-comfort: #B4643C;

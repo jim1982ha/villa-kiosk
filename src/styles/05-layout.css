@@ -12,7 +12,7 @@
    content on a notched phone still starts clear of the status bar, matching
    the topbar's own mobile treatment below. */
 .center-overlay {
-  position: absolute; inset: 0; z-index: 30;
+  position: absolute; inset: 0; z-index: var(--z-center-overlay);
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px;
   text-align: center;
   padding: calc(52px + var(--safe-top) + 24px) 24px 24px;
@@ -22,7 +22,7 @@
    loading screen above them hid Settings and its Upload Model button, the one way to replace that model from inside
    the app. Only loading: its spinner and line sit in the middle, clear of the top bar thanks to the padding above, so
    the clipping bug that put error and no-model screens on top cannot come back. */
-.center-overlay-loading { z-index: 20; }
+.center-overlay-loading { z-index: var(--z-hud-low); }
 /* will-change promotes this to its own compositing layer so WebKit runs the
    rotation on the COMPOSITOR rather than the main thread. That matters here
    more than almost anywhere else in the app: this spinner is on screen

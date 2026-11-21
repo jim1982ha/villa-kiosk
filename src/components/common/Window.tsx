@@ -107,8 +107,9 @@ export default function Window({ kind, label, onClose, onEscape, className, laye
   className?: string;
   /** The backdrop's own classes besides `modal-backdrop` ("panel-modal-backdrop"). */
   layer?: string;
-  /** Over another window (a question over a device window). */
-  zIndex?: number;
+  /** Over another window (a question over a device window): a step of the stacking ladder ("var(--z-modal-screen)",
+   *  01-base.css). */
+  zIndex?: CSSProperties["zIndex"];
   style?: CSSProperties;
   /** Remounts the card when it changes (the Legend redraws on a theme change). */
   frameKey?: string;
