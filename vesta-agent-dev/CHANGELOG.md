@@ -1,3 +1,9 @@
+## 0.12.533
+
+- **"Not a problem" closes the alert at once, on Telegram as on the tablet.** The card turns "(closed)" and struck
+  straight away, ending with "✅ Not a problem at 12:15 (Jm).", with no 1-hour watch. If the problem is over and later
+  comes back, it is a new alert with a new number. "Done" keeps its watch as before.
+
 ## 0.12.532
 
 - **"Not a problem" stops the villa's repeats.** Pressed on Telegram or in the Cockpit, VESTA tells the villa's alert
