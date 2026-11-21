@@ -15,7 +15,7 @@ import type { AppConfig, DeviceGroup } from "./AppConfig";
 import type { EntityMapping, TeleportPoint } from "@/types/scene.types";
 import { roomKey } from "./roomKey";
 import type { HassEntity } from "@/types/ha.types";
-import { SHOWS_NOTHING, createDefaultMapping, isOwnLabel, meshEntityOf, normaliseMeshName } from "./EntityMap";
+import { createDefaultMapping, isOwnLabel, normaliseMeshName } from "./EntityMap";
 import { forgetEntities } from "./dismissedEntities";
 
 /** A change to the config, computed from the config it applies to. */
@@ -152,19 +152,6 @@ export function bindMesh(object: string, entityId: string, entity?: Pick<HassEnt
     meshBindings: { ...withoutObject(config.meshBindings, object, () => true), [object]: entityId },
     entityMap: addMapping(entityId, entity)(config).entityMap ?? config.entityMap,
   });
-}
-
-/** A 3D object taken off a device (its ✕ in the device's "3D object" field): its bindings to the device go, and when
- *  the map would still show a device on it (its name matches one), it shows nothing (SHOWS_NOTHING). The device's
- *  mapping is kept; an object that does not show the device is left as it is. */
-export function takeObjectOff(object: string, entityId: string): ConfigEdit {
-  return (config) => {
-    const meshBindings = withoutObject(config.meshBindings, object, (id) => id === entityId);
-    const unbound = Object.keys(meshBindings).length < Object.keys(config.meshBindings).length;
-    if (!unbound && meshEntityOf(object, config.entityMap, config.meshBindings) !== entityId) return {};
-    if (meshEntityOf(object, config.entityMap, meshBindings) !== null) meshBindings[object] = SHOWS_NOTHING;
-    return { meshBindings };
-  };
 }
 
 /** A 3D object re-mapped to a device given back to the model's own device (the ✕ of its "3D object" field's device):

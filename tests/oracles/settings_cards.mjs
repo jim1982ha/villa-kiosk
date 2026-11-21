@@ -368,9 +368,9 @@ console.log("\n  a device's \"3D object\" field (owner, 2026-11-21): the model's
   const { elements, parseTsx, propText } = await import("../consistency/jsx.mjs");
   const ed = parseTsx("components/settings/ConfigEditor.tsx");
   const rowsDrawn = elements(ed, "EntityMapRow");
-  ck("  ...both lists' cards are EntityMapRow, given the one add (bindMesh) and the one ✕ (takeObjectOff)",
-     rowsDrawn.length === 2 && rowsDrawn.every((r) => propText(r, "onAddObject") === "addObject" && propText(r, "onTakeObjectOff") === "takeOff")
-     && /bindMesh\(object, id, entitiesRef\.current\[id\]\)/.test(ed.getText()) && /takeObjectOff\(object, id\)/.test(ed.getText()), rowsDrawn.map((r) => r.getText().slice(0, 80)));
+  ck("  ...both lists' cards are EntityMapRow, given the one add (bindMesh), and no ✕ that hides an object (owner, 2026-11-21)",
+     rowsDrawn.length === 2 && rowsDrawn.every((r) => propText(r, "onAddObject") === "addObject" && !/onTakeObjectOff/.test(r.getText()))
+     && /bindMesh\(object, id, entitiesRef\.current\[id\]\)/.test(ed.getText()) && !/takeObjectOff/.test(ed.getText()), rowsDrawn.map((r) => r.getText().slice(0, 80)));
   ck("  ...a device on the map's ✕ gives a re-mapped object back to the model's own device (giveObjectBack)",
      rowsDrawn.some((r) => propText(r, "onGiveBack") === "giveBack")
      && /giveObjectBack\(object, id, entitiesRef\.current\[object\]\)/.test(ed.getText()));

@@ -71,10 +71,6 @@ console.log("  one edit at a time:");
 {
   const c = apply(cfg(), me.bindMesh("pump_mesh", "switch.pump"));
   ck("add a 3D object: it shows the entity, which gets a mapping", c.meshBindings.pump_mesh === "switch.pump" && !!c.entityMap["switch.pump"]);
-  const u = apply(c, me.takeObjectOff("pump_mesh", "switch.pump"));
-  ck("take it off: its binding goes (its name matches nothing: no \"shows nothing\" stored), the mapping stays",
-     !("pump_mesh" in u.meshBindings) && !!u.entityMap["switch.pump"], u.meshBindings);
-  ck("take off an object from a device it does not show: no change", J(me.takeObjectOff("lamp_mesh", "fan.other")(cfg())) === "{}");
 }
 {
   // owner, 2026-11-21: the ✕ of the device that drives a re-mapped object gives it back to the model's own device
@@ -128,8 +124,9 @@ console.log("\n  a removed device's 3D object, pointed at another entity:");
      /orphans: orphanIds \} = villa\.settings/.test(ed) && /useVillaModel\(\)/.test(ed) && (ed.match(/repointDevice\(/g) ?? []).length === 1
      && /repointDevice\(id, to,/.test(ed) && (ed.match(/pointAt\(id, to\)/g) ?? []).length === 2);
   // owner, 2026-11-06: the pencil that redirected a device's object is gone, with its edit's second caller
-  ck("  ...and a device's card has no pencil: its 3D objects are added and taken off in its field (bindMesh, takeObjectOff)",
-     /bindMesh\(object, id,/.test(ed) && /takeObjectOff\(object, id\)/.test(ed)
+  // owner, 2026-11-21 ("remove hide"): an object is no longer taken off a device; its edit went with its ✕
+  ck("  ...and a device's card has no pencil: its 3D objects are added in its field (bindMesh), never hidden",
+     /bindMesh\(object, id,/.test(ed) && !/takeObjectOff/.test(ed) && !("takeObjectOff" in me)
      && !/remap|Pencil/i.test(ed.replace(/\{\/\*[\s\S]*?\*\/\}/g, "").replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1")));
 }
 
@@ -188,12 +185,10 @@ console.log("\n  a device's \"3D object\" field, on a model (owner, 2026-11-06):
   ck("  ...an object showing another device moves here, every part of it (a part's own binding goes)",
      resolve(moved).Spot_primitive0 === "light.example_hall" && resolve(moved).Spot_primitive1 === "light.example_hall" && !("Spot_primitive0" in moved.meshBindings), moved.meshBindings);
 
-  const offB = apply(config, me.takeObjectOff(B, "light.example_hall"));
-  ck("✕ on (b) unbinds it: no binding left, it shows nothing", !(B in offB.meshBindings) && resolve(offB)[B] === null, offB.meshBindings);
-
-  const offA = apply(config, me.takeObjectOff(A, A));
-  ck("✕ on (a), linked by its name: \"shows nothing\" stored, the resolver returns no device for it (its every form)",
-     offA.meshBindings[A] === em.SHOWS_NOTHING && resolve(offA)[A] === null && em.meshEntityOf(A, offA.entityMap, offA.meshBindings) === null
+  // an object taken off its device before 2.496.875 (the edit is gone): stored as "shows nothing", still read so
+  const offA = { ...config, meshBindings: { ...config.meshBindings, [A]: em.SHOWS_NOTHING } };
+  ck("an old config's \"shows nothing\" on (a), linked by its name: the resolver returns no device for it (its every form)",
+      resolve(offA)[A] === null && em.meshEntityOf(A, offA.entityMap, offA.meshBindings) === null
      && em.resolveMeshToMapping("light.example_terrace_lamp.001", offA.entityMap, offA.meshBindings) === null, offA.meshBindings);
   ck("  ...every other object unchanged, and its device keeps its settings (on the map, its field the other object)",
      catalog.filter((m) => em.normaliseMeshName(m) !== A).every((m) => resolve(offA)[m] === BEFORE[m]) && !!offA.entityMap[A]
