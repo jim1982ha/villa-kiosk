@@ -1,3 +1,9 @@
+## 0.12.534
+
+- **The villa's all-clear joins its alert's card, even after a restart.** When the villa's system restarted while a
+  "Not a problem" alert was still there, its all-clear ("Cleared on …") stayed a separate message in the chat. It now
+  becomes the alert's card, as it does without a restart.
+
 ## 0.12.533
 
 - **"Not a problem" closes the alert at once, on Telegram as on the tablet.** The card turns "(closed)" and struck
