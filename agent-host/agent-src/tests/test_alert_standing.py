@@ -93,8 +93,8 @@ def test_the_villas_all_clear_ends_not_a_problem_and_says_the_close_again(tmp_pa
     st = W.standing(store, event("resolved"), T0 + timedelta(hours=1))
     assert (st.verdict, st.incident["id"], st.ends["id"]) == (W.LATE, iid, iid)
     W.lasted(store, st.ends)
-    # after it, the problem is over: back within its watch is Back, after it a new number
-    assert verdict(store, event(run=2), T0 + timedelta(hours=2)) == (W.BACK, iid)
+    # after it, the problem is over: "Not a problem" closed with no watch (owner, 2026-11-21, #210), back is a new number
+    assert verdict(store, event(run=2), T0 + timedelta(hours=2)) == (W.NEW, None)
     assert verdict(store, event(run=2), T0 + timedelta(hours=5)) == (W.NEW, None)
     # an all-clear after a restart (another run): no close to say again, the problem still ends
     store2 = Store(str(tmp_path / "t.sqlite"))

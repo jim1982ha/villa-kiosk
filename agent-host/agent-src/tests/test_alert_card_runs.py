@@ -115,7 +115,7 @@ def test_the_rules_all_clear_and_the_closing_note_are_one_line(agent):
     assert not any("Update sent" in ln or "Closing note" in ln for ln in status_lines(card(agent, FM_CHAT)))
 
 
-def test_not_a_problem_then_the_rules_late_all_clear_then_its_watch_tell_the_press_once(agent):
+def test_not_a_problem_then_the_rules_late_all_clear_tell_the_press_once(agent):
     # owner, 2026-11-05 (#118): "Not a problem" at 00:19; the rule's all-clear at 00:27 made the card "Cleared on 00:27.
     # Watch 1h" with "- Closing note sent" twice above it, and its watch's end summed up that "Cleared"
     rule(agent, "opened", 1, 500, priority="P1")                          # to the owner too: the group lists it
@@ -123,47 +123,41 @@ def test_not_a_problem_then_the_rules_late_all_clear_then_its_watch_tell_the_pre
                                                 "user_id": OWNER, "message": {"message_id": 500, "chat": {"id": GROUP}},
                                                 "bot": BOT}))
     rule(agent, "resolved", 1, 501)
+    tick(agent, 24 * 60)
     lines = status_lines(card(agent, GROUP))
     assert len(lines) == 2 and lines[0].startswith("- Alert sent "), lines
-    assert re.fullmatch(rf"✅ Not a problem (?:on|at) {T} \(Owner\)\. Watch .+", lines[1]), lines   # as pressed, word for word
-    tick(agent, 24 * 60)                                                   # its watch is over
-    lines = status_lines(card(agent, GROUP))
-    assert len(lines) == 3 and lines[1].startswith("- Not a problem at "), lines
-    assert lines[2].startswith(("✅ Closed on ", "✅ Closed at ")) and "did not come back" in lines[2], lines
-    assert not any("Cleared" in ln or "Closing note" in ln for ln in lines), lines
+    assert re.fullmatch(rf"✅ Not a problem (?:on|at) {T} \(Owner\)\.", lines[1]), lines   # as pressed, word for word
+    assert not any("Cleared" in ln or "Closing note" in ln or "did not come back" in ln for ln in lines), lines
 
 
-def test_not_a_problem_still_repeated_by_its_rule_ends_its_watch_still_there(agent):
-    # owner, 2026-11-20 (#201): the door still unlocked, its rule repeating it; "it did not come back" would be false
+def test_not_a_problem_is_closed_at_once_and_its_rules_repeats_are_lines_of_its_card(agent):
+    # owner, 2026-11-21 (#210: "Shouldn't it become closed directly?"): the Cockpit put its fault under Closed at once
+    # while Telegram said "(watch)" for 1h. Closed at once, no watch, the same on both
     rule(agent, "opened", 1, 500, priority="P1")
     run(agent.on_ha_event("telegram_callback", {"id": "cb", "data": "i:1:not_a_problem", "chat_id": GROUP,
                                                 "user_id": OWNER, "message": {"message_id": 500, "chat": {"id": GROUP}},
                                                 "bot": BOT}))
+    text = card(agent, GROUP)
+    assert "(closed)" in text.split("\n")[0] and "Watch" not in text, text
+    assert re.fullmatch(rf"✅ Not a problem (?:on|at) {T} \(Owner\)\.", status_lines(text)[-1]), text
     sent = len(agent.tg.sent)
     for mid in (501, 502, 503):
         rule(agent, "opened", 1, mid)                                      # its rule's repeats: nobody rung
     # ...and its message is the alert's ONE card, never a "New alert" card of its own beside it (owner, 2026-11-20:
     # "Wasn't it merged into a single telegram notification before?")
     shown = agent.thread.shown(1)[GROUP]
-    assert shown["mid"] == 503 and "New alert" not in shown["text"] and "(watch)" in shown["text"].split("\n")[0], shown
+    assert shown["mid"] == 503 and "New alert" not in shown["text"] and "(closed)" in shown["text"].split("\n")[0], shown
     assert len(agent.tg.sent) == sent, agent.tg.sent[sent:]
-    # each repeat its own time, on ONE line counted from the close, the card's LAST line, under the close (owner,
-    # 2026-11-20, #208: "I still receive telegram notification without seeing any new texts in the status section")
+    # each repeat its own time, on ONE line counted from the close (owner, 2026-11-20, #208: "I still receive telegram
+    # notification without seeing any new texts in the status section"), the close still the last line
     lines = status_lines(shown["text"])
-    assert re.fullmatch(rf"- Still there at {T}, {T}, {T} since {T}", lines[-1]), lines
-    assert re.fullmatch(rf"✅ Not a problem (?:on|at) {T} \(Owner\)\. Watch .+", lines[-2]), lines
+    assert re.fullmatch(rf"- Still there at {T}, {T}, {T} since {T}", lines[-2]), lines
+    assert re.fullmatch(rf"✅ Not a problem (?:on|at) {T} \(Owner\)\.", lines[-1]), lines
     assert sum(ln.startswith("- Still there") for ln in lines) == 1, lines
     # the tablet's card and the Kiosk fault's story tell it too
     assert any(x["note"].startswith("Still there, 3 times since ") for x in agent.notices.story(1))
-    # its watch over, closed as every watched alert is, when the Kiosk's watch list lets it go (owner, 2026-11-21: "as
-    # soon as an issue is in watch stage", no exception), its last word saying it is still there
-    tick(agent, 5 * 60)                                                    # its watch (4h) is over
-    text = card(agent, GROUP)
-    assert "(closed)" in text.split("\n")[0], text
-    lines = status_lines(text)
-    assert re.fullmatch(rf"✅ Closed (?:on|at) {T}: still there, accepted as not a problem\.", lines[-1]), lines
-    assert lines[-2].startswith("- Still there at ") and lines[-3].startswith("- Not a problem "), lines
-    assert not any("did not come back" in ln or ln.startswith("- Back") for ln in lines), lines
+    tick(agent, 5 * 60)                                                    # nothing more said: no watch to end
+    assert status_lines(card(agent, GROUP)) == lines
 
 
 def test_a_lasting_repeat_is_a_line_of_the_chats_first_told_never_of_the_owner_escalated_to(agent):

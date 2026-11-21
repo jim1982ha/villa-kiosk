@@ -403,15 +403,17 @@ def test_not_a_problem_holds_while_the_rule_repeats_it_then_its_all_clear_ends_i
     assert store.last_task(f"incident:{res['incident_id']}")["status"] == "open"
 
 
-def test_after_the_all_clear_of_a_problem_accepted_it_comes_back_within_its_watch(store):
+def test_after_the_all_clear_of_a_problem_accepted_it_comes_back_as_a_new_alert(store):
+    # owner, 2026-11-21 (#210: "Shouldn't it become closed directly?"): "Not a problem" closes with no watch, so the
+    # problem back after its all-clear is a new alert, a new number
     iid = desk.intake(store, event(), T0, occupancy_reader=lambda: "occupied")["incident_id"]
     desk.reply(store, iid, "not_a_problem", "owner", T0 + timedelta(minutes=7), name="Owner")
     desk.intake(store, event(phase="resolved"), T0 + timedelta(minutes=40))
     res = desk.intake(store, event(started=1790000500), T0 + timedelta(minutes=60), occupancy_reader=lambda: "occupied")
-    assert res["decision"] == "reopened" and res["incident_id"] == iid and res["send"]
-    assert store.last_task(f"incident:{iid}")["status"] == "open"            # its Kiosk fault open again
-    # pressed again, it holds again until its next all-clear
-    desk.reply(store, iid, "not_a_problem", "owner", T0 + timedelta(minutes=65), name="Owner")
+    assert res["decision"] == "new" and res["incident_id"] != iid and res["send"]
+    # pressed on it, it holds until its next all-clear
+    new = res["incident_id"]
+    desk.reply(store, new, "not_a_problem", "owner", T0 + timedelta(minutes=65), name="Owner")
     assert desk.intake(store, event(started=1790000500), T0 + timedelta(minutes=90))["decision"] == "lasting"
 
 

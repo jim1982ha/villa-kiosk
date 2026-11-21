@@ -84,14 +84,14 @@ def test_not_a_problem_in_the_cockpit_is_said_as_such_never_as_a_done(tmp_path):
     k.person_closes(uid, by="Luc", at=now.strftime("%Y-%m-%dT%H:%M:00.000Z"), lasting=True)
     run(v.tickets.repair())
     told(v, now + timedelta(minutes=1))
-    assert re.fullmatch(rf"✅ Not a problem in the Cockpit (?:on|at) {T} \(Luc\)\. Watch 4h\.", status(v, GROUP)[-1]), status(v, GROUP)
-    assert re.fullmatch(rf"✅ Pas un problème dans le Cockpit (?:le|à) {T} \(Luc\)\. Surveillance 4h\.", status(v, FM_FR)[-1]), status(v, FM_FR)
+    assert re.fullmatch(rf"✅ Not a problem in the Cockpit (?:on|at) {T} \(Luc\)\.", status(v, GROUP)[-1]), status(v, GROUP)
+    assert re.fullmatch(rf"✅ Pas un problème dans le Cockpit (?:le|à) {T} \(Luc\)\.", status(v, FM_FR)[-1]), status(v, FM_FR)
     lines = [ln for m in k.messages.values() for ln in m.get("status") or []]        # the tablet's cards of the alert
     # the tablet's card in English, the French beside it (architecture review 22, card 4: it was the FM chat's, drawn last)
-    assert re.fullmatch(rf"✅ Not a problem in the Cockpit (?:on|at) {T} \(Luc\)\. Watch 4h\.", lines[-1]), lines
+    assert re.fullmatch(rf"✅ Not a problem in the Cockpit (?:on|at) {T} \(Luc\)\.", lines[-1]), lines
     (card,) = [m for m in k.messages.values() if m.get("languages")]
     (fr,) = card["languages"]["fr"]["status"]
-    assert re.fullmatch(rf"Pas un problème dans le Cockpit (?:le|à) {T} \(Luc\)\. Surveillance 4h\.", fr), card
+    assert re.fullmatch(rf"Pas un problème dans le Cockpit (?:le|à) {T} \(Luc\)\.", fr), card
     assert not any("Done" in ln or "Terminé" in ln for ln in lines), lines
 
 
@@ -103,9 +103,9 @@ def test_not_a_problem_pressed_on_telegram_closes_it_as_the_cockpit_does(tmp_pat
     run(v.on_ha_event("telegram_callback", {"id": "cb", "data": "i:1:not_a_problem", "chat_id": FM_FR, "user_id": FM_FR,
                                             "message": {"message_id": v.thread.shown(1)[FM_FR]["mid"], "chat": {"id": FM_FR}},
                                             "bot": BOT}))
-    assert re.fullmatch(rf"✅ Pas un problème (?:le|à) {T} \(Luc\)\. .+", status(v, FM_FR)[-1]), status(v, FM_FR)
-    # the same last line in every chat, its watch included (architecture review 21 card 1: the group's ended "(Luc).")
-    assert re.fullmatch(rf"✅ Not a problem (?:on|at) {T} \(Luc\)\. Watch .+", status(v, GROUP)[-1]), status(v, GROUP)
+    assert re.fullmatch(rf"✅ Pas un problème (?:le|à) {T} \(Luc\)\.", status(v, FM_FR)[-1]), status(v, FM_FR)
+    # the same last line in every chat, closed at once, no watch (owner, 2026-11-21, #210)
+    assert re.fullmatch(rf"✅ Not a problem (?:on|at) {T} \(Luc\)\.", status(v, GROUP)[-1]), status(v, GROUP)
     # owner, 2026-11-05 (#118): the press said once, by its close — never also a line above it
     assert sum("Pas un problème" in ln for ln in status(v, FM_FR)) == 1, status(v, FM_FR)
     assert sum("Not a problem" in ln for ln in status(v, GROUP)) == 1, status(v, GROUP)
@@ -136,8 +136,9 @@ def test_a_close_in_the_cockpit_keeps_its_own_line_once_something_follows_it(tmp
     run(v.tickets.repair())
     run(v.run_code_job(v.skills.get("alert-desk"), f"desk.py tick --now {(now + timedelta(minutes=4)).isoformat()}", 60))
     fr = status(v, FM_FR)                         # the reopening went to the facility managers' chats
-    assert any(re.fullmatch(rf"- {said_fr} {T} \(Luc\)\. Surveillance 4h", ln) for ln in fr), fr   # its watch, as told
+    w_fr, w = ("", "") if lasting else (r"\. Surveillance 4h", r"\. Watch 4h")   # "Not a problem": no watch (#210)
+    assert any(re.fullmatch(rf"- {said_fr} {T} \(Luc\){w_fr}", ln) for ln in fr), fr   # its watch, as told
     assert "Rouvert dans le Cockpit" in fr[-1] and not any("Clôture" in ln for ln in fr), fr
     card = k.messages["incident:1"]["status"]     # the tablet's card, in English (its story: every step)
-    assert any(re.fullmatch(rf"- {said} {T} \(Luc\)\. Watch 4h", ln) for ln in card), card
+    assert any(re.fullmatch(rf"- {said} {T} \(Luc\){w}", ln) for ln in card), card
     assert not any("Closing note sent" in ln for ln in card), card

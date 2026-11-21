@@ -284,7 +284,10 @@ def close(store: Store, iid: int, state: str, now_iso: str, *, person: str | Non
     p = notes_of(store.incident(iid))
     t = t or p.get(Notes.WATCH_TERMS)
     minutes = None
-    if can_come_back:
+    # ⚠️ NOT A PROBLEM IS CLOSED AT ONCE (owner, 2026-11-21, #210: "Shouldn't it become closed directly?"): the
+    # Cockpit put its fault under Closed while Telegram said "(watch)" for 1h. Its repeats are the problem lasting
+    # (`lasting`), never a coming back: no watch
+    if can_come_back and not lasting:
         minutes = length(t, person is not None and can_read_again(store.incident(iid))) if t \
             else p.get(Notes.WATCH_MINUTES)
     keep = {Notes.WATCH_MINUTES: minutes} if minutes else {}
