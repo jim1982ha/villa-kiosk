@@ -1,3 +1,10 @@
+## 2.496.869
+
+- **Camera on a phone held sideways: every button fits.** When the buttons do not fit in one column down the right
+  edge, they now take a second (or third) column, so the arrows, the siren, the sound, Fit to screen and Close are
+  always on screen. Close stays at the top right. The column starts below the buttons at the top right (Open Ticket)
+  instead of covering them. Every button stays large enough to tap.
+
 ## 2.496.868
 
 - **A device's "3D object" line is clearer.** On each device card in Devices, the left box shows the object's own
