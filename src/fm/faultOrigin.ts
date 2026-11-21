@@ -4,10 +4,12 @@
 // relevant, etc..)"). Every kind of line a card holds says one sentence here: a device's live state, an overdue task,
 // a fault by its source (fm/issueSource) and, for the VESTA Agent's, what it wrote of its maker (FmTicket.raisedBy:
 // the villa automation of its alert, the skill's check that found it). Nothing known: "Source not recorded.", never a
-// guess. Pure: tests/oracles/fault_origin.mjs drives it by value.
+// guess. ONLY WHO MADE IT (owner, 2026-11-21: "clearly mention who has opened the fault, not adding a redundant
+// description of the fault itself ... and when the card will clear itself"): never the problem again (the card's
+// words say it) nor when it clears or is looked at again (its next-check pill says it). Pure:
+// tests/oracles/fault_origin.mjs drives it by value.
 
 import { authorWords } from "@/auth/roles";
-import { DUE_WORDS } from "./fmEngine";
 import { faultSource } from "./issueSource";
 import type { FaultRaiser, FmTicket } from "./fmTypes";
 
@@ -46,15 +48,9 @@ function checkSaid(r: FaultRaiser): string {
   return r.name ? `${skill} check "${r.name}" (${r.check})` : `${skill} check ${r.check}`;
 }
 
-/** How a fault VESTA reads again is read: its card's next check (FmTicket.check). */
-const READ_AGAIN: Record<NonNullable<FmTicket["check"]>, string> = {
-  minutes: " It looks again every few minutes.",
-  nightly: " It looks again at its nightly check.",
-};
-
 /** What made fault `t`: the VESTA Agent's alert (its automation), its check (its skill and check), a chat, a person in
  *  the Cockpit, a guest. `friendlyOf`: an entity's friendly name in the villa's live states. Pure. */
-export function faultOrigin(t: Pick<FmTicket, "source" | "origin" | "alertNumber" | "reportedBy" | "updates" | "raisedBy" | "check">,
+export function faultOrigin(t: Pick<FmTicket, "source" | "origin" | "alertNumber" | "reportedBy" | "updates" | "raisedBy">,
   friendlyOf: (entityId: string) => string | undefined): string {
   const r = t.raisedBy;
   switch (faultSource(t)) {
@@ -62,11 +58,9 @@ export function faultOrigin(t: Pick<FmTicket, "source" | "origin" | "alertNumber
       if (r?.automation) return `Raised by ${automationSaid(r.automation, friendlyOf)}, which sent its alert to VESTA.`;
       if (r?.check) return `Raised by ${checkSaid(r)}.`;
       return "Raised by an alert of the villa's system, sent to VESTA. Which automation sent it was not recorded.";
-    case "night": {
-      const again = t.check ? READ_AGAIN[t.check] ?? "" : "";
-      if (r?.check) return `Found by ${checkSaid(r)}.${again}`;
-      return `Found by VESTA's maintenance check. Which check found it was not recorded.${again}`;
-    }
+    case "night":
+      if (r?.check) return `Found by ${checkSaid(r)}.`;
+      return "Found by VESTA's maintenance check. Which check found it was not recorded.";
     case "chat":
       return "Created by VESTA from a chat, when a person pressed \"Create this fault\".";
     case "guest":
@@ -83,25 +77,18 @@ export function faultOrigin(t: Pick<FmTicket, "source" | "origin" | "alertNumber
   }
 }
 
-/** A device's live state with no record behind it: what the villa's system reports right now. `detail`: its word
- *  ("Unavailable", "Missing", the lost parts, an alarm's reading). Pure. */
-export function liveOrigin(kind: "unavailable" | "parts" | "alarm", detail: string | undefined, missing = false): string {
-  const after = " Nobody opened it: it goes away by itself once the device is back to normal.";
-  if (kind === "alarm") return `Seen live in the villa's system: this device reads "${detail ?? ""}", an alarm state.${after}`;
-  if (kind === "parts") return `Seen live in the villa's system: parts of this device stopped answering (${detail ?? ""}).${after}`;
-  return missing
-    ? `Seen live: the villa's system no longer has this device.${after}`
-    : `Seen live in the villa's system: this device is offline right now.${after}`;
-}
+/** A device's live state with no record behind it (offline, no longer in the villa's system, parts not answering, an
+ *  alarm reading): VESTA shows it from what the villa's system reports, nobody opened it. */
+export const LIVE_ORIGIN = "Shown by VESTA from this device's live state in the villa's system, not opened by a person or an automation.";
 
-/** An overdue task of the Schedule. Pure. */
-export function scheduleOrigin(title: string, state: keyof typeof DUE_WORDS): string {
-  return `From the Schedule: the maintenance task "${title}" is ${DUE_WORDS[state].word.toLowerCase()}.`;
+/** An overdue task of the Schedule: the task named. Pure. */
+export function scheduleOrigin(title: string): string {
+  return `Added by the Schedule, from its maintenance task "${title}".`;
 }
 
 /** The villa's own alert card that VESTA has not taken over (messagesModel.villaAlertCards): sent by the villa's
  *  system itself. Pure. */
-export const VILLA_ALERT_ORIGIN = "Sent by the villa's system itself (its visit alert), before VESTA took it over. Which automation sent it is not recorded on this card.";
+export const VILLA_ALERT_ORIGIN = "Sent by the villa's system itself (its visit alert). Which automation sent it is not recorded on this card.";
 
 /** A card line's (?) words: its sentences, or "Source not recorded." when it has none. Pure. */
 export function lineOrigin(said: readonly string[] | undefined): string[] {

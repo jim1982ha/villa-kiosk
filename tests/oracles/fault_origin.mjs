@@ -37,10 +37,10 @@ ck("an alert names the villa's automation, its own name and its id in the villa'
 ck("  ...an automation the villa no longer has: its id, read as words",
    saidOf(ticket("a2", { ...AGENT, origin: "alert", raisedBy: { automation: "automation.pool_leak" } }))
    === "Raised by the villa's automation \"Pool leak\" (automation.pool_leak), which sent its alert to VESTA.");
-ck("a maintenance finding names the skill and its check, and how often VESTA looks again",
+ck("a maintenance finding names the skill and its check, never when it looks again (its next-check pill says it)",
    saidOf(ticket("n", { ...AGENT, origin: "night", check: "minutes",
      raisedBy: { skill: "preventive maintenance", check: "PM-MISSING", name: "Missing device" } }))
-   === "Found by VESTA's preventive maintenance check \"Missing device\" (PM-MISSING). It looks again every few minutes.");
+   === "Found by VESTA's preventive maintenance check \"Missing device\" (PM-MISSING).");
 ck("an older fault with no maker written says so, never a guess",
    /not recorded/.test(saidOf(ticket("o", { ...AGENT, origin: "alert", alertNumber: 3 })))
    && /not recorded/.test(saidOf(ticket("o2", { ...AGENT, origin: "night" }))));
@@ -49,6 +49,14 @@ ck("a person's fault names who opened it in the Cockpit",
    === "Opened by Owner in the Cockpit.");
 ck("a chat's and a guest's say where they came from",
    /chat/.test(saidOf(ticket("c", { ...AGENT, origin: "chat" }))) && /guest/.test(saidOf(ticket("g", { reportedBy: "guest" }))));
+
+// a device's live state (owner, 2026-11-21: "clearly mention who has opened the fault, not adding a redundant
+// description of the fault itself ... and when the card will clear itself"): who shows it, never the problem again
+const liveSaid = attentionOf({ devices: { ...devices, unavailable: ["lock.room"] }, entities, entityMap: {}, resolvedRooms: {},
+  fmData: { schedules: [], completions: [], costs: [], tickets: [], savedDocuments: [] } }).attentionItems
+  .find((i) => i.id === "unavailable:lock.room")?.origin;
+ck("a device offline right now says VESTA shows it from its live state, nobody opened it, and nothing more",
+   liveSaid === "Shown by VESTA from this device's live state in the villa's system, not opened by a person or an automation.", liveSaid);
 
 console.log("\n  the pill, drawn:");
 const [group] = groupAttention([{ id: "fault:a", kind: "fault", title: "Room unlocked", entityId: "lock.room", ticketId: "a",

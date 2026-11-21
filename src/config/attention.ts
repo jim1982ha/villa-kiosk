@@ -23,7 +23,7 @@ import type { ConfirmingFault } from "@/fm/faultConfirm";
 import { faultMove, notedStory, type FaultMove } from "@/fm/faultNotes";
 import { deviceWorkKey, groupByDevice } from "@/fm/deviceWork";
 import { faultSource, type IssueSource } from "@/fm/issueSource";
-import { faultOrigin, liveOrigin, scheduleOrigin } from "@/fm/faultOrigin";
+import { faultOrigin, LIVE_ORIGIN, scheduleOrigin } from "@/fm/faultOrigin";
 import type { FmData, FmTicketCheck } from "@/fm/fmTypes";
 import type { HassEntity } from "@/types/ha.types";
 import type { EntityMapping } from "@/types/scene.types";
@@ -510,7 +510,7 @@ export function attentionOf(opts: AttentionInputs): Pick<VillaProblems, "attenti
       // an object the model names whose entity Home Assistant does not have says so, as everywhere (NOT_IN_HA)
       detail: missingFromHa(entities, id) ? NOT_IN_HA : "Unavailable",
       source: "live",
-      origin: liveOrigin("unavailable", undefined, missingFromHa(entities, id)),
+      origin: LIVE_ORIGIN,
       room: deviceRoom(resolvedRooms, id),
       entityId: id,
       ...beganAt(id, entities[id], sinceOf),
@@ -534,7 +534,7 @@ export function attentionOf(opts: AttentionInputs): Pick<VillaProblems, "attenti
       title: labelOf(id, entityMap, entities),
       detail: lostPartsLine(devices, id, entityMap, entities),
       source: "live",
-      origin: liveOrigin("parts", lostPartsLine(devices, id, entityMap, entities)),
+      origin: LIVE_ORIGIN,
       room: deviceRoom(resolvedRooms, id),
       entityId: lost[0],
       ...began,
@@ -580,7 +580,7 @@ export function attentionOf(opts: AttentionInputs): Pick<VillaProblems, "attenti
       title: s.schedule.title,
       detail: DUE_WORDS[s.state].word,   // its state's ONE word (the Schedule's pill's, the recap's)
       source: "schedule",
-      origin: scheduleOrigin(s.schedule.title, s.state),
+      origin: scheduleOrigin(s.schedule.title),
       room: s.schedule.room,
       entityId: s.schedule.entityId,
       // the day it was due; one never done counts from when it was set up (its first due day may still be to come)
@@ -612,7 +612,7 @@ export function attentionOf(opts: AttentionInputs): Pick<VillaProblems, "attenti
       // "Jammed", "92 %") — config/reading, as every reading.
       detail: alarmText(id, entity),
       source: "live",
-      origin: liveOrigin("alarm", alarmText(id, entity)),
+      origin: LIVE_ORIGIN,
       room: deviceRoom(resolvedRooms, id),
       entityId: id,
       ...beganAt(id, entity, sinceOf),
