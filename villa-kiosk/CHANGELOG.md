@@ -1,3 +1,14 @@
+## 2.496.874
+
+- **Screens change layout at fewer widths.** The app now switches between its phone, sideways-phone, small-tablet,
+  desktop and wide layouts at five fixed screen widths instead of eight. Only screens between 481 and 640 pixels wide
+  (a narrow computer window, rarely a phone) and between 1001 and 1023 look different:
+  - 481 to 640 wide: the Weather window shows its phone tiles (smaller dials, temperature across the width), the
+    Energy window its ranked rows, Map colours & keys one column, two side-by-side settings stack, and an announcement's
+    text is a size smaller, as a phone already shows them.
+  - 1001 to 1023 wide: the top bar sits a little closer to the edges, as it already did up to 1000.
+  Phones, iPads and wall tablets look exactly as before.
+
 ## 2.496.873
 
 - **Nothing changes on screen.** A badge's reading line (a device group's readings joined, "24°C  ·  58%", and cut

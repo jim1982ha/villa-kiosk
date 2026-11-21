@@ -163,7 +163,7 @@
 .announcement-full-to { margin: 0; color: var(--text-secondary); }
 .announcement-status-label { color: var(--text-primary); }
 .announcement-story-line { font-style: italic; }
-@media (max-width: 560px) { .announcement-full-text { font-size: var(--text-lg); } }
+@media (max-width: 640px) { .announcement-full-text { font-size: var(--text-lg); } }
 /* ⚠️ AN ANNOUNCEMENT PICKED FOR THE WHOLE SCREEN, THE NIGHT LOOK (owner, 2026-11-04, proposal 5: AnnouncementNotice's
    AnnouncementFullScreenView, in the Window kind "screen"): dark whatever the theme, so a camera's night picture reads
    on it; its title and words at the top, its photo as large as the screen allows, then its buttons and Close inside the
@@ -216,7 +216,7 @@
   display: flex; align-items: center; justify-content: center; background: var(--night-ink); color: var(--night-ground);
 }
 .announcement-night-words { color: var(--night-muted); font-size: var(--text-md); }
-@media (max-width: 560px) {
+@media (max-width: 640px) {
   .announcement-night .announcement-night-head, .announcement-night .announcement-night-body,
   .announcement-night .announcement-night-actions { padding-left: 16px; padding-right: 16px; }
   .announcement-night-head .announcement-full-title { font-size: var(--text-xl); }

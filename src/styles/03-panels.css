@@ -960,7 +960,7 @@ button.energy-rank-row.energy-rank-group:focus-visible { outline: 2px solid var(
    rings in a row, the rain readings two by two, the UV bands' ranges beside
    their names. The Energy window's flow becomes rows: at this width its
    drawn text would be 7 px. */
-@media (max-width: 480px) {
+@media (max-width: 640px) {
   .weather-instruments { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
   .weather-tile { min-height: 0; padding: 12px; gap: 8px; justify-content: flex-start; border-radius: 16px; }
   .weather-tile.k-temp, .weather-tile.k-hum, .weather-tile.k-rain, .weather-tile.k-uv { grid-column: 1 / -1; }

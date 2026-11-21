@@ -169,7 +169,7 @@
 .settings-inline-label { font-size: var(--text-2xs); color: var(--text-secondary); white-space: nowrap; }
 /* Two fields side by side; stacks on narrow screens. */
 .slider-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 20px; align-items: start; }
-@media (max-width: 560px) { .slider-pair { grid-template-columns: 1fr; } }
+@media (max-width: 640px) { .slider-pair { grid-template-columns: 1fr; } }
 /* overflow-x hidden: setting only overflow-y computes overflow-x to auto,
    so any absolutely-positioned child poking past the right edge (the
    .info-pop tooltip on a narrow phone) put a horizontal scrollbar on the
@@ -247,7 +247,7 @@
 /* The line under each row's name. */
 .legend-note { display: block; }
 .legend-count { display: inline-flex; align-items: center; justify-content: center; font-size: var(--text-2xs); font-weight: 700; }
-@media (max-width: 480px) {
+@media (max-width: 640px) {
   .legend-grid { grid-template-columns: 1fr; }
 }
 

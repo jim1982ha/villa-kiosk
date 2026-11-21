@@ -10,7 +10,17 @@
  * redefining one block; component CSS never hardcodes a colour.
  *
  * Self-hosted (never a Google Fonts link — see CLAUDE.md's offline rule):
- * Jost for display/headlines/eyebrows, Public Sans for everything else. */
+ * Jost for display/headlines/eyebrows, Public Sans for everything else.
+ *
+ * SCREEN WIDTHS: a layout changes at these widths only (CSS px; src/config/breakpoints.ts is the table, and
+ * tests/oracles/breakpoints.mjs fails on any other). CSS has no named media queries, so each file writes the value:
+ *   phone         max-width: 640px   (min-width: 641px above it)   a phone held upright: one column, compact top bar
+ *   large phone   max-width: 720px   (min-width: 721px)            a phone held sideways
+ *   small tablet  max-width: 860px   (min-width: 861px)            the villa's name leaves the top bar
+ *   desktop       min-width: 1024px  (max-width: 1023px below it)  wider windows, more side padding
+ *   clock         max-width: 1180px  (min-width: 1181px)           the top bar's clock goes (iPads held sideways)
+ * Heights are a separate question: max-height: 560px is a short screen (a phone held sideways), with or without width.
+ * 480, 560 and 1000 joined phone and desktop on 2026-11-21. */
 
 @font-face { font-family: "Jost"; font-style: normal; font-weight: 400 600; font-display: swap; src: url("/fonts/jost-var.woff2") format("woff2"); }
 @font-face { font-family: "Public Sans"; font-style: normal; font-weight: 400 700; font-display: swap; src: url("/fonts/public-sans-var.woff2") format("woff2"); }

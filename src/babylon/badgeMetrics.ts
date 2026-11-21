@@ -42,6 +42,8 @@
 // pixel. So the painted size, and the clearance that follows from it, are a
 // function of what is pointing at the screen.
 
+import { BREAKPOINTS } from "@/config/breakpoints";
+
 /**
  * ── The one place a VIEWPORT term is legitimate ────────────────────────────
  * Everything else in this file is a function of the POINTER, not the screen,
@@ -207,8 +209,8 @@ export const CARD_MAX_VIEWPORT_FRACTION = 0.45;
 /**
  * Widest CSS viewport that counts as a PHONE for badge layout.
  *
- * 720 because that is the breakpoint `styles.css` already uses for its phone
- * rules — one number for "this is a phone", not two that can drift. It sits
+ * The stylesheets' phone-held-sideways tier (config/breakpoints, `largePhone`, 720) —
+ * one number for "this is a phone", not two that can drift. It sits
  * clear of every tablet posture (iPad portrait starts at 810), so the wall
  * tablet this app is built for keeps the full-size arrangements.
  *
@@ -217,7 +219,7 @@ export const CARD_MAX_VIEWPORT_FRACTION = 0.45;
  * render pixels would make a phone stop being a phone mid-gesture. Same rule
  * as the focus-retention zoom — see quantisedPixelsPerWorldUnit.
  */
-export const PHONE_MAX_CSS_WIDTH = 720;
+export const PHONE_MAX_CSS_WIDTH = BREAKPOINTS.largePhone;
 
 /**
  * ── THERE IS NO PHONE CAP ON AN ARRANGEMENT'S CELL COUNT (2.415.0) ─────────

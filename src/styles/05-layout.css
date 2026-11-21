@@ -98,7 +98,7 @@
      thing in the bar. */
   .hud-clock { display: none; }
 }
-@media (max-width: 1000px) {
+@media (max-width: 1023px) {
   /* Then some chrome padding. */
   /* Sets --hud-side-pad too (not just padding) so .hud-left-col's left
      offset — which reads that same variable — stays lined up with the
