@@ -1,3 +1,9 @@
+## 2.496.860
+
+- **Behind the scenes: one list decides what is drawn over what.** Every layer of the screen (the bars, windows,
+  questions, tips, notices) now takes its place from one named list, so a new window or tip is placed against the
+  others in one spot. Nothing on screen moves or changes.
+
 ## 2.496.859
 
 - **The update notes are shorter.** The list of changes shown with an update now keeps the changes from 2.496.700
