@@ -672,6 +672,20 @@
 /* a device group's members and its "Add another entity…", a device's 3D objects and its "Add a 3D object…": the pills
    and the compact search on one line, wrapping */
 .group-members { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+/* A device's "3D object" field (MappingFields.ObjectsField): one row per object, the model's object at the left,
+   greyed and fixed, the device that drives it at the right; one under the other on a phone. */
+.object-rows { display: flex; flex-direction: column; gap: 6px; }
+.object-row { display: grid; grid-template-columns: fit-content(50%) minmax(0, 1fr); gap: 8px; align-items: center; }
+.object-row .config-search { margin-bottom: 0; }
+.object-model {
+  /* the compact search's size and shape beside it (.config-search-compact), its box dashed and its words dim: fixed */
+  display: flex; align-items: center; gap: 6px; min-width: 0; box-sizing: border-box; min-height: 28px; padding: 0 10px;
+  border-radius: var(--radius-pill); border: 1px dashed var(--hairline); background: transparent;
+  color: var(--text-dim); font-size: var(--text-xs); cursor: default; flex-wrap: wrap; column-gap: 4px; padding-block: 3px;
+}
+.object-model > :first-child { min-width: 0; overflow-wrap: anywhere; }
+.object-model-words { white-space: nowrap; }
+@media (max-width: 640px) { .object-row { grid-template-columns: minmax(0, 1fr); gap: 4px; } }
 .group-members-add { flex: 1 1 180px; min-width: 140px; }
 
 /* THE "this opens more" (common/FoldedList FoldToggle): a chevron before the words, no box; a section's in its title's

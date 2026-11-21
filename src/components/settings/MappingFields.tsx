@@ -143,6 +143,8 @@ export interface ObjectsFieldProps {
   onTakeOff: (object: string, entityId: string) => void;
   /** A device on the map: its objects and settings moved to another entity of the villa's system (its search's pick). */
   onMoveTo?: (entityId: string, to: string) => void;
+  /** An object re-mapped to this device given back to the model's own device (mappingEdits.giveObjectBack). */
+  onGiveBack?: (object: string, entityId: string) => void;
 }
 
 /**
@@ -160,8 +162,35 @@ export interface ObjectsFieldProps {
  * moves them and its settings to the entity picked (mappingEdits.repointDevice, asked first); the model's objects are
  * the search of a device not on the map, or of one no object shows yet.
  */
-export function ObjectsField({ entityId, name, objects, links, onAdd, onTakeOff, onMoveTo }: ObjectsFieldProps) {
+export function ObjectsField({ entityId, name, objects, links, onAdd, onTakeOff, onMoveTo, onGiveBack }: ObjectsFieldProps) {
   const nameOf = useEntityLabel();
+  // ⚠️ TWO FIELDS, WHAT THE MODEL HAS AND WHAT DRIVES IT (owner, 2026-11-21: "camera.server_room" beside "Re-mapped to
+  // this device · search to point it…" read as the old camera still linked): at the left the object's own name in the
+  // model, greyed and fixed, its hover saying which device it showed originally; at the right which device drives it:
+  // this one, a chosen value with its ✕ (back to the model's own device), when it was re-mapped here; empty, with its
+  // hint, when the object is this device's own.
+  if (onMoveTo && objects.length > 0) {
+    return (
+      <div className="object-rows">
+        {objects.map((o) => {
+          const remapped = o !== entityId;
+          return (
+            <div key={o} className="object-row">
+              <div className="object-model" aria-readonly="true" data-tip={`Originally: ${nameOf(o)}`}>
+                <ObjectName name={o} /><span className="object-model-words">in the 3D model</span>
+              </div>
+              <div className="object-device">
+                <EntityPicker compact exclude={entityId} value={remapped ? entityId : undefined}
+                  placeholder="Uses the model's own device · search to show another one"
+                  onChange={(to) => onMoveTo(entityId, to)}
+                  onClear={remapped && onGiveBack ? () => onGiveBack(o, entityId) : undefined} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
   return (
     <div className="group-members">
       {objects.map((o) => (
@@ -169,16 +198,12 @@ export function ObjectsField({ entityId, name, objects, links, onAdd, onTakeOff,
           removeLabel={`Take ${o} off ${name}`} onRemove={() => onTakeOff(o, entityId)} />
       ))}
       <div className="group-members-add">
-        {onMoveTo && objects.length > 0 ? (
-          <EntityPicker compact placeholder={movePlaceholder(objects, entityId)} exclude={entityId} onChange={(to) => onMoveTo(entityId, to)} />
-        ) : (
         <SearchPicker compact placeholder="Add a 3D object…" onPick={(o) => onAdd(o, entityId)}
           empty={links.shows.size === 0 ? "No 3D model loaded yet." : undefined}
           rows={(q) => objectOffers(q, links, entityId).map(({ object, shows }) => ({
             key: object, label: <ObjectName name={object} />,
             side: shows === null ? "shows nothing yet" : `shows ${nameOf(shows)}, moves it here`,
           }))} />
-        )}
       </div>
     </div>
   );
@@ -189,15 +214,6 @@ export function objectTip(object: string, entityId: string, name: string): strin
   return object === entityId
     ? `3D object of the model, named after this device: it shows ${name}.`
     : `3D object of the model, named ${object}: it shows ${name} (${entityId}) here.`;
-}
-
-/** The search of a device on the map whose objects show it: whether an object was re-mapped to this device (its name
- *  not this device's), and what picking an entity does. Pure. */
-export function movePlaceholder(objects: readonly string[], entityId: string): string {
-  const them = objects.length === 1 ? "it" : "them";
-  return objects.some((o) => o !== entityId)
-    ? `Re-mapped to this device · search to point ${them} at another entity…`
-    : `Search to point ${them} at another entity…`;
 }
 
 /**

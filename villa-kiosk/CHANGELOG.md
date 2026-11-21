@@ -1,3 +1,11 @@
+## 2.496.868
+
+- **A device's "3D object" line is clearer.** On each device card in Devices, the left box shows the object's own
+  name "in the 3D model", greyed: it cannot be changed. Hover it to read which device it showed originally. The right
+  box says which device drives that object: when the object was moved to this device, this device is shown there
+  with an ✕ that gives the object back to the model's own device; otherwise it reads "Uses the model's own device"
+  and a search lets you pick another one.
+
 ## 2.496.867
 
 - **Camera: "Fit to screen".** A new button in the camera's bottom row makes the picture as large as the screen

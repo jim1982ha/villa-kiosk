@@ -167,6 +167,18 @@ export function takeObjectOff(object: string, entityId: string): ConfigEdit {
   };
 }
 
+/** A 3D object re-mapped to a device given back to the model's own device (the ✕ of its "3D object" field's device):
+ *  its binding to `entityId` goes, so it shows the device it is named after again, which gets a mapping when the
+ *  villa's system has it (`own`: that entity; none, the object shows what its name resolves to). The stored format is
+ *  the bindings' own: nothing new is written. */
+export function giveObjectBack(object: string, entityId: string, own?: Pick<HassEntity, "attributes">): ConfigEdit {
+  return (config) => {
+    const meshBindings = withoutObject(config.meshBindings, object, (id) => id === entityId);
+    if (Object.keys(meshBindings).length === Object.keys(config.meshBindings).length) return {};
+    return { meshBindings, ...(own ? { entityMap: addMapping(object, own)(config).entityMap ?? config.entityMap } : {}) };
+  };
+}
+
 /** Remove devices as ONE operation (see forgetEntities): the mapping goes
  *  AND the decision is recorded, so the model cannot bring them back. */
 export function forgetMappings(ids: readonly string[]): ConfigEdit {

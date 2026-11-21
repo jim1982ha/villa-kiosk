@@ -77,6 +77,19 @@ console.log("  one edit at a time:");
   ck("take off an object from a device it does not show: no change", J(me.takeObjectOff("lamp_mesh", "fan.other")(cfg())) === "{}");
 }
 {
+  // owner, 2026-11-21: the ✕ of the device that drives a re-mapped object gives it back to the model's own device
+  const em = await import("@/config/EntityMap");
+  const moved = apply(cfg(), me.repointDevice("light.a", "light.b"));
+  const object = "light.a";
+  ck("an object re-mapped to another device (its device renamed: repointDevice) is bound to it",
+     moved.meshBindings[object] === "light.b" && !moved.entityMap["light.a"], moved.meshBindings);
+  const back = apply(moved, me.giveObjectBack(object, "light.b", { attributes: { friendly_name: "A again" } }));
+  ck("  ...given back: its binding goes, the device it is named after is on the map again and shows on it",
+     !(object in back.meshBindings) && !!back.entityMap["light.a"] && em.meshEntityOf(object, back.entityMap, back.meshBindings) === "light.a"
+     && back.meshBindings.lamp_mesh === "light.b", back);
+  ck("  ...an object not bound to that device: no change", J(me.giveObjectBack("lamp_mesh", "fan.other")(moved)) === "{}");
+}
+{
   const c = apply(cfg(), me.forgetMappings(["light.a"]));
   ck("forget: the mapping goes AND the decision is recorded", !c.entityMap["light.a"] && c.dismissedEntityIds.includes("light.a"));
 }

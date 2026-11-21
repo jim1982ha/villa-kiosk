@@ -25,7 +25,7 @@ import { TipTitle } from "@/components/common/InfoTip";
 import { SectionViewButtons } from "@/components/common/FoldedList";
 import type { AddOffer } from "@/config/searchOrAdd";
 import { useConfig } from "@/config/ConfigContext";
-import { addMapping, bindMesh, forgetMappings, repointDevice, takeObjectOff } from "@/config/mappingEdits";
+import { addMapping, bindMesh, forgetMappings, giveObjectBack, repointDevice, takeObjectOff } from "@/config/mappingEdits";
 import { deviceMatches, matchesQuery, objectLinks } from "@/config/deviceRecord";
 import { inferTypeFromEntityId } from "@/config/EntityMap";
 import { unshownEntities } from "@/config/deviceGroups";
@@ -145,6 +145,7 @@ export default function ConfigEditor({ title, tip, initialSearch }: { title: str
   // takes the object off it
   const addObject = useCallback((object: string, id: string) => update(bindMesh(object, id, entitiesRef.current[id])), [update]);
   const takeOff = useCallback((object: string, id: string) => update(takeObjectOff(object, id)), [update]);
+  const giveBack = useCallback((object: string, id: string) => update(giveObjectBack(object, id, entitiesRef.current[object])), [update]);
   // a device on the map given another entity by its field's search (renamed in the villa's system): its 3D objects and
   // settings go there, asked first; the list then shows it under its new id
   const confirm = useConfirmDialog();
@@ -265,6 +266,7 @@ export default function ConfigEditor({ title, tip, initialSearch }: { title: str
               onAddObject={addObject}
               onTakeObjectOff={takeOff}
               onMoveTo={moveTo}
+              onGiveBack={giveBack}
               entity={entities[key]}
               name={nameOf(key)}
               stale={staleSet.has(key)}
