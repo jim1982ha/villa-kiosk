@@ -28,11 +28,13 @@ export function automationName(friendly: string | undefined, entityId: string): 
 }
 
 /** The villa automation `id` named: "the villa's automation "Master bedroom unlocked" (critical_condition---…)", its
- *  name from the villa's live states (`friendlyOf`), its friendly name (else its id) after it when that says more. */
+ *  name from the villa's live states (`friendlyOf`), its friendly name (else its id) after it when that says more. A
+ *  profile the add-on sends no automation to (the facility manager: readDomains) reads its id in words, and the id. */
 function automationSaid(id: string, friendlyOf: (entityId: string) => string | undefined): string {
   const friendly = friendlyOf(id);
   const name = automationName(friendly, id);
-  const kind = id.startsWith("script.") ? "script" : "automation";
+  // its domain only names its kind: no script is read (a profile that reads no automation or script gets its id in words)
+  const kind = id.split(".")[0] === "script" ? "script" : "automation";
   const ref = friendly && friendly !== name ? friendly : id;
   return `the villa's ${kind} "${name}" (${ref})`;
 }

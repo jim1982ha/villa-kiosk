@@ -1,4 +1,4 @@
-## 2.496.853
+## 2.496.854
 
 - **Every issue card says what made it.** A small (?) pill now sits just left of the "next check" pill. Hover it, or
   tap it on a tablet or phone, to read where the card came from: the villa's automation that raised the alert (its
