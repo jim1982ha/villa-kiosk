@@ -76,15 +76,17 @@ def test_the_card_says_what_the_task_says():
     import tempfile
     st = Store(os.path.join(tempfile.mkdtemp(), "s.sqlite"))
     pb = Problems(st)
-    iid = st.new_incident("k", "r", "lock.example_door", "P2", {"message": "Door unlocked"})
-    tid, _ = pb.open_task("incident", iid, "r", "lock.example_door", "Door unlocked")
+    iid = st.new_incident("k", "automation.example_door", "lock.example_door", "P2", {"message": "Door unlocked"})
+    tid, _ = pb.open_task("incident", iid, "automation.example_door", "lock.example_door", "Door unlocked")
     assert pb.card(st.task(tid)) == {"open": True, "title": "Door unlocked", "number": iid, "priority": "P2", "origin": "alert",
                                      "check": "minutes", "pattern": None, "since": None, "note": "Closed: the problem is over.", "who": None, "lasting": False,
                                      "reopen_note": None, "todo": "", "closes_at": None,
                                      "confirms_by": None, "not_watched": False, "monitored_until": None, "expected": None,
                                      "entity_id": "lock.example_door",
                                      # its first moment its alert's (owner's drill #134-P1): the incident's opening
-                                     "began": st.incident(iid)["opened_at"]}
+                                     "began": st.incident(iid)["opened_at"],
+                                     # what made it, its card's (?) pill (owner, 2026-11-21): the villa's automation
+                                     "raised_by": {"automation": "automation.example_door"}}
     # what to do on site is the incident's, as the alert desk carries it (store.Notes.CHECK): the fault's note follows
     st.note(iid, {"check": "Lock it."})
     assert pb.card(st.task(tid))["todo"] == "Lock it."

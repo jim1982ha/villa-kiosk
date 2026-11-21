@@ -1,4 +1,4 @@
-## 0.12.535
+## 0.12.536
 
 - **Each fault card in the VESTA UI says what made it.** VESTA now tells the VESTA UI which villa automation raised an
   alert, or which maintenance check found a problem ("Missing device", PM-MISSING, …): the card's (?) pill shows it
