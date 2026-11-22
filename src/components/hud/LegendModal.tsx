@@ -65,7 +65,7 @@ const CHIP_COUNTS: { label: string; health: RoomHealth; note: string }[] = [
 const STATUS_ITEMS: { label: string; swatch: string; note: string }[] = [
   { label: "Usual", swatch: STATUS_COLOR.usual, note: "Alive, in its usual state: off, closed, locked, no motion, no leak, disarmed" },
   { label: "On / active", swatch: STATUS_COLOR.active,
-    note: "In use, nothing wrong: on, open, unlocked (a critical door too, its problem is its amber \"!\"), motion seen, occupied, playing, armed. A switch or padlock is red only while in use, quiet otherwise" },
+    note: "In use, nothing wrong: on, open, unlocked (a critical door too, its problem is its amber \"!\"), motion seen, occupied, playing, armed. A switch or padlock is filled red while in use, green at rest" },
   // ONE entry for the one meaning (owner, 2026-11-15): moving, and a cover part of the way open (panelRules.PARTIALLY_OPEN)
   { label: "In between", swatch: STATUS_COLOR.transitional,
     note: "Moving (opening, closing, locking, arming), a curtain, blind or shutter partly open, a ticket in progress" },

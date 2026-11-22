@@ -1,3 +1,21 @@
+## 2.496.882
+
+- **Switches and padlocks are filled in their state's colour.** A locked door's padlock is filled green, an unlocked
+  one red; a switch that is off has a green track, on a red one, the white knob's position saying which. A camera's
+  button for its linked device is filled the same way. This replaces 2.496.881's green outline, as you chose.
+
+## 2.496.881
+
+- **Switches and padlocks show their state's colour at rest too.** A locked door's padlock is now green, like its
+  "Locked" pill and its history, drawn on the quiet background; unlocked, it stays filled red. A switch that is off has
+  a green knob on the quiet track; on, the track is red. The same on a camera's button for its linked device: its icon
+  is green at rest. The legend says so.
+
+## 2.496.880
+
+- **Room badges: the number's pill is centred.** On the map, the small rounded pill holding a room's device count sat
+  a little high in its badge; it is now centred top to bottom, on every line of a badge that lists several rooms.
+
 ## 2.496.879
 
 - **One colour code, the same everywhere.** Seven rules now decide every colour: a colour says what is true now, never

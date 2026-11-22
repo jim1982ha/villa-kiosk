@@ -5348,7 +5348,11 @@ export class EntityVisuals {
         // Centred on its own line: (r - (rows-1)/2) units from the chip's
         // centre, plus the optical nudge badgeText gives every string.
         row.text.top = `${(r - (rows - 1) / 2) * csm.size + csm.font * this.metrics.textOpticalTopEm}px`;
-        row.count.top = `${CHIP_COUNT_INSET_PX + r * csm.size}px`;
+        // ⚠️ CENTRED ON ITS LINE (owner, 2026-11-22: "the rounded pill inside the room badge is not vertically
+        // centered"): it was pinned CHIP_COUNT_INSET_PX under the line's top, which centres only a pill nearly the
+        // line's height; at 58% of it the pill sat high. The chip's border (its Rectangle thickness) shifts every
+        // child down by itself, so it is taken back: the pill's middle is the line's, border to border.
+        row.count.top = `${r * csm.size + (csm.size - csm.countSize) / 2 - c.container.thickness}px`;
         row.zone.top = `${r * csm.size}px`;
         row.zone.height = `${csm.size}px`;
         // Its column: the name from that column's left edge, the pill at its
@@ -5554,9 +5558,9 @@ export class EntityVisuals {
     count.stretch = Image.STRETCH_UNIFORM;
     count.horizontalAlignment = Control.HORIZONTAL_ALIGNMENT_RIGHT;
     count.verticalAlignment = Control.VERTICAL_ALIGNMENT_TOP;
-    // Small INWARD inset (negative left pulls it left off the right edge;
-    // renderChips pushes it down off its line's top edge) — tucked just
-    // inside the line's corner, not straddling it.
+    // Small INWARD inset (negative left pulls it left off the right edge);
+    // renderChips centres it on its line, top to bottom — inside the
+    // chip, not straddling its edge.
     count.left = `-${CHIP_COUNT_INSET_PX}px`;
     c.container.addControl(count);
 

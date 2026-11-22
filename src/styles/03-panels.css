@@ -301,10 +301,12 @@ button[aria-busy="true"] { animation: command-waiting 0.9s ease-in-out infinite;
   display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px;
   margin-left: auto; --media-btn: 56px;
 }
-/* Linked-entity toggle in the camera's control cluster: red while on (in use, a lock unlocked), as every switch of a
-   device (SwitchFace; owner, 2026-11-22, colour code rules 2 and 3). The camera's sound on (CameraPanel soundOn) is a
+/* Linked-entity toggle in the camera's control cluster: filled red while on (in use, a lock unlocked), the usual
+   green at rest, as every switch of a device (SwitchFace; owner, 2026-11-22, colour code rule 3, option B: a control
+   filled in its state's colour). The camera's sound on (CameraPanel soundOn) is a
    choice of the person watching, no device's state: the accent, as what is chosen (rule 6). */
 .camera-controls .camera-linked-btn.on { background: var(--status-active); border-color: transparent; }
+.camera-controls .camera-linked-btn:not(.on):not(:disabled) { background: var(--status-usual); border-color: transparent; }
 .camera-controls .camera-sound-btn.on {
   background: var(--accent); border-color: transparent;
 }
