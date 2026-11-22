@@ -154,8 +154,8 @@ export function presenceHeading(p: Presence, when: string, stages: PresenceStage
  *  used in other mini chart"); each step between them on its way to empty, moving, as a lock locking; a state the
  *  sensor does not list: lost contact, or no value, as presenceStateWords says it.
  *  ⚠️ SOMEONE HOME IS NOT AN ALARM (owner, 2026-11-13): the first stage was red ("use the red \"active\" colour",
- *  2026-10-25, when active was red's word), and the steps between amber then teal. Red is an alarm: someone seen while
- *  the villa should be empty is the visit alert's red, on its card. */
+ *  2026-10-25, when active was red's word), and the steps between amber then teal. Since 2026-11-15 red is "in use" again
+ *  and an alarm amber: someone seen while the villa should be empty is the visit alert's amber, on its card. */
 export function stageStatus(stages: PresenceStages, state: string): StatusKey {
   const i = stages.order.findIndex(([s]) => s === state), n = stages.order.length;
   if (i < 0) return presenceStateWords(state).tone;

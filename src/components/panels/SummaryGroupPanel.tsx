@@ -10,7 +10,7 @@
 
 import { roleCan } from "@/auth/permissions";
 import { useState } from "react";
-import { Sparkles, Power, PowerOff, MapPin, Building2 } from "lucide-react";
+import { Sparkles, Power, PowerOff, MapPin, Building2, Lock, Unlock } from "lucide-react";
 import BasePanel from "./BasePanel";
 import { useHA, useHAActions } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
@@ -20,6 +20,7 @@ import type { HaSceneInfo } from "@/config/haScenes";
 import { deviceLook, groupLook, type LookSource } from "@/utils/deviceActivity";
 import { bulkSwitchPlan, bulkWords } from "@/config/activeDevices";
 import { ROW_SWITCH_DOMAINS } from "@/utils/quickAction";
+import { isLockSwitch } from "@/utils/switchWords";
 import type { HassEntity } from "@/types/ha.types";
 import { listSections, offersGrouping, summaryRows, type Grouping } from "@/config/summaryRows";
 import SegmentedGroup from "@/components/common/SegmentedGroup";
@@ -76,7 +77,7 @@ interface Props {
  * Bulk-toggling many devices from one tap is easy to trigger by accident, so it
  * asks first, the LockPanel unlock pattern. Icon-only: the text cost too much
  * width, on a phone above all; the icon carries the direction (Power = will
- * turn on, PowerOff = will turn off) and the tooltip says what it will switch (bulkWords: "Turn off 1 fan"). "On" is
+ * turn on, PowerOff = will turn off; over locks alone the padlock it will throw) and the tooltip says what it will switch (bulkWords: "Turn off 1 fan"). "On" is
  * POWER (groupLook's onCount), and the switch is config/activeDevices' — one
  * call PER DOMAIN (a lock: lock / unlock). Shown over any heading with a device a row switches (owner, 2026-10-20:
  * one switch, four locks — every heading that has one). Once sent it waits as every command button does
@@ -91,16 +92,21 @@ function BulkToggle({ devices, looks }: { devices: HassEntity[]; looks: LookSour
   const { pending, markPending } = usePendingAck(changing.join());
   if (devices.length === 0) return null;
   const words = bulkWords(changing, !anyOn);
+  // ⚠️ LOCKS ONLY, A PADLOCK (owner, 2026-11-22: a lock is a padlock, never an on/off switch — SwitchFace): a heading
+  // over locks alone shows the bolt it will throw, Lock with any unlocked, Unlock… with all locked, and says it so.
+  const locks = devices.every((e) => isLockSwitch(e.entity_id));
+  const icon = locks ? (anyOn ? <Lock size={18} /> : <Unlock size={18} />) : (anyOn ? <PowerOff size={18} /> : <Power size={18} />);
+  const confirmLabel = locks ? (anyOn ? "Lock" : "Unlock") : (anyOn ? "Turn off" : "Turn on");
   const run = () => {
     markPending(allSent(bulkSwitchPlan(devices.map((e) => e.entity_id), !anyOn, ROW_SWITCH_DOMAINS)
       .map((call) => callService(call.domain, call.service, {}, { entity_id: call.entityIds }))));
     setConfirming(false);
   };
   return confirming ? (
-    <InlineConfirm question={`${words}?`} confirmLabel={anyOn ? "Turn off" : "Turn on"} onConfirm={run}
+    <InlineConfirm question={`${words}?`} confirmLabel={confirmLabel} onConfirm={run}
       onCancel={() => setConfirming(false)} />
   ) : (
-    <Button icon={anyOn ? <PowerOff size={18} /> : <Power size={18} />} label={words} busy={pending}
+    <Button icon={icon} label={words} busy={pending}
       onClick={() => setConfirming(true)} />
   );
 }

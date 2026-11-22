@@ -13,7 +13,7 @@
 // checks read them one by one — a line's words could be right in a check and wrong on the card. attention groups the
 // problems; how a card SAYS them lives here only, and a check reads what cockpitCard returns.
 
-import { ACCENT_PILL, QUIET_PILL, pillClass } from "@/fm/tone";
+import { MOVING_PILL, QUIET_PILL, pillClass } from "@/fm/tone";
 import type { RecordStatus } from "@/components/fm/RecordCard";
 import type { AgentCadence } from "@/agent/agentApi";
 import { cardCheck, LIVE_CHECK, watchedLive, type CheckSaid } from "@/fm/faultTiming";
@@ -158,7 +158,7 @@ const SEVERITY_PILL: Record<AttentionSeverity, string> = { danger: pillClass("da
 /** How a card stands, for its colour and its place in Open issues: its worst problem's severity, or "handled" when
  *  every problem of it is a ticket someone took on. */
 export type CardTone = AttentionSeverity | "handled";
-const CARD_TONE_PILL: Record<CardTone, string> = { ...SEVERITY_PILL, handled: ACCENT_PILL };
+const CARD_TONE_PILL: Record<CardTone, string> = { ...SEVERITY_PILL, handled: MOVING_PILL };
 /** ⚠️ OPEN ISSUES IN THEIR COLOUR'S ORDER (owner, 2026-11-05): red, then amber, then grey, then what is being handled. */
 export const CARD_TONE_RANK: Record<CardTone, number> = { danger: 0, warn: 1, lost: 2, handled: 3 };
 
@@ -199,7 +199,7 @@ export function cardTop(card: Pick<CardView, "lines" | "status" | "tone" | "look
   const watch = card.look === "watched" && card.nextCheck ? card.nextCheck : null;
   return {
     ...strip,
-    ...(watch ? { status: [{ text: watch.when, tone: ACCENT_PILL }], statusTip: watch.tip } : {}),
+    ...(watch ? { status: [{ text: watch.when, tone: MOVING_PILL }], statusTip: watch.tip } : {}),
     ...(card.lines.length ? { when: rowWhen(card) } : {}),
     ...(card.nextCheck && !watch ? { check: { pill: card.nextCheck.pill, tip: card.nextCheck.tip } } : {}),
     // what made it (the (?) pill): the card's for one problem, each part's own on a card of several (cardFace)

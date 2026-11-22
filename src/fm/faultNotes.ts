@@ -9,7 +9,7 @@
 
 import { NEED_HELP } from "./deviceWork";
 import { closedTold } from "./faultConfirm";
-import { ACCENT_PILL, QUIET_PILL, pillClass } from "./tone";
+import { MOVING_PILL, QUIET_PILL, pillClass } from "./tone";
 import { STAGE_WORDS, type FmStage, isTicketResolved, helpIsLatest, recordLife, stageOf, standingHelp, statusChanges, stepsInTimeOrder } from "./fmEngine";
 import type { FmTicket, FmTicketUpdate } from "./fmTypes";
 import { authorWords } from "@/auth/roles";
@@ -41,11 +41,10 @@ export function notedStory(t: Pick<FmTicket, "updates">): { note: string; at: st
   return stepsInTimeOrder(t).filter((x) => x.kind === "noted" && x.note).map((x) => ({ note: x.note as string, at: x.at }));
 }
 
-/** A stage's pill colour: its tone (fmEngine.STAGE_WORDS), a ticket in progress the buttons' accent (tone.ACCENT_PILL),
- *  the colour of its Edit Ticket. The Tickets tab's stage pill and every card's who-moved-it pill alike. */
+/** A stage's pill colour: its tone (fmEngine.STAGE_WORDS), a ticket in progress in between (tone.MOVING_PILL). The Tickets tab's stage pill and every card's who-moved-it pill alike. */
 export function stagePillClass(stage: FmStage): string {
   // a closed record is quiet: its card grey (owner, 2026-11-05, the "Status on top" card)
-  return stage === "ticket" ? ACCENT_PILL : stage === "closed" ? QUIET_PILL : pillClass(STAGE_WORDS[stage].tone);
+  return stage === "ticket" ? MOVING_PILL : stage === "closed" ? QUIET_PILL : pillClass(STAGE_WORDS[stage].tone);
 }
 
 /** ⚠️ WHO LAST MOVED IT, IN PARTS (owner, 2026-11-05, the "Status on top" card): the card says where it stands

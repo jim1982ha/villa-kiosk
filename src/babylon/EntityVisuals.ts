@@ -7,8 +7,9 @@
 //   light         -> the bound object glows AND a real PointLight illuminates
 //                    the room; colour follows hs/kelvin, intensity follows
 //                    brightness, off = dark.
-//   fan           -> emissive teal tint while on.
-//   lock          -> green (locked) / red (unlocked) diffuse+emissive tint
+//   fan           -> no tint: its blades turn while on (fanRigs).
+//   lock          -> its status colour (green locked, red unlocked, amber
+//                    breathing when it needs attention) diffuse+emissive tint
 //                    (skipped on a pose mesh — see below, its pose already
 //                    shows the state).
 //   switch/media  -> emissive "active" tint when on/playing.
@@ -149,7 +150,7 @@ import {
   type CardArrangement,
 } from "./badgeCard";
 import { iconKeyFor } from "./badgeIconKeys";
-import { LOST_GREY, healthPill, STATUS_COLOR3 } from "./colors";
+import { healthPill, STATUS_COLOR3 } from "./colors";
 import { COSMETIC_MAPPING_FIELDS, type EntityMapDelta } from "./entityMapDiff";
 // Pose-word resolution (which "__<word>" mesh variant a live state asks for)
 // — pure logic, extracted to keep this file to the things that actually touch
@@ -769,6 +770,11 @@ export class EntityVisuals {
    *  badge would (owner, 2026-11-19: it stood still inside a group). Rebuilt every pass, so a pooled chip that now
    *  shows another device, or none, is whole again. */
   private urgentChips = new Set<Image>();
+  /** A room chip's count pill (and a folded chip's `+N`) whose room says "act now" (summaryLook.roomHealth "alert": an
+   *  alarm, a critical device silent): it breathes like the badges (owner, 2026-11-22, colour code rule 5: urgent
+   *  pulses wherever it shows; it pulsed only in the room picker). An open fault's amber count is still. Rebuilt every
+   *  renderChips pass. */
+  private urgentCounts = new Set<Image>();
   /** The viewer asked for less motion: an urgent badge stays still, its amber mark says it. */
   private readonly reducedMotion = typeof matchMedia === "function" ? matchMedia("(prefers-reduced-motion: reduce)") : null;
 
@@ -1968,6 +1974,7 @@ export class EntityVisuals {
     this.pulsing.clear();
     this.urgentBadges.clear();
     this.urgentChips.clear();
+    this.urgentCounts.clear();
     this.labels.clear();
     this.labelsNewestFirst.length = 0;
     this.lastState.clear();
@@ -5255,6 +5262,8 @@ export class EntityVisuals {
     if (!layer) return; // no GUI layer yet — nothing to attach chips to
     const scale = this.effectiveScale();
     const chipRest = categorySurface("others", "off");
+    for (const img of this.urgentCounts) img.alpha = 1;
+    this.urgentCounts.clear();
     for (const chip of chips) {
       // ── WHAT THE CHIP SHOWS IS summaryLook.roomChipModel's ───────────────
       // A chip whose every device is behind a wall is behind that wall too.
@@ -5291,9 +5300,10 @@ export class EntityVisuals {
       // the chip with; names left-aligned, pills in one right-hand column.
       // Room name and count render as separate controls (see ensureCluster).
       //
-      // Each pill carries ITS room's HEALTH (colors.healthPill): red if a
-      // member needs attention, amber for an open fault, grey for lost
-      // contact, green otherwise — what that room's own chip would show.
+      // Each pill carries ITS room's HEALTH (colors.healthPill): amber if a
+      // member needs attention (breathing when it is urgent: urgentCounts),
+      // grey for lost contact, green otherwise — what that room's own chip
+      // would show.
       // A baked picture, number ink-centred inside it — see
       // badgeText.countBadgeImage for why it is no longer a Rectangle and a
       // TextBlock.
@@ -5355,6 +5365,7 @@ export class EntityVisuals {
           fontOfSize: csm.countFont / csm.countSize,
         });
         row.text.isVisible = row.count.isVisible = row.zone.isVisible = true;
+        if (line.health === "alert") this.urgentCounts.add(row.count);
       }
       for (let i = n; i < c.lines.length; i++) {
         const row = c.lines[i];
@@ -5405,6 +5416,7 @@ export class EntityVisuals {
         c.tabZone.linkOffsetXInPixels = zone.cx - chip.x;
         c.tabZone.linkOffsetYInPixels = zone.cy - chip.y;
         c.tab.isVisible = c.tabZone.isVisible = true;
+        if (model.toggle.health === "alert") this.urgentCounts.add(c.tab);
       } else {
         c.tab.isVisible = c.tabZone.isVisible = false;
       }
@@ -5865,6 +5877,9 @@ export class EntityVisuals {
         const c = STATUS_COLOR3[look.tone];
         setDiffuse?.(c);
         setEmissive?.(c.scale(look.tone === "unavailable" ? 0.25 : 0.2));
+        // needs attention (jammed, a critical lock silent): it breathes, as its badge (colour code rule 5)
+        if (look.tone === "warn") this.pulsing.set(mesh, { tone: c.scale(0.5), now: new Color3(0, 0, 0) });
+        else this.pulsing.delete(mesh);
         break;
       }
 
@@ -5874,7 +5889,7 @@ export class EntityVisuals {
           // An offline leak/smoke sensor must not look like a safe, monitored
           // one — flag it instead of going quiet.
           this.pulsing.delete(mesh);
-          setEmissive?.(LOST_GREY.scale(0.4));
+          setEmissive?.(STATUS_COLOR3.unavailable.scale(0.4));
         } else if (look.on) {
           this.pulsing.set(mesh, { tone: STATUS_COLOR3[look.tone ?? "warn"], now: new Color3(0, 0, 0) });
         } else {
@@ -5900,7 +5915,8 @@ export class EntityVisuals {
 
   private animatePulse(dtMs: number): void {
     // reduced motion: an urgent badge stays whole (updateLabel), so it asks for no frame of its own
-    const breathing = (this.urgentBadges.size > 0 || this.urgentChips.size > 0) && !(this.reducedMotion?.matches ?? false);
+    const breathing = (this.urgentBadges.size > 0 || this.urgentChips.size > 0 || this.urgentCounts.size > 0)
+      && !(this.reducedMotion?.matches ?? false);
     if (this.pulsing.size === 0 && !breathing && !this.beams.hasActive()) return;
     this.pulseT += (dtMs / 1000) * PULSE_RAD_PER_SEC;
     const intensity = (Math.sin(this.pulseT) + 1) / 2; // 0..1
@@ -5918,6 +5934,7 @@ export class EntityVisuals {
       lbl.badge.alpha = breathing ? BADGE_PULSE_MIN + (1 - BADGE_PULSE_MIN) * intensity : 1;
     }
     for (const chip of this.urgentChips) chip.alpha = breathing ? BADGE_PULSE_MIN + (1 - BADGE_PULSE_MIN) * intensity : 1;
+    for (const count of this.urgentCounts) count.alpha = breathing ? BADGE_PULSE_MIN + (1 - BADGE_PULSE_MIN) * intensity : 1;
     this.requestAnimationRender();
   }
 

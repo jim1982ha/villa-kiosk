@@ -124,7 +124,7 @@ export interface ChipToggle {
   /** "+N" (the rooms it hides) or "−" (roomChips.chipToggleLabel). */
   label: string;
   /** Its pill's colour: folded, the WORST health among the lines it hides
-   *  (red beats amber beats grey), so folding never hides trouble; open,
+   *  (amber beats grey), so folding never hides trouble; open,
    *  "ok" — every line shows its own. */
   health: RoomHealth;
 }
@@ -143,7 +143,7 @@ const HEALTH_ORDER: readonly RoomHealth[] = ["alert", "fault", "unavailable", "o
  *  on. Attention outranks lost contact: a leak is the thing to act on first, and a room with both still reads "not all right". */
 export type RoomHealth = "alert" | "fault" | "unavailable" | "ok";
 
-/** ⚠️ A FAULT OUTRANKS LOST CONTACT, AS ON THE BADGE (owner, 2026-10-22: badge proposal 2): red act now, amber check
+/** ⚠️ A FAULT OUTRANKS LOST CONTACT, AS ON THE BADGE (owner, 2026-10-22: badge proposal 2): act now, check
  *  soon, grey no contact — the order of the badges' own corner marks (deviceActivity.MARK_ORDER). */
 export function roomHealth(ring: { ringRed: boolean; fault: boolean; unavailable: boolean }): RoomHealth {
   return ring.ringRed ? "alert" : ring.fault ? "fault" : ring.unavailable ? "unavailable" : "ok";

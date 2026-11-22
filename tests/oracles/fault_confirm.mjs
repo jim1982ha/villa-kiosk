@@ -131,14 +131,14 @@ ck("  ...drawn by the open issues' own card: marked frame, a check, its device i
    // its alert's name the strip's chip, never its words again (architecture review, 2026-11-05)
    && /<span class="fm-record-number">#65<\/span>/.test(drawn) && /Door unlocked/.test(drawn) && !/#65 ·/.test(drawn) && /class="fm-record-who"><svg[\s\S]*?<\/svg><span>Done[^<]* \(JM\)<\/span>/.test(drawn)
    && drawn.includes(`<span>Done${on(-2)} (JM)</span>`), drawn.slice(0, 900));
-// owner, 2026-11-05 ("Status on top", then "state first"): a Watch card's first line says when it closes, in green, with
-// its (i), under a green strip
-const stripOf = (html) => /class="fm-record-strip strip-ok">[\s\S]*?<div class="fm-record-main"><div class="fm-record-state strip-(\w+)"><span class="fm-record-status">([^<]*)<\/span><span class="info-tip"><button type="button" class="icon-quiet small" aria-label="([^"]*)"/.exec(html);
+// owner, 2026-11-05 ("Status on top", then "state first"): a Watch card's first line says when it closes, with its (i);
+// in between, blue, under a blue strip (owner, 2026-11-22, colour code: it was the brand's green)
+const stripOf = (html) => /class="fm-record-strip strip-moving">[\s\S]*?<div class="fm-record-main"><div class="fm-record-state strip-(\w+)"><span class="fm-record-status">([^<]*)<\/span><span class="info-tip"><button type="button" class="icon-quiet small" aria-label="([^"]*)"/.exec(html);
 const checkOf = (html) => /<span class="[^"]*\bfm-record-check" aria-label="([^"]*)">/.exec(html);
 {
   const strip = stripOf(drawn);
-  ck("  ...its first line says \"Closes\" and its time, in green, what VESTA does then in its (i)",
-     !!strip && strip[2] === `Closes ${clockTime(NOW + 8 * 60_000)}` && strip[3] === closesAt(8) && strip[1] === "ok", strip?.slice(1));
+  ck("  ...its first line says \"Closes\" and its time, in blue (in between), what VESTA does then in its (i)",
+     !!strip && strip[2] === `Closes ${clockTime(NOW + 8 * 60_000)}` && strip[3] === closesAt(8) && strip[1] === "moving", strip?.slice(1));
   ck("  ...said once: no next check pill (its first line says when it closes)", checkOf(drawn) === null, checkOf(drawn));
 }
 ck("  ...no Close and no Open Ticket: it is closed", !/fm-record-actions/.test(drawn));

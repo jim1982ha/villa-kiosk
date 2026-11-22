@@ -104,15 +104,10 @@ input[type="range"]::-moz-range-thumb {
   font-size: var(--text-xl); font-weight: 600; transition: all 0.2s;
   background: var(--bg-input); color: var(--text-secondary);
 }
-/* An ACTION that moves a device (LockPanel's "Unlock door…", a blind's Open and Close, the power button's "Turn off"): the colour of the state it
-   leads to (utils/stateColors.actionColor, put in --state by the panel), drawn as the power button is. ⚠️ OWNER,
-   2026-11-13: "Unlock door…" wore the app's green accent, the colour of "on" everywhere else. */
-.big-toggle.action,
-.btn.action {
-  background: color-mix(in srgb, var(--state) 18%, transparent);
-  color: var(--state);
-  box-shadow: inset 0 0 0 1.5px var(--state);
-}
+/* ⚠️ AN ACTION IS PLAIN (owner, 2026-11-22, colour code rule 1: a colour says what is true now, never what a tap will
+   do). "Unlock door…", a blind's Open and Close, the power button's "Turn off" wore the colour of where they lead, beside
+   the window's pill in the colour of the state; the pill alone says it now, the button its words and icon. */
+.big-toggle { color: var(--text-primary); }
 .big-toggle:active { transform: scale(0.97); }
 /* THE WAITING SIGN, ONE RULE (UI scan, 2026-11-10): a button whose command is on its way to a device says it is busy
    (aria-busy: usePendingAck) and breathes until the device answers: the power button, the lock, Play / Pause, a
@@ -306,11 +301,12 @@ button[aria-busy="true"] { animation: command-waiting 0.9s ease-in-out infinite;
   display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px;
   margin-left: auto; --media-btn: 56px;
 }
-/* Linked-entity toggle in the camera's control cluster — green while on, so
-   it reads as a live switch rather than another navigation button. */
-.camera-controls .camera-linked-btn.on,
-.camera-controls .camera-sound-btn.on {   /* the camera's sound on (CameraPanel soundOn): lit the same */
-  background: var(--status-on); border-color: transparent;
+/* Linked-entity toggle in the camera's control cluster: red while on (in use, a lock unlocked), as every switch of a
+   device (SwitchFace; owner, 2026-11-22, colour code rules 2 and 3). The camera's sound on (CameraPanel soundOn) is a
+   choice of the person watching, no device's state: the accent, as what is chosen (rule 6). */
+.camera-controls .camera-linked-btn.on { background: var(--status-active); border-color: transparent; }
+.camera-controls .camera-sound-btn.on {
+  background: var(--accent); border-color: transparent;
 }
 /* The camera's own buttons — moves, siren, sound (CameraPanel): among the others, except on an upright phone, where
    they take a line of their own above them (below) and the usual buttons stay where every camera has them. */
@@ -550,7 +546,7 @@ button[aria-busy="true"] { animation: command-waiting 0.9s ease-in-out infinite;
 .weather-band.b1 { background: color-mix(in srgb, var(--accent) 40%, transparent); }
 .weather-band.b2 { background: color-mix(in srgb, var(--accent) 22%, transparent); }
 .weather-band.b3 { background: color-mix(in srgb, var(--accent-warm) 40%, transparent); }
-.weather-band.b4 { border-radius: 0 7px 7px 0; background: color-mix(in srgb, var(--status-danger) 34%, transparent); }
+.weather-band.b4 { border-radius: 0 7px 7px 0; background: color-mix(in srgb, var(--status-warning) 34%, transparent); }
 .weather-mark { position: absolute; top: -3px; width: 20px; height: 20px; margin-left: -10px; border-radius: 10px; border: 3px solid var(--bg-modal); box-sizing: border-box; }
 /* ── SERIES COLOURS, ONCE (round 9, 2.496.147) ─────────────────────────────
    Each series class names its colour as --series, for every chart piece that
@@ -561,7 +557,7 @@ button[aria-busy="true"] { animation: command-waiting 0.9s ease-in-out infinite;
 :is(.key, .chart-line, .weather-bar-fill, .ring-fill, .weather-mark, .dot, .bar-seg, .bar-chart-dot).in { --series: var(--accent-warm); }
 :is(.key, .chart-line, .weather-bar-fill, .ring-fill, .weather-mark, .dot, .bar-seg, .bar-chart-dot).water { --series: var(--cat-energy); }
 :is(.key, .chart-line, .weather-bar-fill, .ring-fill, .weather-mark, .dot, .bar-seg, .bar-chart-dot).warm { --series: var(--accent-warm); }
-:is(.key, .chart-line, .weather-bar-fill, .ring-fill, .weather-mark, .dot, .bar-seg, .bar-chart-dot).uv { --series: var(--status-danger); }
+:is(.key, .chart-line, .weather-bar-fill, .ring-fill, .weather-mark, .dot, .bar-seg, .bar-chart-dot).uv { --series: var(--status-warning); }
 :is(.key, .chart-line, .weather-bar-fill, .ring-fill, .weather-mark, .dot, .bar-seg, .bar-chart-dot):is(.ink, .cost) { --series: var(--text-primary); }
 :is(.key, .chart-line, .weather-bar-fill, .ring-fill, .weather-mark, .dot, .bar-seg, .bar-chart-dot).feels { --series: color-mix(in srgb, var(--accent) 60%, var(--text-primary)); }
 :is(.weather-mark, .dot):is(.out, .in) { background: var(--series); }
@@ -576,9 +572,9 @@ button[aria-busy="true"] { animation: command-waiting 0.9s ease-in-out infinite;
 .weather-advice-card { background: var(--bg-input); border-radius: 18px; padding: 14px 16px; display: flex; flex-direction: column; gap: 6px; }
 .weather-advice-title { display: flex; align-items: center; gap: 8px; font-size: var(--text-base); font-weight: 600; }
 .weather-advice-mark { width: 26px; height: 26px; flex: 0 0 auto; border-radius: 13px; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: var(--text-sm); }
-.tone-good .weather-advice-mark { background: color-mix(in srgb, var(--accent) 22%, transparent); color: var(--accent); }
+.tone-good .weather-advice-mark { background: color-mix(in srgb, var(--status-usual) 22%, transparent); color: var(--status-usual); }
 .tone-caution .weather-advice-mark { background: color-mix(in srgb, var(--status-warning) 22%, transparent); color: var(--status-warning); }
-.tone-bad .weather-advice-mark { background: color-mix(in srgb, var(--status-danger) 22%, transparent); color: var(--status-danger); }
+.tone-bad .weather-advice-mark { background: color-mix(in srgb, var(--status-warning) 22%, transparent); color: var(--status-warning); }
 .tone-neutral .weather-advice-mark { background: var(--bg-card); color: var(--text-secondary); }
 /* .weather-advice-detail: the small grey paragraph, with .energy-note and .profile-card-desc (06-auth.css). */
 
@@ -664,8 +660,8 @@ button[aria-busy="true"] { animation: command-waiting 0.9s ease-in-out infinite;
 .uv-seg.low { background: color-mix(in srgb, var(--accent) 40%, transparent); }
 .uv-seg.moderate { background: color-mix(in srgb, var(--accent) 22%, transparent); }
 .uv-seg.high { background: color-mix(in srgb, var(--accent-warm) 40%, transparent); }
-.uv-seg.very-high { background: color-mix(in srgb, var(--status-danger) 34%, transparent); }
-.uv-seg.extreme { background: color-mix(in srgb, var(--status-danger) 60%, transparent); }
+.uv-seg.very-high { background: color-mix(in srgb, var(--status-warning) 34%, transparent); }
+.uv-seg.extreme { background: color-mix(in srgb, var(--status-warning) 60%, transparent); }
 .weather-mark.uv { top: auto; left: 50%; margin-left: -10px; margin-bottom: -10px; background: var(--accent-warm); }
 .weather-uv-labels { flex: 1 1 auto; display: flex; flex-direction: column-reverse; font-size: var(--text-xs); color: var(--text-secondary); }
 .weather-uv-labels span { flex-basis: 0; display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 0; }
@@ -755,7 +751,7 @@ button[aria-busy="true"] { animation: command-waiting 0.9s ease-in-out infinite;
 /* UV: the UV scale's own high end, so it reads apart from the sunlight beside
    it (owner, 2026-09-26) — line, legend key, tooltip marker and its axis. */
 
-.chart-yaxis.tint-uv, .chart-unit.tint-uv { color: var(--status-danger); }
+.chart-yaxis.tint-uv, .chart-unit.tint-uv { color: var(--status-warning); }
 .chart-line.ink { opacity: 0.8; }
 .chart-line.thin { stroke-width: 1.6; }
 .chart-line.dashed { stroke-dasharray: 5 4; }
@@ -874,7 +870,7 @@ button[aria-busy="true"] { animation: command-waiting 0.9s ease-in-out infinite;
    series from another, so it is mixed from the accents — never --status-*
    (architecture review 11: the third meter was "needs attention" red, the
    second device "lost contact" amber; tests/oracles/series_colours.mjs). */
-.e-standout { --e: color-mix(in srgb, var(--status-danger) 55%, transparent); }
+.e-standout { --e: color-mix(in srgb, var(--status-warning) 55%, transparent); }
 .e-untracked { --e: color-mix(in srgb, var(--text-secondary) 30%, transparent); }
 .e-s0 { --e: color-mix(in srgb, var(--accent-warm) 60%, transparent); }
 .e-s1 { --e: color-mix(in srgb, var(--cat-energy) 55%, transparent); }

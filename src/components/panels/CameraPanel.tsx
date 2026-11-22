@@ -7,12 +7,14 @@
 // camera picker and the status bar.
 
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { ArrowLeft, X, VideoOff, Maximize2, Minimize2, ZoomOut, ChevronLeft, ChevronRight, Power, Check, Video, Volume2, VolumeX, ListTree, RotateCw, List, Expand, Shrink } from "lucide-react";
+import { ArrowLeft, X, VideoOff, Maximize2, Minimize2, ZoomOut, ChevronLeft, ChevronRight, Check, Video, Volume2, VolumeX, ListTree, RotateCw, List, Expand, Shrink } from "lucide-react";
 import { cameraFitsView, setCameraFitsView } from "@/utils/viewPrefs";
 import type { PanelProps } from "@/types/panel.types";
 import { useRailLayout } from "@/utils/railLayout";
 import { linkedSwitchProps, usePanelActions } from "./PanelActionsContext";
 import { linkedStateWords } from "./panelHeader";
+import { switchIcon } from "./SwitchFace";
+import { switchTip } from "@/utils/switchWords";
 import { EditButton, FaultsButton, OpenTicketButton, useDeviceWarning } from "./DeviceWindowPieces";
 import DeviceReadings from "./DeviceReadings";
 import { useHA } from "@/ha/HAStateStore";
@@ -752,10 +754,10 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
             // paints red alongside "error"/"unreachable". Same word, two
             // vocabularies; don't collapse them.
             colorFor={(s) => (
-              // ⚠️ MOTION IS ACTIVE, NOT RED (owner, 2026-11-13: one colour code for every status): someone seen is the
-              // camera doing its job, green as an occupied room; red is an alarm
+              // ⚠️ MOTION IS ACTIVE (owner, 2026-11-13: one colour code for every status): someone seen is the camera
+              // doing its job, red "in use" as an occupied room; a problem is amber
               s === "motion" ? STATUS_COLOR.active
-                // the camera unreachable: red for a critical one, as the Cockpit and the map (its device's rule)
+                // the camera unreachable: amber for a critical one, as the Cockpit and the map (its device's rule)
                 // and its motion part lost: the same rule, a part of a critical device as the device
                 : s === "offline" || s === "motion-unavailable" ? STATUS_COLOR[(badge?.statusRule ?? PLAIN_STATUS)("unavailable")]
                   // A camera that is up and recording is alive in its usual
@@ -808,10 +810,11 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
               every icon to the same share of its button, at every breakpoint,
               instead of a hand-picked pixel value per icon. */}
           {linked && (
-            <Button on="photo" lit={linked.isOn} icon={<Power />} className="camera-linked-btn"
+            <Button on="photo" lit={linked.isOn} icon={switchIcon(linked.entityId, linked.isOn)} className="camera-linked-btn"
               {...linkedSwitchProps(linked)}
               // its word as the card windows say it (linkedStateWords: Unavailable only when lost, else Unknown)
-              tip={`${linked.label}: ${linkedStateWords(linked)}${linked.known ? `, ${linked.isOn ? "turn off" : "turn on"}` : ""}`}
+              // and a lock its bolt and padlock, as every switch of it (SwitchFace, utils/switchWords)
+              tip={`${linked.label}: ${linkedStateWords(linked, linked.entityId)}${linked.known ? `, ${switchTip(linked.entityId, linked.isOn).toLowerCase()}` : ""}`}
               style={vOrder(5)} />
           )}
           {canCycle && (

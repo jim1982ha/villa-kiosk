@@ -11,21 +11,19 @@
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 import Button from "./Button";
 
-export default function IconButton({ label, tip = label, small = false, danger = false, className, children, ...rest }: {
+export default function IconButton({ label, tip = label, small = false, className, children, ...rest }: {
   /** Its name, with what it acts on ("Remove Generator service"). */
   label: string;
   /** What a mouse over it reads: its name unless said; null for one that opens a card of its own (the (i)). */
   tip?: string | null;
   /** Beside words: a title, a pill, a field, a notice's line. */
   small?: boolean;
-  /** It removes: red under the mouse. */
-  danger?: boolean;
   /** Where it sits (a place's own class), never how it looks. */
   className?: string;
   children: ReactNode;
 } & Omit<ButtonHTMLAttributes<HTMLButtonElement>, "type" | "aria-label" | "className" | "children">) {
   return (
-    <Button quiet small={small} look={danger ? "danger" : undefined} icon={children} label={label} tip={tip}
+    <Button quiet small={small} icon={children} label={label} tip={tip}
       className={className} {...rest} />
   );
 }

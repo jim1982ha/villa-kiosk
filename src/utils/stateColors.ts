@@ -69,30 +69,38 @@ export const STATUS_COLOR = {
 
 export type StatusKey = keyof typeof STATUS_COLOR;
 
+/** The resolved themes (<html data-theme>: ConfigContext, an "auto" kiosk's sun included). */
+export type ThemeName = "light" | "dark" | "night";
+
 /**
- * THE table's colours as the LIGHT theme's hexes — the ONE mirror of the status tokens (01-base.css, which define every
+ * THE table's colours as each theme's hexes — the ONE mirror of the status tokens (01-base.css, which define every
  * theme), for what cannot read a CSS variable (a baked canvas picture, a 3D material) or reads before the stylesheet
  * has painted (EntityCategories' fallbacks). ⚠️ NO SECOND COPY (owner, 2026-11-15: "the alarm colour must be defined
  * ONE time centrally"): the 3D colours, the room chip's pills and the badge marks all read it; tests/oracles/
  * colour_rules.mjs holds each value equal to its token. `noValue`: a mesh has no empty track, so the quiet
- * --status-off a resting object takes.
+ * --status-off a resting object takes. ⚠️ EVERY THEME (owner, 2026-11-22, colour code rule 7: the same meaning in each
+ * theme, in its own shade): it held the light theme's only, so the 3D villa and the room numbers kept the light
+ * shades on a dark or night map. babylon/colors follows the theme in force (syncStatusTheme).
  */
-export const STATUS_HEX: Record<StatusKey, string> = {
-  usual: "#34845A",        // --status-usual
-  active: "#B24232",       // --status-active
-  transitional: "#2B67C0", // --status-pending
-  warn: "#B8801F",         // --status-warning
-  unavailable: "#9A9F98",  // --status-lost
-  noValue: "#D8D3C7",      // --status-off
+export const STATUS_HEX_BY_THEME: Record<ThemeName, Record<StatusKey, string>> = {
+  //            --status-usual --status-active --status-pending --status-warning --status-lost --status-off
+  light: { usual: "#34845A", active: "#B24232", transitional: "#2B67C0", warn: "#B8801F", unavailable: "#9A9F98", noValue: "#D8D3C7" },
+  dark: { usual: "#4FC07E", active: "#E2685A", transitional: "#6A9BEC", warn: "#E0A93A", unavailable: "#C9CCC6", noValue: "#333833" },
+  night: { usual: "#3E8F62", active: "#A4483C", transitional: "#4A72BC", warn: "#A87C2A", unavailable: "#A9ADA6", noValue: "#23261F" },
 };
+/** The light theme's: what reads before any theme is known (EntityCategories' fallbacks before the stylesheet). */
+export const STATUS_HEX: Record<StatusKey, string> = STATUS_HEX_BY_THEME.light;
+
+/** The theme in force: <html data-theme>, the light theme before it is written (or with no document). */
+export function themeInForce(): ThemeName {
+  const t = typeof document === "undefined" ? null : document.documentElement.getAttribute("data-theme");
+  return t === "dark" || t === "night" ? t : "light";
+}
 
 /** A stretch older than what the villa's system keeps (NOT_KEPT, NO_RECORD): nothing to show, the empty track — its
  *  words say which ("No longer kept"). ⚠️ NO LONGER ITS OWN BLUE HAZE (owner, 2026-11-13: "nothing to show is the empty
  *  track"); its own colour since 2026-10-20 sat beside the grey of lost contact. */
 export const NOT_KEPT_COLOR = STATUS_COLOR.noValue;
-/** The app's own red for its own failures (a save that did not happen, the model not refreshed): no device's state, so
- *  not one of the six meanings, and never the amber of "needs attention" (owner, 2026-11-15). */
-export const ERROR_COLOR = "var(--status-danger)";
 
 /** A critical device's reading (on the villa's critical list): its lost contact needs attention (owner, 2026-11-13: "a
  *  critical device offline" is an alarm), amber like every alarm, and urgent (its "?" pulses). Every other meaning
@@ -119,16 +127,6 @@ const CRITICAL_STATUS: StatusRule = (key) => criticalStatus(key, true);
  *  (deviceActivity.ownReadingOf `status`, owner 2026-11-15). */
 export function statusRule(facts: { critical: boolean; hidden: boolean }): StatusRule {
   return facts.hidden ? HIDDEN_STATUS : facts.critical ? CRITICAL_STATUS : PLAIN_STATUS;
-}
-
-/** The colour of a button that MOVES a device to `target` (its state as the villa's system names it: "unlocked",
- *  "open"): the colour of the state it leads to, from this table — "Unlock door…" in the active colour,
- *  "Lock door" and "Close" in the usual colour, "Open" in the active one. A button that SAYS a state (the power button)
- *  takes the state it says (PowerToggle). ⚠️ AN ACTION WEARS WHERE IT LEADS (owner, 2026-11-13: "Shall the `Unlock
- *  door` button colour be contextual to the `unlocked` colour state?"): it wore the app's green accent, a colour that
- *  says "on" on every other screen; a blind's buttons wore the device's category colour, an identity, never a state. */
-export function actionColor(entityId: string, target: string, rule: StatusRule = PLAIN_STATUS): string {
-  return STATUS_COLOR[rule(statusKeyFor(target, entityId))];
 }
 
 // ── The state → meaning map ───────────────────────────────────────────────

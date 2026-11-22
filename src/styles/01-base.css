@@ -274,12 +274,13 @@
   --text-on-accent: #FFFDF9;
 
   /* ⚠️ THE SIX MEANINGS (owner, 2026-11-13: one colour code for every status, utils/stateColors STATUS_COLOR): usual
-     green (the hue of --status-on), active red, moving blue (--status-pending), needs attention amber
+     green, active red, moving blue (--status-pending), needs attention amber
      (--status-warning), lost contact a light grey, nothing to show the empty track (--bg-input). ⚠️ SWAPPED (owner,
      2026-11-15): active was green and the alarm red before. The same day the alarm merged into amber: an open fault,
      an alarm and a critical device silent are all amber, and what is urgent pulses (08-shared.css `urgent-pulse`).
-     --status-danger stays the app's red for what is not a device's state (a delete, an error, the connection lost). */
-  --status-on: #34845A;
+     ⚠️ ONE RED, ONE GREEN (owner, 2026-11-22, colour code rule 2): the app's own red for errors and deletes
+     (--status-danger) and a switch's own green (--status-on) are gone; an error is amber, a delete plain, a switch red
+     when on. Red means only "in use". */
   --status-usual: #34845A;
   --status-active: #B24232;
   --status-off: #D8D3C7;
@@ -290,7 +291,6 @@
      Also a cover part of the way open (panelRules.PARTIALLY_OPEN). */
   --status-pending: #2B67C0;
   --status-warning: #B8801F;
-  --status-danger: #B24232;
   /* No contact — the villa's system lost the device (utils/stateColors STATUS_COLOR.unavailable, the badge's grey
      "?"). Grey, not the amber of a fault (owner, 2026-10-22: badge proposal 2); LIGHT and plain (owner, 2026-11-13:
      far from the dark empty track of "nothing to show"), so its symbols and figures are dark ink. */
@@ -352,13 +352,11 @@
   --text-dim: #6C726B;
   --text-on-accent: #0B1710;
 
-  --status-on: #4FC07E;
   --status-usual: #4FC07E;
   --status-active: #E2685A;
   --status-off: #333833;
   --status-pending: #6A9BEC;
   --status-warning: #E0A93A;
-  --status-danger: #E2685A;
   --status-lost: #C9CCC6;
 
   --hairline: rgba(241, 239, 232, 0.12);
@@ -405,13 +403,11 @@
   --text-dim: #565B55;
   --text-on-accent: #0A0C0A;
 
-  --status-on: #3E8F62;
   --status-usual: #3E8F62;
   --status-active: #A4483C;
   --status-off: #23261F;
   --status-pending: #4A72BC;
   --status-warning: #A87C2A;
-  --status-danger: #A4483C;
   --status-lost: #A9ADA6;
 
   --hairline: rgba(201, 196, 182, 0.10);
@@ -594,7 +590,7 @@ button {
    ⚠️ THE ONE WORDED BUTTON (owner, 2026-11-10: "only 1 definition for all similar UI elements"): a window's footer drew
    its buttons as soft pills while the same Cancel and Save in a form, a question in place and every "Add", "Copy" and
    "Record spend" were outlined boxes, and a third look (a grey box) for a handful more. Every worded button is this
-   pill: grey, the main answer in the accent (.primary), one that cannot be taken back in red (.danger). No place
+   pill: grey, the main answer in the accent (.primary), one that cannot be taken back grey too (asked first). No place
    restyles it: a footer, a form and a card's line place a button, they never redraw it. A word that may hide on a
    phone is its .btn-label (08-shared.css); a card's bar draws its own segments (07-facility.css, owner 2026-11-05)
    and a tool group its own (04-modals.css .tool-group, owner 2026-11-06). Its classes are common/Button's alone
@@ -616,7 +612,6 @@ button {
 }
 .btn:active { transform: scale(0.96); }
 .btn.primary { background: var(--accent); color: var(--text-on-accent); font-weight: 600; }
-.btn.danger { background: var(--status-danger); color: #fff; }
 /* the worded button without its word: an action beside worded ones (a window header's, a card's Edit beside Pause) */
 .btn.icon-only { padding: 0; width: var(--touch-min); min-width: var(--touch-min); justify-content: center; }
 /* A count on a window's button (the Cockpit's updates): at its bottom-right corner (owner, 2026-10-14); the top bar's
@@ -642,8 +637,8 @@ button {
    a chart's thumbs and fit mark 20). One body for all of them: a control big enough already is untouched (100%).
    ::before on the map's buttons (.icon-btn), whose ::after is .has-hold-action's dot. */
 :is(.segmented button, .tool-group > button, .tool-group > div > button, .chart-fit-mark) { position: relative; }
-:is(.segmented button, .tool-group > button, .tool-group > div > button, .summary-entity-toggle, .chart-fit-mark,
-  .chart-range-thumb)::after,
+:is(.segmented button, .tool-group > button, .tool-group > div > button, .summary-entity-toggle, .summary-entity-lock,
+  .chart-fit-mark, .chart-range-thumb)::after,
 .icon-btn::before, .hud-home-btn::before {
   content: ""; position: absolute; top: 50%; left: 50%;
   width: max(100%, var(--touch-min)); height: max(100%, var(--touch-min));
@@ -652,7 +647,6 @@ button {
 .icon-quiet:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 @media (hover: hover) {
   .icon-quiet:hover:not(:disabled) { background: color-mix(in srgb, var(--text-primary) 10%, transparent); color: var(--text-primary); }
-  .icon-quiet.danger:hover:not(:disabled) { color: var(--status-danger); }
 }
 
 /* ⚠️ THE ONE BUTTON OVER A PHOTO OR A VIDEO (owner, 2026-11-10: one definition): the camera's bottom buttons were a
@@ -674,7 +668,6 @@ button {
 .media-btn:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
 @media (hover: hover) {
   .media-btn:hover:not(.on) { background: var(--chip-scrim-strong); }
-  .media-btn.danger:hover { color: var(--status-danger); }
 }
 
 /* ⚠️ NO BUTTON SHOWED IT WAS UNDER THE MOUSE (owner, 2026-10-18: "there is no hovering style when hovering the
@@ -684,19 +677,18 @@ button {
   .btn.primary:hover:not(:disabled) {
     background: var(--accent); color: var(--text-on-accent); filter: brightness(1.06);
   }
-  .btn.danger:hover:not(:disabled) { background: var(--status-danger); color: #fff; filter: brightness(1.08); }
 }
 .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 /* A device's own command (a player's Play / Pause: common/Button look "device") speaks the DEVICE's colour, as its On
    button and its chosen mode do (.segmented-device): one vocabulary for "this belongs to this device"; its window sets
-   the colour. An action that moves a device is in the colour of the state it leads to (03-panels .btn.action), and a
-   command that leads to no state (a blind's Stop) is plain: a category colour is the device's identity, never what a
+   the colour. A command that moves a device or leads to no state (a blind's Stop) is plain: a category colour is the device's identity, never what a
    button does. Each brightens under the mouse, keeping its colour. (It was a window's restyling of every button in
-   its .row-buttons, so an action there took the device's colour under the mouse; 2026-11-20.) */
+   its .row-buttons, so an action there took the device's colour under the mouse; 2026-11-20. An action that moved a
+   device wore the colour of where it led until 2026-11-22, colour code rule 1: its words say what it does, the pill
+   the state.) */
 .btn.device { background: var(--device-fill, var(--bg-input)); color: var(--device-ink, var(--text-primary)); }
 @media (hover: hover) {
   .btn.device:hover:not(:disabled) { background: var(--device-fill, var(--bg-input)); color: var(--device-ink, var(--text-primary)); filter: brightness(1.12); }
-  .btn.action:hover:not(:disabled) { background: color-mix(in srgb, var(--state) 18%, transparent); color: var(--state); filter: brightness(1.12); }
 }
 .btn:disabled { opacity: 0.4; pointer-events: none; }
 /* ⚠️ THE ONE GROUP OF BUTTONS (owner, 2026-11-10: one definition): a footer's answers, a form's end, a question in
@@ -714,7 +706,7 @@ button {
    used by every floating HUD/modal-adjacent piece over the 3D scene. One
    definition instead of eight copies of the same two values; each selector
    below still sets its own border (color/width vary: hairline, hairline-strong,
-   or the danger color for what did not happen) and layout separately. */
+   or the amber of what did not happen) and layout separately. */
 .icon-btn, .hud-group, .hud-stack, .hud-menu,
 .room-label, .joystick-base {
   background: var(--bg-panel);

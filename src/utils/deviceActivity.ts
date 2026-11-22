@@ -320,10 +320,12 @@ export function classifyDeviceActivity({ type, entity: s, condition }: DeviceRea
  * OFF — its real alert — never did; a media_player glowed on `on` but not on
  * `buffering`. Now the mesh asks classifyDeviceActivity, as the badge does.
  *
- *   * `tint` — a lock's whole-mesh colour: its window's status colour (green locked, amber unlocked, red jammed or a
- *     critical one unlocked, teal on its way, grey out of contact);
+ *   * `tint` — a lock's whole-mesh colour: its window's status colour (green locked, red unlocked, blue on its way,
+ *     amber jammed, grey out of contact, amber for a critical one), breathing while amber (colour code rule 5, owner
+ *     2026-11-22: urgent pulses wherever it shows);
  *   * `pulse` — a sensor's pulse, in its window's colour, while it is on (a detection, a door open: active; a leak,
- *     smoke: the alarm's red). ⚠️ IT PULSED ONLY RED (owner, 2026-11-13: "I used to see it blinking"): a detection was
+ *     smoke: the alarm's amber), and a critical sensor gone silent, amber as its pill (colour code rule 4, owner
+ *     2026-11-22: a device speaks with one voice; it was a still grey). ⚠️ IT PULSED ONLY RED (owner, 2026-11-13: "I used to see it blinking"): a detection was
  *     red in its window until the colour code made it "on, nothing wrong", and its object went still;
  *   * `glow` — an active switch/player's soft glow, in its window's status colour;
  *
@@ -359,8 +361,8 @@ export function meshLookFor(entityId: string, source: LookSource): MeshLook {
     case "lock":
       return { kind: "tint", tone: quiet ? "usual" : status };
     case "binary_sensor":
-      return { kind: "pulse", on: !quiet && kind !== "unavailable" && (status === "warn" || status === "active"),
-        unavailable: !quiet && kind === "unavailable", tone: status };
+      return { kind: "pulse", on: !quiet && (status === "warn" || (kind !== "unavailable" && status === "active")),
+        unavailable: !quiet && kind === "unavailable" && status !== "warn", tone: status };
     case "switch":
     case "media_player":
       return { kind: "glow", on: !quiet && kind === "on", tone: status };

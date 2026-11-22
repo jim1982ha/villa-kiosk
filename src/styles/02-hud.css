@@ -318,21 +318,21 @@
   box-shadow: 0 0 0 1.5px var(--bg-overlay);
   background: var(--status-off);
 }
-.status-dot.on { background: var(--status-on); }
+.status-dot.on { background: var(--status-usual); }
 .status-dot.warn { background: var(--status-warning); }
-.status-dot.danger { background: var(--status-danger); }
 .status-dot.pending { background: var(--status-pending); animation: pulse 1s infinite; }
 /* A phone-menu row's glyph that carries a .status-dot: the dot sits on the
    glyph's own corner, not the row's. */
 .hud-menu-glyph { position: relative; display: inline-grid; place-items: center; flex: 0 0 auto; --status-dot-inset: -3px; }
 .conn-dot { display: inline-flex; align-items: center; }
 .conn-dot .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--status-off); }
-.conn-dot.online .dot { background: var(--status-on); box-shadow: 0 0 8px var(--status-on); }
+.conn-dot.online .dot { background: var(--status-usual); box-shadow: 0 0 8px var(--status-usual); }
 /* Connecting is a TRANSITIONAL state — mid-handshake, on its way to a rest
    state — which is what --status-pending means (2.157.0). Amber here said
    "contact lost", which is the state it is actively trying to leave. */
 .conn-dot.connecting .dot { background: var(--status-pending); animation: pulse 1s infinite; }
-.conn-dot.offline .dot { background: var(--status-danger); box-shadow: 0 0 8px var(--status-danger); }
+/* offline: lost contact, grey as every lost contact (owner, 2026-11-22, colour code rule 2) */
+.conn-dot.offline .dot { background: var(--status-lost); box-shadow: 0 0 8px var(--status-lost); }
 
 /* Rooms dial button — vertically centred on the left edge so its long-press
    radial fans out symmetrically over the full height. */
@@ -426,7 +426,7 @@
 }
 .hud-left-col > * { pointer-events: auto; }
 /* The presence tile (PresenceTile): the rail's width, its icon and one short word; the icon in the map's colour for
-   the state (--tone: green someone there, grey lost contact — utils/stateColors STATUS_COLOR), and EMPTY in the rail's
+   the state (--tone: red someone there, grey lost contact — utils/stateColors STATUS_COLOR), and EMPTY in the rail's
    own icon colour, as every other rail button (owner, 2026-11-14: its status colour read as a signal). */
 .hud-left-col .hud-presence-btn {
   width: 100%; height: auto; min-height: 44px; padding: 4px 0;
@@ -769,8 +769,8 @@
 }
 /* A device the villa's system has lost contact with wears the WHOLE tile in "no contact" (owner, 2026-10-19: only
    the icon square said so): a dashed edge, a tint, its reading — GREY, the badge's grey "?" (owner, 2026-10-22: badge
-   proposal 2; it was amber, now a fault's colour), as .status-pill.unavailable. A critical one is red instead
-   (deviceLook.critical, the badge's red "?"). The 2px edge comes out of the button's padding, so the tile keeps its
+   proposal 2; it was amber, now a fault's colour), as .status-pill.unavailable. A critical one is amber instead
+   (deviceLook.critical, the badge's amber "?"), pulsing. The 2px edge comes out of the button's padding, so the tile keeps its
    size. SummaryEntityRow.rowLookClass decides which. */
 .summary-entity-row.is-lost {
   border: 2px dashed var(--status-lost);
@@ -824,8 +824,9 @@
   border-radius: 999px; border: none; cursor: pointer; position: relative;
   background: var(--status-off); transition: background 0.15s ease;
 }
-/* on: the green of "on, doing something" (owner, 2026-11-13: one colour code for every status, utils/stateColors) */
-.summary-entity-toggle.on { background: var(--status-on); }   /* a switch's own green, never a state's red */
+/* on: in use, red as its pill, its history and its 3D glow (owner, 2026-11-22, colour code rules 2 and 3: a control
+   is quiet at rest and takes the state's colour only in use) */
+.summary-entity-toggle.on { background: var(--status-active); }
 /* The row switch's "Unlock …?" — on its own line under the row, full width
    (EntityRowToggle; the row wraps only while it is open). */
 .summary-entity-confirm { flex: 1 1 100%; padding: 0 12px 12px; }
@@ -835,6 +836,16 @@
   transition: transform 0.15s ease;
 }
 .summary-entity-toggle.on .knob { transform: translateX(20px); }
+/* A lock's padlock in place of the switch (SwitchFace; owner, 2026-11-22): the toggle's size and place, quiet like an
+   off switch while locked (its usual state), red with the padlock open while unlocked (in use), as a switch that is on. */
+.summary-entity-lock {
+  flex: 0 0 auto; width: 48px; height: 28px; margin-right: 10px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 999px; border: none; cursor: pointer; position: relative;
+  background: var(--status-off); color: var(--text-primary); transition: background 0.15s ease;
+}
+.summary-entity-lock.open { background: var(--status-active); color: #fff; }
+.summary-entity-lock:disabled { cursor: default; opacity: 0.5; }
 
 .panel-linked-label {
   font-size: var(--text-base); font-weight: 600;

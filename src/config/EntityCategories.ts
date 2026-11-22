@@ -253,7 +253,7 @@ export function categorySurface(category: Category, state: DeviceSurfaceState, o
    corner MARK now (markSurface, below); a ring is only ever its face's own. */
 
 /** A badge's corner mark, as painted: its fill and its symbol, in its ink (deviceActivity.BadgeMark — the same amber,
- *  grey and teal every other surface paints those meanings in: utils/stateColors STATUS_COLOR, the Cockpit's
+ *  grey and blue every other surface paints those meanings in: utils/stateColors STATUS_COLOR, the Cockpit's
  *  severities). Resolved to literal colours, like categorySurface, for the canvas bake. */
 export function markSurface(mark: Exclude<BadgeMark, "active">): { fill: string; symbol: string; ink: string } {
   switch (mark) {

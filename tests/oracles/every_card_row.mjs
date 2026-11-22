@@ -108,8 +108,8 @@ ck("each kind that has a state says it; a ticket's, its stage, who took it its w
    && !(table.ticket.card.status ?? []).length, Object.entries(table).map(([k, v]) => [k, v.card.status]));
 {
   const row = draw(h(InboxCard, { item: table.ticket, opened: true, canManage: false, onOpenEntity() {}, onEditTicket() {}, onRaiseTicket() {} }));
-  ck("  ...a ticket's strip green, its first line \"Ticket in progress\" in green; its who line who opened it, not its stage again",
-     /fm-record-strip strip-ok"/.test(row) && /fm-record-state strip-ok"><span class="fm-record-status">Ticket in progress</.test(row) && /fm-record-who"[\s\S]*<span>Opened/.test(row)
+  ck("  ...a ticket's strip blue, in between (owner, 2026-11-22), its first line \"Ticket in progress\" in blue; its who line who opened it, not its stage again",
+     /fm-record-strip strip-moving"/.test(row) && /fm-record-state strip-moving"><span class="fm-record-status">Ticket in progress</.test(row) && /fm-record-who"[\s\S]*<span>Opened/.test(row)
      && !/In progress/.test(text(inside(row, "fm-record-who"))), row);
 }
 {

@@ -21,8 +21,8 @@ import "./babylonSideEffects";
 import { CAMERA_BEAM_ALPHA_INDEX } from "./seeThroughOrder";
 import { STATUS_COLOR3 } from "./colors";
 
-// ⚠️ MOTION SEEN IS ACTIVE, NOT RED (owner, 2026-11-13: one colour code for every status): the status table's green,
-// as the camera window's motion marks; it was its own red
+// ⚠️ MOTION SEEN IS ACTIVE (owner, 2026-11-13: one colour code for every status): the status table's "in use" red,
+// as the camera window's motion marks, in the theme in force (colors.syncStatusTheme)
 const BEAM_COLOR = STATUS_COLOR3.active;
 // A wide "spotlight" cone at ROOM scale. Two rounds of feedback shaped this:
 // the original 6m/1.6m combo (2026-07-03, before) read as a long thin streak

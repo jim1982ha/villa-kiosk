@@ -40,7 +40,7 @@ const BADGE_ITEMS: { label: string; state: DeviceSurfaceState; mark?: BadgeMark;
     note: "The device linked to it, filled when on, hollow when off, or its own problem with the same marks" },
   { label: "Top-right dot", state: "active", mark: "active", note: "In use, motion seen, a door open, a lock unlocked" },
   { label: "Amber \"!\"", state: "off", mark: "fault",
-    note: "Something needs attention: an open fault, or an alarm (a leak, smoke, a low battery, a jammed lock)" },
+    note: "Something needs attention: an open fault, or an alarm (a leak, smoke, a low battery, a jammed lock, a critical door left unlocked)" },
   { label: "Amber \"?\"", state: "unavailable", mark: "critical", note: "A critical device has gone silent" },
   { label: "Pulsing", state: "active", mark: "alarm", pulse: true,
     note: "Act now: an alarm, or a critical device gone silent. An open fault does not pulse" },
@@ -57,19 +57,21 @@ const CHIP_COUNTS: { label: string; health: RoomHealth; note: string }[] = [
     note: "Something in the room needs attention: an alarm, a critical device gone silent or an open fault, shown before grey" },
 ];
 
-/** The six status colours, as every pill, history bar, On button and 3D object paints them (utils/stateColors
+/** The six status colours, as every pill, history bar, switch and 3D object paints them (utils/stateColors
  *  STATUS_COLOR, read here so the legend cannot describe another colour). ⚠️ ONE MEANING PER COLOUR (owner,
- *  2026-11-13; swapped 2026-11-15): green is "the device is alive, and reporting the usual state", red "on, doing
- *  something", amber "needs attention" (the alarm included since 2026-11-15, its pill pulsing). */
+ *  2026-11-13; swapped 2026-11-15; the colour code's seven rules 2026-11-22): green is "the device is alive, and
+ *  reporting the usual state", red "in use" and nothing else, amber "needs attention" (an error too), what is urgent
+ *  pulsing. */
 const STATUS_ITEMS: { label: string; swatch: string; note: string }[] = [
   { label: "Usual", swatch: STATUS_COLOR.usual, note: "Alive, in its usual state: off, closed, locked, no motion, no leak, disarmed" },
-  { label: "On / active", swatch: STATUS_COLOR.active, note: "Doing something, nothing wrong: on, open, unlocked, motion seen, occupied, playing, armed" },
+  { label: "On / active", swatch: STATUS_COLOR.active,
+    note: "In use, nothing wrong: on, open, unlocked (a critical door too, its problem is its amber \"!\"), motion seen, occupied, playing, armed. A switch or padlock is red only while in use, quiet otherwise" },
   // ONE entry for the one meaning (owner, 2026-11-15): moving, and a cover part of the way open (panelRules.PARTIALLY_OPEN)
   { label: "In between", swatch: STATUS_COLOR.transitional,
-    note: "Moving (opening, closing, locking, arming), or a curtain, blind or shutter partly open" },
+    note: "Moving (opening, closing, locking, arming), a curtain, blind or shutter partly open, a ticket in progress" },
   { label: "Needs attention", swatch: STATUS_COLOR.warn,
-    note: "A leak or smoke, a jammed lock, a fault, a critical door unlocked or offline. Its pill pulses: act now" },
-  { label: "Unavailable", swatch: STATUS_COLOR.unavailable, note: "No contact with the device" },
+    note: "A leak or smoke, a jammed lock, a fault, a critical device offline, the \"!\" of a critical door left unlocked, an action that failed. What is urgent pulses: act now" },
+  { label: "Unavailable", swatch: STATUS_COLOR.unavailable, note: "No contact with the device, or with the villa's system" },
   { label: "No value", swatch: STATUS_COLOR.noValue, note: "The device answers with no value to give right now" },
   // the same empty track, said apart (stateColors.NOT_KEPT_COLOR)
   { label: "Not kept", swatch: NOT_KEPT_COLOR, note: "A history older than the villa's system keeps" },

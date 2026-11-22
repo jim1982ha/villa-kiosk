@@ -57,10 +57,14 @@ export default function LastDayTimeline({
   // the "no longer kept" stretch is not one of the device's states: never in its palette (historySource.keptFrom)
   const held = data.map((p) => p.state).filter((s) => !isNoHistory(s));
   const hue = useTrendColor();
-  // its states by the status table, through its device's rule as its pill; its lost contact keeps the band's own grey
+  // its states by the status table, through its device's rule as its pill. ⚠️ ITS LOST CONTACT TOO (owner, 2026-11-22,
+  // colour code rule 4: a device speaks with one voice): a critical device's silence is amber here as in its pill, its
+  // row and its camera bar; it kept the band's own grey, whatever the pill said. Whatever paints the other states
+  // (a palette, a caller's colours), a lost stretch is the rule's.
   const rule = useStatusRule();
-  const byTable = (s: string) => { const k = statusKeyFor(s, entityId); return STATUS_COLOR[k === "unavailable" ? k : rule(k)]; };
-  const base = colorFor ?? (palette ? paletteColorFor(held) : byTable);
+  const byTable = (s: string) => STATUS_COLOR[rule(statusKeyFor(s, entityId))];
+  const others = colorFor ?? (palette ? paletteColorFor(held) : byTable);
+  const base = (s: string) => (statusKeyFor(s, entityId) === "unavailable" ? STATUS_COLOR[rule("unavailable")] : others(s));
   // a sensor's reading in words: its usual state in the window's family colour (trendHue); a device's band: the table's
   const paint = trend ? (s: string) => hue(base(s)) : base;
   return (

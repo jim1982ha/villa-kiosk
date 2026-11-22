@@ -1,5 +1,5 @@
 // src/components/panels/EntityRowToggle.tsx
-// The inline on/off switch on a device row (the group/room/category modal's
+// The inline on/off switch on a device row (a lock's padlock: SwitchFace) (the group/room/category modal's
 // list, where most bulk toggling actually happens).
 //
 // Its own component purely so it can hold a hook: the rows are produced by a
@@ -29,6 +29,8 @@ import { tapFeedback } from "@/utils/haptics";
 import { useAskFirst } from "@/hooks/useAskFirst";
 import type { SwitchAsk } from "@/utils/devicePower";
 import InlineConfirm from "@/components/common/InlineConfirm";
+import SwitchFace from "./SwitchFace";
+import { switchA11y } from "@/utils/switchWords";
 
 interface Props {
   entityId: string;
@@ -53,16 +55,8 @@ export default function EntityRowToggle({ entityId, actualOn, label, onToggle, a
 
   return (
     <>
-    <button
-      className={`summary-entity-toggle${isOn ? " on" : ""}`}
-      onClick={request}
-      role="switch"
-      aria-checked={isOn}
-      aria-label={`${label}: ${isOn ? "on" : "off"}`}
-      data-tip={isOn ? "Turn off" : "Turn on"}
-    >
-      <span className="knob" />
-    </button>
+    {/* the toggle, or a lock's padlock (SwitchFace) */}
+    <SwitchFace entityId={entityId} isOn={isOn} onClick={request} {...switchA11y(entityId, label, isOn)} />
     {asking && (
       <div className="summary-entity-confirm">
         <InlineConfirm question={asking.question} confirmLabel={asking.confirmLabel} onConfirm={confirm} onCancel={cancel} />
