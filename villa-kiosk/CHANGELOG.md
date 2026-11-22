@@ -1,3 +1,11 @@
+## 2.496.884
+
+- **A button that acts is in the colour of where it leads.** "Lock door" is green, the colour of locked; "Unlock door…"
+  red, the colour of unlocked. "Turn off" is green and "Turn on" red, a blind's Close green and Open red (Stop stays
+  plain), Play / Pause the colour of what it switches to, and the same for the buttons over a room or floor heading in
+  a list. These buttons are drawn as before 2.496.883: a light tint with a coloured outline and coloured words, not a
+  solid fill. A list's switch and padlock, and the chosen mode, speed or light colour, still show the state right now.
+
 ## 2.496.883
 
 - **Every control of a device is filled in its state's colour.** In a device's window, the buttons now take the colour

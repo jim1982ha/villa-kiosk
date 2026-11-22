@@ -3,6 +3,7 @@ import { Tv, Play } from "lucide-react";
 import BasePanel from "./BasePanel";
 import ControlFrame from "./ControlFrame";
 import CommandButton from "./CommandButton";
+import { leadsTo } from "@/utils/stateColors";
 import type { PanelProps } from "@/types/panel.types";
 import { useHAActions } from "@/ha/HAStateStore";
 import { HAServices } from "@/ha/HAServiceCalls";
@@ -19,7 +20,9 @@ export default function MediaPanel({ entity, mapping, onClose }: PanelProps) {
           {title && <p className="body-text center mt">Now playing: {title}</p>}
 
           <div className="row-buttons mt">
-            <CommandButton look="state" icon={<Play size={18} />} style={{ flex: 1 }} watch={entity?.state}
+            {/* the colour of where it leads (stateColors.leadsTo; owner, 2026-11-22): paused when playing, else playing */}
+            <CommandButton look="action" icon={<Play size={18} />} watch={entity?.state}
+              style={{ flex: 1, ...leadsTo(mapping.entityId, entity?.state === "playing" ? "paused" : "playing") }}
               send={() => HAServices.mediaPlayPause(ws, mapping.entityId)}> Play / Pause</CommandButton>
           </div>
       </ControlFrame>

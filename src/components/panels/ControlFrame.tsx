@@ -11,7 +11,7 @@
 // children; they render only while the device can be commanded.
 
 import type { CSSProperties } from "react";
-import { pillKey, stateFill } from "@/utils/stateColors";
+import { leadsTo, pillKey, stateFill } from "@/utils/stateColors";
 import type { ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
 import { PowerSection } from "./PowerToggle";
@@ -51,9 +51,9 @@ export default function ControlFrame({ entity, mapping, power, beside, pill, chi
   const sw = power ? deviceSwitch(entity, mapping.entityId, mapping) : null;
   // a panel's own pill is read with the same rule (its device's, DeviceLook.statusRule): only painted here
   const shown = pill ?? controlPill(mapping.entityId, entity, sw ? sw.position : null, rule);
-  // ⚠️ EVERY CONTROL OF THE WINDOW IN ITS PILL'S COLOUR (owner, 2026-11-22: "the Lock door button is not in a
-  // consistent colour"): the power button, the lock's, a blind's, Play / Pause, the chosen mode or colour read
-  // `--state` from here, so they cannot say another state than the pill above them (stateColors.stateFill)
+  // what is chosen now (a mode, a speed, a light's colour) is filled in its pill's colour from here (`--state`,
+  // stateColors.stateFill), so it cannot say another state than the pill above it; a button that acts wears where
+  // it leads (leadsTo)
   const state = { display: "contents", ...stateFill(pillKey(shown.tone)) } as CSSProperties;
   return (
     <div className="device-controls" style={state}>
@@ -63,6 +63,7 @@ export default function ControlFrame({ entity, mapping, power, beside, pill, chi
         return (
           <PowerSection
             on={sw.position === "on"}
+            leads={leadsTo(mapping.entityId, sw.position === "on" ? "off" : "on", rule)}
             onClick={() => HAServices.power(ws, entity, mapping.entityId)}
             ask={sw.ask}
             beside={beside}

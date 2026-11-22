@@ -21,7 +21,7 @@ import { deviceLook, groupLook, type LookSource } from "@/utils/deviceActivity";
 import { bulkSwitchPlan, bulkWords } from "@/config/activeDevices";
 import { ROW_SWITCH_DOMAINS } from "@/utils/quickAction";
 import { isLockSwitch } from "@/utils/switchWords";
-import { stateFill } from "@/utils/stateColors";
+import { leadsTo } from "@/utils/stateColors";
 import type { HassEntity } from "@/types/ha.types";
 import { listSections, offersGrouping, summaryRows, type Grouping } from "@/config/summaryRows";
 import SegmentedGroup from "@/components/common/SegmentedGroup";
@@ -98,9 +98,9 @@ function BulkToggle({ devices, looks }: { devices: HassEntity[]; looks: LookSour
   const locks = devices.every((e) => isLockSwitch(e.entity_id));
   const icon = locks ? (anyOn ? <Lock size={18} /> : <Unlock size={18} />) : (anyOn ? <PowerOff size={18} /> : <Power size={18} />);
   const confirmLabel = locks ? (anyOn ? "Lock" : "Unlock") : (anyOn ? "Turn off" : "Turn on");
-  // filled in the group's state now, as each row's switch (colour code rule 3, owner 2026-11-22): red while any is in
-  // use, green when all rest; its icon and words say what a tap does
-  const fill = stateFill(anyOn ? "active" : "usual") as CSSProperties;
+  // the colour of where it leads, as a window's button (stateColors.leadsTo; owner, 2026-11-22): "Lock" or "Turn off"
+  // the resting green, "Unlock…" or "Turn on" the in-use red
+  const leads = leadsTo(devices[0].entity_id, locks ? (anyOn ? "locked" : "unlocked") : (anyOn ? "off" : "on")) as CSSProperties;
   const run = () => {
     markPending(allSent(bulkSwitchPlan(devices.map((e) => e.entity_id), !anyOn, ROW_SWITCH_DOMAINS)
       .map((call) => callService(call.domain, call.service, {}, { entity_id: call.entityIds }))));
@@ -110,7 +110,7 @@ function BulkToggle({ devices, looks }: { devices: HassEntity[]; looks: LookSour
     <InlineConfirm question={`${words}?`} confirmLabel={confirmLabel} onConfirm={run}
       onCancel={() => setConfirming(false)} />
   ) : (
-    <Button look="state" style={fill} icon={icon} label={words} busy={pending}
+    <Button look="action" style={leads} icon={icon} label={words} busy={pending}
       onClick={() => setConfirming(true)} />
   );
 }

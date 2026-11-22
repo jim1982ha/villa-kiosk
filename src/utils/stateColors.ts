@@ -288,17 +288,27 @@ export function powerStatus(position: "on" | "off" | "unknown", state: string | 
  * a lock spends a second or two "locking", which is not `locked`, so the pill
  * went red and read UNLOCKED every single time the door was secured.
  */
-/** ⚠️ A DEVICE'S CONTROLS ARE FILLED IN ITS STATE'S COLOUR (owner, 2026-11-22, colour code rules 1 and 3, option B:
- *  "the Lock door button is not in a consistent colour"): the window's buttons, its chosen mode, a list's switch and
- *  padlock, a heading's button all say the state NOW, as its pill and history do; their words and icon say what a tap
- *  does. The fill and the ink on it, as CSS custom properties `--state` / `--state-ink` (`.state`, 01-base.css): white
- *  on the strong fills, dark on the amber and the light grey (healthPill's inks), the text's own on no value. */
+/** ⚠️ WHAT IS CHOSEN NOW IS FILLED IN THE STATE'S COLOUR (owner, 2026-11-22, colour code rule 3, option B): a window's
+ *  chosen mode or speed (.segmented-device) and its chosen light colour's ring, as a list's switch and padlock (02-hud)
+ *  and the window's pill. A button that ACTS wears where it leads instead (leadsTo). The fill and the ink on it, as CSS
+ *  custom properties `--state` / `--state-ink`: white on the strong fills, dark on the amber and the light grey
+ *  (healthPill's inks), the text's own on no value. */
 const STATE_INK: Record<StatusKey, string> = {
   usual: "#ffffff", active: "#ffffff", transitional: "#ffffff", warn: "#17191A", unavailable: "#17191A",
   noValue: "var(--text-primary)",
 };
 export function stateFill(key: StatusKey): Record<string, string> {
   return { "--state": STATUS_COLOR[key], "--state-ink": STATE_INK[key] };
+}
+
+/** ⚠️ A WORDED BUTTON THAT MOVES A DEVICE WEARS WHERE IT LEADS (owner, 2026-11-22: "I expect to see the Lock Door
+ *  button in green because that's the colour of Locked state, and similarly for all other similar button"): "Lock door"
+ *  the locked green, "Unlock door…" and "Turn on" the in-use red, "Turn off" and "Close" the resting green, "Open" red;
+ *  its icon shows that same end (a closed padlock on "Lock door"). Drawn tinted and outlined in it (`.action`,
+ *  03-panels.css), never filled: a filled button is the state now (a list's switch and padlock, the chosen mode). A
+ *  command that leads to no state (a blind's Stop) is plain. `target` is the state as the villa's system names it. */
+export function leadsTo(entityId: string, target: string, rule: StatusRule = PLAIN_STATUS): Record<string, string> {
+  return { "--leads": STATUS_COLOR[rule(statusKeyFor(target, entityId))] };
 }
 
 export const STATUS_PILL_CLASS: Record<StatusKey, string> = {

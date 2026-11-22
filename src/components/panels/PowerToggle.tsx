@@ -5,11 +5,11 @@
 // ⚠️ AN ACTION, AS THE LOCK'S (owner, 2026-11-13: "there is no pill showing the current state for the Fan as it
 // appear for other device"): it said the state ("On") in the state's colour while a lock and a blind said theirs in a
 // pill and named their action on the button. The window's pill says the state now (ControlFrame, every window), and
-// this button says what a tap does, as "Unlock door…". ⚠️ IN THE STATE NOW (owner, 2026-11-22, colour code rules 1 and
-// 3): it wore the colour of where it leads, beside a pill in the colour of the state, two logics; it is filled in the
-// pill's colour now (--state, ControlFrame), its words and icon saying the action.
+// this button says what a tap does, as "Unlock door…", in the colour of where it leads (stateColors.leadsTo: "Turn off"
+// the resting green, "Turn on" the in-use red; owner, 2026-11-22: "the colour of Locked state … for all other similar
+// button").
 
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { Power } from "lucide-react";
 import { usePendingAck } from "@/hooks/usePendingAck";
 import { useAskFirst } from "@/hooks/useAskFirst";
@@ -20,6 +20,8 @@ import InlineConfirm from "@/components/common/InlineConfirm";
 
 interface Props {
   on: boolean;
+  /** The colour of where a tap leads (stateColors.leadsTo: off when on, on when off). */
+  leads: Record<string, string>;
   onClick: () => unknown;
   /** devicePower.deviceSwitch's `ask` — the device's own answer to "ask
    *  before throwing it": always for an unlock, and whenever the owner set
@@ -48,7 +50,7 @@ export function PowerSection({ beside, ...props }: Omit<Props, "compact"> & { be
   );
 }
 
-export default function PowerToggle({ on, onClick, ask = null, compact = false }: Props) {
+export default function PowerToggle({ on, leads, onClick, ask = null, compact = false }: Props) {
   // `on` is derived purely from HA's live entity state, so the button gave no
   // feedback at all for the round-trip between a tap and the real
   // state_changed event landing — on a slow link that read as "did that even
@@ -72,7 +74,8 @@ export default function PowerToggle({ on, onClick, ask = null, compact = false }
 
   return (
     <button
-      className={`big-toggle state${compact ? " compact" : ""}`}
+      className={`big-toggle action${compact ? " compact" : ""}`}
+      style={leads as CSSProperties}
       onClick={request}
       aria-busy={pending || undefined}
     >

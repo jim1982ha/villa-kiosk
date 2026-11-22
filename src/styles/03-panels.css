@@ -104,11 +104,21 @@ input[type="range"]::-moz-range-thumb {
   font-size: var(--text-xl); font-weight: 600; transition: all 0.2s;
   background: var(--bg-input); color: var(--text-secondary);
 }
-/* ⚠️ AN ACTION IS PLAIN (owner, 2026-11-22, colour code rule 1: a colour says what is true now, never what a tap will
-   do). "Unlock door…", a blind's Open and Close, the power button's "Turn off" wore the colour of where they lead, beside
-   the window's pill in the colour of the state; the pill alone says it now, the button its words and icon. */
+/* An ACTION that moves a device ("Lock door", "Unlock door…", a blind's Open and Close, the power button, Play / Pause,
+   a list heading's): tinted and outlined in the colour of the state it leads to (utils/stateColors.leadsTo, `--leads`),
+   its icon showing that end. ⚠️ OWNER, 2026-11-22: "I expect to see the Lock Door button in green because that's the
+   colour of Locked state", drawn as before, never filled (a fill is the state now: a list's switch, the chosen mode). */
 .big-toggle { color: var(--text-primary); }
-.big-toggle.state:hover:not(:disabled) { filter: brightness(1.12); }
+.big-toggle.action,
+.btn.action {
+  background: color-mix(in srgb, var(--leads) 18%, transparent);
+  color: var(--leads);
+  box-shadow: inset 0 0 0 1.5px var(--leads);
+}
+@media (hover: hover) {
+  .big-toggle.action:hover:not(:disabled),
+  .btn.action:hover:not(:disabled) { background: color-mix(in srgb, var(--leads) 18%, transparent); color: var(--leads); filter: brightness(1.12); }
+}
 .big-toggle:active { transform: scale(0.97); }
 /* THE WAITING SIGN, ONE RULE (UI scan, 2026-11-10): a button whose command is on its way to a device says it is busy
    (aria-busy: usePendingAck) and breathes until the device answers: the power button, the lock, Play / Pause, a

@@ -16,10 +16,10 @@
 import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from "react";
 import { ChevronDown } from "lucide-react";
 
-/** What a button is among its neighbours: the main answer (the accent), a device's control (filled in its device's
- *  state now, `--state`/`--state-ink`: its window's ControlFrame, a list's heading; owner, 2026-11-22, colour code rule
- *  3, option B). None: the plain button, also what cannot be taken back (asked first, never painted). */
-export type ButtonLook = "main" | "state";
+/** What a button is among its neighbours: the main answer (the accent), an action that moves a device (tinted and
+ *  outlined in the colour of the state it leads to, `--leads`: stateColors.leadsTo; owner, 2026-11-22). None: the
+ *  plain button, also what cannot be taken back (asked first, never painted). */
+export type ButtonLook = "main" | "action";
 
 export interface ButtonShape {
   look?: ButtonLook;
