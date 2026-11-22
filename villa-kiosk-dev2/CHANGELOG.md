@@ -1,3 +1,9 @@
+## 2.496.882
+
+- **Switches and padlocks are filled in their state's colour.** A locked door's padlock is filled green, an unlocked
+  one red; a switch that is off has a green track, on a red one, the white knob's position saying which. A camera's
+  button for its linked device is filled the same way. This replaces 2.496.881's green outline, as you chose.
+
 ## 2.496.881
 
 - **Switches and padlocks show their state's colour at rest too.** A locked door's padlock is now green, like its
