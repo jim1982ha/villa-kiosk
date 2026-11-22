@@ -1,3 +1,9 @@
+## 2.496.885
+
+- **A camera's siren or linked switch is plain while off.** The button beside the camera's arrows was filled green
+  while the siren was off, which looked as if it were on. It now looks like the camera's other buttons while off, and
+  is filled red only while the siren (or the linked switch) is on, or a linked door is unlocked.
+
 ## 2.496.884
 
 - **A button that acts is in the colour of where it leads.** "Lock door" is green, the colour of locked; "Unlock door…"
