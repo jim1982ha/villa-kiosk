@@ -1,3 +1,12 @@
+## 2.496.878
+
+- **A lock shows a padlock, not an on/off switch.** In every list of devices (a room, a floor, Locks, the search), a
+  lock's switch is now a padlock: closed and green when the door is locked, open and red when it is unlocked (amber for
+  a door on the critical list). Tapping it does what it shows: "Lock" at once, "Unlock…" only after you confirm. The
+  same padlock and words appear for a lock linked to another device, in its window and on a camera's buttons. A room
+  or floor heading over locks only shows a padlock too, "Lock" when one is unlocked and "Unlock…" when all are locked,
+  still asked first.
+
 ## 2.496.877
 
 - **Camera window: the two arrows that change camera sit together, and "Fit to screen" shows only when it helps.** On
