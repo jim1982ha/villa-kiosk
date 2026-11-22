@@ -29,12 +29,12 @@ export default function CoverPanel({ entity, mapping, onClose }: PanelProps) {
       <ControlFrame entity={entity} mapping={mapping} pill={pill}>
 
       <div className="row-buttons">
-        {/* plain, as every button that acts (colour code rule 1, owner 2026-11-22): the pill above says the state */}
-        <CommandButton icon={<ChevronUp size={20} />} style={{ flex: 1 }}
+        {/* filled in the blind's state now, as its pill (--state, ControlFrame; colour code rule 3, owner 2026-11-22) */}
+        <CommandButton look="state" icon={<ChevronUp size={20} />} style={{ flex: 1 }}
           watch={moves} send={() => HAServices.openCover(ws, mapping.entityId)}> Open</CommandButton>
-        <CommandButton icon={<Square size={16} />} style={{ flex: 1 }} watch={moves}
+        <CommandButton look="state" icon={<Square size={16} />} style={{ flex: 1 }} watch={moves}
           send={() => HAServices.stopCover(ws, mapping.entityId)}> Stop</CommandButton>
-        <CommandButton icon={<ChevronDown size={20} />} style={{ flex: 1 }}
+        <CommandButton look="state" icon={<ChevronDown size={20} />} style={{ flex: 1 }}
           watch={moves} send={() => HAServices.closeCover(ws, mapping.entityId)}> Close</CommandButton>
       </div>
 

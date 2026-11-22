@@ -178,13 +178,18 @@ ck("the On button's meaning comes from the table: on active, off usual, no value
    powerStatus("on", "on", "light.x") === "active" && powerStatus("off", "off", "fan.x") === "usual"
    && powerStatus("on", "on", "switch.x") === "active" && powerStatus("unknown", "unknown", "light.x") === "noValue"
    && powerStatus("unknown", "opening", "cover.x") === "transitional");
-// owner, 2026-11-13: the window's pill says the state; the power button names its action. Plain since 2026-11-22
-// (colour code rule 1: a colour says what is true now, never what a tap will do)
+// owner, 2026-11-13: the window's pill says the state; the power button names its action. Since 2026-11-22 (colour
+// code rules 1 and 3) it is filled in the pill's colour, the state NOW, read from its window (--state, ControlFrame)
 const { controlPill } = await import("@/config/reading");
+const { stateFill, pillKey } = await import("@/utils/stateColors");
 const button = (on) => draw(h(PowerToggle, { on, onClick: () => {} }));
-ck("  ...the power button says what a tap does in words, in no colour at all (no status, no category)",
+ck("  ...the power button says what a tap does in words, filled in its window's state (class state), never a category's",
    button(true).includes("Turn off") && button(false).includes("Turn on")
-   && ![button(true), button(false)].some((b) => /--status-|--cat-|--device-|--state/.test(b)), button(true));
+   && [button(true), button(false)].every((b) => /class="big-toggle state"/.test(b) && !/--cat-|--device-/.test(b)), button(true));
+ck("  ...a window's controls read the state from its pill: stateFill of the pill's meaning, white ink on the strong fills, dark on amber",
+   pillKey(STATUS_PILL_CLASS.active) === "active" && pillKey(STATUS_PILL_CLASS.warn) === "warn"
+   && stateFill("usual")["--state"] === STATUS_COLOR.usual && stateFill("active")["--state-ink"] === "#ffffff"
+   && stateFill("warn")["--state-ink"] === "#17191A");
 const light = (state) => ({ entity_id: "light.x", state, attributes: {} });
 ck("  ...and every window's pill says the state the same way: On active, Off usual, an A/C's mode in its words",
    JSON.stringify(controlPill("light.x", light("on"), "on")) === JSON.stringify({ text: "On", tone: STATUS_PILL_CLASS.active })
@@ -244,9 +249,13 @@ ck("no .ts/.tsx outside the table names a status or category token as a colour: 
 {
   const read = (f) => readFileSync(new URL(`../../src/${f}`, import.meta.url), "utf8");
   const css = ["01-base.css", "02-hud.css", "03-panels.css", "07-facility.css", "08-shared.css"].map((f) => read(`styles/${f}`)).join("\n");
-  ck("rule 1: no button wears the colour of where it leads (no .action look, no actionColor)",
+  ck("rule 1: no button wears the colour of where it leads (no .action look, no actionColor); a device's controls wear its state now",
      !/\.(btn|big-toggle)\.action\b/.test(css) && !/actionColor/.test(read("utils/stateColors.ts"))
-     && !/look="action"/.test(read("components/panels/LockPanel.tsx") + read("components/panels/CoverPanel.tsx")));
+     && !/look="action"/.test(read("components/panels/LockPanel.tsx") + read("components/panels/CoverPanel.tsx"))
+     && /\.btn\.state, \.big-toggle\.state \{ background: var\(--state/.test(css)
+     && /stateFill\(pillKey\(shown\.tone\)\)/.test(read("components/panels/ControlFrame.tsx"))
+     && (read("components/panels/CoverPanel.tsx").match(/look="state"/g) ?? []).length === 3
+     && /look="state"/.test(read("components/panels/MediaPanel.tsx")) && /big-toggle state/.test(read("components/panels/LockPanel.tsx")));
   ck("rule 2: red is only \"in use\": no app red (--status-danger), no second green (--status-on), no red button",
      !/--status-danger|--status-on\b/.test(css.replace(/\/\*[\s\S]*?\*\//g, "")) && !/\.btn\.danger|\.danger:hover/.test(css));
   ck("rule 3 (option B): a switch and a padlock filled in their state's colour, green at rest, red in use",

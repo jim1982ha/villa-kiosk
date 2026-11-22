@@ -79,7 +79,7 @@ export default function LockPanel({ entity, mapping, onClose }: PanelProps) {
         const Icon = b === "lock" ? Lock : Unlock;
         return n === 0 ? (
           <button key={b}
-            className="big-toggle"
+            className="big-toggle state"
             onClick={ask.request}
             aria-busy={pending || undefined}
           >
@@ -87,7 +87,7 @@ export default function LockPanel({ entity, mapping, onClose }: PanelProps) {
           </button>
         ) : (
           <div key={b} className="mt">
-            <Button icon={<Icon size={18} />} style={{ width: "100%" }}
+            <Button look="state" icon={<Icon size={18} />} style={{ width: "100%" }}
               onClick={ask.request}> {b === "lock" ? "Lock door" : "Unlock door…"}</Button>
           </div>
         );

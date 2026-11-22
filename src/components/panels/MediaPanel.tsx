@@ -19,7 +19,7 @@ export default function MediaPanel({ entity, mapping, onClose }: PanelProps) {
           {title && <p className="body-text center mt">Now playing: {title}</p>}
 
           <div className="row-buttons mt">
-            <CommandButton look="device" icon={<Play size={18} />} style={{ flex: 1 }} watch={entity?.state}
+            <CommandButton look="state" icon={<Play size={18} />} style={{ flex: 1 }} watch={entity?.state}
               send={() => HAServices.mediaPlayPause(ws, mapping.entityId)}> Play / Pause</CommandButton>
           </div>
       </ControlFrame>

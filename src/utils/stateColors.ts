@@ -288,6 +288,19 @@ export function powerStatus(position: "on" | "off" | "unknown", state: string | 
  * a lock spends a second or two "locking", which is not `locked`, so the pill
  * went red and read UNLOCKED every single time the door was secured.
  */
+/** ⚠️ A DEVICE'S CONTROLS ARE FILLED IN ITS STATE'S COLOUR (owner, 2026-11-22, colour code rules 1 and 3, option B:
+ *  "the Lock door button is not in a consistent colour"): the window's buttons, its chosen mode, a list's switch and
+ *  padlock, a heading's button all say the state NOW, as its pill and history do; their words and icon say what a tap
+ *  does. The fill and the ink on it, as CSS custom properties `--state` / `--state-ink` (`.state`, 01-base.css): white
+ *  on the strong fills, dark on the amber and the light grey (healthPill's inks), the text's own on no value. */
+const STATE_INK: Record<StatusKey, string> = {
+  usual: "#ffffff", active: "#ffffff", transitional: "#ffffff", warn: "#17191A", unavailable: "#17191A",
+  noValue: "var(--text-primary)",
+};
+export function stateFill(key: StatusKey): Record<string, string> {
+  return { "--state": STATUS_COLOR[key], "--state-ink": STATE_INK[key] };
+}
+
 export const STATUS_PILL_CLASS: Record<StatusKey, string> = {
   usual: "usual",
   active: "active",
@@ -298,6 +311,10 @@ export const STATUS_PILL_CLASS: Record<StatusKey, string> = {
   unavailable: "unavailable",
   noValue: "novalue",
 };
+/** The meaning a pill's class says (STATUS_PILL_CLASS read back): what a window's controls take from its pill. */
+export function pillKey(tone: string): StatusKey {
+  return (Object.keys(STATUS_PILL_CLASS) as StatusKey[]).find((k) => STATUS_PILL_CLASS[k] === tone) ?? "noValue";
+}
 
 /**
  * A binary_sensor's meaning. When it has a PROBLEM state — its device class's (leak, smoke, gas, tamper, a low

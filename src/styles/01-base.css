@@ -686,9 +686,11 @@ button {
    its .row-buttons, so an action there took the device's colour under the mouse; 2026-11-20. An action that moved a
    device wore the colour of where it led until 2026-11-22, colour code rule 1: its words say what it does, the pill
    the state.) */
-.btn.device { background: var(--device-fill, var(--bg-input)); color: var(--device-ink, var(--text-primary)); }
+/* A DEVICE'S CONTROL (look "state"): filled in its device's state now (--state / --state-ink: ControlFrame, a list's
+   heading; stateColors.stateFill), its words saying what a tap does (owner, 2026-11-22, colour code rule 3, option B). */
+.btn.state, .big-toggle.state { background: var(--state, var(--bg-input)); color: var(--state-ink, var(--text-primary)); }
 @media (hover: hover) {
-  .btn.device:hover:not(:disabled) { background: var(--device-fill, var(--bg-input)); color: var(--device-ink, var(--text-primary)); filter: brightness(1.12); }
+  .btn.state:hover:not(:disabled) { background: var(--state, var(--bg-input)); color: var(--state-ink, var(--text-primary)); filter: brightness(1.12); }
 }
 .btn:disabled { opacity: 0.4; pointer-events: none; }
 /* ⚠️ THE ONE GROUP OF BUTTONS (owner, 2026-11-10: one definition): a footer's answers, a form's end, a question in
