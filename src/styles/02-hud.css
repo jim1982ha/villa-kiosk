@@ -822,30 +822,30 @@
 .summary-entity-toggle {
   flex: 0 0 auto; width: 48px; height: 28px; margin-right: 10px;
   border-radius: 999px; border: none; cursor: pointer; position: relative;
-  background: var(--status-off); transition: background 0.15s ease;
+  background: var(--status-usual); transition: background 0.15s ease;
 }
-/* ⚠️ ITS STATE'S COLOUR, ALWAYS (owner, 2026-11-22, colour code rule 3, option A: a grey switch beside a green "Off"
-   pill read as a contradiction): at rest outlined, its knob the usual green on the quiet track; in use filled, the
-   track red as its pill, its history and its 3D glow, the knob white. Never a filled green track: on a phone that
-   reads "on". */
+/* ⚠️ ITS STATE'S COLOUR, ALWAYS, FILLED (owner, 2026-11-22, colour code rule 3, option B, "more consistent with the
+   other elements": a grey switch beside a green "Off" pill read as a contradiction; option A's green knob on a quiet
+   track was tried the same day): the track the usual green at rest, red in use, as its pill, its history and its 3D
+   glow; the knob white, its position saying off or on. */
 .summary-entity-toggle.on { background: var(--status-active); }
 /* The row switch's "Unlock …?" — on its own line under the row, full width
    (EntityRowToggle; the row wraps only while it is open). */
 .summary-entity-confirm { flex: 1 1 100%; padding: 0 12px 12px; }
 .summary-entity-toggle .knob {
   position: absolute; top: 3px; left: 3px; width: 22px; height: 22px;
-  border-radius: 50%; background: var(--status-usual); box-shadow: 0 1px 3px rgba(0,0,0,0.35);
-  transition: transform 0.15s ease, background 0.15s ease;
+  border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.35);
+  transition: transform 0.15s ease;
 }
-.summary-entity-toggle.on .knob { transform: translateX(20px); background: #fff; }
+.summary-entity-toggle.on .knob { transform: translateX(20px); }
 /* A lock's padlock in place of the switch (SwitchFace; owner, 2026-11-22): the toggle's size and place, and its rule
-   (colour code rule 3, option A): locked, its usual state, outlined, the closed padlock green on the quiet track, as
-   its "Locked" pill and history; unlocked, in use, filled red with the padlock open in white, as a switch that is on. */
+   (colour code rule 3, option B): filled in its state's colour, the padlock white: locked green, as its "Locked" pill
+   and history; unlocked red, open, as a switch that is on. */
 .summary-entity-lock {
   flex: 0 0 auto; width: 48px; height: 28px; margin-right: 10px;
   display: inline-flex; align-items: center; justify-content: center;
   border-radius: 999px; border: none; cursor: pointer; position: relative;
-  background: var(--status-off); color: var(--status-usual); transition: background 0.15s ease;
+  background: var(--status-usual); color: #fff; transition: background 0.15s ease;
 }
 .summary-entity-lock.open { background: var(--status-active); color: #fff; }
 .summary-entity-lock:disabled { cursor: default; opacity: 0.5; }
