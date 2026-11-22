@@ -1,5 +1,7 @@
 // src/components/panels/LockPanel.tsx
 import { Lock, Unlock } from "lucide-react";
+import type { CSSProperties } from "react";
+import { leadsTo } from "@/utils/stateColors";
 import BasePanel from "./BasePanel";
 import type { PanelProps } from "@/types/panel.types";
 import { useHAActions } from "@/ha/HAStateStore";
@@ -77,9 +79,11 @@ export default function LockPanel({ entity, mapping, onClose }: PanelProps) {
             confirmLabel={ask.asking.confirmLabel} onConfirm={ask.confirm} onCancel={ask.cancel} /></div>;
         }
         const Icon = b === "lock" ? Lock : Unlock;
+        // the colour of where it leads (owner, 2026-11-22): "Lock door" the locked green, "Unlock door…" the unlocked red
+        const leads = leadsTo(mapping.entityId, b === "lock" ? "locked" : "unlocked", rule) as CSSProperties;
         return n === 0 ? (
           <button key={b}
-            className="big-toggle state"
+            className="big-toggle action" style={leads}
             onClick={ask.request}
             aria-busy={pending || undefined}
           >
@@ -87,7 +91,7 @@ export default function LockPanel({ entity, mapping, onClose }: PanelProps) {
           </button>
         ) : (
           <div key={b} className="mt">
-            <Button look="state" icon={<Icon size={18} />} style={{ width: "100%" }}
+            <Button look="action" icon={<Icon size={18} />} style={{ width: "100%", ...leads }}
               onClick={ask.request}> {b === "lock" ? "Lock door" : "Unlock door…"}</Button>
           </div>
         );

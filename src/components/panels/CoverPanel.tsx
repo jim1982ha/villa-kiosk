@@ -1,5 +1,6 @@
 // src/components/panels/CoverPanel.tsx
 import { Blinds, ChevronUp, ChevronDown, Square } from "lucide-react";
+import { leadsTo } from "@/utils/stateColors";
 import BasePanel from "./BasePanel";
 import type { PanelProps } from "@/types/panel.types";
 import { useHAActions } from "@/ha/HAStateStore";
@@ -12,13 +13,14 @@ import CommandButton from "./CommandButton";
 
 export default function CoverPanel({ entity, mapping, onClose }: PanelProps) {
   const { ws } = useHAActions();
+  const rule = useStatusRule();
   const pos = entity?.attributes.current_position;
   const hasPosition = typeof pos === "number";
   // Follows the device until dragged (useLiveDraft): a state event mid-drag
   // would otherwise snap it back and the release would send a stale number.
   const position = useLiveDraft<number>(hasPosition ? pos as number : undefined, 0,
     (v) => HAServices.setCoverPosition(ws, mapping.entityId, v));
-  const pill = coverPill(mapping.entityId, entity?.state, hasPosition ? position.value : undefined, useStatusRule());
+  const pill = coverPill(mapping.entityId, entity?.state, hasPosition ? position.value : undefined, rule);
   // what a command moves: the blind's state ("opening") or, on one that reports only it, its position
   const moves = `${entity?.state} ${pos}`;
 
@@ -29,12 +31,12 @@ export default function CoverPanel({ entity, mapping, onClose }: PanelProps) {
       <ControlFrame entity={entity} mapping={mapping} pill={pill}>
 
       <div className="row-buttons">
-        {/* filled in the blind's state now, as its pill (--state, ControlFrame; colour code rule 3, owner 2026-11-22) */}
-        <CommandButton look="state" icon={<ChevronUp size={20} />} style={{ flex: 1 }}
+        {/* each in the colour of where it leads (stateColors.leadsTo; owner, 2026-11-22); Stop leads nowhere: plain */}
+        <CommandButton look="action" icon={<ChevronUp size={20} />} style={{ flex: 1, ...leadsTo(mapping.entityId, "open", rule) }}
           watch={moves} send={() => HAServices.openCover(ws, mapping.entityId)}> Open</CommandButton>
-        <CommandButton look="state" icon={<Square size={16} />} style={{ flex: 1 }} watch={moves}
+        <CommandButton icon={<Square size={16} />} style={{ flex: 1 }} watch={moves}
           send={() => HAServices.stopCover(ws, mapping.entityId)}> Stop</CommandButton>
-        <CommandButton look="state" icon={<ChevronDown size={20} />} style={{ flex: 1 }}
+        <CommandButton look="action" icon={<ChevronDown size={20} />} style={{ flex: 1, ...leadsTo(mapping.entityId, "closed", rule) }}
           watch={moves} send={() => HAServices.closeCover(ws, mapping.entityId)}> Close</CommandButton>
       </div>
 

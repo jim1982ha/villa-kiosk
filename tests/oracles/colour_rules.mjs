@@ -179,13 +179,17 @@ ck("the On button's meaning comes from the table: on active, off usual, no value
    && powerStatus("on", "on", "switch.x") === "active" && powerStatus("unknown", "unknown", "light.x") === "noValue"
    && powerStatus("unknown", "opening", "cover.x") === "transitional");
 // owner, 2026-11-13: the window's pill says the state; the power button names its action. Since 2026-11-22 (colour
-// code rules 1 and 3) it is filled in the pill's colour, the state NOW, read from its window (--state, ControlFrame)
+// code) its colour is where it leads, as "Lock door" the locked green (owner, 2026-11-22), tinted, never filled
 const { controlPill } = await import("@/config/reading");
-const { stateFill, pillKey } = await import("@/utils/stateColors");
-const button = (on) => draw(h(PowerToggle, { on, onClick: () => {} }));
-ck("  ...the power button says what a tap does in words, filled in its window's state (class state), never a category's",
+const { stateFill, pillKey, leadsTo } = await import("@/utils/stateColors");
+const button = (on) => draw(h(PowerToggle, { on, leads: leadsTo("light.x", on ? "off" : "on"), onClick: () => {} }));
+ck("  ...the power button says what a tap does in words, in the colour of where it leads, never a category's",
    button(true).includes("Turn off") && button(false).includes("Turn on")
-   && [button(true), button(false)].every((b) => /class="big-toggle state"/.test(b) && !/--cat-|--device-/.test(b)), button(true));
+   && [button(true), button(false)].every((b) => /class="big-toggle action"/.test(b) && !/--cat-|--device-/.test(b))
+   && button(true).includes(`--leads:${STATUS_COLOR.usual}`) && button(false).includes(`--leads:${STATUS_COLOR.active}`), button(true));
+ck("  ...every action wears where it leads: Lock door and Close green, Unlock door and Open red",
+   leadsTo("lock.x", "locked")["--leads"] === STATUS_COLOR.usual && leadsTo("lock.x", "unlocked")["--leads"] === STATUS_COLOR.active
+   && leadsTo("cover.x", "closed")["--leads"] === STATUS_COLOR.usual && leadsTo("cover.x", "open")["--leads"] === STATUS_COLOR.active);
 ck("  ...a window's controls read the state from its pill: stateFill of the pill's meaning, white ink on the strong fills, dark on amber",
    pillKey(STATUS_PILL_CLASS.active) === "active" && pillKey(STATUS_PILL_CLASS.warn) === "warn"
    && stateFill("usual")["--state"] === STATUS_COLOR.usual && stateFill("active")["--state-ink"] === "#ffffff"
@@ -249,13 +253,11 @@ ck("no .ts/.tsx outside the table names a status or category token as a colour: 
 {
   const read = (f) => readFileSync(new URL(`../../src/${f}`, import.meta.url), "utf8");
   const css = ["01-base.css", "02-hud.css", "03-panels.css", "07-facility.css", "08-shared.css"].map((f) => read(`styles/${f}`)).join("\n");
-  ck("rule 1: no button wears the colour of where it leads (no .action look, no actionColor); a device's controls wear its state now",
-     !/\.(btn|big-toggle)\.action\b/.test(css) && !/actionColor/.test(read("utils/stateColors.ts"))
-     && !/look="action"/.test(read("components/panels/LockPanel.tsx") + read("components/panels/CoverPanel.tsx"))
-     && /\.btn\.state, \.big-toggle\.state \{ background: var\(--state/.test(css)
+  ck("rule 1: a button that acts wears where it leads, tinted and outlined (.action, --leads); what is chosen now is filled in the state",
+     /\.btn\.action \{\s*background: color-mix\(in srgb, var\(--leads\) 18%/.test(css)
      && /stateFill\(pillKey\(shown\.tone\)\)/.test(read("components/panels/ControlFrame.tsx"))
-     && (read("components/panels/CoverPanel.tsx").match(/look="state"/g) ?? []).length === 3
-     && /look="state"/.test(read("components/panels/MediaPanel.tsx")) && /big-toggle state/.test(read("components/panels/LockPanel.tsx")));
+     && (read("components/panels/CoverPanel.tsx").match(/look="action"/g) ?? []).length === 2
+     && /look="action"/.test(read("components/panels/MediaPanel.tsx")) && /big-toggle action/.test(read("components/panels/LockPanel.tsx")));
   ck("rule 2: red is only \"in use\": no app red (--status-danger), no second green (--status-on), no red button",
      !/--status-danger|--status-on\b/.test(css.replace(/\/\*[\s\S]*?\*\//g, "")) && !/\.btn\.danger|\.danger:hover/.test(css));
   ck("rule 3 (option B): a switch and a padlock filled in their state's colour, green at rest, red in use",
