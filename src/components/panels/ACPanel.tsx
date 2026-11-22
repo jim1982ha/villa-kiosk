@@ -47,7 +47,7 @@ export default function ACPanel({ entity, mapping, onClose }: PanelProps) {
 
         <div className="field">
           <label className="eyebrow">Mode</label>
-          <DeviceChoice label="Mode" active={entity?.state ?? null} stateOf={mapping.entityId}
+          <DeviceChoice label="Mode" active={entity?.state ?? null}
             send={(m) => HAServices.setHvacMode(ws, mapping.entityId, m)}
             options={hvacModes.map((m) => ({ key: m, label: MODE_LABELS[m] ?? m }))} />
         </div>

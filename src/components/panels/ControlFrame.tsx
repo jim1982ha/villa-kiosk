@@ -10,6 +10,8 @@
 // keeps only its own controls (brightness, fan speed, set-point…), passed as
 // children; they render only while the device can be commanded.
 
+import type { CSSProperties } from "react";
+import { pillKey, stateFill } from "@/utils/stateColors";
 import type { ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
 import { PowerSection } from "./PowerToggle";
@@ -49,8 +51,12 @@ export default function ControlFrame({ entity, mapping, power, beside, pill, chi
   const sw = power ? deviceSwitch(entity, mapping.entityId, mapping) : null;
   // a panel's own pill is read with the same rule (its device's, DeviceLook.statusRule): only painted here
   const shown = pill ?? controlPill(mapping.entityId, entity, sw ? sw.position : null, rule);
+  // ⚠️ EVERY CONTROL OF THE WINDOW IN ITS PILL'S COLOUR (owner, 2026-11-22: "the Lock door button is not in a
+  // consistent colour"): the power button, the lock's, a blind's, Play / Pause, the chosen mode or colour read
+  // `--state` from here, so they cannot say another state than the pill above them (stateColors.stateFill)
+  const state = { display: "contents", ...stateFill(pillKey(shown.tone)) } as CSSProperties;
   return (
-    <>
+    <div className="device-controls" style={state}>
       {/* the state, said once and the same way in every window; a critical device's "needs a look" in red */}
       <StatusPill tone={shown.tone} icon={pill?.icon}>{shown.text}</StatusPill>
       {sw && (() => {
@@ -64,6 +70,6 @@ export default function ControlFrame({ entity, mapping, power, beside, pill, chi
         );
       })()}
       {children}
-    </>
+    </div>
   );
 }

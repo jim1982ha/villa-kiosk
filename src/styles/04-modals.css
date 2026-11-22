@@ -274,9 +274,10 @@
   background: var(--accent-soft); color: var(--accent); font-weight: 600;
   box-shadow: var(--elev-1);
 }
-/* In a device's window the chosen mode or speed says THAT DEVICE's state, in its colour (--device-*, BasePanel), as
-   its On button does: a blue-badged device's mode is not the app's green (SegmentedGroup `device`). */
-.segmented-device button.active { background: var(--device-fill, var(--accent-soft)); color: var(--device-ink, var(--accent)); }
+/* In a device's window the chosen mode or speed says THAT DEVICE's state, filled in its state's colour (--state,
+   ControlFrame), as its power button does (owner, 2026-11-22, colour code rule 3, option B; it was the device's
+   family colour). */
+.segmented-device button.active { background: var(--state, var(--accent-soft)); color: var(--state-ink, var(--accent)); }
 /* A choice the view has nothing to draw for: still there, greyed (SegmentedGroup `disabled`). */
 .segmented button:disabled { opacity: 0.35; cursor: not-allowed; }
 .segmented button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }

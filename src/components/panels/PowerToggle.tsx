@@ -5,9 +5,9 @@
 // ⚠️ AN ACTION, AS THE LOCK'S (owner, 2026-11-13: "there is no pill showing the current state for the Fan as it
 // appear for other device"): it said the state ("On") in the state's colour while a lock and a blind said theirs in a
 // pill and named their action on the button. The window's pill says the state now (ControlFrame, every window), and
-// this button says what a tap does, as "Unlock door…". ⚠️ PLAIN (owner, 2026-11-22, colour code rule 1: a colour says
-// what is true now, never what a tap will do): it wore the colour of where it leads, beside a pill in the colour of the
-// state, two logics; the pill alone is in colour now, the button's words and icon say the action.
+// this button says what a tap does, as "Unlock door…". ⚠️ IN THE STATE NOW (owner, 2026-11-22, colour code rules 1 and
+// 3): it wore the colour of where it leads, beside a pill in the colour of the state, two logics; it is filled in the
+// pill's colour now (--state, ControlFrame), its words and icon saying the action.
 
 import type { ReactNode } from "react";
 import { Power } from "lucide-react";
@@ -72,7 +72,7 @@ export default function PowerToggle({ on, onClick, ask = null, compact = false }
 
   return (
     <button
-      className={`big-toggle${compact ? " compact" : ""}`}
+      className={`big-toggle state${compact ? " compact" : ""}`}
       onClick={request}
       aria-busy={pending || undefined}
     >

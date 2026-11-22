@@ -16,11 +16,10 @@
 import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from "react";
 import { ChevronDown } from "lucide-react";
 
-/** What a button is among its neighbours: the main answer (the accent), a device's own command (the device's colour,
- *  `--device-fill`/`--device-ink`, set by its window). None: the plain button, which is also what an action that moves a
- *  device and one that cannot be taken back are (owner, 2026-11-22, colour code rules 1 and 2: a colour says what is
- *  true now, and red only "in use"; what cannot be taken back is asked first, never painted). */
-export type ButtonLook = "main" | "device";
+/** What a button is among its neighbours: the main answer (the accent), a device's control (filled in its device's
+ *  state now, `--state`/`--state-ink`: its window's ControlFrame, a list's heading; owner, 2026-11-22, colour code rule
+ *  3, option B). None: the plain button, also what cannot be taken back (asked first, never painted). */
+export type ButtonLook = "main" | "state";
 
 export interface ButtonShape {
   look?: ButtonLook;

@@ -112,18 +112,9 @@ export default function BasePanel({ title, entityId, icon, className, headerActi
       draggable={false}
     />
   );
-  // Every control in this panel that expresses THIS DEVICE'S current state —
-  // the big On button, the fan's selected speed, a climate mode chip — is
-  // painted in the device's own category colour, from the same
-  // categorySurface() call that paints the header badge above and its badge
-  // out on the 3D map. Published once here rather than read per component:
-  // the panel is the thing that knows which device is open, so a panel type
-  // that grows another stateful control inherits the colour for free.
-  //
-  // It has to be a custom property rather than a class per category, because
-  // `badge.color` is an arbitrary #rrggbb the user picked in the badge colour
-  // editor — no fixed stylesheet could enumerate it. Absent (a group panel,
-  // or a profile that can't see the badge) the CSS falls back to the accent.
+  // The device's family colour (its badge's, or the one picked for it), for its trend only. ⚠️ ITS CONTROLS NO LONGER
+  // WEAR IT (owner, 2026-11-22, colour code rule 3): the power button, a chosen mode, Play / Pause are filled in the
+  // device's STATE now (--state, ControlFrame); a family colour is an identity, never a state.
   const deviceTint = badge && categorySurface(badge.category, "active", badge.color);
   // The family's colour for this device's value and trend (trendHue): its badge's hue — the category's, or the one
   // picked for this badge. Others has no family colour of its own: its trend keeps the usual colour.
@@ -158,11 +149,7 @@ export default function BasePanel({ title, entityId, icon, className, headerActi
           onClose={() => setColorOpen(false)}
         />
       )}
-      style={deviceTint ? {
-        ["--device-fill" as string]: deviceTint.fill,
-        ["--device-ink" as string]: deviceTint.ink,
-        ["--device-ring" as string]: deviceTint.ring,
-      } : undefined}>
+>
       {/* the title takes the first focus, never the badge (WindowHeader `focus`) */}
       <WindowHeader focus title={title} icon={headerIcon} under={room}>
         {(headerActions || back || warning) && (

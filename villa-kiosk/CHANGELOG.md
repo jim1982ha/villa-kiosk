@@ -1,3 +1,12 @@
+## 2.496.883
+
+- **Every control of a device is filled in its state's colour.** In a device's window, the buttons now take the colour
+  of the pill above them, the state right now: "Lock door" is red while the door is unlocked, "Unlock door…" green
+  while it is locked; "Turn on" / "Turn off", a blind's Open, Stop and Close, Play / Pause and the chosen mode, speed or
+  light colour follow the same rule. Their words and icon still say what a tap does. The buttons over a room or floor
+  heading in a list do the same: red while any device in it is in use, green when all rest. The device's family colour
+  stays on its icon only.
+
 ## 2.496.882
 
 - **Switches and padlocks are filled in their state's colour.** A locked door's padlock is filled green, an unlocked
