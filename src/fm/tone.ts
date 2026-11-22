@@ -27,10 +27,9 @@ export const toneClass = (t: Tone): string => (t === "ok" ? "" : `tone-${t}`);
  *  is drawn too (green, as a task's "ok" state) — only a card's tone is left plain when all is well. */
 export const pillClass = (t: Tone): string => `tone-${t}`;
 
-/** A ticket IN PROGRESS's pill: the buttons' accent, as its Edit Ticket button (owner, 2026-11-04: "change the colour
- *  of the pill for OPENED ticket, for this green colour, and also colour the Edit Ticket button with this same green
- *  accent style"). */
-export const ACCENT_PILL = "tone-accent";
+/** A ticket IN PROGRESS's pill, and a watch's: in between, open and not yet fixed, the status blue (owner, 2026-11-22,
+ *  colour code rules 2 and 6: the brand's green is never a state; it was since 2026-11-04, the Edit Ticket button's). */
+export const MOVING_PILL = "tone-moving";
 
 /** A state that needs nothing (a closed record, a device out of contact): the card's grey (owner, 2026-11-05). */
 export const QUIET_PILL = "tone-quiet";

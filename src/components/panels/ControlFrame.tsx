@@ -17,7 +17,6 @@ import StatusPill from "./StatusPill";
 import { useStatusRule } from "./PanelActionsContext";
 import { useHAActions } from "@/ha/HAStateStore";
 import { HAServices } from "@/ha/HAServiceCalls";
-import { actionColor } from "@/utils/stateColors";
 import { isOffline } from "@/utils/deviceHealth";
 import { controlPill } from "@/config/reading";
 import { deviceSwitch } from "@/utils/devicePower";
@@ -58,7 +57,6 @@ export default function ControlFrame({ entity, mapping, power, beside, pill, chi
         return (
           <PowerSection
             on={sw.position === "on"}
-            leads={actionColor(mapping.entityId, sw.position === "on" ? "off" : "on")}
             onClick={() => HAServices.power(ws, entity, mapping.entityId)}
             ask={sw.ask}
             beside={beside}

@@ -38,11 +38,11 @@ interface Props {
 
 /** A room card's corner button (the small button over a photo, common/Button's drawing; a span, as a card is a button
  *  and a button holds no other): a press on it is not a press on the card. */
-function CornerButton({ label, danger = false, onPress, children }: {
-  label: string; danger?: boolean; onPress: () => void; children: ReactNode;
+function CornerButton({ label, onPress, children }: {
+  label: string; onPress: () => void; children: ReactNode;
 }) {
   return (
-    <span role="button" tabIndex={-1} className={buttonClass({ on: "photo", small: true, wordless: true, look: danger ? "danger" : undefined })}
+    <span role="button" tabIndex={-1} className={buttonClass({ on: "photo", small: true, wordless: true, })}
       onClick={(e) => { e.stopPropagation(); onPress(); }} data-tip={label} aria-label={label}>
       {children}
     </span>
@@ -173,7 +173,7 @@ export default function TeleportMenu({ manager, currentFloor, onClose, onTelepor
                 </CornerButton>
               )}
               {mayEdit && (
-                <CornerButton label={`Remove room ${p.name}`} danger onPress={() => setAsk({ kind: "remove", name: p.name })}>
+                <CornerButton label={`Remove room ${p.name}`} onPress={() => setAsk({ kind: "remove", name: p.name })}>
                   <Trash2 size={16} />
                 </CornerButton>
               )}

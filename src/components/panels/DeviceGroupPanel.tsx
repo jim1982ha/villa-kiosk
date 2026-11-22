@@ -30,8 +30,7 @@ interface Props {
 /**
  * Colours for telling one plotted SERIES from another — nothing more.
  *
- * These were the status tokens (--status-on / --status-warning /
- * --status-danger), which quietly asserted something they had no basis for: a
+ * These were the status tokens (green / amber / red), which quietly asserted something they had no basis for: a
  * group's second series was drawn in the app's "needs attention" red and its
  * third in the amber that means "Home Assistant has lost contact", purely
  * because of the order the members happened to be listed in. A humidity line

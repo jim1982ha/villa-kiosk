@@ -16,10 +16,11 @@
 import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from "react";
 import { ChevronDown } from "lucide-react";
 
-/** What a button is among its neighbours: the main answer (the accent), one that cannot be taken back (red), an action
- *  that moves a device (the colour of the state it leads to, `--state`: 03-panels.css), a device's own command (the
- *  device's colour, `--device-fill`/`--device-ink`, set by its window). None: the plain button. */
-export type ButtonLook = "main" | "danger" | "action" | "device";
+/** What a button is among its neighbours: the main answer (the accent), a device's own command (the device's colour,
+ *  `--device-fill`/`--device-ink`, set by its window). None: the plain button, which is also what an action that moves a
+ *  device and one that cannot be taken back are (owner, 2026-11-22, colour code rules 1 and 2: a colour says what is
+ *  true now, and red only "in use"; what cannot be taken back is asked first, never painted). */
+export type ButtonLook = "main" | "device";
 
 export interface ButtonShape {
   look?: ButtonLook;
@@ -45,8 +46,8 @@ export function buttonClass({ look, wordless, on, quiet, small, lit, captioned }
   else if (on === "menu") c.push("hud-menu-item", lit ? "active" : "");
   else if (on === "map") c.push("icon-btn", lit ? "active" : "");
   else if (on === "photo") {
-    c.push("media-btn", small ? "small" : "", wordless ? "" : "worded", lit ? "on" : "", look === "danger" ? "danger" : "");
-  } else if (quiet) return [`icon-quiet${small ? " small" : ""}`, place, look === "danger" ? "danger" : ""].filter(Boolean).join(" ");
+    c.push("media-btn", small ? "small" : "", wordless ? "" : "worded", lit ? "on" : "");
+  } else if (quiet) return [`icon-quiet${small ? " small" : ""}`, place].filter(Boolean).join(" ");
   else c.push("btn", look === "main" ? "primary" : (look ?? ""), wordless ? "icon-only" : "", lit ? "active" : "");
   if (place) c.push(place);
   return c.filter(Boolean).join(" ") || undefined;

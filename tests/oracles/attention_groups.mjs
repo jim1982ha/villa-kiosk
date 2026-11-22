@@ -110,8 +110,8 @@ const taken = groupAttention(build([{ ...ticket("va-5", "Back door stiff", "lock
   const c = taken && cockpitCard(taken, null);
   ck("  ...an open fault's line is its text alone; one taken in hand too, \"Ticket in progress\" its state, in that colour",
      taken && lineText(taken) === "Back door stiff" && !c.status?.length
-     && /^Ticket in progress \| Opened on /.test(drawnMove(c.lines[0].move, (x) => x)) && c.lines[0].move?.tone === "tone-accent"
-     && JSON.stringify(cardStrip(c).status) === JSON.stringify([{ text: "Ticket in progress", tone: "tone-accent" }]) && c.tone === "handled"
+     && /^Ticket in progress \| Opened on /.test(drawnMove(c.lines[0].move, (x) => x)) && c.lines[0].move?.tone === "tone-moving"
+     && JSON.stringify(cardStrip(c).status) === JSON.stringify([{ text: "Ticket in progress", tone: "tone-moving" }]) && c.tone === "handled"
      && !cockpitCard(loneFault, null).status?.length && cockpitCard(loneFault, null).tone === "warn", taken?.items);
 }
 // ⚠️ ONE ICON PER MEANING (owner, 2026-10-13: "the icon is redundant"): every line repeated its row's icon

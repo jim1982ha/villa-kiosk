@@ -7,6 +7,7 @@
 // `requestRender()` keeps the loop "awake" for a short window; when nothing asks
 // for frames the loop idles at ~0% GPU. (Core 3Dash idea, generalised.)
 
+import { syncStatusTheme } from "./colors";
 import { Engine } from "@babylonjs/core/Engines/engine";
 import type { DeviceMarks } from "@/utils/deviceActivity";
 import { Scene } from "@babylonjs/core/scene";
@@ -671,6 +672,8 @@ export class SceneManager {
     // attribute on a timer for an "auto" kiosk, and rebuilding every badge
     // every five minutes for a no-op write would be a real cost on a wall
     // tablet this app is otherwise careful to let idle.
+    // the status colours in the theme already in force (colour code rule 7), before the first object is painted
+    syncStatusTheme();
     if (typeof MutationObserver !== "undefined") {
       let lastTheme = document.documentElement.getAttribute("data-theme");
       this.themeObserver = new MutationObserver(() => {
@@ -1038,6 +1041,9 @@ export class SceneManager {
     // (see setViewMode), which is driven by the SUN rather than by the UI
     // theme. Re-pinning the themed colour here would silently undo that the
     // first time an auto kiosk crossed into night.
+    // The status colours of the 3D objects, room glows, beams and room numbers: the new theme's shades (colour code
+    // rule 7, owner 2026-11-22), then every badge and mesh replayed in them.
+    syncStatusTheme();
     this.visuals.repaintBadges();
   };
 

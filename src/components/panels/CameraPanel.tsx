@@ -754,10 +754,10 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
             // paints red alongside "error"/"unreachable". Same word, two
             // vocabularies; don't collapse them.
             colorFor={(s) => (
-              // ⚠️ MOTION IS ACTIVE, NOT RED (owner, 2026-11-13: one colour code for every status): someone seen is the
-              // camera doing its job, green as an occupied room; red is an alarm
+              // ⚠️ MOTION IS ACTIVE (owner, 2026-11-13: one colour code for every status): someone seen is the camera
+              // doing its job, red "in use" as an occupied room; a problem is amber
               s === "motion" ? STATUS_COLOR.active
-                // the camera unreachable: red for a critical one, as the Cockpit and the map (its device's rule)
+                // the camera unreachable: amber for a critical one, as the Cockpit and the map (its device's rule)
                 // and its motion part lost: the same rule, a part of a critical device as the device
                 : s === "offline" || s === "motion-unavailable" ? STATUS_COLOR[(badge?.statusRule ?? PLAIN_STATUS)("unavailable")]
                   // A camera that is up and recording is alive in its usual

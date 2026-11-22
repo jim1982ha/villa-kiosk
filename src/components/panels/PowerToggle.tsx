@@ -5,7 +5,9 @@
 // ⚠️ AN ACTION, AS THE LOCK'S (owner, 2026-11-13: "there is no pill showing the current state for the Fan as it
 // appear for other device"): it said the state ("On") in the state's colour while a lock and a blind said theirs in a
 // pill and named their action on the button. The window's pill says the state now (ControlFrame, every window), and
-// this button says what a tap does, in the colour of where it leads (stateColors.actionColor), as "Unlock door…".
+// this button says what a tap does, as "Unlock door…". ⚠️ PLAIN (owner, 2026-11-22, colour code rule 1: a colour says
+// what is true now, never what a tap will do): it wore the colour of where it leads, beside a pill in the colour of the
+// state, two logics; the pill alone is in colour now, the button's words and icon say the action.
 
 import type { ReactNode } from "react";
 import { Power } from "lucide-react";
@@ -18,8 +20,6 @@ import InlineConfirm from "@/components/common/InlineConfirm";
 
 interface Props {
   on: boolean;
-  /** The colour of where a tap leads (stateColors.actionColor: off when on, on when off). */
-  leads: string;
   onClick: () => unknown;
   /** devicePower.deviceSwitch's `ask` — the device's own answer to "ask
    *  before throwing it": always for an unlock, and whenever the owner set
@@ -48,7 +48,7 @@ export function PowerSection({ beside, ...props }: Omit<Props, "compact"> & { be
   );
 }
 
-export default function PowerToggle({ on, leads, onClick, ask = null, compact = false }: Props) {
+export default function PowerToggle({ on, onClick, ask = null, compact = false }: Props) {
   // `on` is derived purely from HA's live entity state, so the button gave no
   // feedback at all for the round-trip between a tap and the real
   // state_changed event landing — on a slow link that read as "did that even
@@ -72,8 +72,7 @@ export default function PowerToggle({ on, leads, onClick, ask = null, compact = 
 
   return (
     <button
-      className={`big-toggle action${compact ? " compact" : ""}`}
-      style={{ ["--state" as string]: leads }}
+      className={`big-toggle${compact ? " compact" : ""}`}
       onClick={request}
       aria-busy={pending || undefined}
     >

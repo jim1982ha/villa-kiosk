@@ -211,7 +211,7 @@ export default function BasePanel({ title, entityId, icon, className, headerActi
         {linked && (
           <LinkedSensorRow entityId={linked.entityId} label={linked.label} role="linked entity" control={(
             // the row's own switch: a toggle, or a lock's padlock (SwitchFace), in its device's colours
-            <SwitchFace entityId={linked.entityId} isOn={linked.isOn} rule={badge?.statusRule} {...linkedSwitchProps(linked)} />
+            <SwitchFace entityId={linked.entityId} isOn={linked.isOn} {...linkedSwitchProps(linked)} />
           )} />
         )}
         {/* a camera's motion sensor: the same band, the same place (owner, 2026-10-21: "apply consistently the same

@@ -127,12 +127,17 @@ ck("every theme gives the six meanings six colours, its usual colour none of its
 {
   // owner, 2026-11-15: every colour of a meaning defined ONE time — the light theme's tokens, and the one mirror the 3D
   // colours, the baked pills and the badge marks read (stateColors.STATUS_HEX), the same values
-  const { STATUS_HEX } = await import("@/utils/stateColors");
+  // ...and every theme's (owner, 2026-11-22, colour code rule 7: the 3D villa and the room numbers in each theme's shade)
+  const { STATUS_HEX, STATUS_HEX_BY_THEME } = await import("@/utils/stateColors");
   const TOKEN = { usual: "status-usual", active: "status-active", transitional: "status-pending", warn: "status-warning",
     unavailable: "status-lost", noValue: "status-off" };
-  const off = Object.entries(TOKEN).filter(([k, t]) => val(BASE, t)?.toLowerCase() !== STATUS_HEX[k].toLowerCase())
-    .map(([k, t]) => ({ k, token: val(BASE, t), mirror: STATUS_HEX[k] }));
-  ck("the table's one hex mirror equals the light theme's tokens, meaning by meaning", off.length === 0, off);
+  const blocks = { light: BASE, ...THEMES };
+  const off = Object.entries(blocks).flatMap(([name, b]) => Object.entries(TOKEN)
+    .filter(([k, t]) => (val(b, t) ?? val(BASE, t))?.toLowerCase() !== STATUS_HEX_BY_THEME[name]?.[k]?.toLowerCase())
+    .map(([k, t]) => ({ name, k, token: val(b, t) ?? val(BASE, t), mirror: STATUS_HEX_BY_THEME[name]?.[k] })));
+  ck("the table's one hex mirror equals each theme's tokens, theme by theme, meaning by meaning",
+     off.length === 0 && Object.keys(STATUS_HEX_BY_THEME).sort().join() === Object.keys(blocks).sort().join()
+     && STATUS_HEX === STATUS_HEX_BY_THEME.light, off);
 }
 
 // ...and no status colour is the alarm's old violet (owner, 2026-11-15: the alarm merged into amber, urgency is a pulse):
@@ -173,13 +178,13 @@ ck("the On button's meaning comes from the table: on active, off usual, no value
    powerStatus("on", "on", "light.x") === "active" && powerStatus("off", "off", "fan.x") === "usual"
    && powerStatus("on", "on", "switch.x") === "active" && powerStatus("unknown", "unknown", "light.x") === "noValue"
    && powerStatus("unknown", "opening", "cover.x") === "transitional");
-// owner, 2026-11-13: the window's pill says the state; the power button names its action in the colour of where it leads
-const { actionColor: leadsTo } = await import("@/utils/stateColors");
+// owner, 2026-11-13: the window's pill says the state; the power button names its action. Plain since 2026-11-22
+// (colour code rule 1: a colour says what is true now, never what a tap will do)
 const { controlPill } = await import("@/config/reading");
-const button = (on) => draw(h(PowerToggle, { on, leads: leadsTo("light.x", on ? "off" : "on"), onClick: () => {} }));
-ck("  ...the power button says what a tap does, in the colour of where it leads (Turn off: usual; Turn on: active), never a category's",
-   button(true).includes("Turn off") && button(true).includes(STATUS_COLOR.usual) && button(false).includes("Turn on")
-   && button(false).includes(STATUS_COLOR.active) && !/--cat-|--device-/.test(button(true)), button(true));
+const button = (on) => draw(h(PowerToggle, { on, onClick: () => {} }));
+ck("  ...the power button says what a tap does in words, in no colour at all (no status, no category)",
+   button(true).includes("Turn off") && button(false).includes("Turn on")
+   && ![button(true), button(false)].some((b) => /--status-|--cat-|--device-|--state/.test(b)), button(true));
 const light = (state) => ({ entity_id: "light.x", state, attributes: {} });
 ck("  ...and every window's pill says the state the same way: On active, Off usual, an A/C's mode in its words",
    JSON.stringify(controlPill("light.x", light("on"), "on")) === JSON.stringify({ text: "On", tone: STATUS_PILL_CLASS.active })
@@ -234,27 +239,33 @@ ck("no .ts/.tsx outside the table names a status or category token as a colour: 
      leak.rooms[0]?.alarm === true && !motion.rooms[0]?.alarm && again.length === 1 && again[0].on && again[0].alarm === true
      && motionChanges(NOTHING_LIT, calm).rooms[0]?.alarm === undefined, { leak, motion, again });
 }
-// an action wears the state it leads to (owner, 2026-11-13: "Unlock door" in the unlocked colour)
+// ⚠️ THE COLOUR CODE'S RULES (owner, 2026-11-22): a colour says what is true now (1), red only "in use" (2), a control
+// quiet at rest (3), brand green never a state (6)
 {
-  const { actionColor, statusRule, STATUS_COLOR: C } = await import("@/utils/stateColors");
-  ck("a button that moves a device is the colour of where it leads: unlock the active colour (a critical door's too), lock and close the usual colour, open the active one (owner, 2026-11-15)",
-     actionColor("lock.example_door", "unlocked") === C.active
-     && actionColor("lock.example_door", "unlocked", statusRule({ critical: true, hidden: false })) === C.active
-     && actionColor("lock.example_door", "locked") === C.usual && actionColor("cover.example_blind", "open") === C.active
-     && actionColor("cover.example_blind", "closed") === C.usual);
+  const read = (f) => readFileSync(new URL(`../../src/${f}`, import.meta.url), "utf8");
+  const css = ["01-base.css", "02-hud.css", "03-panels.css", "07-facility.css", "08-shared.css"].map((f) => read(`styles/${f}`)).join("\n");
+  ck("rule 1: no button wears the colour of where it leads (no .action look, no actionColor)",
+     !/\.(btn|big-toggle)\.action\b/.test(css) && !/actionColor/.test(read("utils/stateColors.ts"))
+     && !/look="action"/.test(read("components/panels/LockPanel.tsx") + read("components/panels/CoverPanel.tsx")));
+  ck("rule 2: red is only \"in use\": no app red (--status-danger), no second green (--status-on), no red button",
+     !/--status-danger|--status-on\b/.test(css.replace(/\/\*[\s\S]*?\*\//g, "")) && !/\.btn\.danger|\.danger:hover/.test(css));
+  ck("rule 3: a switch is quiet when off and red when on; a padlock quiet when locked and red when unlocked",
+     /\.summary-entity-toggle \{[^}]*background: var\(--status-off\)/.test(css) && /\.summary-entity-toggle\.on \{ background: var\(--status-active\); \}/.test(css)
+     && /\.summary-entity-lock \{[^}]*background: var\(--status-off\)/.test(css) && /\.summary-entity-lock\.open \{ background: var\(--status-active\);/.test(css));
+  ck("rule 6: a strip that reports a state takes the status colours: all well green, in between blue, never the brand's",
+     /\.strip-ok \{ --strip: var\(--status-usual\); \}/.test(css) && /\.strip-moving \{ --strip: var\(--status-pending\); \}/.test(css));
 }
 {
-  // owner, 2026-11-15: an error message reads in the app's red, never the amber of a device's state
+  // an error message is amber, as every problem (owner, 2026-11-22, colour code rule 2; it was the app's red, 2026-11-15)
   const { NoticeView } = await import("@/components/hud/Notice");
   const { default: ProblemLine } = await import("@/components/common/ProblemLine");
   const notice = draw(h(NoticeView, { tone: "error", children: "Could not save" }));
-  ck("an error notice wears the app's red (--status-danger), not the amber of a device's state",
-     notice.includes("var(--status-danger)") && !notice.includes("var(--status-warning)"), notice);
+  ck("an error notice wears the amber of every problem, never a red",
+     notice.includes("var(--status-warning)") && !/--status-(danger|active)/.test(notice), notice);
   const css = readFileSync(new URL("../../src/styles/08-shared.css", import.meta.url), "utf8");
   const line = draw(h(ProblemLine, { children: "Could not save" }));
-  ck("  ...and so does an error line (ProblemLine), the amber kept for a warning",
-     /class="problem-line"/.test(line) && /\.problem-line \{[^}]*color: var\(--status-danger\)/.test(css)
-     && /\.problem-line\.warn \{ color: var\(--status-warning\)/.test(css), line);
+  ck("  ...and so does an error line (ProblemLine)",
+     /class="problem-line"/.test(line) && /\.problem-line \{[^}]*color: var\(--status-warning\)/.test(css), line);
 }
 
 console.log("\n  one amber for every problem, urgency by a pulse (owner, 2026-11-15):");

@@ -54,7 +54,7 @@ export interface CardRemove { label: string; run: () => void }
  *  removes. `label` names what goes ("Remove Generator service"), `question` says what is kept. */
 export interface CardBin { label: string; question: string; confirmLabel?: string; run: () => unknown }
 
-/** A card's state: its words and its tone's class (fm/tone pillClass, ACCENT_PILL, QUIET_PILL). */
+/** A card's state: its words and its tone's class (fm/tone pillClass, MOVING_PILL, QUIET_PILL). */
 export interface RecordStatus { text: string; tone: string }
 
 /** One problem of a card holding several (an Inbox device's): its own header, words, who line and bar. */
@@ -127,13 +127,14 @@ export interface RecordCardProps {
 }
 
 /** A strip's colour: the worst of its states' tones, else the card's tone, else grey. ⚠️ ONE RULE FOR EVERY STRIP
- *  (owner, 2026-11-05): red act now, amber a fault, green handled (a ticket in progress, a watch, all well), grey
- *  quiet (a device out of contact, anything closed). Pure: a check drives it. */
-export type StripTone = "danger" | "warn" | "ok" | "neutral";
+ *  (owner, 2026-11-05; colours of the status table since 2026-11-22, colour code rules 2 and 6): amber act now (pulsing)
+ *  or a fault, blue in between (a ticket in progress, a watch), green all well, grey quiet (a device out of contact,
+ *  anything closed). Pure: a check drives it. */
+export type StripTone = "danger" | "warn" | "moving" | "ok" | "neutral";
 const TONE_OF_CLASS: Record<string, StripTone> = {
-  danger: "danger", warn: "warn", accent: "ok", ok: "ok", quiet: "neutral", lost: "neutral",
+  danger: "danger", warn: "warn", moving: "moving", ok: "ok", quiet: "neutral", lost: "neutral",
 };
-const STRIP_RANK: StripTone[] = ["danger", "warn", "ok", "neutral"];
+const STRIP_RANK: StripTone[] = ["danger", "warn", "moving", "ok", "neutral"];
 const toneOf = (cls: string | undefined): StripTone | undefined => {
   const m = /(?:^|\s)tone-(\w+)/.exec(cls ?? "");
   return m ? TONE_OF_CLASS[m[1]] : undefined;
@@ -261,7 +262,7 @@ function StateWords({ status, tip }: { status: readonly RecordStatus[]; tip?: st
  *  keeps its height (07-facility.css); a press is the button's, never the card's tap or hold. */
 function RemoveButton({ label, run }: CardRemove) {
   return (
-    <IconButton danger label={label} className="fm-record-remove"
+    <IconButton label={label} className="fm-record-remove"
       onPointerDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); run(); }}>
       <Trash2 size={16} aria-hidden="true" />
     </IconButton>

@@ -73,8 +73,8 @@
 }
 
 /* ---- Notices (components/hud/Notice) ----------------------------------
-   The connection notice is amber, not red: the socket dropping is recoverable and usually self-heals in seconds, and
-   red is what the map reserves for a device that needs attention (an unlocked door, a leak). */
+   The connection notice is grey, lost contact (owner, 2026-11-22, colour code rule 2): the socket dropping is
+   recoverable and usually self-heals in seconds; red is only "in use", amber what needs attention. */
 /* THE notice (components/hud/Notice) — every message over the villa: the connection, a new version, a failed tap, a
    sensor triggered, a floor-plan sync problem. ONE column under the top bar (52px, see .hud-topbar), so notices stack
    and never overlap; a centred pill clears the corners, so nothing but empty canvas is behind it. Its colour is its
@@ -270,7 +270,7 @@ body:has(.camera-fullscreen) .vesta-notice.below-camera { display: none; }
 .messages-card-body .photo-row { justify-content: center; }
 
 /* a fault the VESTA Agent is confirming: its check in the status green; its card is an open issue's (owner, 2026-10-23) */
-.fault-watched-icon { color: var(--status-on); }
+.fault-watched-icon { color: var(--status-usual); }
 /* An open issue is THE Cockpit card (RecordCard, architecture review 2026-10-15): its own rules went with it — the
    lines below are only what its problems' lines need. */
 .cockpit-attention-icon { flex: 0 0 auto; }
@@ -468,8 +468,8 @@ body:has(.camera-fullscreen) .vesta-notice.below-camera { display: none; }
 /* ⚠️ THE ONE LINE THAT SAYS SOMETHING WENT WRONG (common/ProblemLine; owner, 2026-11-10: one definition). It was red
    at three sizes, amber in two places and a paragraph with its own margins in a fourth. Red: it did not happen.
    Amber (.warn): it happened, with a reservation. Where it stands is its place's business, never its look. */
-.problem-line { font-size: var(--text-base); line-height: 1.4; color: var(--status-danger); min-width: 0; overflow-wrap: anywhere; }
-.problem-line.warn { color: var(--status-warning); }
+/* every problem amber, a failed action's too (owner, 2026-11-22, colour code rule 2: red means only "in use") */
+.problem-line { font-size: var(--text-base); line-height: 1.4; color: var(--status-warning); min-width: 0; overflow-wrap: anywhere; }
 
 @media (max-width: 640px) {
   /* ⚠️ ICON-ONLY AT THE PHONE TIER, where two labelled buttons plus a hint do

@@ -29,7 +29,6 @@ import { tapFeedback } from "@/utils/haptics";
 import { useAskFirst } from "@/hooks/useAskFirst";
 import type { SwitchAsk } from "@/utils/devicePower";
 import InlineConfirm from "@/components/common/InlineConfirm";
-import type { StatusRule } from "@/utils/stateColors";
 import SwitchFace from "./SwitchFace";
 import { switchA11y } from "@/utils/switchWords";
 
@@ -47,11 +46,9 @@ interface Props {
    *  to "ask before switching". The question opens under the row, and the
    *  switch moves only on Confirm (2.496.259 — one tap here unlocked a door). */
   ask?: SwitchAsk | null;
-  /** Its device's rule (DeviceLook.statusRule): a lock's padlock in its bolt's colour, as its badge. */
-  rule?: StatusRule;
 }
 
-export default function EntityRowToggle({ entityId, actualOn, label, onToggle, ask = null, rule }: Props) {
+export default function EntityRowToggle({ entityId, actualOn, label, onToggle, ask = null }: Props) {
   const send = useCallback(() => onToggle(), [onToggle]);
   const { isOn, toggle } = useOptimisticToggle(entityId, actualOn, send);
   const { asking, request, confirm, cancel } = useAskFirst(ask, () => { tapFeedback(); toggle(); });
@@ -59,7 +56,7 @@ export default function EntityRowToggle({ entityId, actualOn, label, onToggle, a
   return (
     <>
     {/* the toggle, or a lock's padlock (SwitchFace) */}
-    <SwitchFace entityId={entityId} isOn={isOn} rule={rule} onClick={request} {...switchA11y(entityId, label, isOn)} />
+    <SwitchFace entityId={entityId} isOn={isOn} onClick={request} {...switchA11y(entityId, label, isOn)} />
     {asking && (
       <div className="summary-entity-confirm">
         <InlineConfirm question={asking.question} confirmLabel={asking.confirmLabel} onConfirm={confirm} onCancel={cancel} />

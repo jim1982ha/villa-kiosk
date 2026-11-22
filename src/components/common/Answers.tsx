@@ -25,7 +25,7 @@ export interface Answer {
   disabled?: boolean;
   /** Its word while its press is on its way ("Saving…"). */
   busy?: ReactNode;
-  /** It cannot be taken back: red. */
+  /** It cannot be taken back: a plain button, never the highlighted main answer (it is the question's own asking). */
   danger?: boolean;
   /** Its glyph says it alone (Save): its word hides on a phone, as Cancel's does. */
   terse?: boolean;
@@ -63,7 +63,7 @@ export default function Answers({ answer, onCancel, cancelLabel = "Cancel", canc
         <Button icon={<X size={18} aria-hidden />} label={cancelLabel} tip={cancelTip} onClick={onCancel}
           shortOnPhone>{cancelLabel}</Button>
       )}
-      <Button look={answer.danger ? "danger" : "main"} icon={answer.icon ?? <Check size={18} aria-hidden />}
+      <Button look={answer.danger ? undefined : "main"} icon={answer.icon ?? <Check size={18} aria-hidden />}
         label={answer.name}
         tip={answer.tip} disabled={answer.disabled || sending} onClick={press} shortOnPhone={answer.terse}>
         {sending && answer.busy ? answer.busy : answer.label}

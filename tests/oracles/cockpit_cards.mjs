@@ -35,10 +35,10 @@ ck("  ...its time in its strip, its tags on its quiet line, then its notes, its 
    /fm-record-when">Opened 2026-10-15 00:08/.test(strip(ticket)) && /fm-record-meta[\s\S]*Test lock/.test(body) && /What to do: power[\s\S]*Reminder sent[\s\S]*fm-record-foot"><span class="fm-amount">IDR 1,000/.test(body), body);
 {
   const { stripTone } = await import("@/components/fm/RecordCard");
-  const { ACCENT_PILL, QUIET_PILL } = await import("@/fm/tone");
-  ck("  ...its strip's colour: the worst state's, then the card's tone, else grey (red, amber, green, grey)",
+  const { MOVING_PILL, QUIET_PILL } = await import("@/fm/tone");
+  ck("  ...its strip's colour: the worst state's, then the card's tone, else grey (amber, blue, green, grey)",
      stripTone([{ text: "a", tone: pillClass("warn") }, { text: "b", tone: pillClass("danger") }]) === "danger"
-     && stripTone([{ text: "a", tone: QUIET_PILL }, { text: "b", tone: ACCENT_PILL }]) === "ok"
+     && stripTone([{ text: "a", tone: QUIET_PILL }, { text: "b", tone: MOVING_PILL }]) === "moving"
      && stripTone([{ text: "a", tone: QUIET_PILL }]) === "neutral" && stripTone([], "fault-watched tone-warn") === "warn"
      && stripTone([], "cockpit-focus") === "neutral" && stripTone([{ text: "a", tone: pillClass("ok") }], "tone-danger") === "ok");
 }
@@ -500,20 +500,20 @@ console.log("\n  a card's state is one pill, everywhere (owner, 2026-11-01, opti
   ck("  ...a card with no buttons says them in the same place, no bar", strip(without) === strip(withButtons) && first(without) === first(withButtons)
      && !/fm-record-actions/.test(without), without);
   const task = draw(h(RecordCard, { title: "Pool filter clean", status: { text: "Due soon", tone: "tone-warn" }, actions: btn("Done") }));
-  const tk = draw(h(RecordCard, { title: "Pump", status: { text: "Ticket in progress", tone: "tone-accent" }, who: "Opened by Owner", actions: btn("Close") }));
+  const tk = draw(h(RecordCard, { title: "Pump", status: { text: "Ticket in progress", tone: "tone-moving" }, who: "Opened by Owner", actions: btn("Close") }));
   const closed = draw(h(RecordCard, { title: "Pump", status: { text: "Resolved", tone: "tone-quiet" }, who: "Done by Wayan" }));
   const times = (html, words) => html.split(words).length - 1;
   const kinds = { "an Inbox card's state": times(withButtons, "Unavailable"), "an Inbox problem's move": times(withButtons, "Reopened"),
     "an Inbox card with no buttons": times(without, "Unavailable"), "a task's due state": times(task, "Due soon"),
     "a ticket's stage": times(tk, "Ticket in progress"), "a closed ticket's": times(closed, "Resolved") };
-  ck("  ...every kind of card says its state exactly once, its first line, in its colour as its strip (green handled, grey closed)",
+  ck("  ...every kind of card says its state exactly once, its first line, in its colour as its strip (blue in progress, grey closed)",
      Object.values(kinds).every((n) => n === 1) && [withButtons, without, task, tk, closed].every((c) => text(first(c)).length > 1 && !/fm-record-status/.test(strip(c)))
-     && /strip-ok/.test(strip(tk)) && /strip-neutral/.test(strip(closed)) && /strip-warn/.test(strip(task))
-     && /fm-record-state strip-ok/.test(tk) && /fm-record-state strip-neutral/.test(closed) && /fm-record-state strip-warn/.test(task) && text(inside(tk, "fm-record-who")) === "|[icon]|Opened by Owner|", kinds);
+     && /strip-moving/.test(strip(tk)) && /strip-neutral/.test(strip(closed)) && /strip-warn/.test(strip(task))
+     && /fm-record-state strip-moving/.test(tk) && /fm-record-state strip-neutral/.test(closed) && /fm-record-state strip-warn/.test(task) && text(inside(tk, "fm-record-who")) === "|[icon]|Opened by Owner|", kinds);
   const css = readFileSync(new URL("../../src/styles/07-facility.css", import.meta.url), "utf8");
   // a ticket's title can be a sentence: "Device_2623 has been offline for over 8d 3h." (owner, 2026-11-05)
   const long = draw(h(RecordCard, { title: "A device with a long name has been offline for over 8d 3h.", number: "#91-P1", when: "05/11/2026 08:56",
-    status: { text: "Ticket in progress", tone: "tone-accent" } }));
+    status: { text: "Ticket in progress", tone: "tone-moving" } }));
   ck("  ...a long name stays in its strip, between its chip and its time; its first line its state alone",
      /fm-record-number">#91-P1<\/span><span class="fm-record-name">A device with a long name has been offline for over 8d 3h\.<\/span><span class="fm-record-when">05\/11\/2026 08:56<\/span><\/div>/.test(long)
      && text(first(long)) === "|Ticket in progress|", long);

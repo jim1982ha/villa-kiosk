@@ -57,7 +57,7 @@ ck("  ...its card says when and by whom", faultWhen(tk, stamp) === "Ticket in pr
      === "Resolved | No action needed by Owner, on 08:00");
   // the stage in its colour: a ticket in progress the buttons' accent (owner, 2026-11-04), a closed one quiet grey (owner,
   // 2026-11-05: "Closed cards grey")
-ck("  ...its stage's colour, a closed one's too", faultMove({ ...tk, updates: [taken] })?.tone === "tone-accent"
+ck("  ...its stage's colour, a closed one's too", faultMove({ ...tk, updates: [taken] })?.tone === "tone-moving"
    && faultMove({ ...tk, status: "resolved", resolvedAt: later({}).at, updates: [taken, later({ status: "resolved", who: "Made" })] })?.tone === "tone-quiet");
 ck("  ...reopened, and help asked", faultWhen({ ...tk, updates: [taken, later({ status: "in_progress", kind: "reopened", by: "Owner" })] }, stamp) === "Ticket in progress | Reopened by Owner, on 08:00"
      && faultWhen({ ...tk, updates: [taken, later({ status: "in_progress", kind: "help", by: "Owner" })] }, stamp) === "Ticket in progress | Need help asked by Owner, on 08:00");

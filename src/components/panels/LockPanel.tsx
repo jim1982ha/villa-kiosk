@@ -6,7 +6,6 @@ import { useHAActions } from "@/ha/HAStateStore";
 import { HAServices } from "@/ha/HAServiceCalls";
 import { usePendingAck } from "@/hooks/usePendingAck";
 import { lockBolt, lockButtons, lockPill } from "@/config/reading";
-import { actionColor } from "@/utils/stateColors";
 import { useStatusRule } from "./PanelActionsContext";
 import { tapFeedback, successFeedback } from "@/utils/haptics";
 import ControlFrame from "./ControlFrame";
@@ -27,7 +26,7 @@ export default function LockPanel({ entity, mapping, onClose }: PanelProps) {
   // motor reports for a second or two, and "jammed" — was announced as a red
   // "UNLOCKED": an alarming claim about a door that was in fact busy securing
   // itself. Reporting the state HA actually sent is both truer and shorter.
-  // a critical lock unlocked or lost: red, as its badge, the Cockpit and its 3D object paint it (its device's rule)
+  // its state in its colour (its device's rule): unlocked red, a critical lock's lost contact amber, as everywhere
   const rule = useStatusRule();
   const pill = lockPill(mapping.entityId, entity?.state, rule);
   // A deadbolt is the SLOWEST device class in the villa — a Z-Wave/Zigbee
@@ -78,11 +77,9 @@ export default function LockPanel({ entity, mapping, onClose }: PanelProps) {
             confirmLabel={ask.asking.confirmLabel} onConfirm={ask.confirm} onCancel={ask.cancel} /></div>;
         }
         const Icon = b === "lock" ? Lock : Unlock;
-        // the colour of where it leads: "Unlock door…" the unlocked amber (red for a critical door), "Lock door" locked's
-        const leads = { ["--state" as string]: actionColor(mapping.entityId, b === "lock" ? "locked" : "unlocked", rule) };
         return n === 0 ? (
           <button key={b}
-            className="big-toggle action" style={leads}
+            className="big-toggle"
             onClick={ask.request}
             aria-busy={pending || undefined}
           >
@@ -90,7 +87,7 @@ export default function LockPanel({ entity, mapping, onClose }: PanelProps) {
           </button>
         ) : (
           <div key={b} className="mt">
-            <Button look="action" icon={<Icon size={18} />} style={{ width: "100%", ...leads }}
+            <Button icon={<Icon size={18} />} style={{ width: "100%" }}
               onClick={ask.request}> {b === "lock" ? "Lock door" : "Unlock door…"}</Button>
           </div>
         );

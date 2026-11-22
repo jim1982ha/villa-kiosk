@@ -1,6 +1,6 @@
 /* The VESTA Agent (docs/agent-integration/PLAN.md A8): the top-bar button with
    its presence dot, and the "by VESTA Agent" record mark. (Its own window was
-   removed, 2.496.443.) Online is --status-on, offline --status-warning. */
+   removed, 2.496.443.) Online is --status-usual, offline --status-warning. */
 
 /* The mark on a Facility record the agent created or changed: the same pill as
    "guest report", in the accent so the two provenances never read alike. */
