@@ -1,3 +1,8 @@
+## 2.496.880
+
+- **Room badges: the number's pill is centred.** On the map, the small rounded pill holding a room's device count sat
+  a little high in its badge; it is now centred top to bottom, on every line of a badge that lists several rooms.
+
 ## 2.496.879
 
 - **One colour code, the same everywhere.** Seven rules now decide every colour: a colour says what is true now, never
