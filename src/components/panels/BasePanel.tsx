@@ -14,6 +14,7 @@
 import Window, { WindowHeader } from "@/components/common/Window";
 import { useState, type ReactNode } from "react";
 import { linkedSwitchProps, usePanelActions } from "./PanelActionsContext";
+import SwitchFace from "./SwitchFace";
 import { TrendHue } from "./trendHue";
 import { ChartFrameShare } from "./chartFrame";
 import { badgeImage } from "@/babylon/badgeIcons";
@@ -209,13 +210,8 @@ export default function BasePanel({ title, entityId, icon, className, headerActi
             its switch before its name, its band over the window's range. The same switch as the group window's rows. */}
         {linked && (
           <LinkedSensorRow entityId={linked.entityId} label={linked.label} role="linked entity" control={(
-            <button
-              className={`summary-entity-toggle${linked.isOn ? " on" : ""}`}
-              {...linkedSwitchProps(linked)}
-              data-tip={linked.isOn ? "Turn off" : "Turn on"}
-            >
-              <span className="knob" />
-            </button>
+            // the row's own switch: a toggle, or a lock's padlock (SwitchFace), in its device's colours
+            <SwitchFace entityId={linked.entityId} isOn={linked.isOn} rule={badge?.statusRule} {...linkedSwitchProps(linked)} />
           )} />
         )}
         {/* a camera's motion sensor: the same band, the same place (owner, 2026-10-21: "apply consistently the same

@@ -10,6 +10,7 @@ import type { DeviceSurfaceState } from "@/config/EntityCategories";
 import type { BadgeMark, LinkPill } from "@/utils/deviceActivity";
 import type { ReadingRow } from "@/config/readingRows";
 import { linkedStateWords } from "./panelHeader";
+import { switchA11y } from "@/utils/switchWords";
 import { PLAIN_STATUS, type StatusRule } from "@/utils/stateColors";
 
 export interface PanelActions {
@@ -135,9 +136,8 @@ export function linkedSwitchProps(linked: NonNullable<PanelActions["linked"]>) {
   return {
     onClick: linked.known ? linked.toggle : undefined,
     disabled: !linked.known,
-    role: "switch" as const,
-    "aria-checked": linked.isOn,
-    "aria-label": `${linked.label}: ${linkedStateWords(linked).toLowerCase()}`,
+    // a switch, or a lock's padlock button naming its bolt (utils/switchWords)
+    ...switchA11y(linked.entityId, linked.label, linked.isOn, linkedStateWords(linked, linked.entityId)),
   };
 }
 

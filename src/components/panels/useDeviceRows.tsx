@@ -141,6 +141,7 @@ export function useDeviceRows(): { looks: LookSource; renderRow: (e: HassEntity,
             actualOn={position === "on"}
             ask={sw.ask}
             label={label}
+            rule={look.statusRule}
             onToggle={doToggle}
           />
         )}

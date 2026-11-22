@@ -7,12 +7,14 @@
 // camera picker and the status bar.
 
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { ArrowLeft, X, VideoOff, Maximize2, Minimize2, ZoomOut, ChevronLeft, ChevronRight, Power, Check, Video, Volume2, VolumeX, ListTree, RotateCw, List, Expand, Shrink } from "lucide-react";
+import { ArrowLeft, X, VideoOff, Maximize2, Minimize2, ZoomOut, ChevronLeft, ChevronRight, Check, Video, Volume2, VolumeX, ListTree, RotateCw, List, Expand, Shrink } from "lucide-react";
 import { cameraFitsView, setCameraFitsView } from "@/utils/viewPrefs";
 import type { PanelProps } from "@/types/panel.types";
 import { useRailLayout } from "@/utils/railLayout";
 import { linkedSwitchProps, usePanelActions } from "./PanelActionsContext";
 import { linkedStateWords } from "./panelHeader";
+import { switchIcon } from "./SwitchFace";
+import { switchTip } from "@/utils/switchWords";
 import { EditButton, FaultsButton, OpenTicketButton, useDeviceWarning } from "./DeviceWindowPieces";
 import DeviceReadings from "./DeviceReadings";
 import { useHA } from "@/ha/HAStateStore";
@@ -808,10 +810,11 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
               every icon to the same share of its button, at every breakpoint,
               instead of a hand-picked pixel value per icon. */}
           {linked && (
-            <Button on="photo" lit={linked.isOn} icon={<Power />} className="camera-linked-btn"
+            <Button on="photo" lit={linked.isOn} icon={switchIcon(linked.entityId, linked.isOn)} className="camera-linked-btn"
               {...linkedSwitchProps(linked)}
               // its word as the card windows say it (linkedStateWords: Unavailable only when lost, else Unknown)
-              tip={`${linked.label}: ${linkedStateWords(linked)}${linked.known ? `, ${linked.isOn ? "turn off" : "turn on"}` : ""}`}
+              // and a lock its bolt and padlock, as every switch of it (SwitchFace, utils/switchWords)
+              tip={`${linked.label}: ${linkedStateWords(linked, linked.entityId)}${linked.known ? `, ${switchTip(linked.entityId, linked.isOn).toLowerCase()}` : ""}`}
               style={vOrder(5)} />
           )}
           {canCycle && (

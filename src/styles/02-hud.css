@@ -835,6 +835,15 @@
   transition: transform 0.15s ease;
 }
 .summary-entity-toggle.on .knob { transform: translateX(20px); }
+/* A lock's padlock in place of the switch (SwitchFace; owner, 2026-11-22): the toggle's size and place, filled in its
+   bolt's colour (--state: locked green, unlocked red, a critical door amber), the padlock closed or open in white. */
+.summary-entity-lock {
+  flex: 0 0 auto; width: 48px; height: 28px; margin-right: 10px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 999px; border: none; cursor: pointer; position: relative;
+  background: var(--state); color: #fff; transition: background 0.15s ease;
+}
+.summary-entity-lock:disabled { cursor: default; opacity: 0.5; }
 
 .panel-linked-label {
   font-size: var(--text-base); font-weight: 600;

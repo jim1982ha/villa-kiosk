@@ -642,8 +642,8 @@ button {
    a chart's thumbs and fit mark 20). One body for all of them: a control big enough already is untouched (100%).
    ::before on the map's buttons (.icon-btn), whose ::after is .has-hold-action's dot. */
 :is(.segmented button, .tool-group > button, .tool-group > div > button, .chart-fit-mark) { position: relative; }
-:is(.segmented button, .tool-group > button, .tool-group > div > button, .summary-entity-toggle, .chart-fit-mark,
-  .chart-range-thumb)::after,
+:is(.segmented button, .tool-group > button, .tool-group > div > button, .summary-entity-toggle, .summary-entity-lock,
+  .chart-fit-mark, .chart-range-thumb)::after,
 .icon-btn::before, .hud-home-btn::before {
   content: ""; position: absolute; top: 50%; left: 50%;
   width: max(100%, var(--touch-min)); height: max(100%, var(--touch-min));

@@ -66,10 +66,12 @@ interface LinkedState { isOn: boolean; known: boolean; contact: "lost" | "no-val
 
 /** The word under a linked entity's name: "Unavailable" only when contact is LOST, "Unknown" when the device answers
  *  but this entity has no value (or its position is not known), else On / Off. ⚠️ UNKNOWN IS NOT LOST CONTACT (owner,
- *  2026-10-18): the row read "Unavailable" for both. */
-export function linkedStateWords(l: LinkedState): string {
+ *  2026-10-18): the row read "Unavailable" for both. A lock says its bolt, Unlocked / Locked (SwitchFace: a padlock,
+ *  never On / Off). */
+export function linkedStateWords(l: LinkedState, entityId?: string): string {
   if (l.contact === "lost") return "Unavailable";
   if (l.contact === "no-value" || !l.known) return "Unknown";
+  if (entityId && domainOf(entityId) === "lock") return l.isOn ? "Unlocked" : "Locked";
   return l.isOn ? "On" : "Off";
 }
 
