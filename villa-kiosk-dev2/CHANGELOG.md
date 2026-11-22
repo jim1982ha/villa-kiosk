@@ -1,3 +1,25 @@
+## 2.496.879
+
+- **One colour code, the same everywhere.** Seven rules now decide every colour: a colour says what is true now, never
+  what a tap will do; red means "in use" and nothing else; a control is quiet at rest; every part of a device says the
+  same thing; what is urgent pulses wherever it shows; the brand green never reports a state; each theme uses its own
+  shade of each colour. What you will see change:
+  - **Switches and padlocks in lists:** a switch that is on is now red (it was green), off stays quiet. A padlock is
+    quiet when the door is locked and red when it is unlocked. (2.496.878 wrongly said a critical door's padlock is
+    amber: it is red like every unlocked door; its problem is the amber "!" on its badge.)
+  - **Buttons in a device's window** ("Unlock door…", "Lock door", "Turn on", "Turn off", "Open", "Close") are plain
+    now; the pill above them says the state in colour. Unlocking still asks first.
+  - **Cockpit:** "on schedule", "pass" and other all-well strips use the status green; a ticket in progress and a
+    watch are blue (in between).
+  - **Errors** (an action that failed, an error line, extreme weather or UV, unusual energy use) are amber like every
+    problem; the connection lost is grey. Delete and remove buttons are plain and still ask first.
+  - **The legend** says exactly this, including that a critical door left unlocked is red as a door and amber in its
+    "!".
+  - **Room numbers on the map** pulse for an alarm or a critical device gone silent, as their badges do.
+  - **A critical device that lost contact** is amber in its history bar too, and its 3D object pulses amber; a jammed
+    or silent critical lock breathes amber in 3D.
+  - **Dark and night themes:** the 3D villa, room glows, camera beams and room numbers use each theme's own shades.
+
 ## 2.496.878
 
 - **A lock shows a padlock, not an on/off switch.** In every list of devices (a room, a floor, Locks, the search), a
