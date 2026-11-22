@@ -1,10 +1,10 @@
 // src/components/panels/SwitchFace.tsx
 // ⚠️ A LOCK IS A PADLOCK, NEVER A SWITCH (owner, 2026-11-22: "Does it make sense to see the toggle appear off when the
 // door is locked? This feel counter intuitive"). A lock's power is still "unlocked = on" (entityState.switchPosition),
-// so a heading's power button can only ever lock a room; what a person SEES is its bolt: a closed padlock, quiet as an
-// off switch, while locked; an open one in red, in use as a switch that is on, while unlocked (a critical door's too: its
-// alarm is its badge's mark). Colour code rules 1 and 3 (owner, 2026-11-22): a control says its state now, quiet at
-// rest. A tap does what it shows: "Lock", or "Unlock…" asked first (devicePower.switchAsk). Every place that draws a device's
+// so a heading's power button can only ever lock a room; what a person SEES is its bolt: a closed padlock in green,
+// outlined on the quiet track, while locked; an open one filled red, in use as a switch that is on, while unlocked (a
+// critical door's too: its alarm is its badge's mark). Colour code rules 1 and 3 (owner, 2026-11-22, option A): a
+// control says its state now, in its state's colour, outlined at rest and filled in use. A tap does what it shows: "Lock", or "Unlock…" asked first (devicePower.switchAsk). Every place that draws a device's
 // switch draws it through here: a device row (EntityRowToggle), a window's linked device (BasePanel) and the camera's
 // rail (CameraPanel, its icon), its words from utils/switchWords, so a lock reads the same wherever it is.
 
