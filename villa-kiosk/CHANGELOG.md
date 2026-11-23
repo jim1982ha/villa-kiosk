@@ -1,3 +1,10 @@
+## 2.496.888
+
+- **Usual is red, in use is green.** The two colours are swapped everywhere at once: the status pills, the history
+  bars, the switches and padlocks, the rooms and devices on the 3D map, and the colour key. A light off or a door
+  locked is now red; a light on or a door unlocked is green. Green for "all well" does not change: the online dot, a
+  check that passed, the "all well" strip and a recovery stay green.
+
 ## 2.496.887
 
 - **A follow-up on an alert starts with ⚙️ alone.** A reminder, an escalation or a "still open" line used to start

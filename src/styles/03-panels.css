@@ -585,7 +585,7 @@ button[aria-busy="true"] { animation: command-waiting 0.9s ease-in-out infinite;
 .weather-advice-card { background: var(--bg-input); border-radius: 18px; padding: 14px 16px; display: flex; flex-direction: column; gap: 6px; }
 .weather-advice-title { display: flex; align-items: center; gap: 8px; font-size: var(--text-base); font-weight: 600; }
 .weather-advice-mark { width: 26px; height: 26px; flex: 0 0 auto; border-radius: 13px; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: var(--text-sm); }
-.tone-good .weather-advice-mark { background: color-mix(in srgb, var(--status-usual) 22%, transparent); color: var(--status-usual); }
+.tone-good .weather-advice-mark { background: color-mix(in srgb, var(--status-good) 22%, transparent); color: var(--status-good); }
 .tone-caution .weather-advice-mark { background: color-mix(in srgb, var(--status-warning) 22%, transparent); color: var(--status-warning); }
 .tone-bad .weather-advice-mark { background: color-mix(in srgb, var(--status-warning) 22%, transparent); color: var(--status-warning); }
 .tone-neutral .weather-advice-mark { background: var(--bg-card); color: var(--text-secondary); }
