@@ -1,3 +1,9 @@
+## 2.496.887
+
+- **A follow-up on an alert starts with ⚙️ alone.** A reminder, an escalation or a "still open" line used to start
+  with ⚠️ ⚙️. It now starts with ⚙️ only, and ⚠️ is kept for a new alert. VESTA UI reads both marks the same way as
+  before. A message from before this update that still starts with ⚠️ ⚙️ may show as new until its next step.
+
 ## 2.496.886
 
 - **A device needing attention breathes smoothly inside a group too.** When it sat in a group of devices on the map,
