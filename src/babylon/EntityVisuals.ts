@@ -4826,7 +4826,7 @@ export class EntityVisuals {
     const layer = this.labelLayer;
     if (!layer) return;
     const live = new Set<string>();
-    for (const chip of this.urgentChips) chip.alpha = 1;
+    const wasUrgent = new Set(this.urgentChips);
     this.urgentChips.clear();
     if (groups.length > 0) {
       // Floored like the room chip's, and for the same reason: a group badge
@@ -4979,6 +4979,7 @@ export class EntityVisuals {
     for (const [key, c] of this.entityGroups) {
       if (!live.has(key)) c.container.isVisible = false;
     }
+    this.settleBreath(wasUrgent, this.urgentChips);
   }
 
   private ensureEntityGroup(key: string, layer: AdvancedDynamicTexture): EntityGroupControls {
@@ -5262,7 +5263,7 @@ export class EntityVisuals {
     if (!layer) return; // no GUI layer yet — nothing to attach chips to
     const scale = this.effectiveScale();
     const chipRest = categorySurface("others", "off");
-    for (const img of this.urgentCounts) img.alpha = 1;
+    const wasUrgent = new Set(this.urgentCounts);
     this.urgentCounts.clear();
     for (const chip of chips) {
       // ── WHAT THE CHIP SHOWS IS summaryLook.roomChipModel's ───────────────
@@ -5442,6 +5443,7 @@ export class EntityVisuals {
     for (const [key, c] of this.clusters) {
       if (!livingRooms.has(key)) c.container.isVisible = c.tab.isVisible = c.tabZone.isVisible = false;
     }
+    this.settleBreath(wasUrgent, this.urgentCounts);
   }
 
   /** `key` is a roomKey(), not a display name — see this.clusters. The chip's
@@ -5915,6 +5917,23 @@ export class EntityVisuals {
         if (map.type === "climate") this.applyClimateOutline(mesh, look.outline ? STATUS_COLOR3[look.outline] : null);
         break;
     }
+  }
+
+  /** Where the urgent badges are in their breath now (animatePulse's clock): reduced motion, whole. */
+  private breathAlpha(): number {
+    if (this.reducedMotion?.matches ?? false) return 1;
+    return BADGE_PULSE_MIN + (1 - BADGE_PULSE_MIN) * ((Math.sin(this.pulseT) + 1) / 2);
+  }
+
+  /** After a pass rebuilt a set of breathing pictures (a group card's cells, a room chip's counts): those no longer
+   *  urgent are whole again, those still urgent keep their place in the breath. ⚠️ NEVER WHOLE FOR ONE FRAME (owner,
+   *  2026-11-23: "the blinking icon is not really clean" in a group card, smooth on a lone badge): each pass set every
+   *  one whole before sorting them again, so a cell mid-fade flashed full for a frame each time the cards were
+   *  redrawn, about twice a second; a lone badge's breath was never reset. */
+  private settleBreath(was: Set<Image>, now: Set<Image>): void {
+    for (const img of was) if (!now.has(img)) img.alpha = 1;
+    const a = this.breathAlpha();
+    for (const img of now) img.alpha = a;
   }
 
   private animatePulse(dtMs: number): void {
