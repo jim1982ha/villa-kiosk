@@ -1,4 +1,4 @@
-## 0.12.537
+## 0.12.538
 
 - **A follow-up on an alert starts with ⚙️ alone.** A reminder, an escalation, a "still open" or a "back" line used
   to start with ⚠️ ⚙️; it now starts with ⚙️ only, and ⚠️ is kept for a new alert. The same goes for the villa's own
