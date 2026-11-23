@@ -1,3 +1,9 @@
+## 2.496.886
+
+- **A device needing attention breathes smoothly inside a group too.** When it sat in a group of devices on the map,
+  its badge flashed back to full brightness for an instant about twice a second while it faded in and out. It now
+  breathes as smoothly as a badge on its own. The same goes for a room's count when that room is urgent.
+
 ## 2.496.885
 
 - **A camera's siren or linked switch is plain while off.** The button beside the camera's arrows was filled green
