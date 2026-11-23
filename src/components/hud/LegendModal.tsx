@@ -59,13 +59,13 @@ const CHIP_COUNTS: { label: string; health: RoomHealth; note: string }[] = [
 
 /** The six status colours, as every pill, history bar, switch and 3D object paints them (utils/stateColors
  *  STATUS_COLOR, read here so the legend cannot describe another colour). ⚠️ ONE MEANING PER COLOUR (owner,
- *  2026-11-13; swapped 2026-11-15; the colour code's seven rules 2026-11-22): green is "the device is alive, and
- *  reporting the usual state", red "in use" and nothing else, amber "needs attention" (an error too), what is urgent
+ *  2026-11-13; swapped 2026-11-15; the colour code's seven rules 2026-11-22): red is "the device is alive, and
+ *  reporting the usual state", green "in use" (swapped back 2026-11-24), amber "needs attention" (an error too), what is urgent
  *  pulsing. */
 const STATUS_ITEMS: { label: string; swatch: string; note: string }[] = [
   { label: "Usual", swatch: STATUS_COLOR.usual, note: "Alive, in its usual state: off, closed, locked, no motion, no leak, disarmed" },
   { label: "On / active", swatch: STATUS_COLOR.active,
-    note: "In use, nothing wrong: on, open, unlocked (a critical door too, its problem is its amber \"!\"), motion seen, occupied, playing, armed. A switch or padlock is filled red while in use, green at rest" },
+    note: "In use, nothing wrong: on, open, unlocked (a critical door too, its problem is its amber \"!\"), motion seen, occupied, playing, armed. A switch or padlock is filled green while in use, red at rest" },
   // ONE entry for the one meaning (owner, 2026-11-15): moving, and a cover part of the way open (panelRules.PARTIALLY_OPEN)
   { label: "In between", swatch: STATUS_COLOR.transitional,
     note: "Moving (opening, closing, locking, arming), a curtain, blind or shutter partly open, a ticket in progress" },

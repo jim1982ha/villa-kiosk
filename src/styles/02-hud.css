@@ -318,7 +318,7 @@
   box-shadow: 0 0 0 1.5px var(--bg-overlay);
   background: var(--status-off);
 }
-.status-dot.on { background: var(--status-usual); }
+.status-dot.on { background: var(--status-good); }
 .status-dot.warn { background: var(--status-warning); }
 .status-dot.pending { background: var(--status-pending); animation: pulse 1s infinite; }
 /* A phone-menu row's glyph that carries a .status-dot: the dot sits on the
@@ -326,7 +326,7 @@
 .hud-menu-glyph { position: relative; display: inline-grid; place-items: center; flex: 0 0 auto; --status-dot-inset: -3px; }
 .conn-dot { display: inline-flex; align-items: center; }
 .conn-dot .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--status-off); }
-.conn-dot.online .dot { background: var(--status-usual); box-shadow: 0 0 8px var(--status-usual); }
+.conn-dot.online .dot { background: var(--status-good); box-shadow: 0 0 8px var(--status-good); }
 /* Connecting is a TRANSITIONAL state — mid-handshake, on its way to a rest
    state — which is what --status-pending means (2.157.0). Amber here said
    "contact lost", which is the state it is actively trying to leave. */
