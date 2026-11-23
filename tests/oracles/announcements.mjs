@@ -411,7 +411,7 @@ const said = (title, status, extra = {}) => ({ ...a(1), title, status, ...extra 
 const picked = { fullScreen: [{ title: "🔥 Overload", seconds: 300 }, { title: "🔔 Visitor at Gate A", seconds: 45 }], ringsFullScreen: true };
 // owner, 2026-10-28 (2.496.562): "the notification disappears after 10sec, as the user shall not have to press the X"
 ck("every announcement's notice goes by itself after 10s: a problem (raised, still open), cleared, a test, a digest",
-   [said("🔥 Overload", "⚠️ New alert"), said("🔥 Overload", "⚠️ ⚙️ Still open"), said("🔥 Overload", "✅ Cleared on 28/10/2026 14:05."),
+   [said("🔥 Overload", "⚠️ New alert"), said("🔥 Overload", "⚙️ Still open"), said("🔥 Overload", "✅ Cleared on 28/10/2026 14:05."),
     said("Weekly test", "Test message: no action needed."), said("Digest", "")]
      .every((x) => JSON.stringify(noticeFor(x, NONE_FULL)) === JSON.stringify({ fullScreenMs: null, noticeMs: 10_000 })),
    noticeFor(said("Digest", ""), NONE_FULL));
@@ -477,7 +477,7 @@ ck("  ...the tablet's notice decides by this rule (the notice model calls it), w
 ck("a ring's rewrite (its answer, its time out) never takes the screen again: its own notice, in place",
    JSON.stringify(noticeFor(said("🔔 Visitor at Gate A", "🔕 Not opened: nobody answered within 2min."), picked, { rewrite: true }))
      === JSON.stringify({ fullScreenMs: null, noticeMs: 10_000 })
-   && JSON.stringify(noticeFor(said("🔔 Visitor at Gate A", "⚠️ ⚙️ Still open"), picked, { rewrite: true }))
+   && JSON.stringify(noticeFor(said("🔔 Visitor at Gate A", "⚙️ Still open"), picked, { rewrite: true }))
      === JSON.stringify({ fullScreenMs: null, noticeMs: 10_000 }));
 
 console.log("\n  Settings › Messages › \"Full-screen announcements\": what the villa has announced, never named in code:");

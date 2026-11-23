@@ -213,7 +213,7 @@ console.log("\n  opening the Cockpit clears the unread mark (owner, 2026-10-31):
   const notes12 = Array.from({ length: 12 }, (_, i) => ann(i + 1));
   const reports2 = [ann(20, { feed: "vesta", key: "note:r1", report: "weekly" }), ann(21, { feed: "vesta", key: "note:r2", report: "weekly" })];
   const step = parseVestaMessage({ seq: 22, at: "2026-10-31T09:00:00+08:00", key: "incident:95", title: "#95-P2 (existing)",
-    body: "Door", status: ["⚠️ ⚙️ Reminder sent"], stage: "existing" });
+    body: "Door", status: ["⚙️ Reminder sent"], stage: "existing" });
   const keptNow = [...notes12, ...reports2, step];
   const before = unreadOf(keptNow, []), beforeReports = unreadOf(keptNow.filter((a) => !!a.report), []);
   const read = readAtOpening([], keptNow);
@@ -602,7 +602,7 @@ console.log("\n  VESTA's card, one per alert, as on Telegram:");
   const seenStep = readAtOpening([], [card90]);
   const quietAgain = { ...card90, seq: 40, at: "2026-10-28T23:00:00+08:00", title: "#90-P2 (existing)" };
   ck("a quiet rewrite of a card read already stays read; a new step (its bottom line) is unread (spec review, 2026-10-29)",
-     unreadOf([quietAgain], seenStep) === 0 && unreadOf([{ ...quietAgain, status: "⚠️ ⚙️ Reminder sent" }], seenStep) === 1);
+     unreadOf([quietAgain], seenStep) === 0 && unreadOf([{ ...quietAgain, status: "⚙️ Reminder sent" }], seenStep) === 1);
   const openIssue = card("o90", { lines: [{ key: "fault:t1", text: "#90-P2 · Door", icons: null, story: [], closing: null,
     actions: [], alertNumber: 90 }] });
   const withOpen = messagesView({ open: [openIssue], watched: [], announcements: shown, filter: "issues", selected: null });

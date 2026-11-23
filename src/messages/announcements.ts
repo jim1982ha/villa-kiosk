@@ -171,7 +171,7 @@ type Stage = "new" | "existing" | "closed";
 /** The mark the layout writes before a stage's status, READ FROM THE AGREEMENT (agent-contract.json `stageMarks`, the
  *  one list the VESTA Agent writes them from and generates the villa's template with; review Q 3, 2026-10-28: this
  *  was a hand-made copy, so a mark changed on the Agent's side read a cleared alarm as new here). The longest first:
- *  "⚠️ ⚙️" opens with "⚠️". Both ends — watch (cleared, still watched) and closed — are "closed" here: a problem that
+ *  a mark that opens with another is read as itself. Both ends — watch (cleared, still watched) and closed — are "closed" here: a problem that
  *  ended; a stage this build does not know is not read. Every source that fires the announcement writes these marks only with a stage (research 01 of "One inbox"). */
 const AS_STAGE: Record<string, Stage> = { new: "new", existing: "existing", watch: "closed", closed: "closed" };
 const STAGE_MARKS: readonly [string, Stage][] = (Object.entries(AGENT_CONTRACT.stageMarks) as [string, string][])
