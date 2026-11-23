@@ -1,3 +1,12 @@
+## 0.12.539
+
+- **"Not a problem" holds until the problem is over.** It used to stop the villa's Automation repeating an alert for
+  24 hours only, so a door left unlocked on purpose came back the next day. It now holds until the door is locked (or
+  whatever the alert reported is right again): the all-clear still comes, and the next time it happens is a new
+  alert. Needs the villa's "CRITICAL Condition" blueprint of 23/11/2026, already saved.
+- While an accepted problem lasts, VESTA reads the device again every few minutes, so a restart of the villa's system
+  days later does not bring it back as a new alert.
+
 ## 0.12.538
 
 - **A follow-up on an alert starts with ⚙️ alone.** A reminder, an escalation, a "still open" or a "back" line used
