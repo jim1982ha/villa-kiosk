@@ -415,7 +415,7 @@ def test_the_tablets_card_is_in_english_whichever_chats_copy_was_drawn_last(tmp_
     fm_copy = v.thread.shown(1)[FM_CHAT]["text"]
     assert "Rappel" in fm_copy, fm_copy                          # the chat reads French
     rec = kiosk.messages["incident:1"]
-    assert rec["status"][-1].startswith("⚠️ ⚙️ Reminder sent"), rec["status"]
+    assert rec["status"][-1].startswith("⚙️ Reminder sent"), rec["status"]
 
     async def done(a):
         data = next(b for b in kiosk.messages["incident:1"]["buttons"] if b["id"].endswith(":done"))

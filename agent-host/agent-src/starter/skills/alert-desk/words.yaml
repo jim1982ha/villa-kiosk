@@ -30,29 +30,17 @@ no_answer:
   ja: "{after}経っても応答なし"
   ko: "{after} 동안 응답 없음"
 
-no_answer_from:
-  en: "No answer from {role} after {after}"
-  fr: "Pas de réponse de {role} après {after}"
-  id: "Tidak ada jawaban dari {role} setelah {after}"
-  de: "Keine Antwort von {role} nach {after}"
-  es: "Sin respuesta de {role} tras {after}"
-  it: "Nessuna risposta da {role} dopo {after}"
-  nl: "Geen antwoord van {role} na {after}"
-  zh: "{role} {after}后仍无回复"
-  ja: "{role}から{after}経っても応答なし"
-  ko: "{after} 동안 {role} 응답 없음"
-
-no_answer_after_reminder:
-  en: "No answer from {role}, {after} after the reminder"
-  fr: "Pas de réponse de {role}, {after} après le rappel"
-  id: "Tidak ada jawaban dari {role}, {after} setelah pengingat"
-  de: "Keine Antwort von {role}, {after} nach der Erinnerung"
-  es: "Sin respuesta de {role}, {after} después del recordatorio"
-  it: "Nessuna risposta da {role}, {after} dopo il promemoria"
-  nl: "Geen antwoord van {role}, {after} na de herinnering"
-  zh: "提醒后{after}，{role}仍无回复"
-  ja: "リマインダーから{after}経っても{role}から応答なし"
-  ko: "알림 후 {after} 동안 {role} 응답 없음"
+no_answer_after_alert:
+  en: "No answer from {role}, {after} after the alert"
+  fr: "Pas de réponse de {role}, {after} après l'alerte"
+  id: "Tidak ada jawaban dari {role}, {after} setelah peringatan"
+  de: "Keine Antwort von {role}, {after} nach der Meldung"
+  es: "Sin respuesta de {role}, {after} después de la alerta"
+  it: "Nessuna risposta da {role}, {after} dopo l'avviso"
+  nl: "Geen antwoord van {role}, {after} na de melding"
+  zh: "警报后{after}，{role}仍无回复"
+  ja: "通知から{after}経っても{role}から応答なし"
+  ko: "경보 후 {after} 동안 {role} 응답 없음"
 
 not_delivered:
   en: "Not delivered to {asked}: Telegram refused every chat of theirs. Over to {to}."

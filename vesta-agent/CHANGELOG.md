@@ -1,3 +1,12 @@
+## 0.12.537
+
+- **A follow-up on an alert starts with ⚙️ alone.** A reminder, an escalation, a "still open" or a "back" line used
+  to start with ⚠️ ⚙️; it now starts with ⚙️ only, and ⚠️ is kept for a new alert. The same goes for the villa's own
+  messages once its message template is updated.
+- **An escalation counts from the alert.** It said "No answer from FM, 30min after the reminder", a reminder the
+  owner's chat never shows. It now says how long it has been since the alert: "No answer from FM, 47min after the
+  alert".
+
 ## 0.12.536
 
 - **Each fault card in the VESTA UI says what made it.** VESTA now tells the VESTA UI which villa automation raised an

@@ -1053,7 +1053,7 @@ def test_the_desks_durations_are_worded_as_both_apps_word_one(store, monkeypatch
     reminder = desk.tick(store, T0 + timedelta(minutes=91), params)
     assert reminder["reasked"] == [iid] and reminder["send"][0]["status"] == "No answer after 1h 30min"
     escalated = desk.tick(store, T0 + timedelta(minutes=151), params)
-    assert escalated["escalated"] == [iid] and escalated["send"][0]["status"] == "No answer from FM, 1h after the reminder"
+    assert escalated["escalated"] == [iid] and escalated["send"][0]["status"] == "No answer from FM, 2h 31min after the alert"
     monkeypatch.setitem(desk.RULES["siren"], "window_min", 90)
     monkeypatch.setattr(desk, "siren_minutes", lambda: 120)
     from test_siren_request import event as visit

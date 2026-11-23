@@ -58,7 +58,7 @@ def test_alert_201_each_chat_reads_its_own_lines_and_its_own_bottom_line(tmp_pat
     assert GROUP in v.thread.shown(1), "escalated to the owner"
     # the owner's group: the first alert (when it began), then its own escalation; the FM's: never the escalation
     group = status(v, GROUP)
-    assert kinds(group[:-1]) == ["Alert"] and group[-1].startswith("⚠️ ⚙️ Escalation sent ") and \
+    assert kinds(group[:-1]) == ["Alert"] and group[-1].startswith("⚙️ Escalation sent ") and \
         group[-1].endswith("(to: Owner)"), group
     assert kinds(status(v, FM)[:-1]) == ["Alert"] and "Reminder sent" in status(v, FM)[-1], status(v, FM)
     rule(v, "resolved", 1, 501, t0 + timedelta(minutes=70))          # cleared, watched: every copy says it
@@ -71,7 +71,7 @@ def test_alert_201_each_chat_reads_its_own_lines_and_its_own_bottom_line(tmp_pat
     assert [i["id"] for i in Store(v.s.store_path).incidents(open_only=False)] == [1]
     assert not [e for e in v.tg.edits[edits:] if e[0] == GROUP] and not [x for x in v.tg.sent[sent:] if x[0] == GROUP]
     assert v.thread.shown(1)[GROUP]["text"] == group_text
-    assert status(v, FM)[-1].startswith("⚠️ ⚙️ Back at "), status(v, FM)
+    assert status(v, FM)[-1].startswith("⚙️ Back at "), status(v, FM)
     # the tablet's card is everyone's: every step, the owner's escalation and the FM's return
     card = k.messages["incident:1"]["status"]
     assert any(ln.startswith("- Escalation sent ") for ln in card) and any("Back at " in ln for ln in card), card

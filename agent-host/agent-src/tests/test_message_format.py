@@ -32,9 +32,9 @@ def test_its_parts_are_read_back_from_the_text_as_sent():
     apart = text.replace("run.\n- P2", "run.\n\n- P2")
     assert [k for k, _, _ in F.parts(apart)] == [k for k, _ in got]
     # an alert: its history and where it stands under "Status:" are ONE note — an older text written apart too
-    alert = "#1-P2 (existing)\nTo: Owner\n🚪 Gate relay released\nWhat to do: check it.\nStatus:\n- Alert sent …\n\n⚠️ ⚙️ Still open"
+    alert = "#1-P2 (existing)\nTo: Owner\n🚪 Gate relay released\nWhat to do: check it.\nStatus:\n- Alert sent …\n\n⚙️ Still open"
     assert [(k, alert[a:b]) for k, a, b in F.parts(alert)][3:] == [("label", "Status:"),
-                                                                   ("note", "- Alert sent …\n\n⚠️ ⚙️ Still open")]
+                                                                   ("note", "- Alert sent …\n\n⚙️ Still open")]
     # any other text: no parts, no style
     assert F.parts("For: JM\n-------\nWeekly report") == [] and F.parts("Done.") == [] and F.telegram_entities("x\ny") == []
 

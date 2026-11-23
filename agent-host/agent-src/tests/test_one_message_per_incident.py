@@ -90,7 +90,7 @@ def test_each_chat_keeps_only_the_latest_message_and_it_recalls_the_alert(agent)
     assert agent.tg.sent[-1][2], "the reminder carries the buttons"
     tick(agent, 50)                            # the escalation replaces Home Assistant's alert in the owner's chat
     (grp,) = shown(agent, GROUP)
-    assert re.fullmatch(r"Escalation sent (?:\d\d/\d\d(?:/\d{4})? )?\d\d:\d\d, No answer from FM, 30min after the reminder \(to: Owner\)",
+    assert re.fullmatch(r"Escalation sent (?:\d\d/\d\d(?:/\d{4})? )?\d\d:\d\d, No answer from FM, 50min after the alert \(to: Owner\)",
                         status(grp)) and SUMMARY in grp
     # an escalation does not ring (owner, 2026-11-08): the owner's copy edited in place, never sent again
     assert (GROUP, 500) not in agent.tg.deleted and (GROUP, 500) in {(c, m) for c, m, _t in agent.tg.edits}
@@ -217,7 +217,7 @@ def test_every_notice_has_one_heading_with_the_incidents_history(agent):
     # in the owner's chat: "To:" names whom this copy went to (owner, 2026-11-12); its "Status:" the first alert, the
     # FM's, and its own steps (owner, 2026-11-20, live #201: each chat its own lines)
     assert re.fullmatch(r"#7 \(existing\)\nTo: Owner\nStill stopped\nStatus:\n"
-                        r"- Alert sent (?:\d\d/\d\d(?:/\d{4})? )?\d\d:\d\d \(to: FM\)\n⚠️ ⚙️ Escalation sent (?:\d\d/\d\d(?:/\d{4})? )?\d\d:\d\d \(to: Owner\)", later), later
+                        r"- Alert sent (?:\d\d/\d\d(?:/\d{4})? )?\d\d:\d\d \(to: FM\)\n⚙️ Escalation sent (?:\d\d/\d\d(?:/\d{4})? )?\d\d:\d\d \(to: Owner\)", later), later
     fm_lines = head_text(agent.notices.heading(FM_CHAT, 7)).split("\n")[2:]
     assert [ln.split(" ")[1] for ln in fm_lines] == ["Alert"] and fm_lines[0].endswith("(to: FM)"), fm_lines
 

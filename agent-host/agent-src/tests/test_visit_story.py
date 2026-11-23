@@ -814,7 +814,7 @@ def test_the_same_room_again_widens_its_line_like_the_cameras(tmp_path, kiosk, m
 def test_the_escalations_words_stay_on_its_own_line_and_say_what_the_settings_waited(tmp_path, kiosk, media):
     # owner's screenshot, 2026-11-15, live #177: a step seen after the escalation, and the tablet's card listed
     # "No answer from FM after 45min" LAST, under it, beside "Escalation sent 12:27" — one event twice, out of its
-    # time; and "after 45min" when 89 minutes had gone: it says what the settings waited, after the reminder
+    # time; and "after 45min" when 89 minutes had gone: it says the wait since the alert, as it went
     v = villa(tmp_path, kiosk)
     vi = evening(v, media)
     play(v, lambda v: tick(v, 20), lambda v: tick(v, 70))
@@ -826,7 +826,7 @@ def test_the_escalations_words_stay_on_its_own_line_and_say_what_the_settings_wa
     escalation = [i for i, x in enumerate(status) if x.startswith("- Escalation sent")]
     seen = [i for i, x in enumerate(status) if x.startswith("- Seen at Waterwall Buddha")]
     assert len(escalation) == 1 and seen and escalation[0] < seen[-1], status
-    assert re.fullmatch(rf"- Escalation sent {TICKET_RE}: No answer from FM, 30min after the reminder \(to: Owner\)",
+    assert re.fullmatch(rf"- Escalation sent {TICKET_RE}: No answer from FM, 1h 10min after the alert \(to: Owner\)",
                         status[escalation[0]]), status
     assert not [x for x in status if x.startswith("- No answer")], status
 

@@ -868,10 +868,10 @@
       }
     }
   },
-  "_stageMarks": "What starts an alert's bottom line, by its stage (review Q 3, 2026-10-28): the VESTA Agent writes it (vesta_shared/message_format.py STAGE_ICONS, and the villa's message template it generates) and the Kiosk reads an announcement's stage back from it (src/messages/announcements.ts stageOf): new, existing, and the two ends, watch (cleared, still watched) and closed. Read from here by both: a mark changed on one side alone made a cleared alarm read as new on the tablet.",
+  "_stageMarks": "What starts an alert's bottom line, by its stage (review Q 3, 2026-10-28): the VESTA Agent writes it (vesta_shared/message_format.py STAGE_ICONS, and the villa's message template it generates) and the Kiosk reads an announcement's stage back from it (src/messages/announcements.ts stageOf): new, existing, and the two ends, watch (cleared, still watched) and closed. Read from here by both: a mark changed on one side alone made a cleared alarm read as new on the tablet. ⚠️ A FOLLOW-UP IS ⚙️ ALONE (owner, 2026-11-23: \"change the ⚠️ ⚙️ to simply ⚙️\"): only a new alert wears ⚠️.",
   "stageMarks": {
     "new": "⚠️",
-    "existing": "⚠️ ⚙️",
+    "existing": "⚙️",
     "watch": "✅",
     "closed": "✅"
   },

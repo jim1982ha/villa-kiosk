@@ -2046,12 +2046,11 @@ def chase(store: Store, inc: dict, now: datetime, out: dict, params: VillaParams
             now - (moment(inc.get("reasked_at")) or asked) >= timedelta(minutes=max(escal - reask, 0)) and \
             store.move(inc["id"], (Incident.REASKED,), Incident.ESCALATED, escalated_at=now.isoformat(),
                        assignee=CHASE["escalates_to"]):
-        # ⚠️ WHAT THE SETTINGS WAITED, SAID AS THEY WAIT IT (owner's screenshot, 2026-11-15, live #177): "No answer from
-        # FM after 45min" when the reminder had waited for the visit to go quiet and 89 minutes had gone — the
-        # escalation comes escalate_minutes - reask_minutes after the reminder, and says so
-        gap = max(escal - reask, 0)
-        said = say("no_answer_after_reminder", role=role_in(CHASE["asks"]), after=lasting_in(gap * 60)) if gap else \
-            say("no_answer_from", role=role_in(CHASE["asks"]), after=lasting_in(escal * 60))
+        # ⚠️ THE WAIT SINCE THE ALERT, AS IT WENT (owner's screenshot, 2026-11-15, live #177: "after 45min" when 89
+        # minutes had gone; owner, 2026-11-23, #225: "30min after the reminder" in the owner's chat, which never lists
+        # the facility manager's reminder): the minutes from the alert the role was asked with to now
+        said = say("no_answer_after_alert", role=role_in(CHASE["asks"]),
+                   after=lasting_in((now - asked).total_seconds() // 60 * 60))
         escalate(inc["id"], inc["severity"], out, about(inc, said))
         out["escalated"].append(inc["id"])
 

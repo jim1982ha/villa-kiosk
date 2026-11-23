@@ -200,7 +200,7 @@ def test_a_run_that_came_back_starts_at_a_back_at_line_and_a_reminder_carries_it
     back = card(agent, GROUP)
     assert back.startswith("#1-P2 (existing)\nTo: FM\n")
     assert re.fullmatch(rf"Back at {T}, 2nd time in 7 days \(to: FM\)",
-                        status(back).removeprefix("⚠️ ⚙️ ")), status(back)
+                        status(back).removeprefix("⚙️ ")), status(back)
     before = card(agent, GROUP)
     tick(agent, 20)                                     # the reminder: to the FM alone
     # owner, 2026-11-20, live #201 (reversing 2026-11-07 #146-P2 "every copy the same"): a step to the FM alone
@@ -208,7 +208,7 @@ def test_a_run_that_came_back_starts_at_a_back_at_line_and_a_reminder_carries_it
     assert card(agent, GROUP) == before and card(agent, FM_CHAT) != before
     group = card(agent, FM_CHAT)                        # the FM's copy tells it
     # point 1: the bottom line says its own step — never "Reminder: no answer after 15min" alone under 18:03
-    assert re.fullmatch(rf"⚠️ ⚙️ Reminder sent {T}, No answer after 15min \(to: FM\)", status_lines(group)[-1]), group
+    assert re.fullmatch(rf"⚙️ Reminder sent {T}, No answer after 15min \(to: FM\)", status_lines(group)[-1]), group
     lines = status_lines(group)
     # ... and is told once: the history above it stops before it (drawn as it stood before this step)
     assert sum("Reminder sent" in ln for ln in lines) == 1, lines
@@ -218,14 +218,14 @@ def test_a_run_that_came_back_starts_at_a_back_at_line_and_a_reminder_carries_it
     assert re.fullmatch(rf"- Back at {T}, 2nd time in 7 days \(to: FM\)", lines[2]), lines
     # the close in its own words, its moment and its watch (architecture review 22, card 6: "- Closing note sent …"
     # said a message went, never what closed it)
-    assert re.fullmatch(rf"- Cleared (?:on|at) {T}\. Watch .+", lines[1]) and lines[3].startswith("⚠️ ⚙️ Reminder sent"), lines
+    assert re.fullmatch(rf"- Cleared (?:on|at) {T}\. Watch .+", lines[1]) and lines[3].startswith("⚙️ Reminder sent"), lines
     assert not any("ame back" in ln or "ame-back" in ln or ln.startswith("—") for ln in lines), lines
     assert "Facility Manager" not in group and "facility manager" not in group
     fm_before = card(agent, FM_CHAT)
     tick(agent, 50)                                     # the escalation: to the owner — in the group, not the FM's chat
     esc = card(agent, GROUP)
     lines = status_lines(esc)
-    assert re.fullmatch(rf"⚠️ ⚙️ Escalation sent {T}, No answer from FM, 30min after the reminder \(to: Owner\)", lines[-1]), lines
+    assert re.fullmatch(rf"⚙️ Escalation sent {T}, No answer from FM, 50min after the alert \(to: Owner\)", lines[-1]), lines
     # the group lists the steps posted there (the villa's own alert, its all-clear, its return) and its own, never the
     # FM's reminder (owner, 2026-11-20, live #201); the escalation leaves the FM's copy as it was
     assert re.fullmatch(rf"- Alert sent {T} \(to: FM\)", lines[0]) and lines[2].startswith("- Back at "), lines

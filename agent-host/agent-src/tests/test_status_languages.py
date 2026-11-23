@@ -80,11 +80,11 @@ def test_each_fm_chat_reads_its_status_in_its_own_language_the_alert_text_unchan
     tick(agent, 20)                                    # the reminder, to both facility manager chats
     de, fr = card(agent, FM_DE), card(agent, FM_FR)
     assert re.fullmatch(rf"- Alarm gesendet (?:am|um) {T} \(an: FM\)", status(de, "Status")[0]), de
-    assert re.fullmatch(rf"⚠️ ⚙️ Erinnerung gesendet (?:am|um) {T}, Keine Antwort nach 15Min\. \(an: FM\)",
+    assert re.fullmatch(rf"⚙️ Erinnerung gesendet (?:am|um) {T}, Keine Antwort nach 15Min\. \(an: FM\)",
                         status(de, "Status")[-1]), de
     assert re.fullmatch(rf"- Alerte envoyée (?:le|à) {T} \(à: FM\)", status(fr, "Statut")[0]), fr
     # the desk's own words ("No answer after 15min") in the chat's language, from the skill's words.yaml
-    assert re.fullmatch(rf"⚠️ ⚙️ Rappel envoyé (?:le|à) {T}, Pas de réponse après 15min \(à: FM\)",
+    assert re.fullmatch(rf"⚙️ Rappel envoyé (?:le|à) {T}, Pas de réponse après 15min \(à: FM\)",
                         status(fr, "Statut")[-1]), fr
     for text in (de, fr):
         # the card's first line, "To:" and the villa's own words stay as they are
@@ -120,7 +120,7 @@ def test_a_copy_recorded_before_is_drawn_again_whole_at_the_next_step(agent):
     fr = card(agent, FM_FR)
     assert fr.split("\n")[1] == "To: FM", fr                # whom this copy went to (owner, 2026-11-12)
     lines = status(fr, "Statut")
-    assert [ln.split(" ")[1] for ln in lines] == ["Alerte", "⚙️"] and "Rappel envoyé" in lines[-1], lines
+    assert [ln.split(" ")[0] for ln in lines] == ["-", "⚙️"] and "Rappel envoyé" in lines[-1], lines
     assert "Escalade" not in fr, fr
 
 

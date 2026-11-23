@@ -241,7 +241,7 @@ def test_an_answer_settles_the_alert_in_every_chat_and_its_reminder(agent):
     assert {c for c, _, _ in agent.tg.edits} == {OWNER, GROUP, FM}
     shown = {c: r["text"] for c, r in agent.thread.shown(iid).items()}
     assert set(shown) == {OWNER, GROUP, FM} and len(set(shown.values())) == 1, shown
-    assert re.search(r"\n(?:(?:✅|⚠️|⚠️ ⚙️) )?Done (?:on|at) (?:\d\d/\d\d(?:/\d{4})? )?\d\d:\d\d \(FM\)\.", shown[GROUP]), shown[GROUP]
+    assert re.search(r"\n(?:(?:✅|⚠️|⚙️) )?Done (?:on|at) (?:\d\d/\d\d(?:/\d{4})? )?\d\d:\d\d \(FM\)\.", shown[GROUP]), shown[GROUP]
     # settled once: no chat still shows the incident's buttons unanswered
     assert not [c for c, r in agent.thread.shown(iid).items() if r["buttons"] and not r["settled"]]
 
@@ -253,7 +253,7 @@ def test_an_incident_home_assistant_clears_settles_its_alerts(agent):
                                 "alert-desk"))
     run(agent.outcome.carry_out({"settle": [{"incident_id": iid, "note": "Cleared in the villa's system, {time}. No reply needed."}]}, "alert-desk"))
     assert sorted(c for c, _, _ in agent.tg.edits) == sorted([FM, GROUP])     # every chat of the role: each settled
-    assert all(re.search(r"(?:\n-------\n|\n\n|Status:\n|\(to: [A-Za-z &]+\)\n)(?:(?:✅|⚠️|⚠️ ⚙️) )?Cleared in the villa's system, (?:\d\d/\d\d(?:/\d{4})? )?\d\d:\d\d\. No reply needed\.$", text)
+    assert all(re.search(r"(?:\n-------\n|\n\n|Status:\n|\(to: [A-Za-z &]+\)\n)(?:(?:✅|⚠️|⚙️) )?Cleared in the villa's system, (?:\d\d/\d\d(?:/\d{4})? )?\d\d:\d\d\. No reply needed\.$", text)
                for _, _, text in agent.tg.edits)
 
 

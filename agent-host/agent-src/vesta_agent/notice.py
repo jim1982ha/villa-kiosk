@@ -9,7 +9,7 @@ and the one heading every such message carries (owner, 2026-10-11, the order and
     - Alert sent 09/10/2026 13:12 to Owner & FM                   ← a quote, in italics
     - Closing note sent 09/10/2026 13:20 to Owner & FM
     - Back at 09/10/2026 15:02 (2nd time in 7 days), alert sent to Owner & FM   ← a new run of the same alert
-    ⚠️ ⚙️ Reminder sent 09/10/2026 15:17 to FM — No answer after 15 min    ← this step: what, when, to whom, why
+    ⚙️ Reminder sent 09/10/2026 15:17 to FM — No answer after 15 min    ← this step: what, when, to whom, why
 
 A message about no incident is headed the same way, by its title (owner, 2026-10-12: one layout):
 

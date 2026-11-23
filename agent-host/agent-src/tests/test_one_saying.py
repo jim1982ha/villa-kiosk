@@ -75,7 +75,7 @@ def test_the_heading_names_the_incident_first_and_what_was_sent_to_whom(tmp_path
     # then its own step: what, when, to whom (owner, 2026-10-16)
     status_block = text.split("\nStatus:\n")[1]
     assert re.fullmatch(r"- Alert sent (?:\d\d/\d\d(?:/\d{4})? )?\d\d:\d\d \(to: FM\)\n"
-                        r"⚠️ ⚙️ Escalation sent (?:\d\d/\d\d(?:/\d{4})? )?\d\d:\d\d, x \(to: Owner\)", status_block), text
+                        r"⚙️ Escalation sent (?:\d\d/\d\d(?:/\d{4})? )?\d\d:\d\d, x \(to: Owner\)", status_block), text
     # the FM's chat holds its own, a dash per line, the owner's escalation not among them
     history = [ln for ln in head_text(v.notices.heading(FM, 21)).split("\n")[2:] if ln.startswith("- ")]
     assert re.fullmatch(r"- Alert sent (?:\d\d/\d\d(?:/\d{4})? )?\d\d:\d\d \(to: FM\)", history[0])
@@ -120,12 +120,13 @@ def test_one_result_records_one_history_line_per_kind_of_notice(tmp_path):
 
 def test_the_bottom_line_shows_the_stage_by_its_icon():
     # owner, 2026-10-11: "⚠️ for New alert, ⚠️ ⚙️ for Follow-up, 🆘 for Need help pressed, ☑️ for Closed if the device logs
+    # owner, 2026-11-23: "change the ⚠️ ⚙️ to simply ⚙️": a follow-up wears ⚙️ alone
     # no answers, ✅ for Closed when there is no issue"
     from vesta_agent import layout
     def bottom(head, status="", mark=None):
         return layout.render(layout.parts(head=head, body="Door unlocked", status=status, mark=mark)).rsplit("\n", 1)[1]
     assert bottom("#3-P2 (new)\nTo: JM") == "⚠️ New alert"
-    assert bottom("#3-P2 (existing)\nTo: JM", "Reminder: no answer after 15min") == "⚠️ ⚙️ Reminder: no answer after 15min"
+    assert bottom("#3-P2 (existing)\nTo: JM", "Reminder: no answer after 15min") == "⚙️ Reminder: no answer after 15min"
     assert bottom("#3-P2 (existing)\nTo: JM", "Need help pressed by Fabien: over to you.", "help") == \
         "🆘 Need help pressed by Fabien: over to you."
     assert bottom("#3-P2 (closed)\nTo: JM", "Done pressed by Fabien. Note: VESTA cannot check this one.",
@@ -134,7 +135,7 @@ def test_the_bottom_line_shows_the_stage_by_its_icon():
         "✅ Cleared on 11/10/2026 10:27."
     # the stage's own words, with no moment to give: never a "{time}" shown (owner, 2026-10-19: one closing wording)
     assert bottom("#3-P2 (closed)\nTo: JM") == "✅ Cleared."
-    assert bottom("#3-P2 (existing)\nTo: JM", "x", "unchecked") == "⚠️ ⚙️ x"         # ☑️ only on a closure
+    assert bottom("#3-P2 (existing)\nTo: JM", "x", "unchecked") == "⚙️ x"         # ☑️ only on a closure
     # a copy sent before 0.12.152 ("For: JM, P2 Incident: Follow Up #3") is never drawn half old, half new: it gets
     # the new heading whole when it changes (Notices.retitle — test_an_old_copy_gets_the_new_heading_whole)
     # a "For: JM" heading recorded before 0.12.175 is laid out in the one layout, under UNTITLED (owner, 2026-10-12)
@@ -180,7 +181,7 @@ def test_telegram_shows_the_title_in_bold_the_alert_quoted_and_the_status_quoted
     tg.api = api
     alert = "🚪 Gate <relay> released\nGate_Relay is off\nWhat to do: check it."
     history = "- Alert sent 11/10/2026 05:23 to Owner & Facility Manager\n- Escalation sent 11/10/2026 05:23 to Owner"
-    bottom = "⚠️ ⚙️ Still not right when the alert stopped watching it on 11/10/2026 05:23."
+    bottom = "⚙️ Still not right when the alert stopped watching it on 11/10/2026 05:23."
     status = f"{history}\n{bottom}"
     text = f"#1-P2 (existing)\nTo: Owner\n{alert}\nStatus:\n{status}"
     asyncio.run(tg.send(1, text))
@@ -225,7 +226,7 @@ def test_one_incident_one_picture_in_every_chat_of_the_same_people(tmp_path):
     text = shown[FM]
     # whom this copy went to (owner, 2026-11-12: the reminder, to the FM), never a name (owner, 2026-10-13)
     assert text.startswith("#5 (existing)\nTo: FM\n") and \
-        re.search(r"\n⚠️ ⚙️ Reminder sent (?:\d\d/\d\d(?:/\d{4})? )?\d\d:\d\d, No answer after 15min \(to: FM\)$", text), text
+        re.search(r"\n⚙️ Reminder sent (?:\d\d/\d\d(?:/\d{4})? )?\d\d:\d\d, No answer after 15min \(to: FM\)$", text), text
     # the group: neither sent the reminder nor edited, its buttons kept (owner, 2026-11-20, live #201)
     first_group = next(t for c, t, _ in v.tg.sent if c == GROUP)
     assert not [c for c, _, _ in v.tg.sent[3:] if c == GROUP] and first_group.startswith("#5 (new)\nTo: Owner & FM\n")
@@ -242,8 +243,8 @@ def test_a_close_reaches_a_copy_without_buttons_too(tmp_path):
                                               R.message("fm", ALERT, incident=6, buttons=True, stage="new")]}, "x"))
     assert not v.thread.shown(6)[OWNER]["buttons"]
     asyncio.run(v.thread.close(6, "Done on {time} (Fabien)."))
-    # its status replaced: the copy is "existing" (its icon ⚠️ ⚙️) and lists the alert sent (owner, 2026-10-15)
-    assert all(r["text"].rsplit("\n", 1)[1].startswith("⚠️ ⚙️ Done at ")
+    # its status replaced: the copy is "existing" (its icon ⚙️) and lists the alert sent (owner, 2026-10-15)
+    assert all(r["text"].rsplit("\n", 1)[1].startswith("⚙️ Done at ")
                and "\n- Alert sent " in r["text"] for r in v.thread.shown(6).values())
 
 
