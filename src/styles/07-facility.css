@@ -39,7 +39,7 @@
 .strip-danger { --strip: var(--status-warning); }
 .strip-warn { --strip: var(--status-warning); }
 .strip-moving { --strip: var(--status-pending); }   /* in between: a ticket in progress, a watch (rule 2) */
-.strip-ok { --strip: var(--status-good); }   /* all well: the status green, never the brand's (owner, 2026-11-22, rule 6) */
+.strip-ok { --strip: var(--status-usual); }   /* all well: the status green, never the brand's (owner, 2026-11-22, rule 6) */
 .strip-neutral { --strip: var(--status-lost); }
 .fm-record-strip, .fm-record-part-head {
   --strip-line: 22px;
@@ -215,7 +215,7 @@
 }
 .fm-stat .n { font-size: var(--text-2xl); font-weight: 700; line-height: 1.1; }
 .fm-stat .l { font-size: var(--text-xs); color: var(--text-dim); overflow-wrap: break-word; }
-.fm-stat.good .n { color: var(--status-good); }
+.fm-stat.good .n { color: var(--status-usual); }
 .fm-stat.warn .n { color: var(--status-warning); }
 .fm-stat.bad  .n { color: var(--status-warning); }
 
@@ -319,7 +319,7 @@
 .guest-report { width: min(480px, 100%); }
 .guest-report-done {
   display: flex; flex-direction: column; align-items: center; gap: 10px;
-  padding: 28px 24px; text-align: center; color: var(--status-good);
+  padding: 28px 24px; text-align: center; color: var(--status-usual);
 }
 .guest-report-done h3 { margin: 0; font-size: var(--text-lg); color: var(--text-primary); }
 .guest-report-done p { max-width: 300px; }
@@ -398,7 +398,7 @@
 }
 
 .fm-check-icon { flex: 0 0 auto; display: flex; }
-.fm-check-icon.pass { color: var(--status-good); }
+.fm-check-icon.pass { color: var(--status-usual); }
 .fm-check-icon.warn { color: var(--status-warning); }
 .fm-check-icon.fail { color: var(--status-warning); }
 
@@ -409,7 +409,7 @@
   display: flex; align-items: center; gap: 12px;
   padding: var(--card-pad); border-radius: var(--card-radius); background: var(--bg-card); border: var(--card-border);
 }
-.fm-headline-icon { flex: 0 0 auto; display: flex; color: var(--status-good); }
+.fm-headline-icon { flex: 0 0 auto; display: flex; color: var(--status-usual); }
 /* The verdict, its checks always under it (owner, 2026-11-05), Save snapshot beside it. */
 .fm-headline-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .fm-headline strong { font-size: var(--text-lg); }
@@ -462,7 +462,7 @@
   padding: var(--card-pad); border-radius: var(--card-radius); background: var(--bg-card); border: var(--card-border);
 }
 .fm-cap-bar { height: 8px; border-radius: 999px; background: var(--bg-input); overflow: hidden; }
-.fm-cap-bar > span { display: block; height: 100%; background: var(--status-good); }
+.fm-cap-bar > span { display: block; height: 100%; background: var(--status-usual); }
 :is(.tone-warn, .tone-danger) .fm-cap-bar > span { background: var(--tone); }
 .fm-cap-note { margin: 0; }
 

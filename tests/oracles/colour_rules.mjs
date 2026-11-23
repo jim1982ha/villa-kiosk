@@ -260,11 +260,11 @@ ck("no .ts/.tsx outside the table names a status or category token as a colour: 
      && /look="action"/.test(read("components/panels/MediaPanel.tsx")) && /big-toggle action/.test(read("components/panels/LockPanel.tsx")));
   ck("rule 2: red is only \"in use\": no app red (--status-danger), no second green (--status-on), no red button",
      !/--status-danger|--status-on\b/.test(css.replace(/\/\*[\s\S]*?\*\//g, "")) && !/\.btn\.danger|\.danger:hover/.test(css));
-  ck("rule 3 (option B): a switch and a padlock filled in their state's colour, red at rest, green in use",
+  ck("rule 3 (option B): a switch and a padlock filled in their state's colour, green at rest, red in use",
      /\.summary-entity-toggle \{[^}]*background: var\(--status-usual\)/.test(css) && /\.summary-entity-toggle\.on \{ background: var\(--status-active\); \}/.test(css)
      && /\.summary-entity-lock \{[^}]*background: var\(--status-usual\); color: #fff/.test(css) && /\.summary-entity-lock\.open \{ background: var\(--status-active\);/.test(css));
-  ck("rule 6: a strip that reports a state takes the status colours: all well the one green (--status-good, the active green), in between blue, never the brand's",
-     /\.strip-ok \{ --strip: var\(--status-good\); \}/.test(css) && /--status-good: var\(--status-active\);/.test(css) && /\.strip-moving \{ --strip: var\(--status-pending\); \}/.test(css));
+  ck("rule 6: a strip that reports a state takes the status colours: all well green, in between blue, never the brand's",
+     /\.strip-ok \{ --strip: var\(--status-usual\); \}/.test(css) && /\.strip-moving \{ --strip: var\(--status-pending\); \}/.test(css));
 }
 {
   // an error message is amber, as every problem (owner, 2026-11-22, colour code rule 2; it was the app's red, 2026-11-15)

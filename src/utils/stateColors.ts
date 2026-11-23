@@ -48,10 +48,6 @@ export const isNoHistory = (state: string): boolean => state === NOT_KEPT || sta
  * holds every surface to it). The camera status bar was the case that proved it: it had its own literal `#000` for a
  * camera being offline while the legend told the user that losing contact was another colour.
  */
-/** "All well": a check passed, the online dot, a recovery. Not a device's state, so not in the six: the active
- *  green itself (--status-good), kept green when usual turned red (owner, 2026-11-24). */
-export const ALL_WELL = "var(--status-good)";
-
 export const STATUS_COLOR = {
   usual: "var(--status-usual)",
   active: "var(--status-active)",
@@ -88,9 +84,9 @@ export type ThemeName = "light" | "dark" | "night";
  */
 export const STATUS_HEX_BY_THEME: Record<ThemeName, Record<StatusKey, string>> = {
   //            --status-usual --status-active --status-pending --status-warning --status-lost --status-off
-  light: { usual: "#B24232", active: "#34845A", transitional: "#2B67C0", warn: "#B8801F", unavailable: "#9A9F98", noValue: "#D8D3C7" },
-  dark: { usual: "#E2685A", active: "#4FC07E", transitional: "#6A9BEC", warn: "#E0A93A", unavailable: "#C9CCC6", noValue: "#333833" },
-  night: { usual: "#A4483C", active: "#3E8F62", transitional: "#4A72BC", warn: "#A87C2A", unavailable: "#A9ADA6", noValue: "#23261F" },
+  light: { usual: "#34845A", active: "#B24232", transitional: "#2B67C0", warn: "#B8801F", unavailable: "#9A9F98", noValue: "#D8D3C7" },
+  dark: { usual: "#4FC07E", active: "#E2685A", transitional: "#6A9BEC", warn: "#E0A93A", unavailable: "#C9CCC6", noValue: "#333833" },
+  night: { usual: "#3E8F62", active: "#A4483C", transitional: "#4A72BC", warn: "#A87C2A", unavailable: "#A9ADA6", noValue: "#23261F" },
 };
 /** The light theme's: what reads before any theme is known (EntityCategories' fallbacks before the stylesheet). */
 export const STATUS_HEX: Record<StatusKey, string> = STATUS_HEX_BY_THEME.light;
