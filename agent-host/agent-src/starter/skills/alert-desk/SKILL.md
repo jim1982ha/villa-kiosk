@@ -92,7 +92,7 @@ message then says who pressed what, and when. Typing the word works too.
 |---|---|
 | Done | incident closed, its Kiosk fault closed; the device is read once `clear_minutes` later. Still bad (its automation names its bad states): the incident opens again, "still there" ("Done (…), but … still reads …: still open. VESTA keeps watching it."), and the desk closes it when it is right. Not knowable (an older alert, a number): the people asked are told what it reads. The same for a fault closed in the Kiosk ("Closed in the Kiosk, but …"); a fault a person REOPENS in the Kiosk asks the facility manager again at once |
 | Need help | escalated to the owner with the detail |
-| Not a problem | incident closed, its Kiosk fault closed with nothing done, never read again while the problem lasts (the Cockpit's own "Not a problem"); its rule told to send it no more for `quiet_hours` (rules.yaml; its own all-clear still comes), told again at a repeat within that time; back after it ended, it is a new alert |
+| Not a problem | incident closed, its Kiosk fault closed with nothing done, never read again while the problem lasts (the Cockpit's own "Not a problem"); its rule told to send it no more until the problem is over (its own all-clear still comes), told again at each repeat; back after it ended, it is a new alert |
 
 ## When a critical automation runs
 

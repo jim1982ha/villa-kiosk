@@ -207,7 +207,7 @@ def cockpit_closes(store: Store, out: dict, t: dict | None = None, now: datetime
         out.setdefault("settle", []).append(R.settle(inc["id"], line, note_in=line.langs or None, closed=True))
         visit_answered(store.incident(inc["id"]), "done", str(said), out)    # its visit ends on the villa too
         if now is not None:
-            quiet_rule(store.incident(inc["id"]), notes_of(inc).get("ha_incident"), now, params, out)
+            quiet_rule(store.incident(inc["id"]), notes_of(inc).get("ha_incident"), out)
         _faults_follow(out)                                                 # its fault says when VESTA confirms it
         told.append(inc["id"])
     return told
@@ -443,22 +443,19 @@ def occupancy(client=None) -> str:
 alert_keys = W.keys
 
 
-def quiet_rule(inc: dict, run, now: datetime, params: VillaParams | None, out: dict) -> None:
+def quiet_rule(inc: dict, run, out: dict) -> None:
     """Alert `inc`, closed "Not a problem" while it lasts: its rule's run `run` (an event's incident_id) told to send
-    it again no more for `quiet_hours` since the close (result.quiet_rule) — the problem's all-clear ends it on the
-    villa's side. Past that time, or not closed so, nothing: the rule repeats as before.
+    it again no more (result.quiet_rule) — the problem's all-clear ends it on the villa's side. Not closed so, nothing:
+    the rule repeats as before.
 
-    ⚠️ NOT A PROBLEM STOPS THE REPEATS (owner, 2026-11-21): the door left unlocked on purpose was still sent to Telegram
-    every 30 minutes by its rule, a day long. Told again at each repeat within the time (its run restarted with Home
-    Assistant, or the event not heard): one repeat at most gets through."""
-    since = moment(W.lasting_since(inc))
-    hours = _params(params).behaviour("quiet_hours")
+    ⚠️ NOT A PROBLEM STOPS THE REPEATS UNTIL THE PROBLEM IS OVER (owner, 2026-11-21: the door left unlocked on purpose
+    was still sent to Telegram every 30 minutes by its rule; owner, 2026-11-23, #225: a day later it started again,
+    the door still unlocked on purpose). Told again at each repeat (its run restarted with Home Assistant, or the
+    event not heard): one repeat at most gets through."""
     rule, run = str(inc.get("rule_id") or ""), str(run or "")
-    if since is None or hours <= 0 or not rule.startswith("automation.") or not run.startswith(f"{rule}-"):
+    if moment(W.lasting_since(inc)) is None or not rule.startswith("automation.") or not run.startswith(f"{rule}-"):
         return
-    until = since + timedelta(hours=hours)
-    if moment(now) < until:
-        out.setdefault("actions", []).append(R.quiet_rule(inc["id"], rule, run, until.isoformat()))
+    out.setdefault("actions", []).append(R.quiet_rule(inc["id"], rule, run))
 
 
 def still_lasting(store: Store, inc: dict, ev: dict, now: datetime, out: dict,
@@ -481,7 +478,7 @@ def still_lasting(store: Store, inc: dict, ev: dict, now: datetime, out: dict,
     # reminders in the status section"): posted again every 30 minutes, the card's Status said nothing new. Its
     # message is a "lasting" step: ONE line, "Still there at 18:46, 11 times since 13:30", counted from the close
     _said_again(store.incident(inc["id"]), ev, out, "lasting", stage="lasting", since=W.lasting_since(inc))
-    quiet_rule(inc, ev.get("ha_incident"), now, params, out)
+    quiet_rule(inc, ev.get("ha_incident"), out)
     return out
 
 
@@ -1060,6 +1057,25 @@ def quiet_after_done(store: Store, now: datetime, client, clear_minutes: float, 
                                                          after=lasting_in(clear_minutes * 60)),
                                                      W.minutes(inc, read_again=False))))
     return reopened
+
+
+def accepted_still_there(store: Store, now: datetime, client) -> None:
+    """Every alert closed "Not a problem" whose problem still holds, read from Home Assistant now (still_there): it
+    lasts from now (alert_watch.lasted_again), as a repeat of its rule would say.
+
+    ⚠️ ITS RULE IS QUIET NOW (owner, 2026-11-23, #225): told to stop repeating until the problem is over, the rule
+    sends nothing for days, and a day with no repeat ended the hold, so its next repeat (Home Assistant restarted)
+    came as a new alert. The device read again says it still lasts; a rule removed or gone silent with the problem
+    over still lets the next alert open."""
+    for inc in store.incidents(open_only=False):
+        if not W.lasting(inc, now) or not judged(inc):
+            continue
+        try:
+            there, _words = still_there(inc, client, now)
+        except Exception:  # noqa: BLE001 — Home Assistant not readable now, or the claim not renderable: the next tick
+            continue
+        if there:
+            W.lasted_again(store, inc, now)
 
 
 def seen_again(store: Store, now: datetime, client, clear_minutes: float, out: dict,
@@ -1908,7 +1924,7 @@ def reply(store: Store, iid: int, option: str, sender_role: str, now: datetime, 
         # no read again, its fault closed with nothing done; its watch for the alert coming back is said, as at a close
         out["actions"] += Problems(store).person_done(iid, place, who=who, at=now.isoformat(),
                                                       terms=watch_terms(inc, terms(params)), read_again=False)
-        quiet_rule(store.incident(iid), notes_of(inc).get("ha_incident"), now, params, out)
+        quiet_rule(store.incident(iid), notes_of(inc).get("ha_incident"), out)
         pressed = closed_said(store.incident(iid), pressed)
         out["send"].append(here(pressed, "closed"))
     elif option == "need_help":
@@ -2071,6 +2087,7 @@ def tick(store: Store, now: datetime, params: VillaParams | None = None, client=
     out = {"send": [], "actions": [], "escalated": [], "reasked": []}
     if client is not None:
         out["cleared"] = seen_again(store, now, client, params.behaviour("clear_minutes"), out, terms(params))
+        accepted_still_there(store, now, client)
         out["not_quiet"] = quiet_after_done(store, now, client, params.behaviour("clear_minutes"), out, terms(params))
         out["rule_gone"] = rule_gone(store, now, client, params.behaviour("clear_minutes"), out)
         out["visits_over"] = visits_over(store, now, client, out, params, zone)

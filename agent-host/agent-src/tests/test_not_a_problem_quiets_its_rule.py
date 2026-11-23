@@ -1,8 +1,8 @@
 """"Not a problem" stops its rule's repeats (owner, 2026-11-21): the door left unlocked on purpose was still sent to
 Telegram every 30 minutes by its rule. A person's "Not a problem" — on Telegram or in the Cockpit — tells the villa's
-rule (the event its repeat wait hears) that this run sends the alert no more for the desk's quiet_hours since the
-close; a repeat that still comes within that time (Home Assistant restarted the run) tells it again; after it, the
-rule repeats as before and VESTA tells it nothing. Synthetic villa; ids invented."""
+rule (the event its repeat wait hears) that this run sends the alert no more until the problem is over (owner,
+2026-11-23, #225: it came back after a day, the door still unlocked on purpose); a repeat that still comes (Home
+Assistant restarted the run) tells it again, however late. Synthetic villa; ids invented."""
 from __future__ import annotations
 
 import asyncio
@@ -15,7 +15,6 @@ from ha_fake import FakeHA, tool
 from telegram_fake import BOT
 from vesta_agent.roster import Roster
 from vesta_shared.result import QUIET_EVENT
-from vesta_shared.timeutil import moment
 
 OWNER, FM, GROUP = 111, 222, -100123
 RULE = "automation.critical_condition_example_door"
@@ -70,14 +69,12 @@ def quiets() -> list[dict]:
     return [d for t, d in Villa.events if t == QUIET_EVENT]
 
 
-def test_not_a_problem_on_telegram_tells_the_rules_run_to_stop_for_a_day(agent):
+def test_not_a_problem_on_telegram_tells_the_rules_run_to_stop_until_the_problem_is_over(agent):
     alert(agent, 1)
     assert quiets() == []                                       # an alert alone tells the rule nothing
-    pressed = datetime.now(timezone.utc)
     press(agent)
     (q,) = quiets()
-    assert q["rule_id"] == RULE and q["incident_id"] == f"{RULE}-1"
-    assert abs((moment(q["until"]) - pressed) - timedelta(hours=24)) < timedelta(minutes=1), q
+    assert q == {"rule_id": RULE, "incident_id": f"{RULE}-1"}, q    # no end time: the problem's all-clear ends it
 
 
 def test_a_done_leaves_the_rule_to_repeat(agent):
@@ -87,21 +84,17 @@ def test_a_done_leaves_the_rule_to_repeat(agent):
     assert quiets() == []
 
 
-def test_a_repeat_within_the_day_tells_it_again_and_one_after_it_is_left_to_repeat(agent):
+def test_a_repeat_tells_it_again_however_late(agent):
     alert(agent, 1)
     press(agent)
-    (first,) = quiets()
     # Home Assistant restarted: the same problem under another run, which never heard the first
     alert(agent, 2)
     assert [q["incident_id"] for q in quiets()] == [f"{RULE}-1", f"{RULE}-2"]
-    assert quiets()[1]["until"] == first["until"]               # the day counts from the press, never from a repeat
-    # a repeat that still gets through late in the day (the event unheard) is told again, with the same end
+    # a repeat that still gets through hours later, and the next a day after it (the event unheard): told again
     now = datetime.now(timezone.utc)
-    assert repeat_at(agent, 2, now + timedelta(hours=23)) == "lasting"
-    assert len(quiets()) == 3 and quiets()[2]["until"] == first["until"], quiets()
-    # the day over, the rule repeats as before: VESTA records each repeat on the closed card, tells the rule nothing
-    assert repeat_at(agent, 2, now + timedelta(hours=25)) == "lasting"
-    assert len(quiets()) == 3, quiets()
+    assert repeat_at(agent, 2, now + timedelta(hours=20)) == "lasting"
+    assert repeat_at(agent, 2, now + timedelta(hours=40)) == "lasting"
+    assert [q["incident_id"] for q in quiets()] == [f"{RULE}-1", f"{RULE}-2", f"{RULE}-2", f"{RULE}-2"], quiets()
 
 
 def repeat_at(v, run_no: int, at: datetime) -> str:

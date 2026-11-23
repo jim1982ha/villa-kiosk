@@ -353,12 +353,11 @@ def tell_villa(incident: int, script: str, fields: dict) -> dict:
 QUIET_RULE, QUIET_EVENT = "rule.quiet", "vesta_alert_quiet"
 
 
-def quiet_rule(incident: int, rule_id: str, run: str, until: str) -> dict:
+def quiet_rule(incident: int, rule_id: str, run: str) -> dict:
     """The villa's rule `rule_id` told that a person closed its alert `incident` "Not a problem": its run `run` (the
-    event's incident_id) sends that alert again no more until `until` (ISO), or the problem is over. ⚠️ NEVER IN THE
+    event's incident_id) sends that alert again no more, until the problem is over. ⚠️ NEVER IN THE
     CRITICAL PATH: an event the rule hears while it waits anyway — unheard (VESTA away, an older rule), the rule
     repeats as before. Only an automation, only a run it named."""
     if not str(rule_id).startswith("automation.") or not str(run).startswith(f"{rule_id}-"):
         raise ValueError("a rule is told about one of its own runs")
-    return {"action": QUIET_RULE, "incident_id": int(incident), "rule_id": str(rule_id), "run": str(run),
-            "until": str(until)}
+    return {"action": QUIET_RULE, "incident_id": int(incident), "rule_id": str(rule_id), "run": str(run)}

@@ -443,8 +443,7 @@ class Outcome:
                     pass                                                    # a visit's (visit.Run.act)
                 elif kind == QUIET_RULE:
                     # "Not a problem": the villa's rule repeats its alert no more while it lasts (actions.quiet_rule)
-                    await self.actions.quiet_rule(str(a.get("rule_id") or ""), str(a.get("run") or ""),
-                                                  str(a.get("until") or ""))
+                    await self.actions.quiet_rule(str(a.get("rule_id") or ""), str(a.get("run") or ""))
                 elif kind == TAKE_ON and str(a.get("incident_id") or "").isdigit():
                     # Open Ticket on Telegram (owner, 2026-11-05): the Kiosk's own take-on, or a plain answer and the
                     # buttons back — never a press that looks taken and is not

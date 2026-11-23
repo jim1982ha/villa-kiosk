@@ -441,6 +441,20 @@ def test_a_problem_accepted_whose_rule_fell_silent_does_not_hide_the_next_alert_
     assert res["decision"] == "new" and res["incident_id"] != iid and res["send"]
 
 
+def test_a_problem_accepted_still_read_there_holds_while_its_rule_is_quiet(store):
+    # owner, 2026-11-23 (#225): told "Not a problem", the rule repeats no more until the door is locked; days later
+    # Home Assistant restarts and its new run repeats once: still the problem the owner accepted, never a new alert
+    iid = desk.intake(store, event(claim="{{ is_state('lock.front_door', 'unlocked') }}"), T0,
+                      occupancy_reader=lambda: "occupied")["incident_id"]
+    desk.reply(store, iid, "not_a_problem", "owner", T0 + timedelta(minutes=7), name="Owner")
+    ha = Claims([(T0, "true")])
+    for hours in range(1, 50, 6):
+        ha.now = T0 + timedelta(hours=hours)
+        desk.tick(store, ha.now, client=ha)
+    res = desk.intake(store, event(started=1790100000), T0 + timedelta(hours=50), occupancy_reader=lambda: "occupied")
+    assert res["decision"] == "lasting" and res["incident_id"] == iid and _quiet(res), res
+
+
 def test_the_ticks_cli_reads_home_assistant_again(tmp_path):
     # the engine runs "desk.py tick" every 5 minutes: it must be given Home Assistant, or nothing is read again
     import subprocess

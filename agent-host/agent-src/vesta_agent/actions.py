@@ -435,8 +435,8 @@ class Actions:
             return False
 
     # ------------------------------------------------------------------ a rule told to stop repeating
-    async def quiet_rule(self, rule_id: str, run: str, until: str) -> bool:
-        """The villa's rule `rule_id` told its run `run` need not send its alert again until `until` (ISO): a person
+    async def quiet_rule(self, rule_id: str, run: str) -> bool:
+        """The villa's rule `rule_id` told its run `run` need not send its alert again while the problem lasts: a person
         closed it "Not a problem" (result.quiet_rule, the alert desk's). ONE event, result.QUIET_EVENT, naming only an
         automation's own run: it acts on no device, and a rule that does not hear it repeats as before. ⚠️ GATED HERE,
         NEVER BY THE AI; recorded like every other call."""
@@ -444,7 +444,7 @@ class Actions:
         if not str(rule_id).startswith("automation.") or not str(run).startswith(f"{rule_id}-"):
             self.state.log("refused", {"system": True, "event": QUIET_EVENT, "rule": rule_id, "reason": "not its run"})
             return False
-        data = {"rule_id": str(rule_id), "incident_id": str(run), "until": str(until)}
+        data = {"rule_id": str(rule_id), "incident_id": str(run)}
         try:
             await asyncio.to_thread(self.writer_factory().fire_event, QUIET_EVENT, data)
             self.state.log("executed", {"system": True, "event": QUIET_EVENT, **data})
