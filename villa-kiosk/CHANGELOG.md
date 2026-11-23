@@ -1,3 +1,8 @@
+## 2.496.889
+
+- **Colours back as they were in 2.496.887.** Usual is green again and in use is red, on every device, in every
+  theme and in the colour key. The red and green swap of 2.496.888 is undone.
+
 ## 2.496.888
 
 - **Usual is red, in use is green.** The two colours are swapped everywhere at once: the status pills, the history

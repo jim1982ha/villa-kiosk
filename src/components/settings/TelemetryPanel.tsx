@@ -25,7 +25,7 @@ import type { TelemetryKind } from "@/utils/telemetry";
 import { backendFetch } from "@/auth/sessionLost";
 import { refusalOf } from "@/utils/storeSave";
 import { useOutsideClose } from "@/hooks/useOutsideClose";
-import { ALL_WELL, STATUS_COLOR } from "@/utils/stateColors";
+import { STATUS_COLOR } from "@/utils/stateColors";
 import Button from "@/components/common/Button";
 
 interface TelemetryEvent {
@@ -309,13 +309,13 @@ export function telemetryTime(at: string | undefined): string {
 }
 
 // an event's meaning (owner, 2026-11-22, colour code rule 2): a failure of the app needs attention (amber), a recovery
-// is all well (green, utils/stateColors ALL_WELL)
+// is back to usual (green)
 const TONE: Record<string, string> = {
   error: STATUS_COLOR.warn,
   freeze: STATUS_COLOR.warn,
   "context-lost": STATUS_COLOR.warn,
-  "context-restored": ALL_WELL,
-  recovered: ALL_WELL,
+  "context-restored": STATUS_COLOR.usual,
+  recovered: STATUS_COLOR.usual,
   csp: STATUS_COLOR.warn,
 };
 
