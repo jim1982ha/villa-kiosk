@@ -297,6 +297,10 @@ function summarise(e: TelemetryEvent): string {
         ? `repainted, rebuild blocked ${ms(e.blockedMs)}`
         : `context restored after ${ms(e.deadMs)} dead`
           + ` · ${e.meshes ?? "?"} meshes, ${e.textures ?? "?"} textures to re-upload`;
+    case "load-slow":
+      return `still unpacking after ${ms(e.runMs)}: ${e.glMeshes ?? "?"} meshes, ${e.glTextures ?? "?"} textures`
+        + `${typeof e.importMs === "number" ? `, import done in ${ms(e.importMs)}` : ""} · ${e.gpu || "GPU unknown"}`
+        + ` · ${e.cores ?? "?"} cores, ${e.devMemGb || "?"} GB`;
     default:
       return "";
   }

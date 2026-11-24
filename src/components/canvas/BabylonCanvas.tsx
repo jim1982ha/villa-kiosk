@@ -5,6 +5,7 @@ import Notice from "@/components/hud/Notice";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle } from "lucide-react";
 import { SceneManager } from "@/babylon/SceneManager";
+import { importSoFar } from "@/babylon/ModelLoader";
 import { sceneHandle } from "@/babylon/sceneHandle";
 import { formatProbe, registerProbeRunner } from "@/babylon/perfProbe";
 import { useConfig } from "@/config/ConfigContext";
@@ -130,6 +131,11 @@ function VillaScene({
   // do: no WebGL, a lost GPU context, or a crash loop. Either wins the screen.
   const model = useModel().state;
   const [sceneFail, setSceneFail] = useState<null | "error" | "crash-loop">(null);
+  // a device too slow for the model says how far it got (ModelLoader.importSoFar), once per load
+  const slow = model.kind === "too-heavy" && model.slow;
+  useEffect(() => {
+    if (slow) reportTelemetry("load-slow", importSoFar() ?? { stage: "import not started" });
+  }, [slow]);
   // Full copyable diagnostics report shown on the error / crash-loop screens.
   const [report, setReport] = useState("");
   // The central SH3D refresh below runs silently in the background by design

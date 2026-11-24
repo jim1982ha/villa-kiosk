@@ -1,3 +1,10 @@
+## 2.496.891
+
+- **A device too slow for the 3D villa reports how far it got.** When the villa's model is still opening after 3
+  minutes, the device now sends a report: how many shapes and textures it had opened, its graphics chip, and its
+  processor and memory. It shows in Settings › Advanced › Device telemetry. This tells what to make lighter for a
+  slow screen such as a TV.
+
 ## 2.496.890
 
 - **A device too slow for the 3D villa says so.** When a device was still opening the villa's model after 3 minutes,

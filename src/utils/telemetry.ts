@@ -77,6 +77,9 @@ export type TelemetryKind =
   // each device's latest in a Home Assistant sensor so it can be read without an export (owner, 2026-11-16: the
   // phone lit the next room for three releases while every computer showed it right).
   | "render"
+  // A model still unpacking past modelLifecycle.MODEL_UNPACK_LIMIT_MS: how far the import got and the device's GPU,
+  // cores and memory (ModelLoader.importSoFar), as `load` comes only once a model is open.
+  | "load-slow"
   | "csp";            // a Content-Security-Policy violation the BROWSER posted (csp.conf report-uri)
   // "roomzoom" lived here from 2.361.0 and is GONE (2.427.0). It asked whether a
   // room shot was the WALL fit or a tighter badge-spread, and it got its answer:
