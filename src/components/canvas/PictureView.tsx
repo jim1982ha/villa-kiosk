@@ -307,6 +307,15 @@ export default function PictureView({ onEntityPicked, onEntityLongPressed, onClu
                 stroke={lit.alarms?.has(roomKey(r.name)) ? STATUS_COLOR.warn : STATUS_COLOR.active} />
             ))}
           </svg>
+          {/* ⚠️ A LAMP ON SHOWS ON THE PICTURE (owner, 2026-11-25: "i can't see the light ON on the villa map"): the
+              picture is taken with every lamp dark (EntityVisuals.lampsOff), so each lamp this profile may see that is
+              on now (the 3D view's own lamp set: entity-map type "light") is a warm pool drawn at its spot */}
+          {manifest!.badges.filter((b) => b.floor === floor.floor && entities[b.id]?.state === "on"
+            && looks.typeOf(b.id) === "light" && panelMapping(b.id, config.entityMap, role, entities[b.id], { control: false }))
+            .map((b) => (
+              <span key={b.id} className="picture-lamp-pool"
+                style={{ left: `${b.u * 100}%`, top: `${b.v * 100}%`, width: size * 2.4, height: size * 2.4 }} />
+            ))}
           <span className="picture-floor-label">{floor.label}</span>
         </div>
       ))}
