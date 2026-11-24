@@ -1,3 +1,10 @@
+## 2.496.890
+
+- **A device too slow for the 3D villa says so.** When a device was still opening the villa's model after 3 minutes,
+  it said the model was too heavy and offered to upload a lighter one. When the model is within the size limit, the
+  device is what is too slow (a TV, for example) and another file would not help. It now says "This device is too
+  slow to show the 3D villa", how long it tried, and that the villa opens on a faster device. No upload is offered.
+
 ## 2.496.889
 
 - **Colours back as they were in 2.496.887.** Usual is green again and in use is red, on every device, in every
