@@ -45,6 +45,17 @@ export interface PictureRoom {
   pts: [number, number][];
 }
 
+/** A cover's pose other than open (the pictures show every cover open): its outline on the picture, drawn live over
+ *  it while the cover's state asks for that pose (meshVariants: the 3D view's own rule). */
+export interface PictureCoverPose {
+  id: string;
+  /** The pose word, as the model names it ("closed", "half"). */
+  word: string;
+  floor: number;
+  /** Its ground extents: (u, v) top-left and bottom-right. */
+  u0: number; v0: number; u1: number; v1: number;
+}
+
 export interface PicturesManifest {
   v: 1;
   /** What the pictures were made from: when any of these changed, a capable owner device makes them again. */
@@ -59,6 +70,8 @@ export interface PicturesManifest {
   floors: PictureFloor[];
   badges: PictureBadge[];
   rooms: PictureRoom[];
+  /** Missing in a set made before 2.496.897: no cover drawn. */
+  covers?: PictureCoverPose[];
 }
 
 /** A file's URL under /model/views/, stamped with the manifest's version so a new set is never served from cache. */

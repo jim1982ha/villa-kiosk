@@ -1196,6 +1196,33 @@ export class EntityVisuals {
     return () => { back(); this.requestRender(); };
   }
 
+  /** Every cover in its open pose for a villa picture (villaPictureCapture): a curtain drawn when the picture was
+   *  taken would stay drawn in it for good, while the picture view draws the live ones over it. Returns, for each
+   *  cover with poses, where each of its other poses lies (the ground extents of its meshes, its floor), and the
+   *  function that puts every pose back as it was. */
+  coversOpen(): { back: () => void; poses: CoverPoseExtent[] } {
+    const was: [AbstractMesh, boolean][] = [];
+    const poses: CoverPoseExtent[] = [];
+    for (const [entityId, byWord] of this.meshVariants) {
+      if (!entityId.startsWith("cover.") || byWord.size < 2) continue;
+      const open = pickNearestVariant(orderVariantWords(byWord.keys()), "open", byWord.keys());
+      for (const [word, meshes] of byWord) {
+        if (word !== open && meshes.length) {
+          let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+          for (const m of meshes) {
+            m.computeWorldMatrix(true);
+            const b = m.getBoundingInfo().boundingBox;
+            minX = Math.min(minX, b.minimumWorld.x); maxX = Math.max(maxX, b.maximumWorld.x);
+            minZ = Math.min(minZ, b.minimumWorld.z); maxZ = Math.max(maxZ, b.maximumWorld.z);
+          }
+          poses.push({ id: entityId, word, floor: stampedFloor(meshes[0]) ?? null, minX, maxX, minZ, maxZ });
+        }
+        for (const m of meshes) { was.push([m, m.isVisible]); m.isVisible = word === open; }
+      }
+    }
+    return { poses, back: () => { for (const [m, v] of was) m.isVisible = v; this.requestRender(); } };
+  }
+
   /** Copy the cosmetic (non-structural) fields of every cached mapping across
    *  from the freshly-applied config. Returns the entity ids whose per-light
    *  intensity override changed, so the caller can re-derive just those
@@ -5987,3 +6014,6 @@ export class EntityVisuals {
 
 
 }
+
+/** A cover pose's place on the ground (EntityVisuals.coversOpen): metres, the scene's x and z. */
+export interface CoverPoseExtent { id: string; word: string; floor: number | null; minX: number; maxX: number; minZ: number; maxZ: number }

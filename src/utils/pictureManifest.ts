@@ -6,7 +6,7 @@
 
 import type { AppConfig } from "@/config/AppConfig";
 import { COSMETIC_MAPPING_FIELDS } from "@/babylon/entityMapDiff";
-import type { PictureBadge, PictureFloor, PictureRoom, PicturesManifest, ViewFile } from "@/utils/villaPictures";
+import type { PictureBadge, PictureCoverPose, PictureFloor, PictureRoom, PicturesManifest, ViewFile } from "@/utils/villaPictures";
 
 export type PictureFrame = PicturesManifest["frame"];
 export type Look = "day" | "night";
@@ -24,7 +24,7 @@ export function pictureFrame(min: { x: number; z: number }, max: { x: number; z:
 }
 
 /** Goes up when the framing changes, so every stored set is made again (configKey). */
-export const FRAMING_RULE = 2;
+export const FRAMING_RULE = 3;
 
 /** ⚠️ THE FRAME IS THE HOUSE, NOT THE GARDEN (owner, 2026-11-24: on a TV the whole plot left each floor small): the
  *  floors' own meshes' extents plus `margin` metres, widened to keep every badge point (with 1 m to spare) on the
@@ -102,7 +102,8 @@ export function configKey(config: PlacementConfig): string {
     entityMap[id] = placed;
   }
   return hash53(stableText({
-    // how the pictures are framed: a set made by an older rule (the whole plot, before 2.496.895) is made again
+    // how the pictures are made: a set made by an older rule (the whole plot before 2.496.895, curtains as they
+    // were before 2.496.897) is made again
     framing: FRAMING_RULE,
     entityMap,
     meshBindings: config.meshBindings,
@@ -123,6 +124,8 @@ export function picturesStale(stored: PicturesManifest | null, now: PictureSourc
 
 /** A badge's anchor in the world, on its 1-based floor (EntityVisuals.anchorSnapshot). */
 export interface WorldAnchor { id: string; x: number; y: number; z: number; floor: number }
+/** A cover pose's ground extents in the world, on its 1-based floor (EntityVisuals.coversOpen). */
+export interface WorldCoverPose { id: string; word: string; floor: number; minX: number; maxX: number; minZ: number; maxZ: number }
 /** A room outline in the world, on its 1-based floor (SceneManager.pictureRooms). */
 export interface WorldOutline { name: string; floor: number; pts: { x: number; z: number }[] }
 
@@ -136,6 +139,7 @@ export function buildManifest(input: {
   size: { width: number; height: number };
   anchors: readonly WorldAnchor[];
   rooms: readonly WorldOutline[];
+  covers?: readonly WorldCoverPose[];
 }): PicturesManifest {
   const { frame, size } = input;
   const floors: PictureFloor[] = input.floors.map((floor) => ({
@@ -148,6 +152,10 @@ export function buildManifest(input: {
     .sort((a, b) => a.floor - b.floor || a.id.localeCompare(b.id));
   const rooms: PictureRoom[] = input.rooms.filter((r) => shown.has(r.floor) && r.pts.length >= 3)
     .map((r) => ({ name: r.name, floor: r.floor, pts: r.pts.map((p) => toUv(frame, p.x, p.z)) }));
+  const covers: PictureCoverPose[] = (input.covers ?? []).filter((c) => shown.has(c.floor)).map((c) => {
+    const [u0, v0] = toUv(frame, c.minX, c.maxZ), [u1, v1] = toUv(frame, c.maxX, c.minZ);
+    return { id: c.id, word: c.word, floor: c.floor, u0, v0, u1, v1 };
+  }).sort((a, b) => a.floor - b.floor || a.id.localeCompare(b.id) || a.word.localeCompare(b.word));
   return {
     v: 1,
     model_version: input.source.model_version,
@@ -158,5 +166,6 @@ export function buildManifest(input: {
     floors,
     badges,
     rooms,
+    covers,
   };
 }

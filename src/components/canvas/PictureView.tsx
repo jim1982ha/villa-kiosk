@@ -17,6 +17,7 @@ import { useHA } from "@/ha/HAStateStore";
 import { useProfile } from "@/auth/ProfileContext";
 import { panelMapping, profileView, roleCan } from "@/auth/permissions";
 import { ROLE_LABELS, ROLE_ORDER } from "@/auth/roles";
+import { desiredVariantWord, orderVariantWords, pickNearestVariant } from "@/babylon/meshVariants";
 import { iconKeyFor } from "@/babylon/badgeIconKeys";
 import { motionLit, motionRouting, type MotionRouting } from "@/babylon/motionRouting";
 import { effectiveCategory, subjectOf } from "@/config/EntityCategories";
@@ -228,6 +229,19 @@ export default function PictureView({ onEntityPicked, onEntityLongPressed, onClu
     return motionLit(routes);
   }, [entities, config.entityMap, config.roomGlowAndCones, resolvedRooms, role, watchers, manifest]);
 
+  // ── Each cover's pose now, where it is not open (the 3D view's pick: pickNearestVariant over its authored words) ──
+  const coverPoses = useMemo(() => {
+    const byId = new Map<string, NonNullable<typeof manifest>["covers"]>();
+    for (const c of manifest?.covers ?? []) byId.set(c.id, [...(byId.get(c.id) ?? []), c]);
+    return [...byId].flatMap(([id, poses]) => {
+      const entity = entities[id];
+      if (!entity || !poses?.length || !panelMapping(id, config.entityMap, role, entity, { control: false })) return [];
+      const words = [...poses.map((c) => c.word), "open"];
+      const chosen = pickNearestVariant(orderVariantWords(words), desiredVariantWord(entity), words);
+      return poses.filter((c) => c.word === chosen);
+    });
+  }, [manifest, entities, config.entityMap, role]);
+
   // ── The badges this profile may see, as the 3D map draws them (EntityVisuals.updateLabel, classic style) ────────
   const size = badgeSizePx(w, h, config.entityIconScale);
   // a group's count pill: the room chip's proportion of a badge's square (the picture's square is PICTURE_SCALE
@@ -301,6 +315,12 @@ export default function PictureView({ onEntityPicked, onEntityLongPressed, onClu
           <img className="picture-floor-image" alt={`Floor ${floor.label}`} draggable={false}
             src={viewUrl(night ? floor.night : floor.day, pictures.kind === "ready" ? pictures.version : undefined)} />
           <svg className="picture-rooms" viewBox="0 0 1 1" preserveAspectRatio="none" aria-hidden="true">
+            {/* ⚠️ A CURTAIN SHOWS AS IT IS (owner, 2026-11-25): the pictures show every cover open, so the pose its
+                state asks for now (the 3D view's rule: meshVariants) is drawn over it, outlined, unless it is open */}
+            {coverPoses.filter((c) => c.floor === floor.floor).map((c) => (
+              <rect key={c.id} className="picture-cover" x={c.u0} y={c.v0} width={Math.max(c.u1 - c.u0, 0.004)}
+                height={Math.max(c.v1 - c.v0, 0.004)} />
+            ))}
             {manifest!.rooms.filter((r) => r.floor === floor.floor && lit.rooms.has(roomKey(r.name))).map((r) => (
               <polygon key={r.name} className="picture-room-glow" points={r.pts.map(([u, v]) => `${u},${v}`).join(" ")}
                 fill={lit.alarms?.has(roomKey(r.name)) ? STATUS_COLOR.warn : STATUS_COLOR.active}
@@ -315,6 +335,12 @@ export default function PictureView({ onEntityPicked, onEntityLongPressed, onClu
             .map((b) => (
               <span key={b.id} className="picture-lamp-pool"
                 style={{ left: `${b.u * 100}%`, top: `${b.v * 100}%`, width: size * 2.4, height: size * 2.4 }} />
+            ))}
+          {manifest!.badges.filter((b) => b.floor === floor.floor && entities[b.id]?.state === "on"
+            && looks.typeOf(b.id) === "fan" && panelMapping(b.id, config.entityMap, role, entities[b.id], { control: false }))
+            .map((b) => (
+              <span key={b.id} className="picture-fan-turn"
+                style={{ left: `${b.u * 100}%`, top: `${b.v * 100}%`, width: size * 1.8, height: size * 1.8 }} />
             ))}
           <span className="picture-floor-label">{floor.label}</span>
         </div>

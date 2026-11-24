@@ -75,6 +75,12 @@
 .picture-lamp-pool { position: absolute; transform: translate(-50%, -50%); border-radius: 50%; pointer-events: none;
   background: radial-gradient(circle, rgba(255, 214, 130, 0.95) 0%, rgba(255, 196, 90, 0.55) 40%, rgba(255, 180, 60, 0) 72%);
   mix-blend-mode: screen; }
+/* a fan on: a turning ring around its badge, as the 3D view turns its blades */
+.picture-fan-turn { position: absolute; transform: translate(-50%, -50%); border-radius: 50%; pointer-events: none;
+  border: 3px dashed var(--status-active); opacity: 0.85; animation: picture-fan 2s linear infinite; }
+@keyframes picture-fan { from { transform: translate(-50%, -50%) rotate(0deg); } to { transform: translate(-50%, -50%) rotate(360deg); } }
+/* a curtain drawn (or part-way): its place on the picture, a fabric-coloured band with an outline */
+.picture-cover { fill: #c9b79c; fill-opacity: 0.85; stroke: #6b5a45; stroke-width: 2px; vector-effect: non-scaling-stroke; }
 .picture-floor-label {
   position: absolute; left: 6px; top: 6px; padding: 2px 8px; border-radius: var(--radius-pill);
   background: var(--chip-bg); color: var(--text-primary); font-size: var(--text-sm); font-weight: 600; pointer-events: none;
@@ -97,7 +103,7 @@
 .picture-badge.urgent > img, .picture-badge.urgent .picture-group-square { animation: picture-urgent 1.2s ease-in-out infinite; }
 @keyframes picture-urgent { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.12); } }
 @media (prefers-reduced-motion: reduce) {
-  .picture-room-glow, .picture-badge.urgent > img, .picture-badge.urgent .picture-group-square { animation: none; }
+  .picture-room-glow, .picture-fan-turn, .picture-badge.urgent > img, .picture-badge.urgent .picture-group-square { animation: none; }
 }
 
 /* --- Central .sh3d background-refresh failure banner --- */
