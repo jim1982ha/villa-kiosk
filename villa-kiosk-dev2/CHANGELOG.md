@@ -1,3 +1,10 @@
+## 2.496.897
+
+- **A fan that is on and a drawn curtain now show on the villa pictures.** A fan that is on has a turning ring around
+  its badge. The pictures are now made with every curtain open, and a curtain that is closed (or part-way) is drawn
+  over them at its place, as the 3D view shows it. The Owner's computer makes the new pictures by itself the next
+  time it opens VESTA UI.
+
 ## 2.496.896
 
 - **A lamp that is on now shows on the villa pictures.** The pictures are taken with every lamp off, and nothing drew
