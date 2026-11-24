@@ -107,6 +107,17 @@ console.log("\n  a model too heavy to load:");
   await p;
   ck("  ...and when it does finish after all, the villa is shown", r.life.snapshot().state.kind === "ready");
 }
+{
+  const r = rig({ answers: [ok(holding(20 * MB))] });
+  let fail;
+  const p = r.life.load(() => new Promise((_, rej) => { fail = rej; }));
+  await new Promise((res) => setTimeout(res, 0));
+  r.timers.find((t) => t.live).fn();
+  fail(new Error("Scene has been disposed"));
+  const got = await p;
+  ck("an unpack stopped by the slow screen (its scene freed): that screen stays, no error screen",
+     !got.ok && got.reason === "too-heavy" && r.life.snapshot().state.kind === "too-heavy", r.life.snapshot().state);
+}
 
 console.log("\n  the add-on unreachable, then answering:");
 {

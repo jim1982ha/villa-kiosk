@@ -24,7 +24,7 @@ import { watchDisposed, staleDisposed } from "@/utils/leakWatch";
 import ModelUploader from "@/components/settings/ModelUploader";
 import ErrorReport from "@/components/ErrorReport";
 import {
-  isCrashLooping, crashLoopInfo, startLoadAttempt, noteLoadPhase, noteModel,
+  isCrashLooping, crashLoopInfo, startLoadAttempt, noteLoadPhase, noteLoadProgress, lastLoad, noteModel,
   clearCrashLoop, noteContextLoss, captureError, buildReport,
 } from "@/utils/diagnostics";
 import { adoptDetected } from "@/config/mappingEdits";
@@ -131,10 +131,13 @@ function VillaScene({
   // do: no WebGL, a lost GPU context, or a crash loop. Either wins the screen.
   const model = useModel().state;
   const [sceneFail, setSceneFail] = useState<null | "error" | "crash-loop">(null);
-  // a device too slow for the model says how far it got (ModelLoader.importSoFar), once per load
+  // a device too slow for the model says how far it got (ModelLoader.importSoFar), once per load, then its scene is
+  // freed: ⚠️ AN UNPACK LEFT RUNNING CRASHED A TV (owner, 2026-11-24), as it went on filling the device's memory
   const slow = model.kind === "too-heavy" && model.slow;
   useEffect(() => {
-    if (slow) reportTelemetry("load-slow", importSoFar() ?? { stage: "import not started" });
+    if (!slow) return;
+    reportTelemetry("load-slow", { outcome: "still unpacking", ...(importSoFar() ?? {}) });
+    managerRef.current?.dispose();
   }, [slow]);
   // Full copyable diagnostics report shown on the error / crash-loop screens.
   const [report, setReport] = useState("");
@@ -156,6 +159,9 @@ function VillaScene({
     // which tears the page down before any try/catch can run.
     if (isCrashLooping()) {
       const { count, sinceMs } = crashLoopInfo();
+      // what the killed page reached, once per opening that stops here
+      const last = lastLoad();
+      reportTelemetry("load-slow", { outcome: "page died", phase: last.phase ?? "", ...(last.progress ?? {}) });
       const cap = captureError(
         "SCENE_LOAD_CRASH_LOOP",
         new Error(
@@ -330,7 +336,9 @@ function VillaScene({
           try {
             // The versioned URL is the geometry's identity: it changes the instant a
             // different GLB is uploaded, so cached probes cannot outlive their model.
-            result = await manager.loadModel(data, url);
+            // kept every 2 s: a page killed mid-import (out of memory) still leaves how far it got
+            const keep = setInterval(() => noteLoadProgress(importSoFar()), 2000);
+            try { result = await manager.loadModel(data, url); } finally { clearInterval(keep); }
           } catch (err) {
             // the 3D view's own words for a texture without its image are an index ("/textures/364/source"): name
             // the material instead, as the upload does (a model uploaded before it refused those can still be one)
@@ -901,11 +909,10 @@ function VillaScene({
           title="The villa couldn't be displayed on this device"
           hint={
             <>
-              The 3D view failed to load several times in a row, so it was stopped
-              to avoid an endless reload loop. This almost always means the device
-              (typically an iPhone) ran out of memory for this model, a heavier
-              GLB (more geometry/textures) can exceed iOS Safari's per-tab limit
-              even when the same file works fine on a computer or Android phone.
+              The last try to open the 3D villa on this device stopped before it
+              finished, almost always because the device ran out of memory for this
+              model. So that it does not happen again, VESTA did not try again. The
+              same model can work on a computer or another phone.
               {canManageModel && " An Owner can upload a lighter model from Advanced Settings."}
               {" "}For troubleshooting, tap &ldquo;Show technical details&rdquo; below to copy a report.
             </>

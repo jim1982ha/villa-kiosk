@@ -329,6 +329,8 @@ export function createModelLifecycle(deps: ModelLifecycleDeps): ModelLifecycle {
       return { ok: true, result, cfg, url, data, prefetched, kept };
     } catch (error) {
       if (stale()) return { ok: false, reason: "cancelled" };
+      // the unpack ended by the slow screen itself (BabylonCanvas frees the scene there): that screen stays
+      if (snap.state.kind === "too-heavy") return { ok: false, reason: "too-heavy" };
       const message = (error as Error)?.message ?? String(error);
       state({ kind: "error", code, message, addon: false });
       return { ok: false, reason: "error", code, error };

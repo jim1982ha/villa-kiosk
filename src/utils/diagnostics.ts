@@ -26,10 +26,12 @@ import { detectPointerClass } from "@/babylon/badgeMetrics";
 import { readJson, writeJson } from "@/utils/storedJson";
 
 const DIAG_KEY = "villa-kiosk:diag";
-// Two rapid attempts that never ended already in the window → the next mount is the 3rd,
-// so we bail then. Window is short so an occasional real reload never trips it.
-const CRASH_LOOP_THRESHOLD = 2;
-const CRASH_LOOP_WINDOW_MS = 90_000;
+// ⚠️ ONE LOAD THAT NEVER ENDED STOPS THE NEXT (owner, 2026-11-24: opening the villa crashed a TV, and the next try
+// would have crashed it again; two in 90 s caught an iPhone reload loop but never a device reopened by hand). Only a
+// page killed mid-load leaves its attempt standing (a reload, a hidden page, a caught error all end theirs), so one
+// is already the signal; "Try once more" clears it. The window only forgets a kill from another day.
+const CRASH_LOOP_THRESHOLD = 1;
+const CRASH_LOOP_WINDOW_MS = 6 * 3600_000;
 
 type LoadPhase =
   | "engine-init"
@@ -55,6 +57,8 @@ interface DiagState {
   phase?: LoadPhase;                // furthest phase reached on the last attempt
   model?: { path?: string; bytes?: number; sha256?: string };
   lastError?: CapturedError | null; // most recent captured JS error (may predate a crash)
+  /** How far the last import got (ModelLoader.importSoFar), kept as it runs: what a killed page reached. */
+  progress?: Record<string, number | string> | null;
   contextLosses?: number;
 }
 
@@ -133,6 +137,17 @@ export function startLoadAttempt(now = Date.now()): LoadAttempt {
 
 export function noteLoadPhase(phase: LoadPhase): void {
   write({ phase });
+}
+
+/** The running import's progress, kept so a page killed mid-load still tells how far it got. */
+export function noteLoadProgress(progress: Record<string, number | string> | null): void {
+  write({ progress });
+}
+
+/** The last load's furthest phase and progress, as the page that ran it left them. */
+export function lastLoad(): { phase?: LoadPhase; progress?: Record<string, number | string> | null } {
+  const { phase, progress } = read();
+  return { phase, progress };
 }
 
 export function noteModel(model: DiagState["model"]): void {
