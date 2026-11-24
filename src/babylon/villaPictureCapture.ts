@@ -6,7 +6,8 @@
 // What a picture must NOT hold, because it is kept for good and the picture view draws these live over it: the
 // badges (the GUI layer is off), the clickable outlines, the room glows, the light pools, the camera beams and the
 // sky (only the model's own meshes are drawn: SceneManager.picturesStage), the lamps (shown off for the shot:
-// EntityVisuals.lampsOff) and the curtains (every cover shown open: EntityVisuals.coversOpen). Day and night are forced
+// EntityVisuals.lampsOff) and the curtains (every cover shown open: EntityVisuals.coversOpen) and
+// the ceiling fans (hidden: EntityVisuals.ceilingFansHidden). Day and night are forced
 // (SunController.forceLook), the floor shown without becoming the active one (FloorManager.showForPicture). Everything is put back in a `finally`, then a frame is asked for.
 //
 // The canvas on screen does not change while it runs: the render loop draws nothing (picturesStage holds it) and the
@@ -166,6 +167,7 @@ export async function captureVillaPictures(
   let target: PictureTarget | null = null;
   let lampsBack: (() => void) | null = null;
   let coversBack: (() => void) | null = null;
+  let fansBack: (() => void) | null = null;
   try {
     // an unstamped badge is drawn on every floor in the 3D villa; a picture has one place for it: the lowest floor
     const detectedFloors = floors.getFloorsDetected();
@@ -181,6 +183,8 @@ export async function captureVillaPictures(
     lampsBack = visuals.lampsOff();
     const covers = visuals.coversOpen();
     coversBack = covers.back;
+    const fans = visuals.ceilingFansHidden();
+    fansBack = fans.back;
     const pictures = new Map<ViewFile, Blob>();
     for (const floor of shown) {
       floors.showForPicture(floor);
@@ -194,7 +198,8 @@ export async function captureVillaPictures(
     }
     if (interrupted()) throw new CaptureAborted();
     const manifest = buildManifest({ source, madeAt: new Date(), frame, floors: shown, size, anchors, rooms: stage.rooms,
-      covers: covers.poses.map((c) => ({ ...c, floor: c.floor ?? lowest })) });
+      covers: covers.poses.map((c) => ({ ...c, floor: c.floor ?? lowest })),
+      fans: fans.fans.map((f) => ({ ...f, floor: f.floor ?? lowest })) });
     const files = [...pictures].map(([name, blob]) => ({ name, blob }));
     files.push({ name: "manifest.json", blob: new Blob([JSON.stringify(manifest)], { type: "application/json" }) });
     return { files, manifest, bytes: files.reduce((n, f) => n + f.blob.size, 0) };
@@ -202,6 +207,7 @@ export async function captureVillaPictures(
     floors.showForPicture(null);
     lampsBack?.();
     coversBack?.();
+    fansBack?.();
     scene.clearColor = clear;
     sun.forceLook(null);
     target?.dispose();

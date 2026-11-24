@@ -56,6 +56,16 @@ export interface PictureCoverPose {
   u0: number; v0: number; u1: number; v1: number;
 }
 
+/** A ceiling fan (hidden on the pictures): its blades drawn live over them, turning while it is on. */
+export interface PictureFan {
+  id: string;
+  floor: number;
+  /** Its axle, (u, v). */
+  u: number; v: number;
+  /** Its blade tips' radius, as a fraction of the picture's width. */
+  r: number;
+}
+
 export interface PicturesManifest {
   v: 1;
   /** What the pictures were made from: when any of these changed, a capable owner device makes them again. */
@@ -72,6 +82,8 @@ export interface PicturesManifest {
   rooms: PictureRoom[];
   /** Missing in a set made before 2.496.897: no cover drawn. */
   covers?: PictureCoverPose[];
+  /** Missing in a set made before 2.496.899: the fans are in the picture. */
+  fans?: PictureFan[];
 }
 
 /** A file's URL under /model/views/, stamped with the manifest's version so a new set is never served from cache. */

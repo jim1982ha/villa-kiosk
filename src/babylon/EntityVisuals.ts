@@ -130,7 +130,7 @@ import { solveRoomZoom } from "./roomZoomSolver";
 import { RoomFocus } from "./roomFocus";
 import { PlacementCheck } from "./placementCheck";
 import { PlacementTelemetry, passSnapshot, placementReport, type PlacementReport } from "./placementReport";
-import { FanRigs } from "./fanRigs";
+import { enclosingCircle, FanRigs, isCeilingFan } from "./fanRigs";
 import {
   PlacementPass, GROUP_OVERLAP_ALLOW_WIDTHS, BADGE_PLACEMENT, cardOf as passCardOf, cellMax, drawnCells,
   roomOfEntity, placementItems as passItems, glassScratch, viewportBudget, cellCapFor, drawableMaxOf,
@@ -1221,6 +1221,33 @@ export class EntityVisuals {
       }
     }
     return { poses, back: () => { for (const [m, v] of was) m.isVisible = v; this.requestRender(); } };
+  }
+
+  /** Every ceiling fan hidden for a villa picture (villaPictureCapture): blades baked into it could never turn, so the
+   *  picture view draws them, turning while the fan is on (fanRigs.isCeilingFan: a ventilation fan stays in the
+   *  picture and never turns). Returns each one's circle (its blade tips seen from above, as fanRigs finds its axle)
+   *  and floor, and the function that shows them again. */
+  ceilingFansHidden(): { back: () => void; fans: CeilingFanCircle[] } {
+    const was: [AbstractMesh, boolean][] = [];
+    const fans: CeilingFanCircle[] = [];
+    for (const [entityId, meshes] of this.byEntity) {
+      if (this.mapping.get(entityId)?.type !== "fan" || !isCeilingFan(entityId) || !meshes.length) continue;
+      const pts: [number, number][] = [];
+      for (const m of meshes) {
+        const pos = m.getVerticesData(VertexBuffer.PositionKind);
+        if (!pos) continue;
+        const world = m.computeWorldMatrix(true);
+        for (let i = 0; i < pos.length; i += 3) {
+          const p = Vector3.TransformCoordinates(new Vector3(pos[i], pos[i + 1], pos[i + 2]), world);
+          pts.push([p.x, p.z]);
+        }
+      }
+      const c = enclosingCircle(pts);
+      if (!c) continue;
+      fans.push({ id: entityId, floor: stampedFloor(meshes[0]) ?? null, x: c.x, z: c.y, r: c.r });
+      for (const m of meshes) { was.push([m, m.isVisible]); m.isVisible = false; }
+    }
+    return { fans, back: () => { for (const [m, v] of was) m.isVisible = v; this.requestRender(); } };
   }
 
   /** Copy the cosmetic (non-structural) fields of every cached mapping across
@@ -6017,3 +6044,5 @@ export class EntityVisuals {
 
 /** A cover pose's place on the ground (EntityVisuals.coversOpen): metres, the scene's x and z. */
 export interface CoverPoseExtent { id: string; word: string; floor: number | null; minX: number; maxX: number; minZ: number; maxZ: number }
+/** A ceiling fan's circle on the ground (EntityVisuals.ceilingFansHidden): metres, the scene's x and z. */
+export interface CeilingFanCircle { id: string; floor: number | null; x: number; z: number; r: number }

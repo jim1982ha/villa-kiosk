@@ -348,14 +348,18 @@ export default function PictureView({ onEntityPicked, onEntityLongPressed, onClu
             && looks.typeOf(b.id) === "light" && panelMapping(b.id, config.entityMap, role, entities[b.id], { control: false }))
             .map((b) => (
               <span key={b.id} className="picture-lamp-pool"
-                style={{ left: `${b.u * 100}%`, top: `${b.v * 100}%`, width: size * 2.4, height: size * 2.4 }} />
+                style={{ left: `${b.u * 100}%`, top: `${b.v * 100}%`, width: size * 1.5, height: size * 1.5 }} />
             ))}
-          {manifest!.badges.filter((b) => b.floor === floor.floor && entities[b.id]?.state === "on"
-            && looks.typeOf(b.id) === "fan" && panelMapping(b.id, config.entityMap, role, entities[b.id], { control: false }))
-            .map((b) => (
-              <span key={b.id} className="picture-fan-turn"
-                style={{ left: `${b.u * 100}%`, top: `${b.v * 100}%`, width: size * 1.8, height: size * 1.8 }} />
-            ))}
+          {/* ⚠️ A CEILING FAN TURNS (owner, 2026-11-25: "instead of seeing the ceiling fan spinning, i see this red
+              circle"): the pictures are made without the ceiling fans, so their blades are drawn here, at their size,
+              turning while the fan is on as the 3D view turns them; a ventilation fan stays in the picture, still */}
+          {(manifest!.fans ?? []).filter((f) => f.floor === floor.floor).map((f) => (
+            <svg key={f.id} className={`picture-fan${entities[f.id]?.state === "on" ? " on" : ""}`} aria-hidden="true"
+              viewBox="-1 -1 2 2" style={{ left: `${f.u * 100}%`, top: `${f.v * 100}%`,
+                width: f.r * 2 * rect.w, height: f.r * 2 * rect.w }}>
+              <g className="picture-fan-blades">{FAN_BLADES}</g>
+            </svg>
+          ))}
           <span className="picture-floor-label">{floor.label}</span>
         </div>
       ))}
@@ -379,6 +383,16 @@ export default function PictureView({ onEntityPicked, onEntityLongPressed, onClu
     </div>
   );
 }
+
+/** Three blades round a hub, on a disc of radius 1: a ceiling fan seen from below the ceiling. */
+const FAN_BLADES = (
+  <>
+    {[0, 120, 240].map((a) => (
+      <path key={a} transform={`rotate(${a})`} d="M-0.13,-0.12 L-0.2,-0.95 Q0,-1.02 0.2,-0.95 L0.13,-0.12 Z" />
+    ))}
+    <circle r={0.16} />
+  </>
+);
 
 /** The sun's or the moon's drawn size, its glow included. */
 const SKY_BODY_PX = 72;

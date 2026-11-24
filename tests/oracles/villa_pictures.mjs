@@ -46,6 +46,7 @@ const made = buildManifest({
   rooms: [{ name: "Room", floor: 2, pts: [{ x: -10, z: 16 }, { x: 30, z: 16 }, { x: 30, z: -4 }] }],
   covers: [{ id: "cover.c", word: "closed", floor: 1, minX: -10, maxX: 10, minZ: 6, maxZ: 16 },
            { id: "cover.top", word: "closed", floor: 3, minX: 0, maxX: 1, minZ: 0, maxZ: 1 }],
+  fans: [{ id: "fan.ceiling_fan_a", floor: 2, x: 10, z: 6, r: 2 }],
 });
 ck("the manifest reads back as one", parseManifest(JSON.parse(JSON.stringify(made))) !== null);
 ck("  ...its badges at their device's place on their floor's picture",
@@ -53,6 +54,8 @@ ck("  ...its badges at their device's place on their floor's picture",
 ck("  ...a room's outline in the same (u, v)", JSON.stringify(made.rooms[0].pts) === "[[0,0],[1,0],[1,1]]");
 ck("  ...a drawn curtain's place as a box on its floor's picture, top-left then bottom-right",
    JSON.stringify(made.covers) === '[{"id":"cover.c","word":"closed","floor":1,"u0":0,"v0":0,"u1":0.5,"v1":0.5}]', made.covers);
+ck("  ...a ceiling fan's axle on its floor's picture, its radius a share of the picture's width",
+   JSON.stringify(made.fans) === '[{"id":"fan.ceiling_fan_a","floor":2,"u":0.5,"v":0.5,"r":0.05}]', made.fans);
 ck("  ...each floor names its two pictures", made.floors.map((f) => `${f.label}:${f.day},${f.night}`).join(" ")
    === "1F:f1-day.webp,f1-night.webp 2F:f2-day.webp,f2-night.webp");
 
