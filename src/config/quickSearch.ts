@@ -6,8 +6,6 @@
 // scene that sets one; a siren is sounded from its camera's own button, which asks.
 // ⚠️ A SCENE IS LISTED ONLY WHEN IT SETS A DEVICE THIS PROFILE MAY SWITCH: one that only sets a helper (the press of
 // an automation) or devices the profile cannot control is not this profile's to run.
-// ⚠️ A PROFILE THAT SWITCHES NOTHING SEARCHES TO LOOK (`look`: the read-only Display, owner 2026-11-24): every device its
-// lists cover is found, to open its window and see its state, and no scene is offered.
 
 import { deviceSearchTexts, matchesQuery, type SearchSource } from "./deviceRecord";
 import type { HaSceneInfo } from "./haScenes";
@@ -27,8 +25,6 @@ export interface QuickSearchSource {
   /** The rooms with a viewpoint (the Rooms window's). */
   rooms: readonly TeleportPoint[];
   scenes: readonly HaSceneInfo[];
-  /** This profile switches nothing (no controlEntities): devices are found to look at, scenes never. */
-  look?: boolean;
 }
 
 export interface QuickSearchResult {
@@ -46,9 +42,9 @@ export function quickSearch(query: string, s: QuickSearchSource): QuickSearchRes
   const listed = new Set(s.devices);
   const rooms = s.rooms.filter((r) => matchesQuery(query, r.name));
   const devices = s.devices
-    .filter((id) => (s.look || switchable(id)) && matchesQuery(query, ...deviceSearchTexts(id, s.src)))
+    .filter((id) => switchable(id) && matchesQuery(query, ...deviceSearchTexts(id, s.src)))
     .slice(0, SEARCH_DEVICE_LIMIT);
-  const scenes = s.look ? [] : s.scenes.filter((sc) =>
+  const scenes = s.scenes.filter((sc) =>
     !sc.memberEntityIds.some(isSiren)
     && sc.memberEntityIds.some((id) => listed.has(id) && switchable(id))
     && matchesQuery(query, sc.name, ...sc.rooms));

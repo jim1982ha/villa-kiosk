@@ -1,3 +1,10 @@
+## 2.496.894
+
+- **The two floors sit side by side on a wide screen.** On a TV or a computer the pictures show 1F on the left and
+  2F on the right, so each floor is larger. On a phone held upright they stay stacked, 2F over 1F.
+- **No Display profile any more.** VESTA UI has its three profiles again: Owner, Facility Manager and Guest. A device
+  that cannot show the 3D villa shows the pictures whichever profile is signed in, with that profile's usual rights.
+
 ## 2.496.893
 
 - **A device too weak for the 3D villa shows pictures of it instead.** As VESTA UI opens, it checks the device first

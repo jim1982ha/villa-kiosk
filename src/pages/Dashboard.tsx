@@ -303,10 +303,8 @@ export default function Dashboard() {
   const onEntityPicked = useCallback(
     (entityId: string, clientX: number, clientY: number) => {
       // RBAC: the scene already hides badges for denied entities, but the raw
-      // 3D mesh is still tappable — the one panel gate (permissions.panelMapping). ⚠️ A PROFILE THAT SWITCHES NOTHING
-      // STILL LOOKS (the read-only Display, owner 2026-11-24: a TV shows every state): the tap opens the device's window
-      // to look, its controls greyed (PanelActions may.control), and never quick-toggles.
-      const mapping = panelMapping(entityId, config.entityMap, role, entities[entityId], { control: canControl });
+      // 3D mesh is still tappable — the one panel gate (permissions.panelMapping).
+      const mapping = panelMapping(entityId, config.entityMap, role, entities[entityId], { control: true });
       if (!mapping) return;
 
       // Simple on/off entities act in-world without the panel: a tap toggles
@@ -314,7 +312,7 @@ export default function Dashboard() {
       // onEntityLongPressed below) — that's the deliberate, harder-to-trigger
       // action a "confirm before acting" gate would otherwise provide.
       const entity = entities[entityId];
-      if (canControl && isQuickToggle(mapping, entity)) {
+      if (isQuickToggle(mapping, entity)) {
         HAServices.power(ws, entity, entityId);
         // No panel opens for this path, so nothing on screen changes until
         // HA's real state_changed round-trip lands — spawn a tap ripple right
@@ -327,7 +325,7 @@ export default function Dashboard() {
       // Rich entities (sliders, streams, info) open their control panel as before.
       go({ type: "openDevice", panel: { entityId } });
     },
-    [config.entityMap, entities, ws, role, canControl, spawnRipple],
+    [config.entityMap, entities, ws, role, spawnRipple],
   );
 
   // Long-press always opens the full control panel — even for quick-toggle
@@ -335,7 +333,7 @@ export default function Dashboard() {
   // panel popping up on every casual tap.
   const onEntityLongPressed = useCallback(
     (entityId: string, clientX: number, clientY: number) => {
-      const mapping = panelMapping(entityId, config.entityMap, role, entities[entityId], { control: canControl });
+      const mapping = panelMapping(entityId, config.entityMap, role, entities[entityId], { control: true });
       if (!mapping) return;
       // Acknowledge the HOLD itself, the moment it's recognised (the gesture
       // now fires mid-press, not on release — see TapRecognizer). Every
@@ -359,7 +357,7 @@ export default function Dashboard() {
     },
     // `entities` is read (the category — and so the permission — can depend
     // on a device's device_class); it was missing, so this judged a stale one.
-    [config.entityMap, entities, role, canControl, spawnRipple],
+    [config.entityMap, entities, role, spawnRipple],
   );
 
   // Announce motion the moment it's detected, wherever it happens: a brief

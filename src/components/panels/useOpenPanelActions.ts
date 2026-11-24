@@ -104,7 +104,7 @@ export function useOpenPanelActions({ screen, open: activePanel, go, panelFor, r
       readings,
       onOpenReading: openReading,
       back: backText ? { label: backText, go: goBack } : undefined,
-      may: { edit: doors.editDevices, reportFault: doors.reportFault, control: canControl },
+      may: { edit: doors.editDevices, reportFault: doors.reportFault },
       // Owner-only: jump straight to this device's row in Advanced Settings.
       onEdit: () => go({ type: "editDevice" }),
       // Every profile can report; only some can MANAGE. A guest gets a

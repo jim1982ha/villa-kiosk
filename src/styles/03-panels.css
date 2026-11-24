@@ -325,12 +325,6 @@ button[aria-busy="true"] { animation: command-waiting 0.9s ease-in-out infinite;
    they take a line of their own above them (below) and the usual buttons stay where every camera has them. */
 .camera-device-controls { display: contents; }
 .camera-device-controls:empty { display: none; }
-/* A read-only profile's controls (ControlFrame): one disabled fieldset, no box of its own, the controls laid out as
-   for every other profile and dimmed as any disabled control. */
-.device-controls-readonly { display: contents; border: 0; margin: 0; padding: 0; min-width: 0; }
-/* ...greyed, every one alike: the big power button, the steppers and the sliders had no disabled look of their own and
-   still read as pressable on the read-only Display */
-.device-controls-readonly :is(button, input, select):disabled { opacity: 0.45; cursor: default; filter: saturate(0.4); }
 @media (max-width: 720px) and (orientation: portrait) {
   .camera-device-controls {
     display: flex; flex: 0 0 100%; order: -1; justify-content: flex-end; gap: 8px; min-width: 0;

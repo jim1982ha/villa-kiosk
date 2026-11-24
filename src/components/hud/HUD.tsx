@@ -60,7 +60,6 @@ import { useVillaAttention } from "@/components/cockpit/useVillaAttention";
 import type { VillaHealthLevel } from "@/config/attention";
 import { formatCountBadge, withCount } from "@/utils/countBadge";
 import { useConversation } from "@/messages/ConversationContext";
-import { talksToVesta } from "@/messages/conversation";
 import { useAnnouncements } from "@/messages/AnnouncementsContext";
 import { countOf } from "@/utils/countOf";
 import Button from "@/components/common/Button";
@@ -188,8 +187,6 @@ export default function HUD({
   // every profile makes. `doors.agent` still says whether this profile is shown the Agent at all.
   const { thread, talker } = useConversation();
   const robot = doors.agent && thread.shown;
-  // "Ask VESTA" (the bar's button, the phone's and the menu's row): while VESTA runs, to a profile that talks to it
-  const talkShown = thread.shown && talksToVesta(role);
   const agentTitle = "VESTA Agent, online";
   // The agent's presence as the dot on its robot — the top bar's and the
   // phone menu's are this one element (.status-dot, 2.496.247): shown only while it runs.
@@ -349,9 +346,9 @@ export default function HUD({
   // The phone's "Ask VESTA" beside its gear, when the bar has room for it (owner, 2026-10-31): the room is the bar's
   // own measurement (barRoom), never a device rule.
   const barRef = useRef<HTMLDivElement | null>(null);
-  const barMic = barMicShown(talkShown, useBarRoom(barRef));
+  const barMic = barMicShown(thread.shown, useBarRoom(barRef));
   // ...and the menu's row only where that button is not (owner, 2026-10-31): one decision for both
-  const menuAsk = menuAskShown(talkShown, barMic);
+  const menuAsk = menuAskShown(thread.shown, barMic);
   const [legendOpen, setLegendOpen] = useState(false);
 
   // The view toggle + default-view anchor (and their tap-vs-hold gesture) live
@@ -639,7 +636,7 @@ export default function HUD({
                 bottom right. Without one, the ⚠ as before. */}
             {/* VESTA's conversation, its own button beside the robot (owner, 2026-10-29), every profile, while VESTA runs:
                 tap to open it, hold to talk where the page can record (ticket 23 of "One inbox") */}
-            {talkShown && (
+            {thread.shown && (
               <TalkButton place="bar" onOpen={onAskVesta} onTap={onAskVesta}
                 idle={talker ? "Ask VESTA: tap to open, hold to talk" : "Ask VESTA"} caption={caption("Voice")} />
             )}

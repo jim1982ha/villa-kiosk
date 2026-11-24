@@ -600,10 +600,6 @@ def _service_call_allowed(role: str, domain: str, service: str, targets: list[st
     permissions.ts's category/type matrix would otherwise show them."""
     if _may(role, "administer"):
         return True
-    if not _may(role, "controlEntities"):
-        # a profile that switches nothing (the read-only Display, owner 2026-11-24: a TV in the villa) sends no service
-        # call at all: its app greys every control, and this is the refusal behind it, over websocket and REST alike
-        return False
     if domain == "homeassistant":
         return service in ALLOWED_HOMEASSISTANT_SERVICES
     if SCENE_SELECT_DOMAIN and domain == SCENE_SELECT_DOMAIN and domain not in ALLOWED_SERVICE_DOMAINS:
@@ -1530,11 +1526,8 @@ async def auth_check_handler(request: web.Request) -> web.Response:
 # PIN configured in the add-on options. Verification lives HERE so the PINs
 # never reach the browser (the /addon-config route deliberately omits them).
 
-AUTH_ROLES = ("guest", "owner", "ops", "display")
-# The read-only Display (owner, 2026-11-24: the villa shown on a TV, nothing switched) has NO passcode option: it opens
-# only through Ingress (_profile_enabled), and _configured_pin answers "" for it.
+AUTH_ROLES = ("guest", "owner", "ops")
 PIN_OPTION = {"guest": "guest_pin", "owner": "owner_pin", "ops": "ops_pin"}
-PINLESS_IN_INGRESS = ("guest", "display")
 # PIN_RE: see OPTIONS.
 
 # ── Superadmin elevation ─────────────────────────────────────────────────
@@ -1769,8 +1762,7 @@ def _configured_pin(role: str) -> str:
     treated as unset rather than comparable — never let a weird value widen
     what a submitted string could match.
     """
-    option = PIN_OPTION.get(role)
-    return opt(option) if option else ""
+    return opt(PIN_OPTION[role])
 
 
 def _configured_superadmin_pin() -> str:
@@ -1849,18 +1841,13 @@ def _profile_enabled(role: str, ingress: bool) -> bool:
     the person has already proved who they are. On the direct port and the
     tunnel an empty guest passcode used to mean "anyone who finds the hostname
     may open the doors" (2.496.207). The option text said so; it was still the
-    wrong default for a hostname that is one guess away.
-
-    The Display (read only, never a passcode: owner 2026-11-24) opens the same way as a passcode-less Guest: inside the
-    villa's system only, never on the direct port or the tunnel."""
+    wrong default for a hostname that is one guess away."""
     if _configured_pin(role):
         return True
-    return role in PINLESS_IN_INGRESS and ingress
+    return role == "guest" and ingress
 
 
 def _profile_disabled_text(role: str) -> str:
-    if role == "display":
-        return "The Display profile can only be opened from inside the villa's system."
     if role == "guest":
         return ("The Guest profile has no passcode set, so it can only be opened "
                 "from inside Home Assistant.")
@@ -2535,7 +2522,7 @@ async def auth_verify_handler(request: web.Request) -> web.Response:
         return body
     role = body.get("role")
     pin = body.get("pin")
-    # Whitelist validation: role must be one of the known profiles (AUTH_ROLES).
+    # Whitelist validation: role must be one of the three known profiles.
     if role not in AUTH_ROLES:
         return web.json_response({"error": "unknown role"}, status=400)
 
@@ -5550,9 +5537,8 @@ async def _fire_press(app: web.Application, data: dict) -> bool:
 
 
 async def announcement_press_handler(request: web.Request) -> web.Response:
-    """`{"key", "command"}` — every profile that switches devices (`controlEntities`, its door in _routes: the doorbell's
-    Unlock opens the gate, which a read-only Display never does): 200 once the press is on the villa's bus, 409 when no
-    kept announcement offers that button (any more), 502 when the villa's system was not reached."""
+    """`{"key", "command"}` — every profile: 200 once the press is on the villa's bus, 409 when no kept announcement
+    offers that button (any more), 502 when the villa's system was not reached."""
     body = await _json_object(request)
     if isinstance(body, web.Response):
         return body
@@ -5933,8 +5919,7 @@ def _routes() -> tuple:
         ("GET", "/announcements", SIGNED_IN, announcements_handler),
         ("GET", "/announcement-photo/{id}", SIGNED_IN, announcement_photo_handler),
         ("GET", "/vesta-messages", SIGNED_IN, vesta_messages_handler),
-        ("POST", "/announcement-press", _profiles("controlEntities", "This profile shows the villa only: it presses nothing."),
-         announcement_press_handler),
+        ("POST", "/announcement-press", SIGNED_IN, announcement_press_handler),
         ("POST", "/visit-press", _profiles(str(VISIT_PRESS.get("capability") or "administer"),
                                            "Only the owner or the facility manager answers an alert."),
          visit_press_handler),

@@ -17,22 +17,37 @@ export function containRect(box: Rect, picW: number, picH: number): Rect {
   return { x: box.x + (box.w - w) / 2, y: box.y + (box.h - h) / 2, w, h };
 }
 
-/** Each floor's band of `area`, the highest floor on top (owner, 2026-11-24: 2F over 1F, 1F at the bottom), bands
- *  sized to their pictures' heights at a common width so one picture is not shrunk for another's shape. */
+/** Each floor's band of `area`. ⚠️ SIDE BY SIDE ON A WIDE SCREEN (owner, 2026-11-24: "split the view vertically ...
+ *  as it fits more the 16/9 aspect of TV screens"): 1F on the left, 2F on its right; stacked (2F over 1F, 1F at the
+ *  bottom, the first ask) where that draws the pictures larger, a phone held upright. Whichever arrangement gives the
+ *  pictures the larger scale wins, so no screen gets one shrunk for nothing. Bands are sized to their pictures at a
+ *  common scale so one picture is not shrunk for another's shape. */
 export function floorBands(area: Rect, floors: readonly PictureFloor[], gap: number): { floor: PictureFloor; band: Rect }[] {
-  const order = [...floors].sort((a, b) => b.floor - a.floor);
-  if (order.length === 0) return [];
-  const free = Math.max(0, area.h - gap * (order.length - 1));
-  const weights = order.map((f) => (f.width > 0 ? f.height / f.width : 1));
-  const total = weights.reduce((s, x) => s + x, 0) || 1;
-  // the area's whole width fits every floor with height to spare (a phone upright): the floors kept together, the
-  // stack centred, rather than each alone in the middle of its half
-  const tall = area.w * total <= free;
-  let y = tall ? area.y + (free - area.w * total) / 2 : area.y;
-  return order.map((floor, i) => {
-    const h = tall ? area.w * weights[i] : (free * weights[i]) / total;
-    const band = { x: area.x, y, w: area.w, h };
-    y += h + gap;
+  if (floors.length === 0) return [];
+  const dims = floors.map((f) => (f.width > 0 && f.height > 0 ? { w: f.width, h: f.height } : { w: 1, h: 1 }));
+  const n = floors.length;
+  // side by side: widths add up, the tallest sets the height
+  const rowScale = Math.min(Math.max(0, area.w - gap * (n - 1)) / dims.reduce((s, d) => s + d.w, 0),
+    area.h / Math.max(...dims.map((d) => d.h)));
+  // stacked: heights add up, the widest sets the width
+  const colScale = Math.min(area.w / Math.max(...dims.map((d) => d.w)),
+    Math.max(0, area.h - gap * (n - 1)) / dims.reduce((s, d) => s + d.h, 0));
+  if (rowScale >= colScale) {
+    const order = floors.map((floor, i) => ({ floor, d: dims[i] })).sort((a, b) => a.floor.floor - b.floor.floor);
+    const used = order.reduce((s, o) => s + o.d.w * rowScale, 0) + gap * (n - 1);
+    let x = area.x + (area.w - used) / 2;
+    return order.map(({ floor, d }) => {
+      const band = { x, y: area.y, w: d.w * rowScale, h: area.h };
+      x += band.w + gap;
+      return { floor, band };
+    });
+  }
+  const order = floors.map((floor, i) => ({ floor, d: dims[i] })).sort((a, b) => b.floor.floor - a.floor.floor);
+  const used = order.reduce((s, o) => s + o.d.h * colScale, 0) + gap * (n - 1);
+  let y = area.y + (area.h - used) / 2;
+  return order.map(({ floor, d }) => {
+    const band = { x: area.x, y, w: area.w, h: d.h * colScale };
+    y += band.h + gap;
     return { floor, band };
   });
 }

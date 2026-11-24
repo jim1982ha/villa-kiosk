@@ -9,12 +9,16 @@ const floor = (n) => ({ floor: n, label: `${n}F`, day: `f${n}-day.webp`, night: 
 
 console.log("\n  the floors:");
 {
-  const bands = floorBands({ x: 0, y: 60, w: 1366, h: 700 }, [floor(1), floor(2)], 10);
-  ck("2F is drawn above 1F, 1F at the bottom", bands[0].floor.floor === 2 && bands[1].floor.floor === 1
-     && bands[0].band.y + bands[0].band.h <= bands[1].band.y, bands.map((b) => [b.floor.label, b.band]));
+  const tv = floorBands({ x: 0, y: 60, w: 960, h: 400 }, [floor(2), floor(1)], 10);
+  ck("on a wide TV the floors sit side by side, 1F on the left", tv[0].floor.floor === 1 && tv[1].floor.floor === 2
+     && tv[0].band.x + tv[0].band.w <= tv[1].band.x && tv[0].band.y === tv[1].band.y, tv.map((b) => [b.floor.label, b.band]));
+  const stackedH = (400 - 10) / 2;   // what each picture would get stacked
+  ck("  ...and each picture is larger than it would be stacked", tv[0].band.w / 1.6 > stackedH, tv.map((b) => b.band));
   const phone = floorBands({ x: 0, y: 60, w: 390, h: 700 }, [floor(1), floor(2)], 10);
+  ck("on an upright phone 2F is stacked above 1F", phone[0].floor.floor === 2 && phone[1].floor.floor === 1
+     && phone[0].band.y + phone[0].band.h <= phone[1].band.y, phone.map((b) => [b.floor.label, b.band]));
   const gap = phone[1].band.y - (phone[0].band.y + phone[0].band.h);
-  ck("on an upright phone the two floors sit together, not each alone in its half", gap === 10, phone.map((b) => b.band));
+  ck("  ...the two floors sit together, not each alone in its half", Math.abs(gap - 10) < 1e-9, phone.map((b) => b.band));
   const r = containRect({ x: 0, y: 0, w: 1000, h: 300 }, 1600, 1000);
   ck("a picture keeps its shape, whole and centred in its band", Math.abs(r.w / r.h - 1.6) < 1e-9 && r.h === 300 && r.x > 0, r);
 }

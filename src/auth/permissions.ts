@@ -209,13 +209,10 @@ export function mayControlDevice(
  * long-press against a stale entity snapshot), and the summary tile's opener
  * checked nothing at all, relying on the tile having checked first.
  *
- * `control`: the caller opens it to ACT (a tap may toggle it), so it needs
- * the controlEntities capability too; `control: false` opens it to LOOK, which
- * the category and type alone decide (a summary tile, a list's row, and the
- * map's tap for a profile without controlEntities: the read-only Display,
- * owner 2026-11-24). Inside the window, ControlFrame greys every control for
- * such a profile (PanelActions may.control), and the add-on refuses its
- * service calls (_service_call_allowed) — the panels themselves check nothing.
+ * `control`: opening from the 3D model is an ACTION on the device (a tap may
+ * toggle it), so it needs the controlEntities capability too; a summary tile
+ * opens the panel to LOOK, which the category alone decides — the panel's own
+ * controls enforce control rights for anything done inside it.
  */
 export function panelMapping(
   entityId: string,

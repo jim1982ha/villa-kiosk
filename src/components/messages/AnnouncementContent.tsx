@@ -119,10 +119,7 @@ export function RecordButtons({ record }: { record: Pressable }) {
   const { presses, press, numberOf } = useAnnouncementPress(record);
   const { answers } = useConversation();
   const { ask, dialog } = useConfirmDialog();
-  const role = profile?.role ?? null;
-  // a signed-in profile that switches nothing (the read-only Display) presses nothing; a card drawn with no profile
-  // (none signed in yet) keeps the buttons every profile is offered, the add-on judging the press
-  const offered = offeredButtons(record.buttons, roleCan(role, "viewAgent"), role === null || roleCan(role, "controlEntities"));
+  const offered = offeredButtons(record.buttons, roleCan(profile?.role ?? null, "viewAgent"));
   // VESTA's answer to the last of this record's presses that has one
   const answer = offered.map((b) => numberOf(b.command)).reverse()
     .map((n) => (n !== undefined ? answers.get(n) : undefined)).find(Boolean);
