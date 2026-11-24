@@ -1,3 +1,13 @@
+## 2.496.892
+
+- **Opening the villa can no longer crash a slow device twice.** If a device stopped in the middle of opening the 3D
+  villa (it ran out of memory, or the whole device crashed), VESTA no longer tries again the next time it opens. It
+  says so, with a "Try once more" button. Until now it took two such stops in a row within 90 seconds.
+- **A device still opening the villa after 3 minutes stops trying.** It frees its memory at once instead of carrying
+  on in the background, which is what crashed a TV.
+- **Both cases report how far the device got** (Settings › Advanced › Device telemetry), even when the device
+  crashed: it keeps its progress as it goes.
+
 ## 2.496.891
 
 - **A device too slow for the 3D villa reports how far it got.** When the villa's model is still opening after 3
