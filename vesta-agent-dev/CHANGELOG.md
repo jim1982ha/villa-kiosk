@@ -1,3 +1,15 @@
+## 0.12.540
+
+- **One message for a critical device offline, the alert's.** When a device the villa's critical-devices Automation
+  watches went offline, the night check's "devices offline" message and the Automation's alert both reached the FM,
+  a minute apart. The check now leaves such a device to the Automation's alert for 15min (setting "alert wait
+  minutes"); it tells the device itself only if no alert came by then.
+- **"All back to normal." only when everything is back.** A message whose device was taken over by an alert said
+  "All back to normal." while the device was still offline. It now keeps its title; its Status line still says which
+  alert follows it.
+- **"Happened again:"** replaces "Back again:" in the night check's messages: it means the problem came back, not
+  the device.
+
 ## 0.12.539
 
 - **"Not a problem" holds until the problem is over.** It used to stop the villa's Automation repeating an alert for
