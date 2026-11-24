@@ -19,6 +19,8 @@ It also serves local helper routes (no Supervisor token involved):
        (GLB) or its room-data sidecar (.rooms.json) under the add-on's own
        persistent /data volume (atomic overwrite), so the kiosk can be re-skinned
        from its own Settings UI instead of SSH/Samba.
+  POST /model-views?name=<file> -> stores one of the villa pictures (a .webp, or
+       their manifest.json) under views/, next to the model (villaPictures.ts).
   GET  /auth/roles    -> which kiosk profiles require a passcode (booleans only).
   POST /auth/verify   -> server-side profile passcode check. The configured PINs
        (guest_pin/owner_pin/ops_pin add-on options) never leave this process:
@@ -598,6 +600,10 @@ def _service_call_allowed(role: str, domain: str, service: str, targets: list[st
     permissions.ts's category/type matrix would otherwise show them."""
     if _may(role, "administer"):
         return True
+    if not _may(role, "controlEntities"):
+        # a profile that switches nothing (the read-only Display, owner 2026-11-24: a TV in the villa) sends no service
+        # call at all: its app greys every control, and this is the refusal behind it, over websocket and REST alike
+        return False
     if domain == "homeassistant":
         return service in ALLOWED_HOMEASSISTANT_SERVICES
     if SCENE_SELECT_DOMAIN and domain == SCENE_SELECT_DOMAIN and domain not in ALLOWED_SERVICE_DOMAINS:
@@ -763,6 +769,15 @@ UPLOAD_MAGIC = {
     "glb": (b"glTF",),
     "rooms": (b"{", b"\xef\xbb\xbf{"),
 }
+
+# THE VILLA PICTURES (owner, 2026-11-24): a device too weak for the 3D villa shows a still picture of each floor,
+# made on a capable device of a profile that may manage the model and stored here, under views/ next to the model,
+# served by nginx's /model/ like the model itself. Only these names, nothing else (the frontend's VIEW_FILES), each
+# checked for what it claims to be: the same defence as the model upload, so this door cannot publish an arbitrary
+# file. A picture is a 1600 px webp, well under the cap; the cap only bounds a bad body.
+VIEWS_DIR = "views"
+VIEW_FILES = ("manifest.json", "f1-day.webp", "f1-night.webp", "f2-day.webp", "f2-night.webp")
+VIEW_MAX_BYTES = 8 * 1024 * 1024
 
 # Headers that must not be copied verbatim when relaying a proxied response.
 HOP_BY_HOP = {
@@ -1270,12 +1285,30 @@ async def _cleanup_stale_options(session: ClientSession) -> None:
 
 
 def _remove_model_files() -> list[str]:
-    """Delete the uploaded model, its room-data sidecar and their upload records; the names actually removed. The
-    kiosk then shows its "No 3D model loaded yet" screen with the uploader."""
+    """Delete the uploaded model, its room-data sidecar, their upload records and the villa pictures made from them;
+    the names actually removed. The kiosk then shows its "No 3D model loaded yet" screen with the uploader."""
     www = _data(WWW_NAME)
     glb = MANAGED_PATH["glb"]
     gone = []
     for rel in (glb, glb + ".upload.json", _rooms_rel(glb), _rooms_rel(glb) + ".upload.json"):
+        try:
+            os.remove(os.path.join(www, rel))
+            gone.append(rel)
+        except FileNotFoundError:
+            pass
+        except OSError as err:
+            print(f"[supervisor-proxy] could not remove {rel}: {err}", flush=True)
+    return gone + _remove_views()
+
+
+def _remove_views() -> list[str]:
+    """Delete the villa pictures (views/); the names actually removed. Called whenever the model or its room data is
+    replaced or removed: a picture of the previous model would show badges on walls that moved, and the picture view
+    reads a missing manifest as "no pictures yet" until a capable device makes new ones."""
+    www = _data(WWW_NAME)
+    gone = []
+    for name in VIEW_FILES:
+        rel = f"{VIEWS_DIR}/{name}"
         try:
             os.remove(os.path.join(www, rel))
             gone.append(rel)
@@ -1383,6 +1416,8 @@ def _effective_paths() -> dict:
         "rooms_upload": _upload_meta(_rooms_rel(model_rel)) if model_rel else None,
         "model_version": _file_version(model_rel) if model_rel else "",
         "rooms_version": _file_version(_rooms_rel(model_rel)) if model_rel else "",
+        # The pictures' manifest is written LAST of its set, so its version stamps the whole set (villaPictures.ts).
+        "views_version": _file_version(f"{VIEWS_DIR}/manifest.json"),
     }
 
 
@@ -1414,6 +1449,46 @@ def _resolve_upload_target(kind: str) -> str:
     if dest != root and not dest.startswith(root + os.sep):
         raise ValueError("resolved path escapes the data root")
     return dest
+
+
+def _resolve_view_target(name: str) -> str:
+    """Absolute, traversal-checked destination of one villa picture file; ValueError for a name outside VIEW_FILES
+    or a path that escapes views/ (a symlinked views/ pointing elsewhere, say)."""
+    if name not in VIEW_FILES:
+        raise ValueError("not a villa picture file")
+    www = os.path.realpath(_data(WWW_NAME))
+    dest = os.path.realpath(os.path.join(www, VIEWS_DIR, name))
+    if dest != os.path.join(www, VIEWS_DIR, name):
+        raise ValueError("resolved path escapes the views folder")
+    return dest
+
+
+def _view_body_ok(name: str, body: bytes) -> bool:
+    """A picture is a webp (RIFF....WEBP), the manifest a JSON object."""
+    if name.endswith(".webp"):
+        return len(body) >= 12 and body[:4] == b"RIFF" and body[8:12] == b"WEBP"
+    return body.lstrip()[:1] == b"{"
+
+
+async def model_views_handler(request: web.Request) -> web.Response:
+    """Store one villa picture file (villaPictures.ts): the device that made the set posts the four pictures, then
+    the manifest LAST, so a reader never sees a manifest pointing at pictures not yet written. Atomic like every
+    write here: a reader gets the old file or the new one."""
+    name = request.query.get("name", "")
+    try:
+        dest = _resolve_view_target(name)
+    except ValueError as err:
+        print(f"[supervisor-proxy] view target rejected: {err}", flush=True)
+        return web.json_response({"error": "not a villa picture file"}, status=400)
+    body = bytearray()
+    async for chunk in request.content.iter_chunked(64 * 1024):
+        body.extend(chunk)
+        if len(body) > VIEW_MAX_BYTES:
+            return web.json_response({"error": "picture too large"}, status=413)
+    if not _view_body_ok(name, bytes(body)):
+        return web.json_response({"error": "not a picture of that kind"}, status=400)
+    await asyncio.to_thread(atomic_write, dest, lambda out: out.write(body))
+    return web.json_response({"ok": True, "name": name, "bytes": len(body)})
 
 
 async def addon_config_handler(request: web.Request) -> web.Response:
@@ -1455,8 +1530,11 @@ async def auth_check_handler(request: web.Request) -> web.Response:
 # PIN configured in the add-on options. Verification lives HERE so the PINs
 # never reach the browser (the /addon-config route deliberately omits them).
 
-AUTH_ROLES = ("guest", "owner", "ops")
+AUTH_ROLES = ("guest", "owner", "ops", "display")
+# The read-only Display (owner, 2026-11-24: the villa shown on a TV, nothing switched) has NO passcode option: it opens
+# only through Ingress (_profile_enabled), and _configured_pin answers "" for it.
 PIN_OPTION = {"guest": "guest_pin", "owner": "owner_pin", "ops": "ops_pin"}
+PINLESS_IN_INGRESS = ("guest", "display")
 # PIN_RE: see OPTIONS.
 
 # ── Superadmin elevation ─────────────────────────────────────────────────
@@ -1691,7 +1769,8 @@ def _configured_pin(role: str) -> str:
     treated as unset rather than comparable — never let a weird value widen
     what a submitted string could match.
     """
-    return opt(PIN_OPTION[role])
+    option = PIN_OPTION.get(role)
+    return opt(option) if option else ""
 
 
 def _configured_superadmin_pin() -> str:
@@ -1770,13 +1849,18 @@ def _profile_enabled(role: str, ingress: bool) -> bool:
     the person has already proved who they are. On the direct port and the
     tunnel an empty guest passcode used to mean "anyone who finds the hostname
     may open the doors" (2.496.207). The option text said so; it was still the
-    wrong default for a hostname that is one guess away."""
+    wrong default for a hostname that is one guess away.
+
+    The Display (read only, never a passcode: owner 2026-11-24) opens the same way as a passcode-less Guest: inside the
+    villa's system only, never on the direct port or the tunnel."""
     if _configured_pin(role):
         return True
-    return role == "guest" and ingress
+    return role in PINLESS_IN_INGRESS and ingress
 
 
 def _profile_disabled_text(role: str) -> str:
+    if role == "display":
+        return "The Display profile can only be opened from inside the villa's system."
     if role == "guest":
         return ("The Guest profile has no passcode set, so it can only be opened "
                 "from inside Home Assistant.")
@@ -2451,7 +2535,7 @@ async def auth_verify_handler(request: web.Request) -> web.Response:
         return body
     role = body.get("role")
     pin = body.get("pin")
-    # Whitelist validation: role must be one of the three known profiles.
+    # Whitelist validation: role must be one of the known profiles (AUTH_ROLES).
     if role not in AUTH_ROLES:
         return web.json_response({"error": "unknown role"}, status=400)
 
@@ -2675,6 +2759,7 @@ async def _chunked_upload(request: web.Request, kind: str, dest: str,
         # See the single-shot handler for why 0644 before the atomic replace.
         os.chmod(part, 0o644)
         os.replace(part, dest)
+        _remove_views()
     except web.HTTPException:
         # REFUSED (not a GLB, over the size cap, an empty piece): the upload
         # is over, and its pieces go with it.
@@ -2736,6 +2821,8 @@ async def model_upload_handler(request: web.Request) -> web.Response:
         return total
 
     total = await atomic_write_async(dest, _stream)
+    # The pictures were made from the file just replaced: they go with it (_remove_views).
+    _remove_views()
 
     _write_upload_sidecar(request, dest)
     rel = os.path.relpath(dest, os.path.realpath(_data(WWW_NAME)))
@@ -5463,8 +5550,9 @@ async def _fire_press(app: web.Application, data: dict) -> bool:
 
 
 async def announcement_press_handler(request: web.Request) -> web.Response:
-    """`{"key", "command"}` — every profile: 200 once the press is on the villa's bus, 409 when no kept announcement
-    offers that button (any more), 502 when the villa's system was not reached."""
+    """`{"key", "command"}` — every profile that switches devices (`controlEntities`, its door in _routes: the doorbell's
+    Unlock opens the gate, which a read-only Display never does): 200 once the press is on the villa's bus, 409 when no
+    kept announcement offers that button (any more), 502 when the villa's system was not reached."""
     body = await _json_object(request)
     if isinstance(body, web.Response):
         return body
@@ -5817,6 +5905,9 @@ def _routes() -> tuple:
         # overwrite the villa model every kiosk loads.
         ("POST", "/model-upload", _profiles("manageModel", "Only the owner profile may upload a model."),
          model_upload_handler),
+        # the villa pictures are made where the model is managed, and read by everyone through /model/views/
+        ("POST", "/model-views", _profiles("manageModel", "Only a profile that may manage the model may store its pictures."),
+         model_views_handler),
         # a guest still reads the device config, to see the right badges and rooms at all
         ("GET", "/device-config", SIGNED_IN, device_config_get_handler),
         ("PUT", "/device-config", _store_editors("editConfig", "device configuration"), device_config_put_handler),
@@ -5842,7 +5933,8 @@ def _routes() -> tuple:
         ("GET", "/announcements", SIGNED_IN, announcements_handler),
         ("GET", "/announcement-photo/{id}", SIGNED_IN, announcement_photo_handler),
         ("GET", "/vesta-messages", SIGNED_IN, vesta_messages_handler),
-        ("POST", "/announcement-press", SIGNED_IN, announcement_press_handler),
+        ("POST", "/announcement-press", _profiles("controlEntities", "This profile shows the villa only: it presses nothing."),
+         announcement_press_handler),
         ("POST", "/visit-press", _profiles(str(VISIT_PRESS.get("capability") or "administer"),
                                            "Only the owner or the facility manager answers an alert."),
          visit_press_handler),

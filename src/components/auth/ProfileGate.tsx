@@ -3,8 +3,8 @@
 // is configured), then the children render. Minimum-click funnel: a profile
 // without a configured PIN signs in with a single tap.
 
-import { useEffect, useState, type ReactNode } from "react";
-import { UserRound, KeyRound, Wrench } from "lucide-react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { UserRound, KeyRound, Wrench, Tv } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
 import { resolveSiteTitle } from "@/config/AppConfig";
 import { useProfile } from "@/auth/ProfileContext";
@@ -18,11 +18,13 @@ import ProblemLine from "@/components/common/ProblemLine";
 import SignInAgain from "./SignInAgain";
 import { signInExpired } from "@/auth/remoteSignIn";
 import Button from "@/components/common/Button";
+import { deviceView } from "@/utils/deviceVerdict";
 
 const ROLE_ICONS: Record<Role, typeof UserRound> = {
   guest: UserRound,
   owner: KeyRound,
   ops: Wrench,
+  display: Tv,
 };
 
 export default function ProfileGate({ children }: { children: ReactNode }) {
@@ -62,7 +64,8 @@ export default function ProfileGate({ children }: { children: ReactNode }) {
       .catch(async () => {
         if (cancelled) return;
         const gated = { pin: true, enabled: true };
-        setAccess({ guest: gated, owner: gated, ops: gated });
+        // the Display never has a passcode: a tap asks the server, which opens it or says why not (_profile_enabled)
+        setAccess({ guest: gated, owner: gated, ops: gated, display: { pin: false, enabled: true } });
         if (await signInExpired()) { if (!cancelled) setSignIn(true); return; }
         if (!cancelled) setGateError("Couldn't load the passcode settings, a passcode will be asked for every profile.");
       });
@@ -107,6 +110,17 @@ export default function ProfileGate({ children }: { children: ReactNode }) {
   };
 
   const cancel = isSwitch ? cancelSwitch : undefined;
+
+  // A device that shows the villa pictures (a TV, a weak screen: utils/deviceVerdict) lands in the read-only Display by
+  // itself, as if tapped, when no session exists yet and the server opens it here without a passcode (inside the villa's
+  // system: /auth/roles). Once per visit, and never on a switch: the top bar's Switch profile still shows every card.
+  const autoOpened = useRef(false);
+  useEffect(() => {
+    if (autoOpened.current || role || switching || resolving || !access) return;
+    if (deviceView() !== "pictures" || !access.display.enabled || access.display.pin) return;
+    autoOpened.current = true;
+    choose("display");
+  });
 
   // ── ONE return, ONE tree shape ────────────────────────────────────────
   // This used to return four different shapes: `<>{children}</>` when signed
@@ -181,7 +195,8 @@ export default function ProfileGate({ children }: { children: ReactNode }) {
                       <Icon size={34} aria-hidden="true" />
                       <span className="profile-card-name">{ROLE_LABELS[r]}</span>
                       <span className="profile-card-desc">
-                        {closed ? "No passcode set, not available from here." : ROLE_DESCRIPTIONS[r]}
+                        {closed ? (r === "display" ? "Opens only from inside the villa's system."
+                          : "No passcode set, not available from here.") : ROLE_DESCRIPTIONS[r]}
                       </span>
                     </button>
                   );

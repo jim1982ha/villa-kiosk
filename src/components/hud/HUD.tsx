@@ -60,6 +60,7 @@ import { useVillaAttention } from "@/components/cockpit/useVillaAttention";
 import type { VillaHealthLevel } from "@/config/attention";
 import { formatCountBadge, withCount } from "@/utils/countBadge";
 import { useConversation } from "@/messages/ConversationContext";
+import { talksToVesta } from "@/messages/conversation";
 import { useAnnouncements } from "@/messages/AnnouncementsContext";
 import { countOf } from "@/utils/countOf";
 import Button from "@/components/common/Button";
@@ -119,6 +120,9 @@ interface Props {
   families?: ReadonlySet<Category> | null;
   /** Asks the Dashboard to open the villa's presence window (why it counts as empty or occupied). */
   onOpenPresence: () => void;
+  /** False on a device shown the villa pictures (deviceVerdict): no floor to switch (both are on screen), no
+   *  first-person view and no joystick. Absent: the 3D villa. */
+  has3d?: boolean;
 }
 
 function useClock(): string {
@@ -141,7 +145,7 @@ export default function HUD({
   doors, onOpenSettings, onMove,
   viewMode, onToggleViewMode,
   hasOverviewDefault, onApplyOverviewDefault, onSaveOverviewDefault,
-  onOpenCockpit, onAskVesta, onOpenCategory, onOpenPresence, onShowTips, onOpenSearch, families,
+  onOpenCockpit, onAskVesta, onOpenCategory, onOpenPresence, onShowTips, onOpenSearch, families, has3d = true,
 }: Props) {
   const { connection, haConfig } = useHA();
   const { config, update } = useConfig();
@@ -184,6 +188,8 @@ export default function HUD({
   // every profile makes. `doors.agent` still says whether this profile is shown the Agent at all.
   const { thread, talker } = useConversation();
   const robot = doors.agent && thread.shown;
+  // "Ask VESTA" (the bar's button, the phone's and the menu's row): while VESTA runs, to a profile that talks to it
+  const talkShown = thread.shown && talksToVesta(role);
   const agentTitle = "VESTA Agent, online";
   // The agent's presence as the dot on its robot — the top bar's and the
   // phone menu's are this one element (.status-dot, 2.496.247): shown only while it runs.
@@ -343,9 +349,9 @@ export default function HUD({
   // The phone's "Ask VESTA" beside its gear, when the bar has room for it (owner, 2026-10-31): the room is the bar's
   // own measurement (barRoom), never a device rule.
   const barRef = useRef<HTMLDivElement | null>(null);
-  const barMic = barMicShown(thread.shown, useBarRoom(barRef));
+  const barMic = barMicShown(talkShown, useBarRoom(barRef));
   // ...and the menu's row only where that button is not (owner, 2026-10-31): one decision for both
-  const menuAsk = menuAskShown(thread.shown, barMic);
+  const menuAsk = menuAskShown(talkShown, barMic);
   const [legendOpen, setLegendOpen] = useState(false);
 
   // The view toggle + default-view anchor (and their tap-vs-hold gesture) live
@@ -633,7 +639,7 @@ export default function HUD({
                 bottom right. Without one, the ⚠ as before. */}
             {/* VESTA's conversation, its own button beside the robot (owner, 2026-10-29), every profile, while VESTA runs:
                 tap to open it, hold to talk where the page can record (ticket 23 of "One inbox") */}
-            {thread.shown && (
+            {talkShown && (
               <TalkButton place="bar" onOpen={onAskVesta} onTap={onAskVesta}
                 idle={talker ? "Ask VESTA: tap to open, hold to talk" : "Ask VESTA"} caption={caption("Voice")} />
             )}
@@ -770,14 +776,14 @@ export default function HUD({
                 </div>
                 {/* Same view switch as the inline row's, immediately before
                     Settings so the pairing matches the desktop layout. */}
-                <button
+                {has3d && <button
                   role="menuitem"
                   className="hud-menu-item"
                   onClick={() => { setMenuOpen(false); onToggleViewMode(); }}
                 >
                   {viewMode === "overview" ? <PersonStanding size={18} /> : <MapIcon size={18} />}
                   <span>{viewMode === "overview" ? "First-person view" : "Bird's-eye view"}</span>
-                </button>
+                </button>}
                 {/* Settings, then Logout — the rows the desktop's account
                     menu holds too (accountRows). */}
                 {accountRows(() => setMenuOpen(false), false)}
@@ -812,7 +818,7 @@ export default function HUD({
           bar (kept free for the tiles + joystick) nor the top bar (already
           tight on a phone) had room for a clearly-labelled home. */}
       <div className="hud-left-col">
-        <div className="hud-stack">
+        {has3d && <div className="hud-stack">
           {availFloors.map((f) => (
             <Button
               key={f} on="map" lit={currentFloor === f || radial?.floor === f}
@@ -840,7 +846,7 @@ export default function HUD({
               query, the same breakpoints as .hud-right-inline). */}
           <span className="hud-stack-sep hud-view-btn" aria-hidden="true" />
           <ViewControls className="hud-view-btn" viewMode={viewMode} onToggleViewMode={onToggleViewMode} />
-        </div>
+        </div>}
         {/* Is the villa seen as empty or occupied — its own section, on every screen (owner, 2026-10-18) */}
         <PresenceTile onOpen={onOpenPresence} />
       </div>
@@ -849,7 +855,7 @@ export default function HUD({
         {/* Bottom-right: the first-person movement joystick — the ONLY thing
             left in this bar now that the view-mode toggle moved to the left
             column (see hud-left-col). */}
-        {viewMode === "first-person" && <VirtualJoystick onMove={onMove} />}
+        {has3d && viewMode === "first-person" && <VirtualJoystick onMove={onMove} />}
       </div>
     </>
   );

@@ -6,7 +6,8 @@ import { overlayOpen } from "@/hooks/useBackToClose";
 import { keyIsForCamera } from "@/babylon/overviewKeys";
 import { useInterval } from "@/hooks/useInterval";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
-import BabylonCanvas from "@/components/canvas/BabylonCanvas";
+import PictureView, { type PicturePlaces } from "@/components/canvas/PictureView";
+import { deviceView, reportDeviceView } from "@/utils/deviceVerdict";
 import SummaryGroupPanel from "@/components/panels/SummaryGroupPanel";
 import { Layers } from "lucide-react";
 import HUD from "@/components/hud/HUD";
@@ -69,6 +70,10 @@ import { readSceneMirror } from "./sceneMirror";
 const SettingsModal = lazy(() => import("@/components/settings/SettingsModal"));
 const ConfigEditorModal = lazy(() => import("@/components/settings/ConfigEditorModal"));
 const CockpitModal = lazy(() => import("@/components/cockpit/CockpitModal"));
+// ⚠️ THE 3D VIEW IS ITS OWN FILE, FETCHED ONLY WHERE IT IS SHOWN (owner, 2026-11-24): a device given the villa
+// pictures (deviceVerdict) never downloads the 3D engine (2.7 MB) nor the model. A device that shows it starts the
+// fetch as the page opens (main.tsx), so it is in hand by the time this page mounts.
+const BabylonCanvas = lazy(() => import("@/components/canvas/BabylonCanvas"));
 const OPENING = (
   <DialogLayer className="modal-backdrop">
     <div className="spinner" role="status" aria-label="Opening…" style={{ margin: "auto" }} />
@@ -104,7 +109,13 @@ export default function Dashboard() {
   resolvedRoomsRef.current = resolvedRooms;
 
   // The canvas's view of its scene (babylon/sceneHandle): once that scene is torn down, a call on it does nothing.
+  // Null for good on a device shown the villa pictures: every use below reads it as "no scene".
   const [manager, setManager] = useState<SceneManager | null>(null);
+  // The 3D villa or its pictures, decided once for this device before any 3D work (utils/deviceVerdict).
+  const [view] = useState(deviceView);
+  useEffect(() => { reportDeviceView(); }, []);
+  // What the pictures say of the devices they draw (PictureView): "on the map" and the room of one with no area.
+  const [places, setPlaces] = useState<PicturePlaces | null>(null);
   // WHAT IS ON SCREEN — the windows, the open device panel and where its Back
   // goes, the open room or category list, the Cockpit's tab, the fault and
   // guest report to start, Advanced Settings' focus — and every move between
@@ -159,6 +170,8 @@ export default function Dashboard() {
   // linked and motion entity, dismissed ones out), which are dismissed, and
   // which a profile can see at all — decided once, by the villa model
   // (config/villaVisibility.ts), and read here as by every surface below.
+  // On the pictures, the devices they draw stand for the model's objects (PictureView's places).
+  useEffect(() => { if (places) setSceneEntityIds(places.mapped); }, [places]);
   const villaSets = useVillaSets(sceneEntityIds);
   // the villa model, built once here and handed down (VillaModelProvider below): this page reads the same value
   const villa = useVillaModelValue(villaSets);
@@ -290,8 +303,10 @@ export default function Dashboard() {
   const onEntityPicked = useCallback(
     (entityId: string, clientX: number, clientY: number) => {
       // RBAC: the scene already hides badges for denied entities, but the raw
-      // 3D mesh is still tappable — the one panel gate (permissions.panelMapping).
-      const mapping = panelMapping(entityId, config.entityMap, role, entities[entityId], { control: true });
+      // 3D mesh is still tappable — the one panel gate (permissions.panelMapping). ⚠️ A PROFILE THAT SWITCHES NOTHING
+      // STILL LOOKS (the read-only Display, owner 2026-11-24: a TV shows every state): the tap opens the device's window
+      // to look, its controls greyed (PanelActions may.control), and never quick-toggles.
+      const mapping = panelMapping(entityId, config.entityMap, role, entities[entityId], { control: canControl });
       if (!mapping) return;
 
       // Simple on/off entities act in-world without the panel: a tap toggles
@@ -299,7 +314,7 @@ export default function Dashboard() {
       // onEntityLongPressed below) — that's the deliberate, harder-to-trigger
       // action a "confirm before acting" gate would otherwise provide.
       const entity = entities[entityId];
-      if (isQuickToggle(mapping, entity)) {
+      if (canControl && isQuickToggle(mapping, entity)) {
         HAServices.power(ws, entity, entityId);
         // No panel opens for this path, so nothing on screen changes until
         // HA's real state_changed round-trip lands — spawn a tap ripple right
@@ -312,7 +327,7 @@ export default function Dashboard() {
       // Rich entities (sliders, streams, info) open their control panel as before.
       go({ type: "openDevice", panel: { entityId } });
     },
-    [config.entityMap, entities, ws, role, spawnRipple],
+    [config.entityMap, entities, ws, role, canControl, spawnRipple],
   );
 
   // Long-press always opens the full control panel — even for quick-toggle
@@ -320,7 +335,7 @@ export default function Dashboard() {
   // panel popping up on every casual tap.
   const onEntityLongPressed = useCallback(
     (entityId: string, clientX: number, clientY: number) => {
-      const mapping = panelMapping(entityId, config.entityMap, role, entities[entityId], { control: true });
+      const mapping = panelMapping(entityId, config.entityMap, role, entities[entityId], { control: canControl });
       if (!mapping) return;
       // Acknowledge the HOLD itself, the moment it's recognised (the gesture
       // now fires mid-press, not on release — see TapRecognizer). Every
@@ -344,7 +359,7 @@ export default function Dashboard() {
     },
     // `entities` is read (the category — and so the permission — can depend
     // on a device's device_class); it was missing, so this judged a stale one.
-    [config.entityMap, entities, role, spawnRipple],
+    [config.entityMap, entities, role, canControl, spawnRipple],
   );
 
   // Announce motion the moment it's detected, wherever it happens: a brief
@@ -586,8 +601,15 @@ export default function Dashboard() {
   // panel reads useConfig().resolvedRooms) and Babylon (SceneManager.
   // setResolvedRooms — badge grouping and motion-routing's room-highlight
   // read it there) so the two layers can never disagree.
+  // ⚠️ NO SCENE IS NOT NO ROOMS (owner, 2026-11-24): with no 3D view (the villa pictures, or the scene still
+  // loading) the villa's system's areas answer alone, the pictures' own outlines standing in for the scene's "which
+  // drawn room" (PictureView's places), else nothing: every list, toast and glow still has its rooms.
   useEffect(() => {
-    if (!manager) return;
+    if (!manager) {
+      const ids = roomIdSet(haIdsKey, mappedEntityIds, config.entityMap);
+      setResolvedRooms(resolveRooms(ids, entityAreaNames, (id) => places?.roomOf(id) ?? null));
+      return;
+    }
     const recompute = () => {
       // EVERY entity Home Assistant has, on the map or stored (devicePlace.roomIdSet
       // says why the set is the union), by the one rule; the scene is the rule's
@@ -601,11 +623,17 @@ export default function Dashboard() {
     // no replay, since it has just run.
     recompute();
     return manager.onScene(recompute, false);
-  }, [manager, entityAreaNames, config.entityMap, mappedEntityIds, haIdsKey, setResolvedRooms]);
+  }, [manager, places, entityAreaNames, config.entityMap, mappedEntityIds, haIdsKey, setResolvedRooms]);
 
   const handleTeleport = useCallback(
     (point: TeleportPoint) => {
-      if (!manager) return;
+      // no scene to fly (the villa pictures): the room's devices instead, what holding its chip lists
+      if (!manager) {
+        if (view === "3d") return;
+        closeSurface("rooms");
+        go({ type: "openList", list: { kind: "room", room: point.name, entityIds: roomDevices(point.name) } });
+        return;
+      }
       // Switch floors in BOTH camera modes: floor visibility is real now
       // (split-structure GLBs hide the upper storey), so panning the
       // bird's-eye camera to a 2F room must also reveal the 2F.
@@ -615,7 +643,7 @@ export default function Dashboard() {
       manager.navigateTo(point);
       closeSurface("rooms");
     },
-    [manager, currentFloor, onFloorChange, closeSurface],
+    [manager, view, currentFloor, onFloorChange, closeSurface, go, roomDevices],
   );
 
   // Tapping a room-cluster chip on the map does the SAME thing tapping that
@@ -758,24 +786,32 @@ export default function Dashboard() {
     <AnnouncementsProvider>
     {/* ...and on this profile's conversation with VESTA: the robot, Messages' pinned thread and "Ask VESTA" read it */}
     <ConversationProvider>
-      <BabylonCanvas
-        onManager={setManager}
-        onEntityPicked={onEntityPicked}
-        onEntityLongPressed={onEntityLongPressed}
-        onClusterPicked={handleClusterHeld}
-        onClusterTapped={handleClusterTapped}
-        onFloorChange={(f) => setCurrentFloor(f)}
-        onRoomChange={setRoom}
-        // straight to where the upload button is (it opened Settings on General, which has none: UI scan, 2026-11-10)
-        onNeedModel={() => openSurface("configEditor")}
-      />
+      {view === "pictures" ? (
+        <PictureView onEntityPicked={onEntityPicked} onEntityLongPressed={onEntityLongPressed}
+          onClusterPicked={handleClusterHeld} marks={marks}
+          cover={mapCover} onPlaces={setPlaces} />
+      ) : (
+        <Suspense fallback={<div className="center-overlay center-overlay-loading"><div className="spinner" aria-hidden="true" /></div>}>
+          <BabylonCanvas
+            onManager={setManager}
+            onEntityPicked={onEntityPicked}
+            onEntityLongPressed={onEntityLongPressed}
+            onClusterPicked={handleClusterHeld}
+            onClusterTapped={handleClusterTapped}
+            onFloorChange={(f) => setCurrentFloor(f)}
+            onRoomChange={setRoom}
+            // straight to where the upload button is (it opened Settings on General, which has none: UI scan, 2026-11-10)
+            onNeedModel={() => openSurface("configEditor")}
+          />
+        </Suspense>
+      )}
 
       <RoomLabel room={room} />
 
       <TapRipple ripples={ripples} />
 
       {role && showFirstRunTips && (
-        <FirstRunTips onClose={() => setShowFirstRunTips(false)} />
+        <FirstRunTips onClose={() => setShowFirstRunTips(false)} has3d={view === "3d"} />
       )}
 
       {/* EVERY notice of the villa view, in one column under the top bar, drawn by one piece (Notice) — the most
@@ -812,6 +848,7 @@ export default function Dashboard() {
         onOpenSearch={() => setSearchOpen(true)}
         families={families}
         onOpenPresence={() => openSurface("presence")}
+        has3d={view === "3d"}
       />
 
       {/* Bottom dashboard strip — scene / quick-action / summary tiles,

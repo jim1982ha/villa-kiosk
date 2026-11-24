@@ -49,6 +49,9 @@ import { onGlass, type GlassClearance } from "./badgeLayout";
 import { mergeOverlapping } from "./boxMerge";
 import { chipWidthPx, fitChipLabel, type ChipTextMetrics } from "./labelLayout";
 
+/** A chip's centre as the projection wants it (a chip holds plain numbers: roomChips is loaded without Babylon). */
+const CHIP_CENTRE = new Vector3();
+
 /** The comparison key of the no-room bucket, normalised ONCE at module level —
  *  `roomOf` hands out the LABEL and every map here is keyed by `roomKey`, so
  *  the two must be related in exactly one place. See chipRoom, which refuses
@@ -1878,7 +1881,7 @@ export class PlacementPass {
       // Each line truncated on its own: one room's long name never shortens another's.
       for (const l of ch.lines) l.label = fitChipLabel(l.room, c.text, c.budget);
       if (c.view) {
-        const p = Vector3.Project(ch.centre, Matrix.IdentityReadOnly, c.view.tm, c.view.vp);
+        const p = Vector3.Project(CHIP_CENTRE.set(ch.centre.x, ch.centre.y, ch.centre.z), Matrix.IdentityReadOnly, c.view.tm, c.view.vp);
         ch.x = p.x; ch.y = p.y;
         if (p.z >= 0 && p.z <= 1) behind.delete(ch); else behind.add(ch);
       }

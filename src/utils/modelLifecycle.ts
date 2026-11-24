@@ -46,6 +46,7 @@ import { forgetBrowserModel } from "./localModel";
 import type { LoadedModelInfo } from "./modelInfo";
 import { fmtBytes } from "./modelUpload";
 import { fmtDuration } from "@/components/panels/chartUtils";
+import { deviceView } from "./deviceVerdict";
 
 /**
  * Above this size the model is not loaded: the "too heavy" screen says so,
@@ -130,6 +131,9 @@ export interface ModelLifecycleDeps {
   wait(ms: number): Promise<void>;
   /** A one-shot timer; returns its cancel. */
   setTimer(fn: () => void, ms: number): () => void;
+  /** Whether this device shows the 3D villa at all (deviceVerdict): a device given the villa pictures never
+   *  downloads the model, whoever asks (the page's start, the profile screen, a sign-in). Absent: it does. */
+  shows3d?(): boolean;
 }
 
 /** What a load hands back to the canvas: on success what it needs for its
@@ -217,7 +221,7 @@ export function createModelLifecycle(deps: ModelLifecycleDeps): ModelLifecycle {
   const tooHeavy = (bytes: number | null) => bytes !== null && bytes > MODEL_TOO_HEAVY_BYTES;
 
   const prefetch = () => {
-    if (prefetching || started) return;
+    if (prefetching || started || deps.shows3d?.() === false) return;
     prefetching = true;
     void answer().then((got) => {
       if (!got.ok || !got.cfg.model_path || tooHeavy(sizeFromVersion(got.cfg.model_version))) return;
@@ -392,6 +396,7 @@ export const modelLifecycle: ModelLifecycle = createModelLifecycle({
   forgetBrowserModel,
   wait: (ms) => new Promise((r) => setTimeout(r, ms)),
   setTimer: (fn, ms) => { const t = setTimeout(fn, ms); return () => clearTimeout(t); },
+  shows3d: () => deviceView() === "3d",
 });
 
 /** The model's state, for a screen (re-renders on every change). */

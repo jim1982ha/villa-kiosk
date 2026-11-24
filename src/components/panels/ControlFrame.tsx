@@ -9,6 +9,11 @@
 // their controls. Now: the notice, and no controls, everywhere. Each panel
 // keeps only its own controls (brightness, fan speed, set-point…), passed as
 // children; they render only while the device can be commanded.
+//
+// A PROFILE THAT SWITCHES NOTHING (no controlEntities, PanelActions may.control: the read-only Display, a TV in the
+// villa; owner, 2026-11-24) sees every control as it is, the power button, the choices and the sliders at the device's
+// own values, all disabled by one disabled fieldset around them: nothing to press, nothing to drag, in every window
+// alike. The proxy refuses its service calls too (_service_call_allowed); this is what the screen shows.
 
 import type { CSSProperties } from "react";
 import { leadsTo, pillKey, stateFill } from "@/utils/stateColors";
@@ -16,7 +21,7 @@ import type { ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
 import { PowerSection } from "./PowerToggle";
 import StatusPill from "./StatusPill";
-import { useStatusRule } from "./PanelActionsContext";
+import { usePanelActions, useStatusRule } from "./PanelActionsContext";
 import { useHAActions } from "@/ha/HAStateStore";
 import { HAServices } from "@/ha/HAServiceCalls";
 import { isOffline } from "@/utils/deviceHealth";
@@ -43,6 +48,7 @@ interface Props {
 export default function ControlFrame({ entity, mapping, power, beside, pill, children }: Props) {
   const { ws } = useHAActions();
   const rule = useStatusRule();
+  const { may } = usePanelActions();
   // ⚠️ LOST CONTACT, NOT "UNKNOWN" (owner, 2026-10-18; architecture review 2026-10-19): a device whose state is
   // "unknown" is answering — it can be commanded (a toggle needs no value), so its controls stay, without the notice;
   // its power button then sits "off" until the device says (devicePower: no position). Only "unavailable" or a
@@ -59,18 +65,25 @@ export default function ControlFrame({ entity, mapping, power, beside, pill, chi
     <div className="device-controls" style={state}>
       {/* the state, said once and the same way in every window; a critical device's "needs a look" in red */}
       <StatusPill tone={shown.tone} icon={pill?.icon}>{shown.text}</StatusPill>
-      {sw && (() => {
-        return (
-          <PowerSection
-            on={sw.position === "on"}
-            leads={leadsTo(mapping.entityId, sw.position === "on" ? "off" : "on", rule)}
-            onClick={() => HAServices.power(ws, entity, mapping.entityId)}
-            ask={sw.ask}
-            beside={beside}
-          />
+      {(() => {
+        const controls = (
+          <>
+            {sw && (
+              <PowerSection
+                on={sw.position === "on"}
+                leads={leadsTo(mapping.entityId, sw.position === "on" ? "off" : "on", rule)}
+                onClick={() => (may.control ? HAServices.power(ws, entity, mapping.entityId) : undefined)}
+                ask={sw.ask}
+                beside={beside}
+              />
+            )}
+            {children}
+          </>
         );
+        // only a read-only profile's are wrapped: every other profile's window keeps its layout as it was
+        return may.control ? controls
+          : <fieldset className="device-controls-readonly" disabled aria-label="Read only">{controls}</fieldset>;
       })()}
-      {children}
     </div>
   );
 }

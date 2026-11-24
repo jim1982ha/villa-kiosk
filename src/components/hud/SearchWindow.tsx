@@ -14,7 +14,7 @@ import Button from "@/components/common/Button";
 import { useConfig } from "@/config/ConfigContext";
 import { useHA } from "@/ha/HAStateStore";
 import { useProfile } from "@/auth/ProfileContext";
-import { mayControlDevice } from "@/auth/permissions";
+import { mayControlDevice, roleCan } from "@/auth/permissions";
 import { ROLE_LABELS } from "@/auth/roles";
 import { useVillaModel } from "@/config/VillaModel";
 import { useDeviceSearch } from "@/hooks/useDeviceSearch";
@@ -45,17 +45,19 @@ export default function SearchWindow({ scenes, onClose, onGoToRoom, onOpenEntity
     const covers = visibleTo(role);
     return Object.keys(visibleEntities).filter((id) => covers.has(id)).sort();
   }, [visibleEntities, visibleTo, role]);
+  // a profile that switches nothing (the read-only Display) finds its devices to look at (quickSearch `look`)
+  const look = !!role && !roleCan(role, "controlEntities");
   const found = quickSearch(query, {
     devices: listed,
     mayControl: (id) => mayControlDevice(role, id, config.entityMap[id], entities[id]),
-    src, rooms: config.teleportPoints, scenes,
+    src, rooms: config.teleportPoints, scenes, look,
   });
   const nothing = query.trim() && !found.rooms.length && !found.devices.length && !found.scenes.length;
 
   return (
     <Window kind="content" label="Search" onClose={onClose} className="settings-modal search-window">
       <WindowHeader title="Search" icon={<Search size={22} />}
-        under={role ? `What the ${ROLE_LABELS[role]} profile may control` : undefined} />
+        under={role ? `What the ${ROLE_LABELS[role]} profile may ${look ? "see" : "control"}` : undefined} />
       <div className="modal-body">
         <SearchPicker text={{ value: query, onChange: setQuery }} rows={() => []} onPick={() => {}} startOpen
           placeholder="Search devices, rooms and scenes" clear={!!query && { label: "Clear the search", run: () => setQuery("") }} />
@@ -81,7 +83,7 @@ export default function SearchWindow({ scenes, onClose, onGoToRoom, onOpenEntity
             <div className="summary-section-heading"><span>Devices</span></div>
             <div className="summary-entity-grid">
               {found.devices.map((id) => entities[id] && renderRow(entities[id], {
-                canControl: true, onOpen: (entityId) => { onClose(); onOpenEntity(entityId); } }))}
+                canControl: !look, onOpen: (entityId) => { onClose(); onOpenEntity(entityId); } }))}
             </div>
           </div>
         )}

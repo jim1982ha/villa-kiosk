@@ -11,6 +11,7 @@ import { measureHeader, type RecordingMeasure } from "./voice";
 import { fetchFeed, type FeedRead } from "./feed";
 import { vestaButtons, type AnnouncementButton, type Pressable } from "./announcements";
 import AGENT_CONTRACT from "../../rootfs/usr/share/vesta/agent-contract.json" with { type: "json" };
+import type { Role } from "@/auth/roles";
 
 /** One line of the conversation: the person's question, or VESTA's answer. */
 export interface Turn {
@@ -38,6 +39,13 @@ export interface Turn {
   voice: boolean;
   /** VESTA's answer said aloud by the villa's voice (ticket 24): the add-on's name for its sound, read at /vesta-speech. */
   speech: string | null;
+}
+
+/** Whether this profile talks to VESTA at all: the agreement's conversation.profiles names it (the role the Agent
+ *  answers it with). The read-only Display, a shared screen, is not named (owner, 2026-11-24): no "Ask VESTA" for it, and
+ *  the add-on refuses its question too (vesta_ask_handler). Pure. */
+export function talksToVesta(role: Role | null | undefined): boolean {
+  return role != null && Object.prototype.hasOwnProperty.call(AGENT_CONTRACT.conversation.profiles, role);
 }
 
 /** The longest question the add-on keeps (agent-contract.json conversation.limits.question). */

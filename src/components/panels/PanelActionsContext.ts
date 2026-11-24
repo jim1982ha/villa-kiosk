@@ -17,8 +17,10 @@ export interface PanelActions {
   /** The HA entity_id the open panel controls (shown under the title). */
   entityId?: string;
   /** What this profile may do from the panel — a VALUE (auth/doors), never read from whether a callback exists:
-   *  "absent" looks exactly like "may not" (doors.ts carries the history). */
-  may: { edit: boolean; reportFault: boolean };
+   *  "absent" looks exactly like "may not" (doors.ts carries the history). `control`: it switches devices at all
+   *  (controlEntities): without it every window shows its device's state with its controls greyed (ControlFrame), the
+   *  read-only Display's way (owner, 2026-11-24). */
+  may: { edit: boolean; reportFault: boolean; control: boolean };
   /** Open Advanced Settings focused on this entity (shown with may.edit). */
   onEdit: () => void;
   /** Raise a maintenance fault against the open device — opens the Cockpit's
@@ -117,7 +119,7 @@ export interface PanelActions {
 
 /** No panel open, or a panel outside the provider: nothing allowed, nothing to call. */
 export const NO_PANEL_ACTIONS: PanelActions = {
-  may: { edit: false, reportFault: false }, onEdit: () => {}, onReportFault: () => {}, onSetBadgeColor: () => {},
+  may: { edit: false, reportFault: false, control: false }, onEdit: () => {}, onReportFault: () => {}, onSetBadgeColor: () => {},
 };
 
 const PanelActionsContext = createContext<PanelActions>(NO_PANEL_ACTIONS);

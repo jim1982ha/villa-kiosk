@@ -28,8 +28,10 @@ import {
   clearCrashLoop, noteContextLoss, captureError, buildReport,
 } from "@/utils/diagnostics";
 import { adoptDetected } from "@/config/mappingEdits";
+import { forget3dRecord, note3dOutcome, setViewOverride } from "@/utils/deviceVerdict";
 import { missingImagesMessage } from "@/utils/glbRoomDataExtractor";
 import Button from "@/components/common/Button";
+import { useVillaPictures } from "@/components/canvas/useVillaPictures";
 
 interface Props {
   onManager: (m: SceneManager | null) => void;
@@ -137,6 +139,8 @@ function VillaScene({
   useEffect(() => {
     if (!slow) return;
     reportTelemetry("load-slow", { outcome: "still unpacking", ...(importSoFar() ?? {}) });
+    // the next opening of this device shows the villa pictures (deviceVerdict), before any 3D work
+    note3dOutcome({ kind: "slow" });
     managerRef.current?.dispose();
   }, [slow]);
   // Full copyable diagnostics report shown on the error / crash-loop screens.
@@ -298,7 +302,7 @@ function VillaScene({
         const roomsSync: { promise: Promise<RoomDataFetch> | null } = { promise: null };
         let tConfigDone = tConfigStart;
         // Stamped inside the unpack step below, read after it (holders, as above).
-        const t = { fetchDone: 0, roomsDone: 0, parseDone: 0, meshNames: 0, statesPainted: 0 };
+        const t = { fetchDone: 0, hiddenAtBytes: 0, roomsDone: 0, parseDone: 0, meshNames: 0, statesPainted: 0 };
         const names: { list: string[] } = { list: [] };
         const sha: { promise: Promise<string> } = { promise: Promise.resolve("") };
         // WHICH model, its download and how it ended: utils/modelLifecycle,
@@ -308,6 +312,7 @@ function VillaScene({
         const got = await modelLifecycle.load(async (data, url, cfg) => {
           noteModel({ bytes: data.byteLength });
           t.fetchDone = performance.now();
+          t.hiddenAtBytes = hiddenMsTotal();
           // Diagnostic-only (Settings' "which file is loaded" fingerprint) and
           // needed by nothing downstream — started now, alongside the bytes
           // it hashes, instead of after loadModel resolves, so it runs in the
@@ -646,6 +651,10 @@ function VillaScene({
             done = true;
             releasePin();
             const tPaint = performance.now();
+            // What this device's own work took, bytes in hand to the villa drawn, hidden time out (a slow link is not
+            // a slow device): over deviceVerdict.SLOW_LOAD_MS, the next opening shows the villa pictures (owner,
+            // 2026-11-24: a TV took 74s). A painted load only: one that never drew says nothing of its speed.
+            if (painted) note3dOutcome({ kind: "ready", ms: tPaint - t.fetchDone - (hiddenMsTotal() - t.hiddenAtBytes) });
             sendLoadTelemetry(tReady - tParseDone, tReady, {
               rvMeshNames: Math.round(tMeshNames - tParseDone),
               rvStates: Math.round(tStatesPainted - tMeshNames),
@@ -756,6 +765,10 @@ function VillaScene({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // The villa pictures for the devices too weak for this view, made here when they are missing or stale (after the
+  // mount effect above, which sets the manager it reads).
+  useVillaPictures(managerRef, canManageModel, configRef);
 
   // Re-apply entity map + mesh bindings + markers to the live scene whenever
   // config edits happen (binding an object, dropping a marker, changing a
@@ -890,6 +903,7 @@ function VillaScene({
           {!model.slow && <ModelOffer canManageModel={canManageModel} beginSwitch={beginSwitch}
             ask="Ask the owner to upload a lighter model."
             offer="Export it again with its geometry compressed, then upload it here." />}
+          {model.slow && <PicturesButton />}
         </div>
       )}
       {(sceneFail === "error" || (!sceneFail && model.kind === "error")) && (
@@ -920,9 +934,10 @@ function VillaScene({
           detail={report}
           actions={
             <>
-              <Button onClick={() => { clearCrashLoop(); location.reload(); }}>
+              <Button onClick={() => { clearCrashLoop(); forget3dRecord(); location.reload(); }}>
                 Try once more
               </Button>
+              <PicturesButton />
               {canManageModel && (
                 <Button onClick={() => { clearCrashLoop(); cbRef.current.onNeedModel(); }}>
                   Upload a lighter model
@@ -939,6 +954,16 @@ function VillaScene({
         </Notice>
       )}
     </>
+  );
+}
+
+/** The way out of a 3D view this device cannot open (the crash screen, the slow screen): the villa pictures, kept as
+ *  this device's view (deviceVerdict's override), at once. */
+function PicturesButton() {
+  return (
+    <Button look="main" onClick={() => { setViewOverride("pictures"); location.reload(); }}>
+      Show the villa as pictures
+    </Button>
   );
 }
 

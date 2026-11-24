@@ -1,15 +1,16 @@
 // src/auth/roles.ts
-// The three kiosk profiles. Pure identity data — what each profile may DO
+// The kiosk profiles. Pure identity data — what each profile may DO
 // lives in permissions.ts, and who is currently signed in lives in
 // ProfileContext.tsx, so each concern can change independently.
 
 import ROLE_TABLE from "../../rootfs/usr/share/vesta/roles.json" with { type: "json" };
 
-/** Kiosk profile. "ops" is the facility manager / caretaker. */
-export type Role = "guest" | "owner" | "ops";
+/** Kiosk profile. "ops" is the facility manager / caretaker; "display" the read-only screen (a TV in the villa: every
+ *  device's state, nothing switched, no passcode, opened only inside the villa's system; owner, 2026-11-24). */
+export type Role = "guest" | "owner" | "ops" | "display";
 
 /** Fixed display order for the profile-select screen. */
-export const ROLE_ORDER: Role[] = ["guest", "owner", "ops"];
+export const ROLE_ORDER: Role[] = ["guest", "owner", "ops", "display"];
 
 /** A profile's words, from the one role table (roles.json `profiles.<role>`): the agreement carries the same words to
  *  the VESTA Agent (agent-contract.json `profiles`). ⚠️ THE INITIALS AND DESCRIPTIONS WERE CONSTANTS HERE (architecture
@@ -59,5 +60,5 @@ export function authorWords(s: { role?: unknown; by?: unknown } | undefined): st
 
 /** Runtime whitelist check for values read from storage or the network. */
 export function isRole(value: unknown): value is Role {
-  return value === "guest" || value === "owner" || value === "ops";
+  return value === "guest" || value === "owner" || value === "ops" || value === "display";
 }

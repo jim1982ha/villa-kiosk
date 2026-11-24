@@ -29,7 +29,7 @@ export const AGENT_SOURCES: ReadonlySet<IssueSource> = new Set(["alert", "night"
 
 /** The source of a ticket a profile opened ("Open a ticket"); a guest's comes through Report a problem (reportedBy),
  *  so a guest-stamped first step is a person's. */
-const SOURCE_OF_PROFILE: Record<Role, IssueSource> = { owner: "owner", ops: "fm", guest: "person" };
+const SOURCE_OF_PROFILE: Record<Role, IssueSource> = { owner: "owner", ops: "fm", guest: "person", display: "person" };
 
 /** A fault's source — from what its record says, never from its words: the Agent's `origin` (or its alert number),
  *  a guest's mark, else the profile its first step names (fmCommands.addTicket stamps it). */

@@ -12,8 +12,10 @@
 // in EntityVisuals.
 // Pure; tests/oracles/room_chips.mjs.
 
-import { Vector3 } from "@babylonjs/core/Maths/math.vector";
+// ⚠️ NO BABYLON HERE (owner, 2026-11-24): the summary rules that read this file (summaryLook) are loaded by a device
+// showing the villa pictures, which never downloads the 3D engine; a centre is plain numbers (scene.types Vec3).
 import { groupLook, type DeviceLook } from "@/utils/deviceActivity";
+import type { Vec3 } from "@/types/scene.types";
 
 /**
  * One room chip as DERIVED — everything needed to decide where it lands and
@@ -45,7 +47,7 @@ export interface RoomChip {
    * `orderLines` order. One line for an unmerged chip.
    */
   lines: ChipLine[];
-  ids: string[]; centre: Vector3; rooms: number; roomNames: string[];
+  ids: string[]; centre: Vec3; rooms: number; roomNames: string[];
   /** red: a member needs attention; on: a member is on (and none needs attention) — never red for "on".
    *  deviceActivity.groupLook's count rule; combineChips ORs them on a merge. */
   ringRed: boolean; ringOn: boolean; unavailable: boolean;
@@ -234,13 +236,13 @@ export function bucketRoomChips(
   clustered: (roomKey: string) => boolean,
   display: (roomKey: string) => string,
 ): RoomChip[] {
-  const groups = new Map<string, { ids: string[]; sum: Vector3; looks: (DeviceLook | undefined)[] }>();
+  const groups = new Map<string, { ids: string[]; sum: Vec3; looks: (DeviceLook | undefined)[] }>();
   for (const m of members) {
     if (!clustered(m.room)) continue;
     let g = groups.get(m.room);
-    if (!g) { g = { ids: [], sum: Vector3.Zero(), looks: [] }; groups.set(m.room, g); }
+    if (!g) { g = { ids: [], sum: { x: 0, y: 0, z: 0 }, looks: [] }; groups.set(m.room, g); }
     g.ids.push(m.id);
-    g.sum.addInPlaceFromFloats(m.pos.x, m.pos.y, m.pos.z);
+    g.sum.x += m.pos.x; g.sum.y += m.pos.y; g.sum.z += m.pos.z;
     g.looks.push(m.look);
   }
   const chips: RoomChip[] = [];
@@ -252,7 +254,7 @@ export function bucketRoomChips(
     chips.push({
       key, keys: [key], room, ids: g.ids.slice(),
       lines: [{ key, room, label: room, ids: g.ids.slice(), ringRed: look.ringRed, fault: look.fault, unavailable: look.unavailable }],
-      centre: g.sum.scale(1 / g.ids.length), rooms: 1, roomNames: [room],
+      centre: { x: g.sum.x / g.ids.length, y: g.sum.y / g.ids.length, z: g.sum.z / g.ids.length }, rooms: 1, roomNames: [room],
       ringRed: look.ringRed, ringOn: look.ringOn, unavailable: look.unavailable, fault: look.fault,
       x: 0, y: 0, halfW: 0, halfH: 0, dx: 0, dy: 0, cols: 1, rows: 1, overhang: 0, open: null,
     });
@@ -275,7 +277,9 @@ export function bucketRoomChips(
  */
 export function combineChips(keep: RoomChip, drop: RoomChip): void {
   const na = keep.ids.length, nb = drop.ids.length;
-  keep.centre = keep.centre.scale(na / (na + nb)).addInPlace(drop.centre.scale(nb / (na + nb)));
+  const a = na / (na + nb), b = nb / (na + nb);
+  keep.centre = { x: keep.centre.x * a + drop.centre.x * b, y: keep.centre.y * a + drop.centre.y * b,
+    z: keep.centre.z * a + drop.centre.z * b };
   keep.ids = keep.ids.concat(drop.ids);
   keep.rooms = keep.rooms + drop.rooms;
   // Keep the NAMES, not just the count: a merged chip has to be able to

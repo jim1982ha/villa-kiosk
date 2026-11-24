@@ -1174,6 +1174,28 @@ export class EntityVisuals {
     return [...this.byEntity.keys()];
   }
 
+  /** Every badge's anchor in the world with the floor it is drawn on (null: unstamped, drawn on every floor), for
+   *  the villa pictures' manifest (villaPictureCapture). Every badge the map has, whatever this profile hides: the
+   *  pictures are shared, and the picture view filters for the profile reading them. */
+  anchorSnapshot(): { id: string; x: number; y: number; z: number; floor: number | null }[] {
+    const out: { id: string; x: number; y: number; z: number; floor: number | null }[] = [];
+    for (const [id, lbl] of this.labels) {
+      lbl.anchor.computeWorldMatrix(true);
+      const p = lbl.anchor.getAbsolutePosition();
+      // the bound mesh first, as badgeEligible reads it (a fan's anchor sits on a container no floor is stamped on)
+      out.push({ id, x: p.x, y: p.y, z: p.z, floor: stampedFloor(this.byEntity.get(id)?.[0], lbl.anchor) ?? null });
+    }
+    return out;
+  }
+
+  /** Every lamp dark for a villa picture (villaPictureCapture): a lamp on when the picture was taken would stay lit
+   *  in it for good, while the picture view draws the live ones over it. The returned function lights them as they
+   *  are again (BulbSet.darkForPicture says how, without a shader recompiling). */
+  lampsOff(): () => void {
+    const back = this.bulbs.darkForPicture(this.lightEntityMeshes());
+    return () => { back(); this.requestRender(); };
+  }
+
   /** Copy the cosmetic (non-structural) fields of every cached mapping across
    *  from the freshly-applied config. Returns the entity ids whose per-light
    *  intensity override changed, so the caller can re-derive just those
@@ -5287,7 +5309,7 @@ export class EntityVisuals {
       c.displayName = model.displayName;
       c.roomNames = model.roomNames;
       c.lineRooms = model.lines.map((l) => ({ room: l.room, entityIds: l.entityIds }));
-      c.node.position.copyFrom(chip.centre);
+      c.node.position.set(chip.centre.x, chip.centre.y, chip.centre.z);
       // The chip's frame: always the resting one. No "something is on"
       // border (owner, 2026-11-14: no device badge has one) and never red:
       // whether the room is all right is the COUNT's job

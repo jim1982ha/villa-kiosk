@@ -464,6 +464,22 @@ ck("a guest may NOT restart Home Assistant over the websocket",
    refuse("guest", "call_service", domain="homeassistant", service="restart") is not None)
 ck("  ...nor run a script",
    refuse("ops", "call_service", domain="script", service="turn_on") is not None)
+# the read-only Display (owner, 2026-11-24: a TV in the villa) switches nothing: every service call refused, over the
+# websocket and REST alike, while it reads what any profile not shown cameras reads; the three others keep their calls
+_calls = [("light", "turn_on"), ("lock", "unlock"), ("cover", "open_cover"), ("scene", "turn_on"),
+          ("input_boolean", "toggle"), ("homeassistant", "toggle"), ("media_player", "media_play_pause")]
+ck("a Display sends no service call over the websocket",
+   all(refuse("display", "call_service", domain=d, service=sv) is not None for d, sv in _calls))
+ck("  ...nor over REST",
+   not any(proxy._rest_call_allowed("display", f"services/{d}/{sv}") for d, sv in _calls))
+ck("  ...yet reads the villa (its states, a light, the charts) and no camera",
+   refuse("display", "get_states") is None and proxy._read_allowed("display", "light.any")
+   and proxy._rest_call_allowed("display", "history/period/2026-01-01T00:00:00Z")
+   and not proxy._read_allowed("display", "camera.any")
+   and refuse("display", "camera/webrtc/offer") is not None)
+ck("  ...while guest, ops and owner still switch the villa's devices",
+   all(refuse(r, "call_service", domain=d, service=sv) is None
+       for r in ("guest", "ops", "owner") for d, sv in _calls if d != "homeassistant" or sv == "toggle"))
 
 # ── one policy, two doors ────────────────────────────────────────────────
 # REST and the websocket are two ways to ask Core the same things. Each used
@@ -913,6 +929,27 @@ ck("  ...and granted a session through Ingress",
    via_ha.status == 200 and proxy.SESSION_COOKIE in via_ha.cookies)
 ck("  ...while a passcode-less OWNER is refused on both", all(
    asyncio.run(proxy.auth_verify_handler(_JReq({"role": "owner"}, h))).status == 403 for h in ({}, {"X-VK-Ingress": "1"})))
+# the read-only Display (owner, 2026-11-24) has no passcode at all, whatever the options say: it opens as a
+# passcode-less Guest does, inside the villa's system only
+proxy._read_options = lambda: {"guest_pin": "1234", "owner_pin": "2345", "ops_pin": "3456"}
+ck("the Display has no passcode, set or not", proxy._configured_pin("display") == "")
+ck("  ...opens only from Ingress", proxy._profile_enabled("display", True) and not proxy._profile_enabled("display", False))
+roles = _json.loads(asyncio.run(proxy.auth_roles_handler(_HReq({}, method="GET"))).text)["roles"]
+ingress_roles = _json.loads(asyncio.run(proxy.auth_roles_handler(_HReq({"X-VK-Ingress": "1"}, method="GET"))).text)["roles"]
+ck("  .../auth/roles says so: no passcode, closed here, open inside the villa's system",
+   roles["display"] == {"pinRequired": False, "enabled": False}
+   and ingress_roles["display"] == {"pinRequired": False, "enabled": True})
+direct = asyncio.run(proxy.auth_verify_handler(_JReq({"role": "display"})))
+via_ha = asyncio.run(proxy.auth_verify_handler(_JReq({"role": "display"}, {"X-VK-Ingress": "1"})))
+ck("  ...refused on the direct port and the tunnel (403, saying where it opens)",
+   direct.status == 403 and "inside the villa's system" in _json.loads(direct.text)["error"]
+   and proxy.SESSION_COOKIE not in direct.cookies)
+ck("  ...and granted a Display session through Ingress, with no passcode asked",
+   via_ha.status == 200 and proxy._session_role(via_ha.cookies[proxy.SESSION_COOKIE].value) == "display")
+ck("  ...while the other three still ask for theirs", all(
+   asyncio.run(proxy.auth_verify_handler(_JReq({"role": r}, {"X-VK-Ingress": "1"}))).status == 400
+   for r in ("guest", "owner", "ops")))
+proxy._read_options = lambda: {}
 
 # ── CSP violations reach the telemetry ring ───────────────────────────────
 print("\n  CSP reports:")
@@ -1194,7 +1231,7 @@ DOORS = {
     ("GET", "/healthz"): "public", ("GET", "/auth/roles"): "public", ("GET", "/auth/session"): "public",
     ("POST", "/auth/verify"): "public", ("POST", "/auth/logout"): "public", ("GET", "/auth/check"): "probe",
     ("GET", "/addon-config"): "model",
-    ("POST", "/model-upload"): "session:manageModel",
+    ("POST", "/model-upload"): "session:manageModel", ("POST", "/model-views"): "session:manageModel",
     ("GET", "/device-config"): "session", ("PUT", "/device-config"): "session:editConfig",
     ("GET", "/fm-data"): "session", ("PUT", "/fm-data"): "session:reportFault",
     ("POST", "/fm-evidence"): "session:reportFault", ("GET", "/fm-evidence/{id}"): "session:manageFacility",
@@ -1205,7 +1242,7 @@ DOORS = {
     ("GET", "/critical-devices"): "session", ("GET", "/agent-status"): "session:viewAgent",
     ("PUT", "/kiosk-rooms"): "session:viewAgent",
     ("GET", "/announcements"): "session", ("GET", "/announcement-photo/{id}"): "session",
-    ("GET", "/vesta-messages"): "session", ("POST", "/announcement-press"): "session",
+    ("GET", "/vesta-messages"): "session", ("POST", "/announcement-press"): "session:controlEntities",
     ("POST", "/visit-press"): _visit, ("POST", "/message-erase"): "session",
     ("POST", "/vesta-ask"): "session", ("GET", "/vesta-conversation"): "session",
     ("GET", "/vesta-speech/{name}"): "session", ("POST", "/vesta-press"): "session",
@@ -1291,6 +1328,11 @@ async def _over_http() -> None:
     status, body = await ask("PUT", "/device-config", cookie("guest"))
     ck("  ...the shared settings say who may edit them", (status, body) == (
         403, {"error": "Only the owner profile may edit device configuration."}))
+    # the doorbell's Unlock is an announcement's button: a read-only Display never presses it (owner, 2026-11-24)
+    status, _ = await ask("POST", "/announcement-press", cookie("display"), b'{"key": "ring", "command": "/unlock"}')
+    status_g, _ = await ask("POST", "/announcement-press", cookie("guest"), b'{"key": "ring", "command": "/unlock"}')
+    ck("  ...a Display's press on an announcement's button is refused (403); a guest's reaches the button check",
+       status == 403 and status_g != 403)
 
     agent_routes = [k for k, d in DOORS.items() if d.startswith("agent:")]
     by_cookie = [(m, p) for m, p in agent_routes if (await ask(m, p, cookie("owner")))[0] != 401]
@@ -1313,6 +1355,34 @@ async def _over_http() -> None:
     status, _ = await ask("GET", "/agent/v1/info", bearer)
     ck("the Agent's routes are not there (404) while it is not connected", status == 404, status)
     (data / "options.json").write_text(_hjson.dumps(options))
+
+    print("\n  the villa pictures:")
+    owner = cookie("owner")
+    webp = b"RIFF\x10\0\0\0WEBPVP8 " + b"\0" * 64
+    views = data / "www" / "views"
+    status, _ = await ask("POST", "/model-views?name=f1-day.webp", owner, webp)
+    ck("a picture is stored under views/, where /model/ serves it", status == 200 and (views / "f1-day.webp").read_bytes() == webp, status)
+    refused = {name: (await ask("POST", f"/model-views?name={name}", owner, webp))[0]
+               for name in ("villa.glb", "f3-day.webp", "../villa.glb", "..%2Fvilla.glb", "", "views/f1-day.webp")}
+    ck("  ...only by one of its five names: any other, or a path out of views/, is refused (400)",
+       set(refused.values()) == {400} and not (data / "www" / "villa.glb").exists(), refused)
+    wrong = [(await ask("POST", "/model-views?name=f1-night.webp", owner, b"glTF" + b"\0" * 64))[0],
+             (await ask("POST", "/model-views?name=manifest.json", owner, webp))[0],
+             (await ask("POST", "/model-views?name=f1-night.webp", owner, b"{}"))[0]]
+    ck("  ...and a body that is not what its name says (a model as a picture, a picture as the manifest) too",
+       wrong == [400, 400, 400] and not (views / "f1-night.webp").exists(), wrong)
+    status, _ = await ask("POST", "/model-views?name=f2-day.webp", owner, b"RIFF\0\0\0\0WEBP" + b"\0" * (http.VIEW_MAX_BYTES))
+    ck("  ...as is one over the size cap (413)", status == 413 and not (views / "f2-day.webp").exists(), status)
+    _, before = await ask("GET", "/addon-config", owner, None)
+    status, _ = await ask("POST", "/model-views?name=manifest.json", owner, b'{"v": 1}')
+    _, after = await ask("GET", "/addon-config", owner, None)
+    ck("the add-on reports the pictures' version: none before the manifest, its version after",
+       status == 200 and before.get("views_version") == "" and after.get("views_version", "").endswith("-8"),
+       (before.get("views_version"), after.get("views_version")))
+    status, _ = await ask("POST", "/model-upload?kind=rooms", owner, b'{"rooms": []}')
+    _, gone = await ask("GET", "/addon-config", owner, None)
+    ck("  ...and a new room-data upload removes the pictures made from the old one",
+       status == 200 and gone.get("views_version") == "" and not any(views.iterdir()), status)
 
     print("\n  which bucket a wrong secret charges:")
 

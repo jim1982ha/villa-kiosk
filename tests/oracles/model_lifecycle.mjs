@@ -14,7 +14,7 @@ const holding = (bytes, mtime = 0x6730a000) => ({
 
 /** An invented add-on and network. `answers`: what each ask of the add-on gets (the last one repeats). `bytes(url)`
  *  is what the download returns; `announce` the length it announces, when there is no version stamp. */
-function rig({ answers, announce = null, httpStatus = null }) {
+function rig({ answers, announce = null, httpStatus = null, shows3d }) {
   const asks = [], downloads = [], timers = [];
   const deps = {
     readAddonConfig: async () => {
@@ -34,6 +34,7 @@ function rig({ answers, announce = null, httpStatus = null }) {
     forgetBrowserModel: async () => {},
     wait: async () => {},
     setTimer: (fn, ms) => { const t = { fn, ms, live: true }; timers.push(t); return () => { t.live = false; }; },
+    ...(shows3d ? { shows3d } : {}),
   };
   const life = createModelLifecycle(deps);
   const seen = [];
@@ -162,6 +163,17 @@ console.log("\n  the background download started on the profile screen:");
   r.life.prefetch();
   ck("the load uses it (one download, not two), and a later prefetch starts none",
      got.ok && got.prefetched && r.downloads.length === 1, r.downloads);
+}
+
+{
+  // owner, 2026-11-24: a TV took 74s to open the villa; a device given the villa pictures never downloads the model
+  const r = rig({ answers: [ok(holding(20 * MB))], shows3d: () => false });
+  r.life.prefetch();
+  await new Promise((res) => setTimeout(res, 0));
+  r.life.prefetch();
+  await new Promise((res) => setTimeout(res, 0));
+  ck("a device shown the villa pictures: no prefetch asks the add-on or downloads the model, however often it is asked",
+     r.downloads.length === 0 && r.asks.length === 0, { downloads: r.downloads, asks: r.asks.length });
 }
 
 done("The villa model's lifecycle: ready, none, too heavy with its size, reconnecting, one reload per replacement");

@@ -38,6 +38,15 @@
         "controlEntities", "openSettings", "customizeAppearance", "manageFacility", "reportFault",
         "listUnmappedDevices", "viewAgent"
       ]
+    },
+    "display": {
+      "label": "Display",
+      "short": "Display",
+      "initials": "D",
+      "description": "Shows the villa and its devices, read only: nothing can be switched or changed.",
+      "allowedCategories": "all",
+      "deniedTypes": ["camera"],
+      "capabilities": []
     }
   },
   "_agent": "THE VESTA AGENT IS NOT A PROFILE. It never appears on the profile picker, never holds a cookie, and reaches only /agent/v1/* by bearer token. Its capabilities are its own; the app never reads this row.",

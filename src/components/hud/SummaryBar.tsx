@@ -25,7 +25,7 @@ import { Sparkles } from "lucide-react";
 import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
-import { isCategoryAllowed, listedDevices } from "@/auth/permissions";
+import { isCategoryAllowed, listedDevices, roleCan } from "@/auth/permissions";
 import { CATEGORY_ORDER, categorySurface, type DeviceSurfaceState } from "@/config/EntityCategories";
 import { useResolvedTheme } from "@/hooks/useResolvedTheme";
 import { markImage } from "@/babylon/badgeIcons";
@@ -36,7 +36,7 @@ import SummaryGroupPanel from "@/components/panels/SummaryGroupPanel";
 import EnergyPanel from "@/components/panels/EnergyPanel";
 import { useSceneConfirm } from "@/hooks/useSceneConfirm";
 import { useVillaModel } from "@/config/VillaModel";
-import { deriveTiles, type SummaryTile } from "@/config/summaryTiles";
+import { deriveTiles, tilesForControl, type SummaryTile } from "@/config/summaryTiles";
 import { countOf } from "@/utils/countOf";
 
 interface Props {
@@ -78,7 +78,7 @@ function Tile({ t, onOpen }: { t: SummaryTile; onOpen: (t: SummaryTile) => void 
         ...(surface.ring ? { ["--tile-ring" as string]: surface.ring } : {}),
       }}
       onClick={() => onOpen(t)}
-      data-tip={`${t.label}: ${t.value}, tap to see & control everything it includes`}
+      data-tip={`${t.label}: ${t.value}, tap to see ${t.canControl ? "& control " : ""}everything it includes`}
     >
       <span className="summary-tile-icon">
         <Icon size={20} />
@@ -226,7 +226,9 @@ export default function SummaryBar({ onOpenEntity, scenes }: Props) {
   const station = useMemo(() => found, [stationKey]);
 
   const deviceTiles = useMemo(
-    () => deriveTiles(visibleEntities, config.entityMap, resolvedRooms, (c) => (role ? isCategoryAllowed(role, c) : false), station, villaDeviceSet, haConfig?.unit_system?.temperature),
+    () => tilesForControl(
+      deriveTiles(visibleEntities, config.entityMap, resolvedRooms, (c) => (role ? isCategoryAllowed(role, c) : false), station, villaDeviceSet, haConfig?.unit_system?.temperature),
+      roleCan(role, "controlEntities")),
     // ⚠️ villaDeviceSet, NOT villaDevices. This read `villaDevices` — the
     // imported FUNCTION, a module constant that never changes — so the two
     // inputs unique to the set above (mappedEntityIds, entityDeviceIds) could
@@ -235,8 +237,9 @@ export default function SummaryBar({ onOpenEntity, scenes }: Props) {
     [visibleEntities, config.entityMap, resolvedRooms, role, station, villaDeviceSet],
   );
 
-  // A scene spans categories — allow running one if the profile may control ANY.
-  const canRunScenes = !!role && CATEGORY_ORDER.some((c) => isCategoryAllowed(role, c));
+  // A scene spans categories — allow running one if the profile may control ANY (and switches devices at all: the
+  // read-only Display sees the scenes, greyed).
+  const canRunScenes = !!role && roleCan(role, "controlEntities") && CATEGORY_ORDER.some((c) => isCategoryAllowed(role, c));
 
   // Hidden via Settings, or nothing to show. (The view-mode/default-view
   // buttons used to live in a left section here — they're back to always

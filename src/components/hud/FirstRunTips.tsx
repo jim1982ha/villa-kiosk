@@ -13,7 +13,8 @@ import { Armchair, Info, Layers } from "lucide-react";
 import { markFirstRunTipsSeen } from "@/utils/viewPrefs";
 import ModalFooter from "@/components/common/ModalFooter";
 
-export default function FirstRunTips({ onClose }: { onClose: () => void }) {
+/** `has3d` false: the villa pictures (deviceVerdict), which have no floor buttons to hold. */
+export default function FirstRunTips({ onClose, has3d = true }: { onClose: () => void; has3d?: boolean }) {
   const dismiss = () => { markFirstRunTipsSeen(); onClose(); };
   // ── THE WHOLE DIALOG CONTRACT, NOT HALF OF IT (2.433.0) ──────────────────
   // This called `useBackToClose` directly and had no focus trap, no Escape and
@@ -54,7 +55,7 @@ export default function FirstRunTips({ onClose }: { onClose: () => void }) {
           </li>
           <li>
             <Layers size={18} />
-            <span>A button with a small <span className="first-run-dot-demo" aria-hidden="true" /> dot also does something extra when you press and hold it: try holding a floor button to see its rooms.</span>
+            <span>A button with a small <span className="first-run-dot-demo" aria-hidden="true" /> dot also does something extra when you press and hold it{has3d ? ": try holding a floor button to see its rooms." : "."}</span>
           </li>
           <li>
             <Info size={18} />

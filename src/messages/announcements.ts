@@ -160,9 +160,11 @@ export function vestaButtons(raw: unknown): AnnouncementButton[] {
 /** ⚠️ THE ONE RULE OF WHO IS OFFERED A BUTTON (owner, 2026-10-29: "consistently", "DRY"): every profile the villa's own
  *  (the doorbell's Unlock) and VESTA's that do not act (Continue); one that acts, only a profile that may act (`mayAct`:
  *  the owner, the facility manager — a guest gets answers only). The same wherever a record shows (owner, 2026-10-29: an
- *  alert's Done · Need help on its notice, its card and its issue alike). Read by every screen that draws buttons. Pure. */
-export function offeredButtons(buttons: readonly AnnouncementButton[], mayAct: boolean): AnnouncementButton[] {
-  return buttons.filter((b) => !b.acts || mayAct);
+ *  alert's Done · Need help on its notice, its card and its issue alike). Read by every screen that draws buttons.
+ *  `mayPress` false: a profile that presses nothing at all (no controlEntities: the read-only Display, owner
+ *  2026-11-24, whose press the add-on refuses, the doorbell's Unlock included) is offered none. Pure. */
+export function offeredButtons(buttons: readonly AnnouncementButton[], mayAct: boolean, mayPress: boolean): AnnouncementButton[] {
+  return mayPress ? buttons.filter((b) => !b.acts || mayAct) : [];
 }
 
 /** Where a problem is: raised, still open, cleared. null: the announcement says none (a weekly test, a digest). */

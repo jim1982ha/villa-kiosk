@@ -325,6 +325,35 @@ export class BulbSet {
     }
   }
 
+  /**
+   * Every bulb of `entities` dark for a villa picture (villaPictureCapture), until the returned function: no glow of
+   * its own, no light from its PointLight, no furniture light. The pools are not drawn in a picture at all.
+   * ⚠️ HELD AT ZERO, NEVER SWITCHED OFF: a light switched off or on, and a fixture's opaque/blended switch, recompile
+   * every shader they reach, and a mesh whose shader is compiling is not drawn: the fixtures would blink out on screen
+   * once the picture is taken. Brightness, glow colour and the furniture light's lamp count are uniforms.
+   */
+  darkForPicture(entities: Iterable<readonly AbstractMesh[]>): () => void {
+    const kept: { mat: PBRMaterial | StandardMaterial; emissive: Color3 }[] = [];
+    for (const meshes of entities) {
+      for (const m of meshes) {
+        const mat = m.material;
+        if (!(mat instanceof PBRMaterial || mat instanceof StandardMaterial)) continue;
+        kept.push({ mat, emissive: mat.emissiveColor.clone() });
+        mat.emissiveColor = Color3.Black();
+      }
+    }
+    const lit = [...new Set(this.lights.values())].map((l) => ({ l, intensity: l.intensity }));
+    for (const { l } of lit) l.intensity = 0;
+    const glowBack = lampGlowFor(this.scene).suspend();
+    return () => {
+      for (const { mat, emissive } of kept) mat.emissiveColor = emissive;
+      for (const { l, intensity } of lit) l.intensity = intensity;
+      glowBack();
+      // a state that arrived meanwhile wins over what was kept
+      this.resync();
+    };
+  }
+
   /** Re-render every live shadow map ONCE on the next frame — the set of
    *  VISIBLE occluders changed (a floor switch, a door or curtain pose).
    *  Never for the camera or a light's brightness: a depth map drawn from the

@@ -7,6 +7,7 @@ import { installLifecycleTelemetry } from "./utils/telemetry";
 import { markBoot, installStallObserver, installVisibilityTracker, currentLoadSeq } from "./utils/bootTimeline";
 import { installLeakConsole } from "./utils/leakWatch";
 import { modelLifecycle } from "./utils/modelLifecycle";
+import { deviceView } from "./utils/deviceVerdict";
 import "./styles.css";
 import { underIngress } from "@/ha/ingress";
 import { startServiceWorker } from "@/utils/swUpdate";
@@ -68,6 +69,10 @@ installLeakConsole(currentLoadSeq);
 // ProfileGate's own retry (on the gate screen, and again the moment a profile
 // is authorised) still covers that case.
 modelLifecycle.prefetch();
+// ...and the 3D view's own code (the 3D engine), where it is shown: Dashboard loads it lazily so a device given the
+// villa pictures never downloads it (deviceVerdict, owner 2026-11-24), and this keeps the 3D path from waiting for the
+// page to mount before asking for it. Asked here, at the same moment as the model.
+if (deviceView() === "3d") void import("./components/canvas/BabylonCanvas");
 
 // Register the PWA service worker (best-effort). Skip it under HA Ingress: the
 // add-on is served from a per-session path (/api/hassio_ingress/<token>/), so a

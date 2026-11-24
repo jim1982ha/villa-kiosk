@@ -186,6 +186,16 @@ export class FloorManager {
     return this.currentFloor;
   }
 
+  /** The floor shown for a villa picture (villaPictureCapture), null: the active one again. Visibility only, the
+   *  same cumulative rule: the active floor does not change, and nothing is told (no onFloorChange), so the floor
+   *  buttons and the badges never move while a picture is taken. */
+  private pictureFloor: number | null = null;
+
+  showForPicture(floor: number | null): void {
+    this.pictureFloor = floor;
+    this.applyVisibility();
+  }
+
   /**
    * Show the active floor and every floor BELOW it; only floors above are
    * disabled. The 1F view still cuts the upper storey away (top-down look
@@ -195,8 +205,9 @@ export class FloorManager {
    * enabled regardless of floor.
    */
   private applyVisibility(): void {
+    const shown = this.pictureFloor ?? this.currentFloor;
     for (const [floor, list] of this.floorMeshes) {
-      const on = floor <= this.currentFloor;
+      const on = floor <= shown;
       for (const m of list) {
         if (m.isEnabled(false) !== on) m.setEnabled(on);
       }

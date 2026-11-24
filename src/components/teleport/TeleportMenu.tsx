@@ -12,7 +12,6 @@
 // purely to host the gesture.
 
 import { X, MapPin, Plus, Trash2, List } from "lucide-react";
-import { Axis } from "@babylonjs/core/Maths/math.axis";
 import { useState, type ReactNode } from "react";
 import { useModalA11y } from "@/hooks/useModalA11y";
 import { useConfig } from "@/config/ConfigContext";
@@ -77,15 +76,20 @@ export default function TeleportMenu({ manager, currentFloor, onClose, onTelepor
    * about the current ZOOM/angle is stored — that is re-derived per room from
    * its floor-plan footprint every time it's visited.
    */
-  const captureCurrentPose = (): { position: Vec3; target: Vec3 } => {
-    if (manager!.getViewMode() === "overview") {
-      const pose = manager!.overview.getPose();
+  // ⚠️ THE SCENE IS PASSED, NEVER ASSUMED (owner, 2026-11-24): a device showing the villa pictures has no scene at
+  // all, and `manager!` here held only by its caller's guard. No Babylon import either (the 3D engine is not
+  // downloaded there): the look direction is the camera's own target, less its position.
+  const captureCurrentPose = (m: SceneManager): { position: Vec3; target: Vec3 } => {
+    if (m.getViewMode() === "overview") {
+      const pose = m.overview.getPose();
       const position = { x: round(pose.target.x), y: round(config.eyeHeight), z: round(pose.target.z) };
       return { position, target: { x: position.x, y: position.y, z: position.z + 1.5 } };
     }
-    const cam = manager!.camera.camera;
+    const cam = m.camera.camera;
     const pos = cam.position;
-    const dir = cam.getDirection(Axis.Z);
+    const aim = cam.getTarget();
+    const len = Math.hypot(aim.x - pos.x, aim.y - pos.y, aim.z - pos.z) || 1;
+    const dir = { x: (aim.x - pos.x) / len, y: (aim.y - pos.y) / len, z: (aim.z - pos.z) / len };
     return {
       position: { x: round(pos.x), y: round(pos.y), z: round(pos.z) },
       target: { x: round(pos.x + dir.x), y: round(pos.y + dir.y), z: round(pos.z + dir.z) },
@@ -111,7 +115,7 @@ export default function TeleportMenu({ manager, currentFloor, onClose, onTelepor
     // from the config as it is when the edit runs, never the one this menu captured.
     // Rejected INLINE rather than through a second dialog: the native flow was
     // prompt → alert → prompt, which threw away what was typed and asked twice.
-    const { position, target } = captureCurrentPose();
+    const { position, target } = captureCurrentPose(manager);
     const room = addRoom({ name, floor: currentFloor, position, target });
     const clash = room.clash(config);
     if (clash) return clash;

@@ -40,6 +40,13 @@ export interface SummaryTile {
   canControl: boolean;
 }
 
+/** The tiles as a profile that switches nothing gets them (no `controlEntities`: the read-only Display, owner
+ *  2026-11-24): every tile still shown and counted, none able to act (its list's toggles, its bulk switch greyed).
+ *  `deriveTiles`' `can` stays what the profile may SEE, since it also decides whether the Energy tile exists. */
+export function tilesForControl(tiles: SummaryTile[], control: boolean): SummaryTile[] {
+  return control ? tiles : tiles.map((t) => (t.canControl ? { ...t, canControl: false } : t));
+}
+
 /** Build the ordered tile list from the live entity snapshot. Pure (no side
  *  effects) so it's cheap to recompute on every state push via useMemo. */
 export function deriveTiles(
