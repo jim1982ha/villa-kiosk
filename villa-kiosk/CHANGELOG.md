@@ -1,3 +1,16 @@
+## 2.496.895
+
+- **The villa pictures show the house larger.** They are now framed on the house instead of the whole plot, so each
+  floor fills more of the screen. The next time the Owner opens VESTA UI on a computer, new pictures are made by
+  themselves.
+- **A room glow can be seen from across the room.** On the pictures, a room in use or needing attention now has a
+  solid outline and a stronger colour.
+- **The summary tiles stay before any pictures exist.** Until the first pictures are made, every device placed on the
+  map counts, as before.
+- **A way back to the 3D villa.** On a device that shows the pictures, the menu has "Show the 3D villa". It tries the
+  3D villa on the next opening (it may be slow on that device).
+- **A TV is recognised in more cases** (a browser that says "Smart TV").
+
 ## 2.496.894
 
 - **The two floors sit side by side on a wide screen.** On a TV or a computer the pictures show 1F on the left and

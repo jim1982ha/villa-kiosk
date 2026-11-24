@@ -51,7 +51,7 @@ export const RECORD_KEY = "villa-kiosk:3d-record";
 export const SLOW_LOAD_MS = 40_000;
 
 /** A TV or set-top box's browser: Android TV, Samsung (Tizen), LG (webOS), Sony, HbbTV, Chromecast, Fire TV. */
-export const TV_UA = /Android TV|SMART-TV|SmartTV|Tizen|Web0S|webOS|BRAVIA|HbbTV|CrKey|AFT[A-Z]/i;
+export const TV_UA = /Android TV|Smart[- ]?TV|Tizen|Web0S|webOS|BRAVIA|HbbTV|CrKey|AFT[A-Z]/i;
 /** A renderer drawn by the processor, not a GPU. */
 export const SOFTWARE_GPU = /SwiftShader|llvmpipe|Software|Microsoft Basic Render/i;
 /** GPU families too weak for the villa's model: entry Mali (G31/G51/G52, every T and 400 series), PowerVR GE8xxx,

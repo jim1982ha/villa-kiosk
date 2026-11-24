@@ -2298,10 +2298,14 @@ export class SceneManager {
    * for a frame. The sun's look, the floor and the lamps are the capture's (SunController.forceLook,
    * FloorManager.showForPicture, EntityVisuals.lampsOff).
    */
-  picturesStage(): { meshes: AbstractMesh[]; min: Vector3; max: Vector3; rooms: WorldOutline[]; release: () => void } | null {
+  picturesStage(): { meshes: AbstractMesh[]; min: Vector3; max: Vector3; house: { min: Vector3; max: Vector3 };
+    rooms: WorldOutline[]; release: () => void; } | null {
     if (this.disposed || this.framesHeld || !this.loadedMeshes.length) return null;
     this.framesHeld = true;
     const ext = this.worldExtends(this.loadedMeshes);
+    // the floors' own meshes, without the always-on exterior (ground, garden): what the pictures are framed on
+    const houseMeshes = this.floors.getFloorsDetected().flatMap((f) => this.floors.getFloorMeshes(f)).filter((m) => !m.isDisposed());
+    const house = houseMeshes.length ? this.worldExtends(houseMeshes) : ext;
     this.structure.setView("overview");
     const layers = this.scene.layers.filter((l) => l.isEnabled);
     for (const l of layers) l.isEnabled = false;
@@ -2312,6 +2316,7 @@ export class SceneManager {
       meshes: this.loadedMeshes.filter((m) => !m.isDisposed()),
       min: ext.min,
       max: ext.max,
+      house: { min: house.min, max: house.max },
       rooms: this.pictureRooms(),
       release: () => {
         for (const { m, outline, overlay } of marked) { m.renderOutline = outline; m.renderOverlay = overlay; }

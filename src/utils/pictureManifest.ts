@@ -23,6 +23,26 @@ export function pictureFrame(min: { x: number; z: number }, max: { x: number; z:
   return { minX: min.x, maxX: max.x, minZ: min.z, maxZ: max.z };
 }
 
+/** Goes up when the framing changes, so every stored set is made again (configKey). */
+export const FRAMING_RULE = 2;
+
+/** ⚠️ THE FRAME IS THE HOUSE, NOT THE GARDEN (owner, 2026-11-24: on a TV the whole plot left each floor small): the
+ *  floors' own meshes' extents plus `margin` metres, widened to keep every badge point (with 1 m to spare) on the
+ *  picture, never past the whole model. The same frame for every floor. */
+export function houseFrame(house: { min: { x: number; z: number }; max: { x: number; z: number } },
+  model: { min: { x: number; z: number }; max: { x: number; z: number } },
+  points: readonly { x: number; z: number }[], margin = 1.5): PictureFrame {
+  let minX = house.min.x - margin, maxX = house.max.x + margin, minZ = house.min.z - margin, maxZ = house.max.z + margin;
+  for (const p of points) {
+    minX = Math.min(minX, p.x - 1); maxX = Math.max(maxX, p.x + 1);
+    minZ = Math.min(minZ, p.z - 1); maxZ = Math.max(maxZ, p.z + 1);
+  }
+  return {
+    minX: Math.max(minX, model.min.x), maxX: Math.min(maxX, model.max.x),
+    minZ: Math.max(minZ, model.min.z), maxZ: Math.min(maxZ, model.max.z),
+  };
+}
+
 /** A picture's pixel size: the frame's aspect (spanX / spanZ), the long side PICTURE_LONG_SIDE. */
 export function pictureSize(frame: PictureFrame, longSide = PICTURE_LONG_SIDE): { width: number; height: number } {
   const sx = Math.max(frame.maxX - frame.minX, 1e-6), sz = Math.max(frame.maxZ - frame.minZ, 1e-6);
@@ -82,6 +102,8 @@ export function configKey(config: PlacementConfig): string {
     entityMap[id] = placed;
   }
   return hash53(stableText({
+    // how the pictures are framed: a set made by an older rule (the whole plot, before 2.496.895) is made again
+    framing: FRAMING_RULE,
     entityMap,
     meshBindings: config.meshBindings,
     deviceGroups: config.deviceGroups.map((g) => ({ primary: g.primaryEntityId, members: [...g.memberEntityIds].sort() })),

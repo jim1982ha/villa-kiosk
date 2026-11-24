@@ -303,7 +303,8 @@ export default function PictureView({ onEntityPicked, onEntityLongPressed, onClu
           <svg className="picture-rooms" viewBox="0 0 1 1" preserveAspectRatio="none" aria-hidden="true">
             {manifest!.rooms.filter((r) => r.floor === floor.floor && lit.rooms.has(roomKey(r.name))).map((r) => (
               <polygon key={r.name} className="picture-room-glow" points={r.pts.map(([u, v]) => `${u},${v}`).join(" ")}
-                fill={lit.alarms?.has(roomKey(r.name)) ? STATUS_COLOR.warn : STATUS_COLOR.active} />
+                fill={lit.alarms?.has(roomKey(r.name)) ? STATUS_COLOR.warn : STATUS_COLOR.active}
+                stroke={lit.alarms?.has(roomKey(r.name)) ? STATUS_COLOR.warn : STATUS_COLOR.active} />
             ))}
           </svg>
           <span className="picture-floor-label">{floor.label}</span>

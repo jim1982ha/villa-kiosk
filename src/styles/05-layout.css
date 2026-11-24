@@ -66,8 +66,11 @@
 }
 .picture-rooms { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 /* a lit room glows as the 3D floor glow does: the status colour, breathing (RoomHighlight's pulse) */
-.picture-room-glow { opacity: 0.4; animation: picture-glow 2.4s ease-in-out infinite; }
-@keyframes picture-glow { 0%, 100% { opacity: 0.45; } 50% { opacity: 0.25; } }
+.picture-room-glow { opacity: 0.6; stroke-width: 3px; vector-effect: non-scaling-stroke; stroke-linejoin: round;
+  animation: picture-glow 2.4s ease-in-out infinite; }
+/* ⚠️ SEEN FROM ACROSS THE ROOM (owner, 2026-11-24: the glow was barely visible on a TV): a solid outline and a strong
+   fill, breathing between the two */
+@keyframes picture-glow { 0%, 100% { opacity: 0.7; } 50% { opacity: 0.4; } }
 .picture-floor-label {
   position: absolute; left: 6px; top: 6px; padding: 2px 8px; border-radius: var(--radius-pill);
   background: var(--chip-bg); color: var(--text-primary); font-size: var(--text-sm); font-weight: 600; pointer-events: none;

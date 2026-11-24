@@ -2,7 +2,7 @@
 // live badges over it. A badge must land where its device is, north up, and a set made before the device moved must be
 // made again, while one made from the same placement is kept.
 import { ck, done } from "../consistency/check.mjs";
-const { pictureFrame, pictureSize, toUv, configKey, picturesStale, buildManifest } = await import("@/utils/pictureManifest");
+const { pictureFrame, houseFrame, pictureSize, toUv, configKey, picturesStale, buildManifest } = await import("@/utils/pictureManifest");
 const { parseManifest } = await import("@/utils/villaPictures");
 
 const frame = pictureFrame({ x: -10, z: -4 }, { x: 30, z: 16 });
@@ -57,4 +57,16 @@ ck("a set made from what is on screen now is kept", !picturesStale(made, source)
 ck("a moved device makes it stale", picturesStale(made, { ...source, config_key: configKey(moved) }));
 ck("  ...so does a new model or new room data", picturesStale(made, { ...source, model_version: "x" })
    && picturesStale(made, { ...source, rooms_version: "y" }));
+console.log("\n  the frame is the house, not the plot:");
+{
+  const model = { min: { x: -40, z: -30 }, max: { x: 40, z: 30 } };
+  const house = { min: { x: -10, z: -5 }, max: { x: 10, z: 5 } };
+  const f = houseFrame(house, model, []);
+  ck("the house plus a margin, far inside the plot", f.minX === -11.5 && f.maxX === 11.5 && f.minZ === -6.5 && f.maxZ === 6.5, f);
+  const g = houseFrame(house, model, [{ x: 20, z: 0 }]);
+  ck("  ...widened to keep a badge outside the house (a pool light) on the picture", g.maxX === 21 && g.minX === -11.5, g);
+  const h = houseFrame(house, model, [{ x: 60, z: 0 }]);
+  ck("  ...never past the whole model", h.maxX === 40, h);
+}
+
 done();

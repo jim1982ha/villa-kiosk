@@ -32,6 +32,10 @@ console.log("\n  what a device is judged by:");
   ck("a TV's browser is given the villa pictures, before any 3D work", v.view === "pictures" && v.tv, v);
 }
 {
+  const v = device({ ua: "Mozilla/5.0 (Linux; Smart TV) AppleWebKit/537.36 Chrome/120.0 Safari/537.36" }).verdict();
+  ck("  ...also one that writes \"Smart TV\" with a space", v.view === "pictures" && v.tv, v);
+}
+{
   const v = device({ gpu: MALI }).verdict();
   ck("a weak GPU (a Mali-G52) is given the pictures, whatever its browser says", v.view === "pictures" && v.reason === "weak-gpu", v);
 }

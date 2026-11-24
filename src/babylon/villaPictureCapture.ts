@@ -22,7 +22,7 @@ import { Color4 } from "@babylonjs/core/Maths/math.color";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector";
 import type { SceneManager } from "./SceneManager";
 import {
-  PICTURE_FLOORS, buildManifest, pictureFrame, pictureSize, viewFileFor, type Look, type PictureSource, type WorldAnchor,
+  PICTURE_FLOORS, buildManifest, houseFrame, pictureSize, viewFileFor, type Look, type PictureFrame, type PictureSource, type WorldAnchor,
 } from "@/utils/pictureManifest";
 import type { PicturesManifest, ViewFile } from "@/utils/villaPictures";
 
@@ -53,9 +53,10 @@ const SHOT_SAMPLES = 4;
 /** A top-down orthographic camera over the frame: forward -y, the picture's up +z (north), its right +x, so a
  *  world point lands at toUv's (u, v) on every floor. Checked, not assumed: a camera turned another way would
  *  store mirrored pictures every reader trusts. */
-function topDownCamera(manager: SceneManager, min: Vector3, max: Vector3): TargetCamera {
-  const sx = max.x - min.x, sz = max.z - min.z;
-  const cam = new TargetCamera("villaPictureCamera", new Vector3((min.x + max.x) / 2, max.y + 10, (min.z + max.z) / 2),
+function topDownCamera(manager: SceneManager, frame: PictureFrame, min: Vector3, max: Vector3): TargetCamera {
+  const sx = frame.maxX - frame.minX, sz = frame.maxZ - frame.minZ;
+  const cam = new TargetCamera("villaPictureCamera",
+    new Vector3((frame.minX + frame.maxX) / 2, max.y + 10, (frame.minZ + frame.maxZ) / 2),
     manager.scene, false);
   cam.rotation.set(Math.PI / 2, 0, 0);
   cam.mode = Camera.ORTHOGRAPHIC_CAMERA;
@@ -165,12 +166,16 @@ export async function captureVillaPictures(
   let target: PictureTarget | null = null;
   let lampsBack: (() => void) | null = null;
   try {
-    const frame = pictureFrame(stage.min, stage.max);
+    // an unstamped badge is drawn on every floor in the 3D villa; a picture has one place for it: the lowest floor
+    const detectedFloors = floors.getFloorsDetected();
+    const lowest = PICTURE_FLOORS.find((f) => detectedFloors.includes(f)) ?? 1;
+    const anchors: WorldAnchor[] = visuals.anchorSnapshot().map((a) => ({ ...a, floor: a.floor ?? lowest }));
+    const frame = houseFrame(stage.house, { min: stage.min, max: stage.max }, anchors);
     const size = pictureSize(frame);
     const detected = floors.getFloorsDetected();
     const shown = PICTURE_FLOORS.filter((f) => detected.includes(f));
     if (!shown.length) throw new Error("the model has no floor 1 or 2");
-    cam = topDownCamera(manager, stage.min, stage.max);
+    cam = topDownCamera(manager, frame, stage.min, stage.max);
     target = new PictureTarget(scene, cam, stage.meshes, size);
     lampsBack = visuals.lampsOff();
     const pictures = new Map<ViewFile, Blob>();
@@ -185,8 +190,6 @@ export async function captureVillaPictures(
       }
     }
     if (interrupted()) throw new CaptureAborted();
-    // an unstamped badge is drawn on every floor in the 3D villa; a picture has one place for it: the lowest floor
-    const anchors: WorldAnchor[] = visuals.anchorSnapshot().map((a) => ({ ...a, floor: a.floor ?? shown[0] }));
     const manifest = buildManifest({ source, madeAt: new Date(), frame, floors: shown, size, anchors, rooms: stage.rooms });
     const files = [...pictures].map(([name, blob]) => ({ name, blob }));
     files.push({ name: "manifest.json", blob: new Blob([JSON.stringify(manifest)], { type: "application/json" }) });

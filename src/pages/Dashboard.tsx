@@ -170,8 +170,13 @@ export default function Dashboard() {
   // linked and motion entity, dismissed ones out), which are dismissed, and
   // which a profile can see at all — decided once, by the villa model
   // (config/villaVisibility.ts), and read here as by every surface below.
-  // On the pictures, the devices they draw stand for the model's objects (PictureView's places).
-  useEffect(() => { if (places) setSceneEntityIds(places.mapped); }, [places]);
+  // On the pictures, the devices they draw stand for the model's objects (PictureView's places). ⚠️ BEFORE ANY
+  // PICTURES EXIST every mapped device does (owner, 2026-11-24: with none made yet the summary tiles all vanished, as
+  // nothing counted as on the map).
+  useEffect(() => {
+    if (places) setSceneEntityIds(places.mapped);
+    else if (view === "pictures") setSceneEntityIds(new Set(Object.keys(config.entityMap)));
+  }, [places, view, config.entityMap]);
   const villaSets = useVillaSets(sceneEntityIds);
   // the villa model, built once here and handed down (VillaModelProvider below): this page reads the same value
   const villa = useVillaModelValue(villaSets);
