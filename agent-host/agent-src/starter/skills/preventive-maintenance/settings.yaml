@@ -18,6 +18,7 @@ behaviour:
   battery_level_window_hours: 24        # A battery is judged on its highest reading over these hours, its level at rest, because a battery dips under load; the villa's low-battery automation reads the same.
   silence_hours: 24                     # A sensor that has not reported for this long is reported as silent.
   unavailable_minutes: 10              # How long a device must stay offline before its fault opens (checked each night and every few minutes).
+  alert_wait_minutes: 15               # How long a device the villa's critical-devices Automation watches is left to that Automation's own alert (its wait, plus a few minutes) before this check tells it offline itself: one message, the alert's.
   back_online_minutes: 10               # How long a device found offline must be back before its fault closes.
   on_threshold_fraction: 0.2            # fraction of running power that counts as "on", the villa's one definition, held equal in every skill: change it with the helper vesta_on_threshold_fraction
   on_threshold_floor_w: 1.0             # For equipment with no history to judge from, the power above which it counts as on.
@@ -67,8 +68,8 @@ reopened_in_kiosk:
 # tells it (architecture review N, 2026-10-27). Each step is a line of its Status section as the alert card says it, in
 # the chat's language: "Cleared on 11/10/2026 06:00: watched until 02:00.", "Closed on 12/10/2026 02:00: it did not
 # come back.", "Back at 12/10/2026 02:00 (to: FM)"; an item an alert took over shows the fault's close note ("Followed
-# by alert #41, …"). `all_title`: the message's title once every item of it is back,
-# closed or taken over ({title}: its own). `tell: false` leaves the messages as sent. A message Telegram no longer lets
+# by alert #41, …"). `all_title`: the message's title once every item of it is really back, cleared or closed
+# ({title}: its own); never for an item an alert took over, which may still be off. `tell: false` leaves the messages as sent. A message Telegram no longer lets
 # be rewritten stays.
 told_cleared:
   tell: true

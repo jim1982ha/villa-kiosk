@@ -177,6 +177,9 @@ class Group:
     entity_ids: list[str] = field(default_factory=list)  # the entities, the same order (an integration: one per device)
     integration: str | None = None    # an integration down: its platform; its devices' first entities in entity_ids
     over: bool = False                # offline since before the history read (offline_since): `since` is its start
+    # when the last of its entities the villa's critical-devices Automation names (pack.critical) went offline: the
+    # moment that Automation counts its wait from (a flap of one of them starts it again); None: none named, or not said
+    watched_since: datetime | None = None
 
     @property
     def entity_id(self) -> str:
@@ -241,6 +244,7 @@ def devices_offline(pack, states: dict, now: datetime, families, *, min_minutes:
     # its stream, its Wi-Fi signal and its noise sensor all reported — only its event sensors, which read "unavailable"
     # until the camera's next event, were): a device is offline only when none of its entities read answers
     groups = {k: g for k, g in groups.items() if k not in answering}
+    real: dict[str, datetime] = {}
     if history is not None and went:
         longer: set[str] = set()
         blind: set[str] = set()
@@ -257,6 +261,11 @@ def devices_offline(pack, states: dict, now: datetime, families, *, min_minutes:
                 g.since = min(known)
                 g.hours = _hours(g.since, now)
                 g.over = any(real[e] == g.since for e in (seeing or g.entity_ids) if e in longer)
+    listed = set(getattr(pack, "critical", None) or ())
+    for g in groups.values():
+        times = [real.get(e) or went.get(e) for e in g.entity_ids if e in listed]
+        if times and None not in times:
+            g.watched_since = max(times)
     # a device an open alert already follows is that alert's: left out before the integration is counted, so the
     # others of its integration stay what they are
     if alerted:

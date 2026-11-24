@@ -112,7 +112,7 @@ def test_the_three_callers_read_the_one_list_and_the_one_reading(tmp_path, monke
     assert s["offline"] == ["Unnamed Ubiquiti U6 Lite"]                  # the same two devices: no tank, no battery
     from vesta_shared.params import VillaParams
     params = VillaParams(helpers=[], states={}, defaults={"unavailable_minutes": 10, "integration_down_devices": 3,
-                                                                  "integration_down_window_minutes": 30})
+                                                          "integration_down_window_minutes": 30, "alert_wait_minutes": 15})
     found = nightly.offline_findings(pack, STATES, NOW, params)
     assert [(f.rule_id, f.entity_id, f.summary) for f in found] == [
         ("PM-UNAVAILABLE", "sensor.spa_pump_power", "Spa Plug has been offline for 5h."),

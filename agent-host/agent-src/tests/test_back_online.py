@@ -156,12 +156,14 @@ def test_a_critical_device_gone_offline_tells_the_facility_manager_at_once(tmp_p
     states = {**_off_since(NIGHT), "lock.example_door": {"state": "unavailable", "attributes": {},
                                                          "last_changed": NIGHT.isoformat()}}
     states.pop("sensor.example_th_humidity")
-    out = _run_engine(tmp_path, states, NIGHT + timedelta(minutes=12))
+    # villa, 2026-11-25: the villa's critical-devices Automation tells it first; this check waits its turn
+    assert _run_engine(tmp_path, states, NIGHT + timedelta(minutes=12))["send"] == [] and _open_tasks(tmp_path) == []
+    out = _run_engine(tmp_path, states, NIGHT + timedelta(minutes=16))     # no alert came: told
     assert out["actions"] == MOVED and [t["entity_id"] for t in _open_tasks(tmp_path)] == ["lock.example_door"]
     (msg,) = out["send"]
-    assert msg["to"] == "fm" and "Example door has been offline for 12min" in msg["text"], msg
+    assert msg["to"] == "fm" and "Example door has been offline for 16min" in msg["text"], msg
     # its title's moment as every Status line and the agreement write one, never "17 Oct, 21:58" (architecture review 25)
-    assert msg["title"] == "Example Villa, devices offline on 17/10/2026 21:58.", msg["title"]
+    assert msg["title"] == "Example Villa, devices offline on 17/10/2026 22:02.", msg["title"]
 
 
 def test_a_critical_device_offline_a_second_time_the_same_day_is_told_as_back_again(tmp_path):
@@ -170,24 +172,24 @@ def test_a_critical_device_offline_a_second_time_the_same_day_is_told_as_back_ag
     # message stayed on "Cleared". The same outage on the NEXT day was told "Back again … (2nd time in 7 days)"
     day = datetime(2026, 10, 17, 10, 0, tzinfo=timezone.utc)
     door = lambda state, at: {"lock.example_door": {"state": state, "attributes": {}, "last_changed": at.isoformat()}}
-    (first,) = _run_engine(tmp_path, door("unavailable", day), day + timedelta(minutes=12))["send"]
+    (first,) = _run_engine(tmp_path, door("unavailable", day), day + timedelta(minutes=16))["send"]
     back = _run_engine(tmp_path, door("locked", day + timedelta(minutes=20)), day + timedelta(minutes=50))
     assert back["send"] == [] and _open_tasks(tmp_path) == []
     (cleared,) = back["edits"]
     assert cleared["key"] == first["key"] and "Cleared on 17/10/2026 10:50" in cleared["text"]
     again = day + timedelta(hours=5)
-    out = _run_engine(tmp_path, door("unavailable", again), again + timedelta(minutes=12))
+    out = _run_engine(tmp_path, door("unavailable", again), again + timedelta(minutes=16))
     (msg,) = out["send"]
-    assert msg["to"] == "fm" and msg["title"] == "Example Villa, devices offline on 17/10/2026 15:12."
-    assert msg["text"].startswith("Back again:\n- Example door has been offline for 12min. (2nd time in 7 days)"), msg["text"]
+    assert msg["to"] == "fm" and msg["title"] == "Example Villa, devices offline on 17/10/2026 15:16."
+    assert msg["text"].startswith("Happened again:\n- Example door has been offline for 16min. (2nd time in 7 days)"), msg["text"]
     # its fault in the VESTA UI is open again, and the first message says so: its watch is over
     assert out["actions"] == MOVED and [t["entity_id"] for t in _open_tasks(tmp_path)] == ["lock.example_door"]
     (edit,) = out["edits"]
     assert edit["key"] == first["key"] and edit["title"] == first["title"]
-    assert "Cleared on 17/10/2026 10:50" in edit["text"] and edit["text"].endswith("\nBack at 17/10/2026 15:12 (to: FM)")
+    assert "Cleared on 17/10/2026 10:50" in edit["text"] and edit["text"].endswith("\nBack at 17/10/2026 15:16 (to: FM)")
     assert len(Store(str(tmp_path / "s.sqlite")).findings()) == 1                         # the same problem, not a second one
     # told once: the checks that follow say nothing more
-    quiet = _run_engine(tmp_path, door("unavailable", again), again + timedelta(minutes=17))
+    quiet = _run_engine(tmp_path, door("unavailable", again), again + timedelta(minutes=21))
     assert quiet["send"] == [] and quiet["edits"] == []
 
 
@@ -200,17 +202,17 @@ def test_maintenance_mode_holds_a_device_gone_offline_and_the_next_check_after_i
                                                          "last_changed": NIGHT.isoformat()}}
     states.pop("sensor.example_th_humidity")
     kiosk_told.save(_villa_pack(tmp_path), "maintenance", True)
-    held = _run_engine(tmp_path, states, NIGHT + timedelta(minutes=12))
+    held = _run_engine(tmp_path, states, NIGHT + timedelta(minutes=16))
     assert held["send"] == [] and held["actions"] == [] and _open_tasks(tmp_path) == []
     st = Store(str(tmp_path / "s.sqlite"))
     assert st.findings("open") == []
     (audit,) = st.db.execute("SELECT detail FROM audit WHERE action = 'suppressed_maintenance'").fetchall()
     assert json.loads(audit[0])["findings"][0]["entity_id"] == "lock.example_door"                  # audited
     kiosk_told.save(_villa_pack(tmp_path), "maintenance", False)
-    out = _run_engine(tmp_path, states, NIGHT + timedelta(minutes=17))
+    out = _run_engine(tmp_path, states, NIGHT + timedelta(minutes=21))
     assert out["actions"] == MOVED and [t["entity_id"] for t in _open_tasks(tmp_path)] == ["lock.example_door"]
     (msg,) = out["send"]
-    assert msg["to"] == "fm" and "Example door has been offline for 17min" in msg["text"], msg
+    assert msg["to"] == "fm" and "Example door has been offline for 21min" in msg["text"], msg
 
 
 def test_a_device_an_offline_alert_already_follows_gets_no_second_fault(tmp_path):
@@ -225,6 +227,58 @@ def test_a_device_an_offline_alert_already_follows_gets_no_second_fault(tmp_path
                                                          "last_changed": NIGHT.isoformat()}}
     out = _run_engine(tmp_path, states, NIGHT + timedelta(minutes=12))
     assert [t["entity_id"] for t in _open_tasks(tmp_path)] == ["sensor.example_th_humidity"] and out["send"] == []
+
+
+def _relay_pack(tmp_path) -> str:
+    """A relay and its uptime sensor, one device; the relay on the villa's critical-devices Automation's list."""
+    rows = [{"entity_id": e, "name": n, "area": "Pool", "family": "power", "asset": "relay", "device_id": "dev_relay"}
+            for e, n in (("switch.example_relay", "Example relay"), ("sensor.example_relay_uptime", "Example relay uptime"))]
+    path = tmp_path / "pack.json"
+    path.write_text(json.dumps({
+        "villa": "Example Villa", "time_zone": "UTC", "generated_at": "x", "ha_version": None, "areas": [], "people": [],
+        "channels": {}, "unknown_area": [], "unclassified": [], "retention": {"raw_history_days": 10},
+        "families": {"power": rows},
+        "assets": {"relay": {"slug": "relay", "name": "Example relay", "entities": {"power": "switch.example_relay"},
+                             "critical": True}},
+        "devices": {"dev_relay": {"name": "Example relay", "manufacturer": "", "model": "", "via": ""}},
+        "entity_devices": {r["entity_id"]: "dev_relay" for r in rows},
+        "critical": ["switch.example_relay"]}))
+    return str(path)
+
+
+def _run_relay(tmp_path, now: datetime):
+    """Its uptime sensor gone at NIGHT, the relay itself back a minute and gone again at NIGHT + 4min."""
+    fx = tmp_path / "fx"
+    fx.mkdir(exist_ok=True)
+    (fx / "states.json").write_text(json.dumps({"states": {
+        "sensor.example_relay_uptime": {"state": "unavailable", "attributes": {}, "last_changed": NIGHT.isoformat()},
+        "switch.example_relay": {"state": "unavailable", "attributes": {},
+                                 "last_changed": (NIGHT + timedelta(minutes=4)).isoformat()}}}))
+    r = subprocess.run([sys.executable, os.path.join(SKILL, "scripts", "recheck.py"), "--store", str(tmp_path / "s.sqlite"),
+                        "--fixture-dir", str(fx), "--now", now.isoformat()], capture_output=True, text=True, timeout=60,
+                       env={**os.environ, "PYTHONPATH": PYTHONPATH, "VESTA_PACK": _relay_pack(tmp_path)})
+    assert r.returncode == 0, r.stderr
+    return json.loads(r.stdout)
+
+
+def test_a_device_the_villas_critical_automation_watches_is_one_message_the_alerts(tmp_path):
+    # villa, 2026-11-25: this check counted from the uptime sensor and told "offline for 12min" at 01:58; the villa's
+    # critical-devices Automation counted from the relay itself and alerted at 01:59: two messages for one problem
+    assert _run_relay(tmp_path, NIGHT + timedelta(minutes=16))["send"] == [] and _open_tasks(tmp_path) == []
+    Store(str(tmp_path / "s.sqlite")).new_incident(
+        "watch|switch.example_relay", "automation.example_watchdog", "switch.example_relay", "P2",
+        {"bad_states": ["unavailable"], "entities": ["switch.example_relay"]})              # the alert, at 14min
+    for minutes in (21, 41):
+        out = _run_relay(tmp_path, NIGHT + timedelta(minutes=minutes))
+        assert out["send"] == [] and _open_tasks(tmp_path) == []
+
+
+def test_a_watched_device_no_alert_followed_is_told_once_its_automation_had_its_chance(tmp_path):
+    # the Automation off, or not running at that hour: the check tells it, counted as the Automation counts (the relay)
+    assert _run_relay(tmp_path, NIGHT + timedelta(minutes=16))["send"] == []
+    (msg,) = _run_relay(tmp_path, NIGHT + timedelta(minutes=20))["send"]
+    assert msg["to"] == "fm" and "Example relay has been offline for 20min" in msg["text"], msg
+    assert _run_relay(tmp_path, NIGHT + timedelta(minutes=25))["send"] == []                 # once
 
 
 # ------------------------------------------------------------------ one physical device, whatever is listed under it

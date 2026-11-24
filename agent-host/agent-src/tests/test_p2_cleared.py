@@ -395,8 +395,20 @@ def test_an_item_an_alert_took_over_says_so_and_two_rewrites_of_one_run_are_one(
     e2 = nightly.told_cleared(store, [], AT, "Asia/Makassar", words, handed={b: "Followed by alert #9, which says when it is back."})
     (e,) = nightly.one_edit_per_message(e1 + e2)
     assert e["text"].endswith("Relay b offline · Followed by alert #9, which says when it is back.")
-    assert "Cleared on 20/10/2026 12:30: watched until 02:00." in e["text"] and e["title"].endswith("All back to normal.")
+    assert "Cleared on 20/10/2026 12:30: watched until 02:00." in e["text"]
+    # villa, 2026-11-25: the relay an alert took over was still off; "All back to normal." said it was back
+    assert e["title"] == m["title"]
     assert e["fallback"].count("\n") == 1                        # both replies kept, for a message it cannot rewrite
+
+
+def test_a_message_whose_items_an_alert_took_over_never_says_all_back_to_normal(tmp_path):
+    store, (a, b), m, words = _real(tmp_path)
+    note = "Followed by alert #9, which says when it is back."
+    (e,) = nightly.one_edit_per_message(nightly.told_cleared(store, [], AT, "Asia/Makassar", words, handed={a: note, b: note}))
+    assert e["title"] == m["title"] and e["text"].count(note) == 2
+    # the other item back later: still not all back, one of them is the alert's
+    (e,) = nightly.told_cleared(store, [b], AT, "Asia/Makassar", words)
+    assert e["title"] == m["title"]
 
 
 def test_each_chat_reads_the_night_checks_story_in_its_own_language_as_the_alert_card_says_it(tmp_path):

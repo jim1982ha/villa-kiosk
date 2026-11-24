@@ -1318,7 +1318,7 @@ where a list named no chat (and, round 15, for approvals): two lists of the same
   `seen_at`, `record_rechecked` ignoring the moments, the recheck dropping `at`, the loop's stamp, `day_seen` left out
   of `asset_findings`, the JUDGED_DAY flag and its watch, the two titles. Not pinned: the "batteries on" title (no
   test sends it).
-- Dropped: the night message's words around its Status ("New", "Back again", its title) stay English in a French chat
+- Dropped: the night message's words around its Status ("New", "Happened again", its title) stay English in a French chat
   while its Status is French; the first copy is all English. Making every copy follow its chat needs a skill message's
   `text_in` on its first post and the tablet kept in English (the review-22 card-4 trap): the owner's call, not done. The owner
   declined it (2026-11-05): rules/decided.md "The night message's language stays as it is".

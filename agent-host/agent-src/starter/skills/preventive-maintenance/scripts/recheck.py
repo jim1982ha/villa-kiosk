@@ -127,7 +127,8 @@ def gone_offline(store, pack, client, now: datetime, params, zone: str, settle_m
     # since when each device is offline, from the past kept between ticks (HISTORY_KEPT): read again whole on every
     # tick, that was the recheck's 41.9 s, then 89.6 s (owner, 2026-10-30)
     for f in N.offline_findings(pack, client().states(ids), at, params, set(N.alerted_offline(store, pack)),
-                                history=remembered(client(), store, HISTORY_KEPT, now), states_of=client().states):
+                                history=remembered(client(), store, HISTORY_KEPT, now), states_of=client().states,
+                                told=N.offline_open(store)):
         row = store.open_finding(f.rule_id, f.entity_id)
         if row:
             moved += Problems(store).seen(row["id"], now.isoformat(), settle_minutes)

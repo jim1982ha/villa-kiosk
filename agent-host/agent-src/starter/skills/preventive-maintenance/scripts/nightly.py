@@ -151,7 +151,8 @@ def run(args) -> dict:
     findings += battery_findings(pack, states, params, today, bat_stats, store=store, best=best, at=now_ref)
 
     alerted = alerted_offline(store, pack)
-    findings += offline_findings(pack, states, now_ref, params, set(alerted), history=cli.history, states_of=cli.states)
+    findings += offline_findings(pack, states, now_ref, params, set(alerted), history=cli.history, states_of=cli.states,
+                                 told=offline_open(store))
     # an offline fault open from before its alert: closed as handed over, never "cleared" while the device is still off
     # (endings.py) — the same hand-over recheck.py makes every 5 minutes
     alerts = handed_to_alerts(store, pack, alerted)
@@ -928,8 +929,13 @@ def handed_to_alerts(store, pack, alerted: dict[str, int]) -> dict[tuple[str, st
             for dev in [pack.physical_device_of(o["entity_id"]) or o["entity_id"]] if dev in alerted}
 
 
+def offline_open(store) -> set[str]:
+    """The entities the open offline faults (PM-UNAVAILABLE) stand under: offline_findings' `told`."""
+    return {o["entity_id"] for o in store.findings(status="open") if o["rule_id"] == "PM-UNAVAILABLE"}
+
+
 def offline_findings(pack, states: dict, now: datetime, params, alerted: set[str] = frozenset(), history=None,
-                     states_of=None) -> list:
+                     states_of=None, told: set[str] = frozenset()) -> list:
     """The devices offline now, as PM-UNAVAILABLE findings — for the night check and for recheck.py every 5 minutes,
     from the ONE reading of "offline now" (vesta_shared.offline.devices_offline, the reports' and the concierge's too)
     over the kinds watched for it (vesta_shared.offline.watched_kinds, the reports' and the chat's too), with its settings: `unavailable_minutes`, `integration_down_devices`. One
@@ -943,7 +949,15 @@ def offline_findings(pack, states: dict, now: datetime, params, alerted: set[str
     states(ids)) asks whether any other entity of the device answers (vesta_shared.offline.device_answers) — the
     5-minute recheck's close of an offline fault (recheck.OFFLINE_ENDS "answers"). Only the watched families' states
     were read here, so a door whose Wi-Fi signal reported closed "the device answers" and opened again at the same run,
-    every 5 minutes."""
+    every 5 minutes.
+
+    ⚠️ ONE MESSAGE, THE ALERT'S (villa, 2026-11-25): a pool relay the villa's critical-devices Automation watches went
+    offline; this check counted from its first entity gone (its uptime sensor, 01:45) and told it at 01:58, the
+    Automation counted from the relay itself (back for 83 s, gone again at 01:49) and alerted at 01:59: two messages for
+    one problem. A device that Automation watches (pack.critical, read from the Automation itself) is left to its alert
+    for `alert_wait_minutes`, counted as the Automation counts (Group.watched_since); its alert, once open, takes it
+    (`alerted`). Past that wait with no alert (the Automation off, or not running then), this check tells it. A device
+    whose fault is open already (`told`: offline_open) is never held: the fault stays while it is offline."""
     out = []
     # since when each is REALLY offline (`history`: the client's, read back past a restart), and an integration down
     # only for its devices gone together (`integration_down_window_minutes`): villa, 2026-10-25
@@ -952,6 +966,10 @@ def offline_findings(pack, states: dict, now: datetime, params, alerted: set[str
                              together_minutes=params.behaviour("integration_down_window_minutes"), history=history):
         if states_of is not None and not g.integration and device_answers(pack, g.entity_ids, states_of):
             continue
+        went = g.watched_since or g.since
+        if g.critical and not g.integration and g.entity_id not in told and went is not None \
+                and (now - went).total_seconds() < params.behaviour("alert_wait_minutes") * 60:
+            continue                         # the villa's own alert's, for now
         if g.integration:
             a = {"slug": f"integration_{g.integration}", "name": integration_name(g.integration, len(g.entity_ids)),
                  "critical": g.critical}
@@ -989,7 +1007,7 @@ def told_now(res: dict, title: str | None = None, store=None, at: datetime | Non
         note = result.fault_note(d.get("check"))
         return f"- {problem_name(d.get('summary', ''), d.get('again'))['headline']}" + (f"\n{note}" if note else "")
     sections = [(label, [[d.get("id"), item(d)] for d in ds if d.get("severity") == "P2"])
-                for label, ds in (("New", res["new_findings"]), ("Back again", res["again"]))]
+                for label, ds in (("New", res["new_findings"]), ("Happened again", res["again"]))]
     if not any(items for _, items in sections):
         return []
     title = title or f"{res.get('villa') or 'The villa'}, night check on {day_label(date.fromisoformat(res['as_of']))}."
@@ -1015,8 +1033,12 @@ def told_now(res: dict, title: str | None = None, store=None, at: datetime | Non
 #: card's "Reopened in the Cockpit on 11/10/2026 07:05 (Owner)". Every step is written by the shared writers now
 #: (vesta_shared.status_words), with its date, in each language; the message's rewrite carries them all (`text_in`).
 TOLD_STATES = ("watch", "closed", "back", "handed", "still", "reopened", "done")
-#: Where nothing more is to come for the item: the message's title says all back to normal once every item is there.
+#: Where nothing more is to come for the item: a person's close of it later is not news (told_closes).
 TOLD_SETTLED = ("watch", "closed", "handed")
+#: Where the item is really back: the message's title says all back to normal once every item is there. ⚠️ HANDED IS
+#: NOT BACK (villa, 2026-11-25): a relay still offline, its fault handed to the villa's alert, read "All back to
+#: normal." 14 minutes before it came back; its Status line "Followed by alert #…" says where it went.
+TOLD_BACK = ("watch", "closed")
 
 
 def _told_line(st: dict, lang: str, to: str = "fm") -> str:
@@ -1105,14 +1127,14 @@ def _told_mark(store, changes: dict[int, dict], on: str | None = None) -> dict[s
 
 def _told_edits(store, keys: dict[str, list[str]], settings: dict, backup: Callable[[str, str], str] | None = None) -> list[dict]:
     """The rewrites of the kept messages `keys` (key → the ids that moved now): the title says all back to normal
-    (told_cleared `all_title`) once every item is settled (TOLD_SETTLED); `backup` (what, id → a line), when given, is
+    (told_cleared `all_title`) once every item is back (TOLD_BACK); `backup` (what, id → a line), when given, is
     the ONE reply a message the engine cannot rewrite gets."""
     words = settings.get("told_cleared") or {}
     out = []
     for key, now_ids in keys.items():
         rec = store.cache_get(key)
         ids, now = [str(i) for _, items in rec["sections"] for i, _ in items], _latest(rec)
-        done = all((now.get(i) or {}).get("kind") in TOLD_SETTLED for i in ids)
+        done = all((now.get(i) or {}).get("kind") in TOLD_BACK for i in ids)
         title = words["all_title"].format(title=rec["title"]) if done and words.get("all_title") else rec["title"]
         said = {str(i): t for _, items in rec["sections"] for i, t in items}
         reply = [backup(said[i].partition("\n")[0].removeprefix("- "), i) for i in now_ids if backup and i in said]
@@ -1154,7 +1176,7 @@ def told_cleared(store, closed_ids, at: datetime, zone: str, settings: dict,
     watched until {until} (status_words.watched; the next night check: Problems.confirms_by, the Cockpit's Watched),
     never a bare "back to normal" while it is still watched (architecture review N, 2026-10-27) —;
     each one an alert now follows (`handed`: finding id → its close note, nightly.handed_to_alerts) with that note. The
-    title `all_title` once every item of the message is settled. Nothing when `tell` is off."""
+    title `all_title` once every item of the message is back (TOLD_BACK). Nothing when `tell` is off."""
     words = settings.get("told_cleared") or {}
     if not words.get("tell"):
         return []
@@ -1223,7 +1245,7 @@ def _watches_over(store, settings: dict, how: Callable[[str, str], dict | None])
 
 
 def _told_since(store, key: str, fid: str, zone: str) -> dict | None:
-    """The step of an item of the message `key` that a later message told again ("Back again", told_now): back, at that
+    """The step of an item of the message `key` that a later message told again ("Happened again", told_now): back, at that
     message's moment. None while `key` is the message that told it last."""
     later = store.cache_get(f"{TOLD}of:{int(fid)}")
     if not later or later == key:
