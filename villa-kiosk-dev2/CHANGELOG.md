@@ -1,3 +1,9 @@
+## 2.496.896
+
+- **A lamp that is on now shows on the villa pictures.** The pictures are taken with every lamp off, and nothing drew
+  the lamps that are on over them. Each lamp that is on now shows as a warm pool of light at its place, as the 3D view
+  lights it.
+
 ## 2.496.895
 
 - **The villa pictures show the house larger.** They are now framed on the house instead of the whole plot, so each
