@@ -84,14 +84,20 @@ export type ModelState =
   /** `addon`: the add-on's own answer for the model was an error (fix the add-on, not the file). */
   | { kind: "error"; code: string; message: string; addon: boolean };
 
+/** The "too heavy" screen's title. ⚠️ A SLOW UNPACK IS THE DEVICE, NOT THE FILE (owner, 2026-11-24: a TV gave up on
+ *  the villa's 28 MB model that a laptop opens in 4 s, and was told to export the model again): a model under the
+ *  size limit that is still unpacking is a device too slow for it, and no upload helps. */
+export function tooHeavyTitle(state: Extract<ModelState, { kind: "too-heavy" }>): string {
+  return state.slow ? "This device is too slow to show the 3D villa." : "This 3D model is too heavy to load.";
+}
+
 /** The "too heavy" screen's line: the model's size against the limit, or how
  *  long its unpack ran, both from their constants (modelLifecycle). */
 export function tooHeavyLine(state: Extract<ModelState, { kind: "too-heavy" }>): string {
   const size = state.bytes !== null ? fmtBytes(state.bytes) : null;
   if (state.slow) {
-    return size
-      ? `It is ${size}, and it was still unpacking after ${fmtDuration(MODEL_UNPACK_LIMIT_MS)}.`
-      : `It was still unpacking after ${fmtDuration(MODEL_UNPACK_LIMIT_MS)}.`;
+    return `It was still unpacking the villa's model${size ? ` (${size})` : ""} after ${fmtDuration(MODEL_UNPACK_LIMIT_MS)}. `
+      + "It opens on a faster device.";
   }
   return `It is ${size ?? "too big"}. The VESTA UI loads models up to ${fmtBytes(MODEL_TOO_HEAVY_BYTES)}.`;
 }

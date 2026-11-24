@@ -3,7 +3,7 @@
 // download, no browser: what each screen shows, and that "replaced" reloads once. Owner, 2026-11-16: a 125 MB model
 // (geometry not compressed) left every screen on "Loading the villa…" for ever.
 import { ck, done } from "../consistency/check.mjs";
-const { createModelLifecycle, tooHeavyLine, MODEL_TOO_HEAVY_BYTES, MODEL_UNPACK_LIMIT_MS } =
+const { createModelLifecycle, tooHeavyLine, tooHeavyTitle, MODEL_TOO_HEAVY_BYTES, MODEL_UNPACK_LIMIT_MS } =
   await import("@/utils/modelLifecycle");
 
 const MB = 1_000_000;
@@ -101,7 +101,8 @@ console.log("\n  a model too heavy to load:");
   guard.fn();
   const s = r.life.snapshot().state;
   ck("  ...an unpack still running past it: the \"too heavy\" screen with the size, not the spinner",
-     s.kind === "too-heavy" && s.slow && s.bytes > 0 && /still unpacking/.test(tooHeavyLine(s)), s);
+     s.kind === "too-heavy" && s.slow && s.bytes > 0 && /still unpacking/.test(tooHeavyLine(s))
+     && /device is too slow/.test(tooHeavyTitle(s)), s);
   finish({ meshes: 1 });
   await p;
   ck("  ...and when it does finish after all, the villa is shown", r.life.snapshot().state.kind === "ready");

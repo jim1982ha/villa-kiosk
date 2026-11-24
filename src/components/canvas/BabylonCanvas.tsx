@@ -12,7 +12,7 @@ import { useProfile } from "@/auth/ProfileContext";
 import { filterConfigForRole, roleCan } from "@/auth/permissions";
 import { useHAActions } from "@/ha/HAStateStore";
 import { centralRoomsUrl, roomsPathFor } from "@/utils/centralModel";
-import { modelLifecycle, useModel, tooHeavyLine } from "@/utils/modelLifecycle";
+import { modelLifecycle, useModel, tooHeavyLine, tooHeavyTitle } from "@/utils/modelLifecycle";
 import { sha256Hex } from "@/utils/modelInfo";
 import { fetchRoomData, roomDataPatch, type RoomDataFetch } from "@/config/roomData";
 import { report as reportTelemetry } from "@/utils/telemetry";
@@ -870,11 +870,12 @@ function VillaScene({
       )}
       {!sceneFail && model.kind === "too-heavy" && (
         <div className="center-overlay" role="alert">
-          <div className="body-text">This 3D model is too heavy to load.</div>
+          <div className="body-text">{tooHeavyTitle(model)}</div>
           <div className="muted body-text">{tooHeavyLine(model)}</div>
-          <ModelOffer canManageModel={canManageModel} beginSwitch={beginSwitch}
+          {/* a device too slow: no other file helps, so no upload is offered */}
+          {!model.slow && <ModelOffer canManageModel={canManageModel} beginSwitch={beginSwitch}
             ask="Ask the owner to upload a lighter model."
-            offer="Export it again with its geometry compressed, then upload it here." />
+            offer="Export it again with its geometry compressed, then upload it here." />}
         </div>
       )}
       {(sceneFail === "error" || (!sceneFail && model.kind === "error")) && (
