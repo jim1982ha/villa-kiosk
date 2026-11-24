@@ -1,3 +1,11 @@
+## 2.496.899
+
+- **A ceiling fan turns on the villa pictures.** The red circle is gone: the pictures are now made without the ceiling
+  fans, and their blades are drawn at their real size, turning while the fan is on, as in the 3D view. A ventilation
+  fan stays as it is in the picture and never turns. The Owner's computer makes the new pictures by itself the next
+  time it opens VESTA UI.
+- **The light of a lamp that is on is smaller**, a soft glow just around its place.
+
 ## 2.496.898
 
 - **The villa pictures have a sky.** Around the floors, the sky now takes the colour of the moment: blue by day,
