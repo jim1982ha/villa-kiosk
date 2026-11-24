@@ -1,3 +1,17 @@
+## 2.496.893
+
+- **A device too weak for the 3D villa shows pictures of it instead.** As VESTA UI opens, it checks the device first
+  (a TV, a weak graphics chip, little memory, or a past crash or slow 3D load on that device). Such a device never
+  loads the 3D villa: it shows a picture of each floor from above, 2F over 1F, with every badge live on it and rooms
+  glowing as on the 3D map. Tapping a badge opens the device. Badges that would overlap become one group badge with
+  a count. On a TV, the remote's arrows move between badges and OK opens one.
+- **The pictures are made by themselves.** When the Owner opens VESTA UI on a computer or Android phone and leaves
+  it still for a moment, it takes the pictures of both floors, by day and by night, and keeps them for every other
+  device. A new model or a moved device makes new ones. Until the first set is made, the pictures screen says so.
+- **New profile: Display.** It shows the villa and every device but switches nothing, opens no ticket and changes no
+  setting. It needs no passcode, and opens only inside the villa's system. A device that shows the pictures opens
+  as Display by itself.
+
 ## 2.496.892
 
 - **Opening the villa can no longer crash a slow device twice.** If a device stopped in the middle of opening the 3D
