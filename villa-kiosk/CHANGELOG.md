@@ -1,3 +1,9 @@
+## 2.496.898
+
+- **The villa pictures have a sky.** Around the floors, the sky now takes the colour of the moment: blue by day,
+  warm at dusk and dawn, dark at night (and follows the Day or Night preview in Settings). The sun by day and the moon
+  by night, in its real phase, sit where they really are, seen from above with north up. Nothing heavy is loaded.
+
 ## 2.496.897
 
 - **A fan that is on and a drawn curtain now show on the villa pictures.** A fan that is on has a turning ring around

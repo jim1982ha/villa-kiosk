@@ -3,7 +3,7 @@
 // on its spot, badges that would touch drawn as one group badge, a remote's arrow going the way it points. Owner, 2026-11-24: a
 // device too weak for the 3D villa shows a picture of each floor, 2F stacked over 1F, with live badges over it.
 import { ck, done } from "../consistency/check.mjs";
-const { floorBands, containRect, groupBadges, groupMark, badgeToward, roomAt } = await import("@/components/canvas/pictureLayout");
+const { floorBands, containRect, groupBadges, groupMark, badgeToward, roomAt, pictureSky, moonPath } = await import("@/components/canvas/pictureLayout");
 
 const floor = (n) => ({ floor: n, label: `${n}F`, day: `f${n}-day.webp`, night: `f${n}-night.webp`, width: 1600, height: 1000 });
 
@@ -83,6 +83,24 @@ console.log("\n  a device's room from the pictures:");
     { name: "<room-b>", floor: 2, pts: [[0, 0], [0.5, 0], [0.5, 1], [0, 1]] }];
   ck("a device drawn inside a room's outline on its own floor is in that room, and in none elsewhere",
      roomAt(rooms, 1, 0.2, 0.5) === "<room-a>" && roomAt(rooms, 2, 0.2, 0.5) === "<room-b>" && roomAt(rooms, 1, 0.8, 0.5) === null);
+}
+
+console.log("\n  the sky:");
+{
+  // a tropical villa (8°S), its model facing true north: noon there is 04:00 UTC
+  const place = { latitude: -8.6, longitude: 115.1, northOffsetDeg: 180 };
+  const noon = pictureSky(new Date("2026-11-25T04:00:00Z"), place, "auto", null);
+  const night = pictureSky(new Date("2026-11-25T16:00:00Z"), place, "auto", null);
+  const lum = (hex) => [1, 3, 5].reduce((n, i) => n + parseInt(hex.slice(i, i + 2), 16), 0);
+  ck("at noon the sun is in a light sky, inside the view", noon.body?.kind === "sun" && lum(noon.top) > lum(night.top)
+     && noon.body.x > 0 && noon.body.x < 1 && noon.body.y > 0 && noon.body.y < 1, noon);
+  ck("  ...at night no sun: the moon when it is up, or nothing", night.body === null || night.body.kind === "moon", night);
+  ck("  ...Settings' Night preview darkens the sky at noon without moving the sun out",
+     lum(pictureSky(new Date("2026-11-25T04:00:00Z"), place, "night", null).top) < lum(noon.top));
+  ck("  ...no place known: the villa's day or night colours it, no body",
+     pictureSky(new Date(), { latitude: 0, longitude: 0, northOffsetDeg: 0 }, "auto", false).body === null);
+  ck("a full moon is the whole disc, a new one a sliver of nothing", moonPath(1, 1, true).includes("A1,1 0 0 1 0,-1")
+     && moonPath(1, 0, true).includes("A1,1 0 0 0 0,-1"));
 }
 
 done("The villa pictures' layout: 2F over 1F, badges on their spots, touching ones grouped, none overlapping, arrows go where they point");

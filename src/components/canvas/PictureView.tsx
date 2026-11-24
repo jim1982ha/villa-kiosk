@@ -48,7 +48,7 @@ import { useLongPress } from "@/hooks/useLongPress";
 import { LONG_PRESS_MS } from "@/utils/tapThresholds";
 import type { CoverRect } from "@/components/hud/mapCover";
 import {
-  badgeToward, containRect, floorBands, groupBadges, groupMark, roomAt, showsNight, type Arrow, type DrawnItem, type Rect,
+  badgeToward, containRect, floorBands, groupBadges, groupMark, moonPath, pictureSky, roomAt, showsNight, type Arrow, type DrawnItem, type Rect,
 } from "./pictureLayout";
 
 /** What the pictures tell the page of the villa's devices: which ones are drawn ("on the map", as the 3D model's
@@ -198,6 +198,8 @@ export default function PictureView({ onEntityPicked, onEntityLongPressed, onClu
 
   const night = showsNight(new Date(now), config, config.render?.dayNightPreview ?? "auto",
     entities["sun.sun"] ? entities["sun.sun"].state === "above_horizon" : null);
+  const sky = pictureSky(new Date(now), config, config.render?.dayNightPreview ?? "auto",
+    entities["sun.sun"] ? entities["sun.sun"].state === "above_horizon" : null);
 
   // ── The room glow: the 3D view's routing (EntityVisuals.routeMotion), every sensor as it stands now ─────────────
   // A camera's detector glows the camera's room (the pictures draw no cones: motionRouting's fallback for a camera
@@ -299,7 +301,19 @@ export default function PictureView({ onEntityPicked, onEntityLongPressed, onClu
   const groupTitle = useCallback((item: DrawnItem) => groupName(item, (id) => deviceRoom(resolvedRooms, id)), [resolvedRooms]);
 
   return (
-    <div ref={boxRef} className="picture-view">
+    <div ref={boxRef} className="picture-view"
+      style={{ background: `linear-gradient(to bottom, ${sky.top}, ${sky.bottom})` }}>
+      {sky.body && w > 0 && (
+        <svg className={`picture-sky-body ${sky.body.kind}`} aria-hidden="true" width={SKY_BODY_PX} height={SKY_BODY_PX}
+          viewBox="-1.5 -1.5 3 3" style={{ left: sky.body.x * w, top: sky.body.y * h }}>
+          {sky.body.kind === "sun" ? <circle r={1} /> : (
+            <>
+              <circle className="moon-dark" r={1} />
+              <path className="moon-lit" d={moonPath(1, sky.body.fraction, sky.body.waxing)} />
+            </>
+          )}
+        </svg>
+      )}
       {pictures.kind === "none" && (
         <div className="picture-view-empty" role="status">
           <div className="body-text">The pictures of the villa are not ready yet.</div>
@@ -365,6 +379,9 @@ export default function PictureView({ onEntityPicked, onEntityLongPressed, onClu
     </div>
   );
 }
+
+/** The sun's or the moon's drawn size, its glow included. */
+const SKY_BODY_PX = 72;
 
 const ARROWS = new Set(["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"]);
 

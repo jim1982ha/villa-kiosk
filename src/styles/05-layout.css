@@ -71,6 +71,11 @@
 /* ⚠️ SEEN FROM ACROSS THE ROOM (owner, 2026-11-24: the glow was barely visible on a TV): a solid outline and a strong
    fill, breathing between the two */
 @keyframes picture-glow { 0%, 100% { opacity: 0.7; } 50% { opacity: 0.4; } }
+/* the sky's sun or moon (pictureLayout.pictureSky), behind the floors */
+.picture-sky-body { position: absolute; transform: translate(-50%, -50%); pointer-events: none; overflow: visible; }
+.picture-sky-body.sun circle { fill: #ffd85a; filter: drop-shadow(0 0 10px rgba(255, 210, 80, 0.9)); }
+.picture-sky-body .moon-dark { fill: rgba(255, 255, 255, 0.08); }
+.picture-sky-body .moon-lit { fill: #f1efe2; filter: drop-shadow(0 0 6px rgba(240, 236, 210, 0.6)); }
 /* a lamp on: a warm pool of light under its badge, as the 3D view lights the lamp */
 .picture-lamp-pool { position: absolute; transform: translate(-50%, -50%); border-radius: 50%; pointer-events: none;
   background: radial-gradient(circle, rgba(255, 214, 130, 0.95) 0%, rgba(255, 196, 90, 0.55) 40%, rgba(255, 180, 60, 0) 72%);

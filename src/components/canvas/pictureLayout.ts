@@ -180,3 +180,65 @@ export function badgeToward(from: { x: number; y: number }, others: readonly { i
   }
   return best;
 }
+
+/** The sky around the pictures (owner, 2026-11-25: "display the sky ... and the sun / moon"): its colours top and
+ *  bottom, and the body in it now. */
+export interface PictureSky {
+  top: string;
+  bottom: string;
+  /** Where the sun or the moon is drawn, as fractions of the view (0..1, x right, y down), or null below the horizon
+   *  or with no known place. `fraction` and `waxing` are the moon's phase (the sun: 1, true). */
+  body: { kind: "sun" | "moon"; x: number; y: number; fraction: number; waxing: boolean } | null;
+}
+
+const SKY_DAY: [string, string] = ["#5fa8e0", "#cfe6f7"];
+const SKY_DUSK: [string, string] = ["#3c4f86", "#f0a868"];
+const SKY_NIGHT: [string, string] = ["#070d22", "#1b2a52"];
+
+function mixHex(a: string, b: string, t: number): string {
+  const p = (s: string) => [1, 3, 5].map((i) => parseInt(s.slice(i, i + 2), 16));
+  const [x, y] = [p(a), p(b)];
+  return `#${x.map((c, i) => Math.round(c + (y[i] - c) * t).toString(16).padStart(2, "0")).join("")}`;
+}
+
+/** ⚠️ THE 3D VIEW'S OWN SKY MOMENT (skyMoment), drawn flat: the colour follows the villa's light (Settings' day/night
+ *  preview included: nightT), the sun by day and the moon by night where they really are, seen from above as the
+ *  pictures are (north up): toward the edge of the view in their compass direction, nearer the middle the higher
+ *  they stand. No place known (latitude and longitude unset): the villa's day/night state colours it, no body. */
+export function pictureSky(
+  date: Date,
+  place: { latitude: number; longitude: number; northOffsetDeg: number },
+  preview: "day" | "auto" | "night",
+  sunAboveHorizon: boolean | null,
+): PictureSky {
+  const known = Number.isFinite(place.latitude) && Number.isFinite(place.longitude)
+    && (place.latitude !== 0 || place.longitude !== 0);
+  const m = known ? skyMoment(date, place, preview) : guessedMoment(sunAboveHorizon ?? true, preview);
+  const t = m.light.nightT;
+  const [top, bottom] = t <= 0.5
+    ? [mixHex(SKY_DAY[0], SKY_DUSK[0], t * 2), mixHex(SKY_DAY[1], SKY_DUSK[1], t * 2)]
+    : [mixHex(SKY_DUSK[0], SKY_NIGHT[0], t * 2 - 1), mixHex(SKY_DUSK[1], SKY_NIGHT[1], t * 2 - 1)];
+  if (!known) return { top, bottom, body: null };
+  const place2d = (d: { x: number; y: number; z: number }) => {
+    const flat = Math.hypot(d.x, d.z) || 1;
+    // on the horizon at the view's edge (0.44 of its half-size from the middle), straight overhead at 0.28
+    const r = 0.44 - 0.16 * Math.max(0, Math.min(1, d.y));
+    return { x: 0.5 + (d.x / flat) * r, y: 0.5 - (d.z / flat) * r };
+  };
+  if (m.light.isDay && m.sun.y > 0) return { top, bottom, body: { kind: "sun", ...place2d(m.sun), fraction: 1, waxing: true } };
+  if (!m.light.isDay && m.moon && m.moon.dir.y > 0) {
+    return { top, bottom, body: { kind: "moon", ...place2d(m.moon.dir), fraction: m.moon.fraction, waxing: m.moon.angle < 0 } };
+  }
+  return { top, bottom, body: null };
+}
+
+/** The moon's lit part as an SVG path on a disc of radius `r` centred on (0, 0): the lit limb's half circle and the
+ *  terminator's half ellipse, lit on the right when waxing. */
+export function moonPath(r: number, fraction: number, waxing: boolean): string {
+  const f = Math.max(0, Math.min(1, fraction));
+  const rx = Math.abs(1 - 2 * f) * r;
+  const s = waxing ? 1 : 0;
+  // crescent: the terminator bulges toward the lit side; gibbous: away from it
+  const back = f < 0.5 ? 1 - s : s;
+  return `M0,${-r} A${r},${r} 0 0 ${s} 0,${r} A${rx},${r} 0 0 ${back} 0,${-r} Z`;
+}
