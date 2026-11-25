@@ -185,17 +185,16 @@ function PicturesOnThisDevice() {
   const now = deviceView() === "pictures";
   const shown = (pending.shown(VIEW_HELD) as boolean | undefined) ?? now;
   return (
-    <div className="setting-line">
-      <OnOffToggle ariaLabel="The villa as pictures on this device" title="Show the villa as still pictures on this device"
-        on={shown} icon={<ImageIcon size={16} />} label="Pictures view" tip={<>
-          A still picture of each floor on this device instead of the 3D villa, as a TV shows it. Save opens VESTA UI
-          again. Pictures are made only by a device showing the 3D villa.
-        </>}
-        onChange={(on) => {
-          if (on === now) pending.forget(VIEW_HELD);
-          else pending.hold(VIEW_HELD, on, async () => { switchDeviceView(on ? "pictures" : "3d"); return null; });
-        }} />
-    </div>
+    // its own line, the switch at its end, as Maintenance mode (owner, 2026-11-25)
+    <OnOffToggle ariaLabel="The villa as pictures on this device" title="Show the villa as still pictures on this device"
+      on={shown} icon={<ImageIcon size={16} />} label="Pictures view" tip={<>
+        A still picture of each floor on this device instead of the 3D villa, as a TV shows it. Save opens VESTA UI
+        again. Pictures are made only by a device showing the 3D villa.
+      </>}
+      onChange={(on) => {
+        if (on === now) pending.forget(VIEW_HELD);
+        else pending.hold(VIEW_HELD, on, async () => { switchDeviceView(on ? "pictures" : "3d"); return null; });
+      }} />
   );
 }
 

@@ -1,3 +1,7 @@
+## 2.496.905
+
+- **Pictures view's On / Off sits at the end of its line,** as Maintenance mode's does, instead of under its name.
+
 ## 2.496.904
 
 - **The pictures switch is in Advanced Settings.** Advanced Settings › Villa › This device has a "Pictures view"
