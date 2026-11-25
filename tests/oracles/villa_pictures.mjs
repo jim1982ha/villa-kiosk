@@ -44,21 +44,31 @@ const made = buildManifest({
   anchors: [{ id: "light.a", x: -10, y: 2.5, z: 16, floor: 1 }, { id: "sensor.b", x: 30, y: 5, z: -4, floor: 2 },
             { id: "sensor.top", x: 0, y: 8, z: 0, floor: 3 }],
   rooms: [{ name: "Room", floor: 2, pts: [{ x: -10, z: 16 }, { x: 30, z: 16 }, { x: 30, z: -4 }] }],
-  covers: [{ id: "cover.c", word: "closed", floor: 1, minX: -10, maxX: 10, minZ: 6, maxZ: 16 },
-           { id: "cover.top", word: "closed", floor: 3, minX: 0, maxX: 1, minZ: 0, maxZ: 1 }],
-  fans: [{ id: "fan.ceiling_fan_a", floor: 2, x: 10, z: 6, r: 2 }],
-  lamps: [{ id: "light.a", floor: 1, x: 30, z: -4, r: 1.8 }, { id: "light.a", floor: 1, x: -10, z: 16, r: 1.8 }],
+  overlays: {
+    covers: [{ id: "cover.c", word: "closed", floor: 1, minX: -10, maxX: 10, minZ: 6, maxZ: 16 },
+             { id: "cover.top", word: "closed", floor: 3, minX: 0, maxX: 1, minZ: 0, maxZ: 1 }],
+    fans: [{ id: "fan.ceiling_fan_a", floor: 2, x: 10, z: 6, r: 2 }],
+    lamps: [{ id: "light.a", floor: 1, x: 30, z: -4, r: 1.8, s: 0.4 }, { id: "light.a", floor: 1, x: -10, z: 16, r: 1.8, s: 0.4 }],
+  },
 });
 ck("the manifest reads back as one", parseManifest(JSON.parse(JSON.stringify(made))) !== null);
 ck("  ...its badges at their device's place on their floor's picture",
    JSON.stringify(made.badges) === '[{"id":"light.a","floor":1,"u":0,"v":0},{"id":"sensor.b","floor":2,"u":1,"v":1}]', made.badges);
 ck("  ...a room's outline in the same (u, v)", JSON.stringify(made.rooms[0].pts) === "[[0,0],[1,0],[1,1]]");
 ck("  ...a drawn curtain's place as a box on its floor's picture, top-left then bottom-right",
-   JSON.stringify(made.covers) === '[{"id":"cover.c","word":"closed","floor":1,"u0":0,"v0":0,"u1":0.5,"v1":0.5}]', made.covers);
+   JSON.stringify(made.overlays.covers) === '[{"id":"cover.c","word":"closed","u0":0,"v0":0,"u1":0.5,"v1":0.5,"floor":1}]', made.overlays.covers);
 ck("  ...a ceiling fan's axle on its floor's picture, its radius a share of the picture's width",
-   JSON.stringify(made.fans) === '[{"id":"fan.ceiling_fan_a","floor":2,"u":0.5,"v":0.5,"r":0.05}]', made.fans);
-ck("  ...each lamp of a light at its own place, its pool a share of the picture's width",
-   JSON.stringify(made.lamps) === '[{"id":"light.a","floor":1,"u":0,"v":0,"r":0.045},{"id":"light.a","floor":1,"u":1,"v":1,"r":0.045}]', made.lamps);
+   JSON.stringify(made.overlays.fans) === '[{"id":"fan.ceiling_fan_a","u":0.5,"v":0.5,"r":0.05,"floor":2}]', made.overlays.fans);
+ck("  ...each lamp of a light at its own place, its pool a share of the picture's width and its share of the light",
+   JSON.stringify(made.overlays.lamps) === '[{"id":"light.a","u":0,"v":0,"r":0.045,"s":0.4,"floor":1},{"id":"light.a","u":1,"v":1,"r":0.045,"s":0.4,"floor":1}]', made.overlays.lamps);
+{
+  const { PICTURE_OVERLAYS } = await import("@/components/canvas/pictureOverlays");
+  const kinds = Object.fromEntries(PICTURE_OVERLAYS.map((k) => [k.key, k]));
+  const back = parseManifest(JSON.parse(JSON.stringify(made)));
+  ck("  ...and each kind reads its own items back, and only those",
+     PICTURE_OVERLAYS.every((k) => back.overlays[k.key].filter(k.read).length === made.overlays[k.key].length)
+     && !kinds.lamps.read({ id: "light.a", floor: 1, u: 0, v: 0, r: 0.045 }) && !kinds.covers.read(made.overlays.fans[0]));
+}
 ck("  ...each floor names its two pictures", made.floors.map((f) => `${f.label}:${f.day},${f.night}`).join(" ")
    === "1F:f1-day.webp,f1-night.webp 2F:f2-day.webp,f2-night.webp");
 

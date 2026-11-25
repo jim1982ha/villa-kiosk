@@ -2,7 +2,8 @@
 // THE VILLA PICTURES (owner, 2026-11-24): what a device too weak for the 3D villa (utils/deviceVerdict) shows in its
 // place. A still picture of each floor (villaPictures.ts: made by a capable device, stored on the add-on), 2F stacked
 // over 1F, in the area the 3D view leaves free of the HUD; over it, in HTML, the badges this profile may see, live
-// from the villa's system, and the rooms glowing by the 3D view's own rules (motionRouting). No Babylon here: this
+// from the villa's system, the rooms glowing by the 3D view's own rules (motionRouting), and each kind pictureOverlays
+// draws (lamps lit, ceiling fans turning, curtains drawn). No Babylon here: this
 // file and everything it imports are loaded by a device that never downloads the 3D engine.
 //
 // A badge does what the 3D badge does: a tap is Dashboard's onEntityPicked (the profile decides look or control), a
@@ -11,13 +12,12 @@
 // opens its devices' list, as a tapped group card does on the 3D map (onClusterPicked). A TV is driven by a remote:
 // every badge is a button, the arrows move between them, OK (Enter) taps and holding it holds.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useConfig } from "@/config/ConfigContext";
 import { useHA } from "@/ha/HAStateStore";
 import { useProfile } from "@/auth/ProfileContext";
 import { panelMapping, profileView, roleCan } from "@/auth/permissions";
 import { ROLE_LABELS, ROLE_ORDER } from "@/auth/roles";
-import { desiredVariantWord, orderVariantWords, pickNearestVariant } from "@/babylon/meshVariants";
 import { iconKeyFor } from "@/babylon/badgeIconKeys";
 import { motionLit, motionRouting, type MotionRouting } from "@/babylon/motionRouting";
 import { effectiveCategory, subjectOf } from "@/config/EntityCategories";
@@ -41,6 +41,7 @@ import { modelLifecycle } from "@/utils/modelLifecycle";
 import { readAddonConfig } from "@/utils/centralModel";
 import { backendFetch } from "@/auth/sessionLost";
 import { parseManifest, viewUrl, type PicturesManifest } from "@/utils/villaPictures";
+import { PICTURE_OVERLAYS, type OverlayLive } from "./pictureOverlays";
 import { useEntityLabel } from "@/hooks/useEntityLabel";
 import { useNow } from "@/hooks/useInterval";
 import { useResolvedTheme } from "@/hooks/useResolvedTheme";
@@ -231,18 +232,14 @@ export default function PictureView({ onEntityPicked, onEntityLongPressed, onClu
     return motionLit(routes);
   }, [entities, config.entityMap, config.roomGlowAndCones, resolvedRooms, role, watchers, manifest]);
 
-  // ── Each cover's pose now, where it is not open (the 3D view's pick: pickNearestVariant over its authored words) ──
-  const coverPoses = useMemo(() => {
-    const byId = new Map<string, NonNullable<typeof manifest>["covers"]>();
-    for (const c of manifest?.covers ?? []) byId.set(c.id, [...(byId.get(c.id) ?? []), c]);
-    return [...byId].flatMap(([id, poses]) => {
-      const entity = entities[id];
-      if (!entity || !poses?.length || !panelMapping(id, config.entityMap, role, entity, { control: false })) return [];
-      const words = [...poses.map((c) => c.word), "open"];
-      const chosen = pickNearestVariant(orderVariantWords(words), desiredVariantWord(entity), words);
-      return poses.filter((c) => c.word === chosen);
-    });
-  }, [manifest, entities, config.entityMap, role]);
+  // ── What is drawn live over the pictures (pictureOverlays: lamps, fans, curtains), each kind's stored items read
+  // back by the kind itself, and what it draws them from ──────────────────────────────────────────────────────────
+  const overlayItems = useMemo(() => PICTURE_OVERLAYS.map((kind) => ({
+    kind, items: (manifest?.overlays?.[kind.key] ?? []).filter(kind.read),
+  })), [manifest]);
+  const live = useMemo((): OverlayLive => ({
+    entities, mayShow: (id) => !!panelMapping(id, config.entityMap, role, entities[id], { control: false }),
+  }), [entities, config.entityMap, role]);
 
   // ── The badges this profile may see, as the 3D map draws them (EntityVisuals.updateLabel, classic style) ────────
   const size = badgeSizePx(w, h, config.entityIconScale);
@@ -329,36 +326,14 @@ export default function PictureView({ onEntityPicked, onEntityLongPressed, onClu
           <img className="picture-floor-image" alt={`Floor ${floor.label}`} draggable={false}
             src={viewUrl(night ? floor.night : floor.day, pictures.kind === "ready" ? pictures.version : undefined)} />
           <svg className="picture-rooms" viewBox="0 0 1 1" preserveAspectRatio="none" aria-hidden="true">
-            {/* ⚠️ A CURTAIN SHOWS AS IT IS (owner, 2026-11-25): the pictures show every cover open, so the pose its
-                state asks for now (the 3D view's rule: meshVariants) is drawn over it, outlined, unless it is open */}
-            {coverPoses.filter((c) => c.floor === floor.floor).map((c) => (
-              <rect key={c.id} className="picture-cover" x={c.u0} y={c.v0} width={Math.max(c.u1 - c.u0, 0.004)}
-                height={Math.max(c.v1 - c.v0, 0.004)} />
-            ))}
             {manifest!.rooms.filter((r) => r.floor === floor.floor && lit.rooms.has(roomKey(r.name))).map((r) => (
               <polygon key={r.name} className="picture-room-glow" points={r.pts.map(([u, v]) => `${u},${v}`).join(" ")}
                 fill={lit.alarms?.has(roomKey(r.name)) ? STATUS_COLOR.warn : STATUS_COLOR.active}
                 stroke={lit.alarms?.has(roomKey(r.name)) ? STATUS_COLOR.warn : STATUS_COLOR.active} />
             ))}
           </svg>
-          {/* ⚠️ A LAMP ON SHOWS ON THE PICTURE, EACH AT ITS PLACE (owner, 2026-11-25: one glow at the badge, not as the
-              3D view shows it): the picture is taken with every lamp dark (EntityVisuals.lampsOff), so each lamp of a
-              light this profile may see that is on is lit here, its bulb and its pool (EntityVisuals.lampSpots) */}
-          {(manifest!.lamps ?? []).filter((l) => l.floor === floor.floor && entities[l.id]?.state === "on"
-            && panelMapping(l.id, config.entityMap, role, entities[l.id], { control: false }))
-            .map((l) => (
-              <span key={`${l.id}@${l.u},${l.v}`} className="picture-lamp-pool"
-                style={{ left: `${l.u * 100}%`, top: `${l.v * 100}%`, width: l.r * 2 * rect.w, height: l.r * 2 * rect.w }} />
-            ))}
-          {/* ⚠️ A CEILING FAN TURNS (owner, 2026-11-25: "instead of seeing the ceiling fan spinning, i see this red
-              circle"): the pictures are made without the ceiling fans, so their blades are drawn here, at their size,
-              turning while the fan is on as the 3D view turns them; a ventilation fan stays in the picture, still */}
-          {(manifest!.fans ?? []).filter((f) => f.floor === floor.floor).map((f) => (
-            <svg key={`${f.id}@${f.u},${f.v}`} className={`picture-fan${entities[f.id]?.state === "on" ? " on" : ""}`} aria-hidden="true"
-              viewBox="-1 -1 2 2" style={{ left: `${f.u * 100}%`, top: `${f.v * 100}%`,
-                width: f.r * 2 * rect.w, height: f.r * 2 * rect.w }}>
-              <g className="picture-fan-blades">{FAN_BLADES}</g>
-            </svg>
+          {overlayItems.map(({ kind, items }) => (
+            <Fragment key={kind.key}>{kind.draw(items.filter((i) => i.floor === floor.floor), rect, live)}</Fragment>
           ))}
           <span className="picture-floor-label">{floor.label}</span>
         </div>
@@ -383,16 +358,6 @@ export default function PictureView({ onEntityPicked, onEntityLongPressed, onClu
     </div>
   );
 }
-
-/** Three blades round a hub, on a disc of radius 1: a ceiling fan seen from below the ceiling. */
-const FAN_BLADES = (
-  <>
-    {[0, 120, 240].map((a) => (
-      <path key={a} transform={`rotate(${a})`} d="M-0.13,-0.12 L-0.2,-0.95 Q0,-1.02 0.2,-0.95 L0.13,-0.12 Z" />
-    ))}
-    <circle r={0.16} />
-  </>
-);
 
 /** The sun's or the moon's drawn size, its glow included. */
 const SKY_BODY_PX = 72;

@@ -45,37 +45,6 @@ export interface PictureRoom {
   pts: [number, number][];
 }
 
-/** A cover's pose other than open (the pictures show every cover open): its outline on the picture, drawn live over
- *  it while the cover's state asks for that pose (meshVariants: the 3D view's own rule). */
-export interface PictureCoverPose {
-  id: string;
-  /** The pose word, as the model names it ("closed", "half"). */
-  word: string;
-  floor: number;
-  /** Its ground extents: (u, v) top-left and bottom-right. */
-  u0: number; v0: number; u1: number; v1: number;
-}
-
-/** One lamp of a light (a light may have several): lit live over the pictures while the light is on. */
-export interface PictureLamp {
-  id: string;
-  floor: number;
-  u: number; v: number;
-  /** Its pool's radius, as a fraction of the picture's width. */
-  r: number;
-}
-
-/** A ceiling fan (hidden on the pictures): its blades drawn live over them, turning while it is on. One entity
- *  driving several fans has one entry for each. */
-export interface PictureFan {
-  id: string;
-  floor: number;
-  /** Its axle, (u, v). */
-  u: number; v: number;
-  /** Its blade tips' radius, as a fraction of the picture's width. */
-  r: number;
-}
-
 export interface PicturesManifest {
   v: 1;
   /** What the pictures were made from: when any of these changed, a capable owner device makes them again. */
@@ -90,12 +59,8 @@ export interface PicturesManifest {
   floors: PictureFloor[];
   badges: PictureBadge[];
   rooms: PictureRoom[];
-  /** Missing in a set made before 2.496.897: no cover drawn. */
-  covers?: PictureCoverPose[];
-  /** Missing in a set made before 2.496.899: the fans are in the picture. */
-  fans?: PictureFan[];
-  /** Missing in a set made before 2.496.902: no lamp lit. */
-  lamps?: PictureLamp[];
+  /** What is drawn live over the pictures, by kind (components/canvas/pictureOverlays: each kind reads its own). */
+  overlays?: Record<string, unknown[]>;
 }
 
 /** A file's URL under /model/views/, stamped with the manifest's version so a new set is never served from cache. */

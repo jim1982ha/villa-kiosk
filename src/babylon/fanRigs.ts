@@ -1,7 +1,8 @@
 // src/babylon/fanRigs.ts
-// Ceiling fans that SPIN: which fan entities spin, the rig that turns one in
-// place around its true axle, the badge anchor lifted out of the spinning
-// subtree, the per-frame turn, and the teardown — one module.
+// Ceiling fans that SPIN: the rig that turns one in place around its true
+// axle (fanAxle, which the villa pictures read too), the badge anchor lifted
+// out of the spinning subtree, the per-frame turn, and the teardown — one
+// module. Which fans turn, and how fast, is fanSpin.ts (Babylon-free).
 //
 // ⚠️ IT WAS SEVEN FIELDS AND FOUR METHODS OF EntityVisuals, WITH TWO TEARDOWNS
 // THAT DISAGREED. The re-index path moved each fan mesh back out of its pivot
@@ -19,11 +20,8 @@ import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
 import type { Scene } from "@babylonjs/core/scene";
 import type { HassEntity } from "@/types/ha.types";
 import { isRenderedFloor, stampedFloor } from "./floorOf";
+import { fanTurnSpeed } from "./fanSpin";
 
-// Ceiling-fan spin: angular speed (rad/s) at full fan percentage. A whole-mesh
-// spin reads as "blades turning" at kiosk distance; ~1 rev/s is lively without
-// strobing. Scaled down by the fan's percentage (min 15%) when reported.
-const FAN_MAX_RAD_PER_SEC = 6.2;
 // A ceiling fan is exported as ONE fused mesh (mount + motor + blades all one
 // piece, one material — no separate "blade" sub-object to isolate), so the
 // whole thing has to spin together. WHERE its axle sits is the centre of the
@@ -40,22 +38,6 @@ const FAN_MAX_RAD_PER_SEC = 6.2;
 // is within 2 cm of the point each fan is most symmetric about, with or
 // without its mount; the plain bounding box's middle is up to 21 cm off (three
 // blades are not a square).
-
-/**
- * Does this fan entity SPIN on the map? Only a CEILING fan does — a VMC or a
- * bathroom extractor is a `fan.*` too, and must not turn. Read from the
- * entity id because Home Assistant has no device_class for a fan's KIND.
- *
- * ⚠️ Unanchored on purpose, and safe only because the caller gates on the
- * mapping's `fan` type — without it this would match `light.x_ceiling_fan_light`
- * and spin a lamp. /dry-audit re-flags this shape (the documented trap is
- * `door` matching inside `outdoor`); anchoring to (^|[._])…([._]|$) would
- * not change the verdict for any realistic id, since the ambiguous cases
- * (`fan.bathroom_ceiling_fan`, a ceiling-mounted extractor) match either way.
- */
-export function isCeilingFan(entityId: string): boolean {
-  return /ceiling[_-]?fan/i.test(entityId);
-}
 
 /**
  * The smallest circle holding every point (Welzl's algorithm, its expected
@@ -94,6 +76,32 @@ export function enclosingCircle(points: readonly (readonly [number, number])[]):
   return c;
 }
 
+/**
+ * Where a fan mesh's axle is, in the world: the centre of the smallest circle holding every vertex seen from above
+ * (enclosingCircle, the circle its blade tips draw), at the fixture's mid height, and that circle's radius. The 3D
+ * view turns the mesh round it (FanRigs) and the villa pictures draw its blades on it (EntityVisuals.ceilingFansHidden).
+ * Null for a mesh with no vertices.
+ */
+export function fanAxle(m: AbstractMesh): { x: number; y: number; z: number; r: number } | null {
+  const positions = m.getVerticesData(VertexBuffer.PositionKind);
+  if (!positions || positions.length < 3) return null;
+  // Every vertex seen from above, in the WORLD (these fixtures import with a baked axis-conversion rotation, so the
+  // mesh's own data has "up" on another axis; the world's is Y).
+  const wm = m.computeWorldMatrix(true);
+  const v = Vector3.Zero();
+  const flat: [number, number][] = [];
+  let yMin = Infinity, yMax = -Infinity;
+  for (let i = 0; i < positions.length; i += 3) {
+    Vector3.TransformCoordinatesFromFloatsToRef(positions[i], positions[i + 1], positions[i + 2], wm, v);
+    flat.push([v.x, v.z]);
+    if (v.y < yMin) yMin = v.y;
+    if (v.y > yMax) yMax = v.y;
+  }
+  const circle = enclosingCircle(flat);
+  if (!circle || !Number.isFinite(circle.x) || !Number.isFinite(circle.y) || !Number.isFinite(yMin)) return null;
+  return { x: circle.x, y: (yMin + yMax) / 2, z: circle.y, r: circle.r };
+}
+
 /** One mesh of a fan, reparented under a pivot at its true axle. */
 interface FanRig { mesh: AbstractMesh; pivot: TransformNode; axisLocal: Vector3 }
 
@@ -121,22 +129,18 @@ export class FanRigs {
     this.wake = wake;
   }
 
-  /** Start/stop a fan's spin from its on/off (+ percentage) state. Only true
-   *  CEILING fans spin (isCeilingFan). */
-  /** Start/stop a fan's spin from its on/off (+ percentage) state. Only true
-   *  CEILING fans spin — VMC/exhaust `fan.*` entities (bathroom vents) must not. */
+  /** Start/stop a fan's spin from its on/off (+ percentage) state (fanSpin.fanTurnSpeed: only true CEILING fans
+   *  spin — VMC/exhaust `fan.*` entities (bathroom vents) must not). */
   show(entity: HassEntity, meshes: readonly AbstractMesh[]): void {
     const id = entity.entity_id;
-    if (!isCeilingFan(id)) return;
-    if (entity.state === "on") {
-      const pct = entity.attributes.percentage as number | undefined;
-      const frac = typeof pct === "number" ? Math.max(0.15, Math.min(1, pct / 100)) : 0.6;
+    const speed = fanTurnSpeed(entity);
+    if (speed !== null) {
       if (!this.rigs.has(id)) {
         const rig = this.setupFanRig(meshes);
         this.rigs.set(id, rig);
         this.detachLabelAnchor(id, rig);
       }
-      this.spinning.set(id, FAN_MAX_RAD_PER_SEC * frac);
+      this.spinning.set(id, speed);
       this.wake(); // wake the loop so animate starts turning it
     } else {
       this.spinning.delete(id);
@@ -186,22 +190,9 @@ export class FanRigs {
       m.unfreezeWorldMatrix();
       m.computeWorldMatrix(true);
 
-      // Every vertex seen from above, in the WORLD (these fixtures import
-      // with a baked axis-conversion rotation, so the mesh's own data has
-      // "up" on another axis; the world's is Y).
-      const wm = m.getWorldMatrix();
-      const v = Vector3.Zero();
-      const flat: [number, number][] = [];
-      let yMin = Infinity, yMax = -Infinity;
-      for (let i = 0; i < positions.length; i += 3) {
-        Vector3.TransformCoordinatesFromFloatsToRef(positions[i], positions[i + 1], positions[i + 2], wm, v);
-        flat.push([v.x, v.z]);
-        if (v.y < yMin) yMin = v.y;
-        if (v.y > yMax) yMax = v.y;
-      }
-      const circle = enclosingCircle(flat);
-      if (!circle || !Number.isFinite(circle.x) || !Number.isFinite(circle.y) || !Number.isFinite(yMin)) continue;
-      const axleWorld = new Vector3(circle.x, (yMin + yMax) / 2, circle.y);
+      const axle = fanAxle(m);
+      if (!axle) continue;
+      const axleWorld = new Vector3(axle.x, axle.y, axle.z);
       const parent = m.parent;
       const parentWorld = parent?.getWorldMatrix?.();
       const pivot = new TransformNode(`fanPivot_${m.uniqueId}`, this.scene);

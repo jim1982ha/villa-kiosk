@@ -5,9 +5,9 @@
 //
 // What a picture must NOT hold, because it is kept for good and the picture view draws these live over it: the
 // badges (the GUI layer is off), the clickable outlines, the room glows, the light pools, the camera beams and the
-// sky (only the model's own meshes are drawn: SceneManager.picturesStage), the lamps (shown off for the shot:
-// EntityVisuals.lampsOff) and the curtains (every cover shown open: EntityVisuals.coversOpen) and
-// the ceiling fans (hidden: EntityVisuals.ceilingFansHidden). Day and night are forced
+// sky (only the model's own meshes are drawn: SceneManager.picturesStage), and every kind drawn live over the
+// pictures (components/canvas/pictureOverlays: the lamps shown off, every curtain open, the ceiling fans hidden, each
+// kind recording where its items are for the manifest). Day and night are forced
 // (SunController.forceLook), the floor shown without becoming the active one (FloorManager.showForPicture). Everything is put back in a `finally`, then a frame is asked for.
 //
 // The canvas on screen does not change while it runs: the render loop draws nothing (picturesStage holds it) and the
@@ -26,6 +26,7 @@ import {
   PICTURE_FLOORS, buildManifest, houseFrame, pictureSize, viewFileFor, type Look, type PictureFrame, type PictureSource, type WorldAnchor,
 } from "@/utils/pictureManifest";
 import type { PicturesManifest, ViewFile } from "@/utils/villaPictures";
+import { PICTURE_OVERLAYS, type WorldItem } from "@/components/canvas/pictureOverlays";
 
 /** The person used the screen while the pictures were taken: nothing is kept, and the caller tries again later. */
 export class CaptureAborted extends Error {
@@ -165,9 +166,8 @@ export async function captureVillaPictures(
   const clear = scene.clearColor.clone();
   let cam: TargetCamera | null = null;
   let target: PictureTarget | null = null;
-  let lampsBack: (() => void) | null = null;
-  let coversBack: (() => void) | null = null;
-  let fansBack: (() => void) | null = null;
+  // each overlay kind's put-back, kept as soon as it is recorded, so a throw half-way still puts back the ones done
+  const backs: (() => void)[] = [];
   try {
     // an unstamped badge is drawn on every floor in the 3D villa; a picture has one place for it: the lowest floor
     const detectedFloors = floors.getFloorsDetected();
@@ -180,11 +180,12 @@ export async function captureVillaPictures(
     if (!shown.length) throw new Error("the model has no floor 1 or 2");
     cam = topDownCamera(manager, frame, stage.min, stage.max);
     target = new PictureTarget(scene, cam, stage.meshes, size);
-    lampsBack = visuals.lampsOff();
-    const covers = visuals.coversOpen();
-    coversBack = covers.back;
-    const fans = visuals.ceilingFansHidden();
-    fansBack = fans.back;
+    const overlays: Record<string, (WorldItem & { floor: number })[]> = {};
+    for (const kind of PICTURE_OVERLAYS) {
+      const { items, back } = kind.record(visuals);
+      backs.push(back);
+      overlays[kind.key] = items.map((w) => ({ ...w, floor: w.floor ?? lowest }));
+    }
     const pictures = new Map<ViewFile, Blob>();
     for (const floor of shown) {
       floors.showForPicture(floor);
@@ -197,18 +198,13 @@ export async function captureVillaPictures(
       }
     }
     if (interrupted()) throw new CaptureAborted();
-    const manifest = buildManifest({ source, madeAt: new Date(), frame, floors: shown, size, anchors, rooms: stage.rooms,
-      covers: covers.poses.map((c) => ({ ...c, floor: c.floor ?? lowest })),
-      fans: fans.fans.map((f) => ({ ...f, floor: f.floor ?? lowest })),
-      lamps: visuals.lampSpots().map((l) => ({ ...l, floor: l.floor ?? lowest })) });
+    const manifest = buildManifest({ source, madeAt: new Date(), frame, floors: shown, size, anchors, rooms: stage.rooms, overlays });
     const files = [...pictures].map(([name, blob]) => ({ name, blob }));
     files.push({ name: "manifest.json", blob: new Blob([JSON.stringify(manifest)], { type: "application/json" }) });
     return { files, manifest, bytes: files.reduce((n, f) => n + f.blob.size, 0) };
   } finally {
     floors.showForPicture(null);
-    lampsBack?.();
-    coversBack?.();
-    fansBack?.();
+    for (const back of backs.reverse()) back();
     scene.clearColor = clear;
     sun.forceLook(null);
     target?.dispose();

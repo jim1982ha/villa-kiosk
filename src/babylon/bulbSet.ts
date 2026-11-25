@@ -67,7 +67,7 @@ import "@babylonjs/core/Lights/Shadows/shadowGeneratorSceneComponent";
 import { RenderTargetTexture } from "@babylonjs/core/Materials/Textures/renderTargetTexture";
 import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
 import type { Scene } from "@babylonjs/core/scene";
-import { LightPoolSet, type LightReading, type PoolFloorProbe, type PoolRoom } from "./lightPoolSet";
+import { fixtureSpots, LightPoolSet, type FixtureBounds, type LightReading, type PoolFloorProbe, type PoolRoom } from "./lightPoolSet";
 import { attachLampGlow, hasLampGlow, lampGlowFor, BULB_REACH_M } from "./lampGlow";
 import { isHelperMesh, structureRole } from "./meshRoles";
 import type { Storeys } from "./storeys";
@@ -172,6 +172,9 @@ export class BulbSet {
    *  (two bedside lamps, a strip's markers) has a light. A merged strip
    *  entity stores the SAME light under several keys. */
   private readonly lights = new Map<number, PointLight>();
+  /** Every fixture's box and whether it lights as a strip, whatever the villa's flavour: where its pools stand
+   *  (fixtureSpots), for the villa pictures (lampSpots). A further piece of a lamp has none. */
+  private readonly fixtures = new Map<number, { mesh: AbstractMesh; box: FixtureBounds; strip: boolean }>();
   // Private: BulbSet's interface is the test surface — tests reached through
   // it into the pools (round 7). What the bulbs give the glow is `lamps()`.
   private readonly pools: LightPoolSet;
@@ -234,8 +237,10 @@ export class BulbSet {
     const pos = Vector3.Center(box.min, box.max);
     if (shape.strip) this.lowerStripLight(pos, mesh);
     this.lights.set(mesh.uniqueId, this.newLight(`elight_${mesh.name}_${mesh.uniqueId}`, pos));
+    const bounds = { min: box.min, max: box.max, centerY: pos.y }, strip = shape.strip && shape.horizontal;
+    this.fixtures.set(mesh.uniqueId, { mesh, box: bounds, strip });
     if (withPools) {
-      this.pools.addFixture(mesh, { min: box.min, max: box.max, centerY: pos.y }, shape.strip && shape.horizontal);
+      this.pools.addFixture(mesh, bounds, strip);
       this.rooms.lampsChanged();
     }
   }
@@ -404,6 +409,12 @@ export class BulbSet {
     return { roomMap: this.rooms.hasMap, lamps, lampsNoRoom: noRoom };
   }
 
+  /** Where each fixture's pools stand and each one's share of its light (fixtureSpots), on every villa, pools or
+   *  not: the villa pictures light a lamp exactly where the 3D view's pool would be (EntityVisuals.lampSpots). */
+  lampSpots(): { mesh: AbstractMesh; x: number; z: number; scale: number }[] {
+    return [...this.fixtures.values()].flatMap(({ mesh, box, strip }) => fixtureSpots(box, strip).map((s) => ({ mesh, ...s })));
+  }
+
   /** Where every lamp's light stands, settled first: the render rig's read. */
   placements(): ReturnType<LightPoolSet["placed"]> {
     this.rooms.settle();
@@ -443,6 +454,7 @@ export class BulbSet {
     this.disposeShadows();
     new Set(this.lights.values()).forEach((l) => l.dispose());
     this.lights.clear();
+    this.fixtures.clear();
     this.pools.clear();
     this.glowMeshes = [];
     this.closed = [];

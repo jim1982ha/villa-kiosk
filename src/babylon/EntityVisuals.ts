@@ -130,7 +130,8 @@ import { solveRoomZoom } from "./roomZoomSolver";
 import { RoomFocus } from "./roomFocus";
 import { PlacementCheck } from "./placementCheck";
 import { PlacementTelemetry, passSnapshot, placementReport, type PlacementReport } from "./placementReport";
-import { enclosingCircle, FanRigs, isCeilingFan } from "./fanRigs";
+import { fanAxle, FanRigs } from "./fanRigs";
+import { isCeilingFan } from "./fanSpin";
 import { LIGHT_POOL_RADIUS } from "./lightPlacement";
 import {
   PlacementPass, GROUP_OVERLAP_ALLOW_WIDTHS, BADGE_PLACEMENT, cardOf as passCardOf, cellMax, drawnCells,
@@ -1225,30 +1226,17 @@ export class EntityVisuals {
   }
 
   /** Where each lamp of every light is, for a villa picture (villaPictureCapture): the picture view lights each one
-   *  that is on with its bulb and its pool (LIGHT_POOL_RADIUS, the 3D view's), as the 3D view lights each bulb of a
-   *  light on its own (bulbSet). A lamp is a mesh's middle seen from above; a strip longer than a pool's radius is a
-   *  row of lamps along it; pieces of one lamp (closer than 30 cm) are one. */
-  lampSpots(): { id: string; floor: number | null; x: number; z: number; r: number }[] {
-    const out: { id: string; floor: number | null; x: number; z: number; r: number }[] = [];
+   *  that is on with its bulb and its pool. The 3D view's own spots (BulbSet.lampSpots: a compact fixture's middle, a
+   *  strip's row of pools, each its share of the strip's light), so both views light a lamp at the same place. */
+  lampSpots(): LampSpot[] {
+    const lightOf = new Map<number, string>();
     for (const [entityId, meshes] of this.byEntity) {
-      if (this.mapping.get(entityId)?.type !== "light") continue;
-      const spots: { x: number; z: number; floor: number | null }[] = [];
-      for (const m of meshes) {
-        m.computeWorldMatrix(true);
-        const b = m.getBoundingInfo().boundingBox;
-        const [x0, x1, z0, z1] = [b.minimumWorld.x, b.maximumWorld.x, b.minimumWorld.z, b.maximumWorld.z];
-        const long = Math.max(x1 - x0, z1 - z0);
-        const n = long > LIGHT_POOL_RADIUS ? Math.ceil(long / LIGHT_POOL_RADIUS) : 1;
-        for (let i = 0; i < n; i++) {
-          const t = (i + 0.5) / n;
-          const [x, z] = x1 - x0 >= z1 - z0 ? [x0 + (x1 - x0) * t, (z0 + z1) / 2] : [(x0 + x1) / 2, z0 + (z1 - z0) * t];
-          if (spots.some((s) => Math.hypot(s.x - x, s.z - z) < 0.3)) continue;
-          spots.push({ x, z, floor: stampedFloor(m) ?? null });
-        }
-      }
-      for (const s of spots) out.push({ id: entityId, ...s, r: LIGHT_POOL_RADIUS });
+      if (this.mapping.get(entityId)?.type === "light") for (const m of meshes) lightOf.set(m.uniqueId, entityId);
     }
-    return out;
+    return this.bulbs.lampSpots().flatMap(({ mesh, x, z, scale }) => {
+      const id = lightOf.get(mesh.uniqueId);
+      return id ? [{ id, floor: stampedFloor(mesh) ?? null, x, z, r: LIGHT_POOL_RADIUS, s: scale }] : [];
+    });
   }
 
   /** Every ceiling fan hidden for a villa picture (villaPictureCapture): blades baked into it could never turn, so the
@@ -1263,23 +1251,16 @@ export class EntityVisuals {
       // ⚠️ ONE CIRCLE PER FAN, NOT PER ENTITY (owner, 2026-11-25: one entity drives the terrace's two fans, drawn as
       // one big fan between them): each mesh is a fan, as fanRigs rigs each mesh on its own axle; meshes of one
       // fixture (their circles' centres closer than the larger radius) are one fan
-      const circles: { x: number; y: number; r: number; floor: number | null }[] = [];
+      const circles: { x: number; z: number; r: number; floor: number | null }[] = [];
       for (const m of meshes) {
-        const pos = m.getVerticesData(VertexBuffer.PositionKind);
-        if (!pos) continue;
-        const world = m.computeWorldMatrix(true);
-        const pts: [number, number][] = [];
-        for (let i = 0; i < pos.length; i += 3) {
-          const p = Vector3.TransformCoordinates(new Vector3(pos[i], pos[i + 1], pos[i + 2]), world);
-          pts.push([p.x, p.z]);
-        }
-        const c = enclosingCircle(pts);
+        // the axle the 3D view turns this mesh round (fanRigs.fanAxle)
+        const c = fanAxle(m);
         if (!c) continue;
-        const same = circles.find((o) => Math.hypot(o.x - c.x, o.y - c.y) < Math.max(o.r, c.r));
+        const same = circles.find((o) => Math.hypot(o.x - c.x, o.z - c.z) < Math.max(o.r, c.r));
         if (same) Object.assign(same, { r: Math.max(same.r, c.r) });
-        else circles.push({ ...c, floor: stampedFloor(m) ?? null });
+        else circles.push({ x: c.x, z: c.z, r: c.r, floor: stampedFloor(m) ?? null });
       }
-      for (const c of circles) fans.push({ id: entityId, floor: c.floor, x: c.x, z: c.y, r: c.r });
+      for (const c of circles) fans.push({ id: entityId, floor: c.floor, x: c.x, z: c.z, r: c.r });
       for (const m of meshes) { was.push([m, m.isVisible]); m.isVisible = false; }
     }
     return { fans, back: () => { for (const [m, v] of was) m.isVisible = v; this.requestRender(); } };
@@ -6079,5 +6060,8 @@ export class EntityVisuals {
 
 /** A cover pose's place on the ground (EntityVisuals.coversOpen): metres, the scene's x and z. */
 export interface CoverPoseExtent { id: string; word: string; floor: number | null; minX: number; maxX: number; minZ: number; maxZ: number }
+/** One lamp's spot on the ground (EntityVisuals.lampSpots): metres, the scene's x and z; `r` its pool's reach, `s`
+ *  its share of its fixture's light (a strip's pools share it). */
+export interface LampSpot { id: string; floor: number | null; x: number; z: number; r: number; s: number }
 /** A ceiling fan's circle on the ground (EntityVisuals.ceilingFansHidden): metres, the scene's x and z. */
 export interface CeilingFanCircle { id: string; floor: number | null; x: number; z: number; r: number }

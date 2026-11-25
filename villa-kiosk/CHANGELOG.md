@@ -1,3 +1,12 @@
+## 2.496.903
+
+- **The villa pictures follow the 3D view more closely.** An LED strip now lights the floor along its whole length,
+  as in the 3D view, instead of in a few spots. A ceiling fan turns at the speed it is set to, slow when it is slow.
+  A fan that a profile may not see is drawn still for that profile, as its lamps and curtains already were. The
+  Owner's computer makes the new pictures by itself the next time it opens VESTA UI.
+- **Show the villa as pictures on any device.** The menu has a new item, "Show the villa as pictures", on a device
+  that shows the 3D villa. "Show the 3D villa" in the same menu goes back.
+
 ## 2.496.902
 
 - **A light that is on shows as in the 3D view on the villa pictures.** Each of its lamps now lights at its own place,

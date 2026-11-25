@@ -58,7 +58,7 @@ export interface LightReading { on: boolean; colour: Color3; frac: number }
 export interface PoolRoom { name: string; pts: Pt2[]; floorY: number; storey?: number }
 
 /** A fixture's box, as the load path already has it. */
-interface FixtureBounds {
+export interface FixtureBounds {
   min: { x: number; z: number };
   max: { x: number; z: number };
   centerY: number;
@@ -102,6 +102,12 @@ function stripSpots(box: FixtureBounds): { x: number; z: number; scale: number }
   const at = Array.from({ length: n }, (_, i) => from + step * (i + 0.5));
   const share = evenShares(at, Math.max(STRIP_LIGHT_MIN, STRIP_LIGHT_PER_M * (to - from)));
   return at.map((t, i) => (alongX ? { x: t, z: across, scale: share[i] } : { x: across, z: t, scale: share[i] }));
+}
+
+/** Where a fixture's pools lie and each one's share of its light: a strip's row (stripSpots), or one at the middle of
+ *  a compact fixture. The 3D view's pools stand on them, and the villa pictures light each one (BulbSet.lampSpots). */
+export function fixtureSpots(box: FixtureBounds, isStrip: boolean): { x: number; z: number; scale: number }[] {
+  return isStrip ? stripSpots(box) : [{ x: (box.min.x + box.max.x) / 2, z: (box.min.z + box.max.z) / 2, scale: 1 }];
 }
 
 /**
@@ -193,8 +199,7 @@ export class LightPoolSet {
    * waits for `setRooms`, off the critical path.
    */
   addFixture(mesh: AbstractMesh, box: FixtureBounds, isStrip: boolean): void {
-    const cx = (box.min.x + box.max.x) / 2, cz = (box.min.z + box.max.z) / 2;
-    const spots = isStrip ? stripSpots(box) : [{ x: cx, z: cz, scale: 1 }];
+    const spots = fixtureSpots(box, isStrip);
     const made: LightPool[] = [];
     spots.forEach(({ x, z, scale }, i) => {
       const spot = { mesh, x, z, y: box.centerY, scale, i };

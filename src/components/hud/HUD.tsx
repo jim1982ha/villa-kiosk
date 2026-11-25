@@ -32,7 +32,7 @@ import {
   // MapIcon, not Map: the bare name shadows the global Map constructor,
   // which this file also uses.
   Settings, Map as MapIcon, PersonStanding,
-  Minus, Plus, CircleHelp, TriangleAlert, Bot, Wrench, LayoutGrid, Power, Search, Box } from "lucide-react";
+  Minus, Plus, CircleHelp, TriangleAlert, Bot, Wrench, LayoutGrid, Power, Search, Box, Image as ImageIcon } from "lucide-react";
 import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
 import InfoTip from "@/components/common/InfoTip";
@@ -394,7 +394,21 @@ export default function HUD({
         <span>Rooms</span>
       </button>
       {/* ⚠️ A WAY BACK TO 3D (owner, 2026-11-24): a device sent to the pictures by its own record (one slow or crashed
-          load) would stay there for good; this asks for the 3D villa on the next opening (deviceVerdict override) */}
+          load) would stay there for good; this asks for the 3D villa on the next opening (deviceVerdict override).
+          ⚠️ AND THE WAY THERE (owner, 2026-11-25: "force display view even if the 3D view is displayed"): the same
+          override, the other way. Here, not in Settings: a Settings change waits for Save, this one opens VESTA UI
+          again at once */}
+      {has3d && (
+        <button
+          role="menuitem"
+          className="hud-menu-item"
+          data-tip="Show the still pictures of each floor on this device, as a TV shows them. Pictures are made only by a device showing the 3D villa."
+          onClick={() => { close(); setViewOverride("pictures"); location.reload(); }}
+        >
+          <ImageIcon size={18} aria-hidden="true" />
+          <span>Show the villa as pictures</span>
+        </button>
+      )}
       {!has3d && (
         <button
           role="menuitem"
