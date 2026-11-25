@@ -1,3 +1,8 @@
+## 2.496.906
+
+- **Pictures view waits for Settings' Save.** Turned on in Advanced Settings, then Back, it now lights Settings'
+  Save: Save switches this device to the pictures, Cancel drops it. Before, Save stayed grey.
+
 ## 2.496.905
 
 - **Pictures view's On / Off sits at the end of its line,** as Maintenance mode's does, instead of under its name.
