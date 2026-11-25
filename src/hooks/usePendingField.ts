@@ -41,6 +41,17 @@ export function usePendingStore(): PendingEdits {
   return pending;
 }
 
+/** ⚠️ A CHOICE FOR THIS DEVICE THAT TAKES EFFECT ONCE SAVE HAS SUCCEEDED (architecture review, 2026-11-25: the
+ *  Pictures view's switch hand-wrote this, and took five releases): what it shows (`now` until changed, or what the
+ *  dialog under this one holds) and its setter. Waits in the dialog's store (pendingEdits `afterSave`): Save lights,
+ *  Save applies it once everything else landed, Cancel drops it, Back hands it to the dialog under. */
+export function useChoiceAfterSave<T>(key: string, now: T, apply: (value: T) => void): [T, (value: T) => void] {
+  const pending = usePendingStore();
+  const shown = pending.chosen(key);
+  const set = (value: T) => pending.afterSave(key, value, value === now ? null : () => apply(value));
+  return [shown === undefined ? now : shown as T, set];
+}
+
 export function usePendingField<T>(key: string, delayMs: number): PendingField<T> {
   const pending = useContext(PendingContext);
   if (!pending) throw new Error("usePendingField must be used inside PendingFields");

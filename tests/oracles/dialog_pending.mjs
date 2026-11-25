@@ -133,6 +133,56 @@ for (const close of ["Save", "Cancel"]) {
   ck("  ...and nothing is sent as Settings goes", sent === (close === "Save" ? 1 : 0), { sent });
 }
 
+console.log("\n  which dialog a dialog is opened over (architecture review, 2026-11-25: told four ways before):");
+{
+  await render(app(h(Advanced)));
+  ck("Advanced Settings on its own is not nested: its own Save / Cancel", advanced.nested === false);
+  await render(app(null));
+  await render(app(h(Settings, { withAdvanced: true })));
+  ck("over Settings it is, even opened in the same moment; Settings is not", advanced.nested === true && settings.nested === false);
+  await render(app(null));
+}
+
+console.log("\n  a choice applied once Save has succeeded (this device's Pictures view), over Settings:");
+{
+  const KEY = "device-view";
+  let applied = [];
+  const choose = (store, on) => act(() => store.afterSave(KEY, on, on ? () => applied.push(on) : null));
+  await render(app(h(Settings, { withAdvanced: true })));
+  await choose(advanced.pending, true);
+  await render(app(h(Settings, { withAdvanced: false })));          // Back
+  ck("Back hands it to Settings: Save lit, nothing applied yet", settings.dirty && applied.length === 0);
+  await render(app(h(Settings, { withAdvanced: true })));           // Advanced Settings opened again
+  ck("  ...opened again, Advanced Settings shows the choice Settings holds (it showed the old one)", advanced.pending.chosen(KEY) === true);
+  await choose(advanced.pending, false);                             // set back to what it is
+  await render(app(h(Settings, { withAdvanced: false })));
+  ck("  ...set back and Back: Settings holds nothing, Save grey again", !settings.dirty && settings.pending.chosen(KEY) === undefined);
+  await render(app(null));
+
+  applied = [];
+  await render(app(h(Settings, { withAdvanced: true })));
+  await choose(advanced.pending, true);
+  await act(() => settings.pending.hold("chats", "x", async () => "The villa refused the list."));
+  await render(app(h(Settings, { withAdvanced: false })));
+  let ok;
+  await act(async () => { ok = await settings.save(); });
+  ck("a Save refused on something else applies nothing (the view switched at once)", ok === false && applied.length === 0, { ok, applied });
+  await act(() => { settings.discard(); });
+  await render(app(null));
+  ck("  ...and Cancel then takes it back: never applied", applied.length === 0, applied);
+
+  applied = [];
+  await render(app(h(Settings, { withAdvanced: true })));
+  await choose(advanced.pending, true);
+  await render(app(h(Settings, { withAdvanced: false })));
+  await act(() => settings.flush());                                  // leaving the title field
+  ck("leaving a field writes the typed value only: the choice still waits", applied.length === 0 && settings.dirty);
+  await act(() => settings.save());
+  ck("Save applies it, once", applied.length === 1 && !settings.dirty, applied);
+  await render(app(null));
+  ck("  ...and not again as Settings goes", applied.length === 1, applied);
+}
+
 console.log("\n  a half-typed number writes nothing:");
 {
   await render(app(h(Advanced)));
@@ -213,7 +263,7 @@ console.log("\n  the wiring:");
   ck("Advanced Settings' fields wait in its draft's store",
      /<PendingFields pending=\{own\.pending\}>/.test(adv)
      && ["latitude", "longitude", "recordsKeptDays"].every((k) => new RegExp(`usePendingField<string>\\("${k}"`).test(adv)));
-  ck("over Settings, Back writes what is still typed", /const back = \(\) => \{ own\.flush\(\); onBack\(\); \};/.test(adv)
+  ck("over Settings, Back closes the draft (what is typed written, what waits for Save handed over)", /const back = \(\) => \{ own\.close\(\); onBack\(\); \};/.test(adv)
      && /onClose=\{back\}/.test(adv));
   ck("a device's label, intensity and fields wait there too",
      /usePendingField<string>\(`device:\$\{entryKey\}:label`/.test(mf) && /usePendingField<number>\(`device:\$\{entryKey\}:intensity`/.test(mf)

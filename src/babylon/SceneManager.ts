@@ -68,6 +68,7 @@ import type { WorldOutline } from "@/utils/pictureManifest";
 // Babylon prototype patches this module depends on — see babylonSideEffects.
 import "./babylonSideEffects";
 import { isDomain } from "@/utils/entityDomain";
+import { reopen } from "@/utils/reopen";
 
 // Cosmetic-vs-structural entityMap diffing lives in its own pure module (no
 // Babylon, no scene state) — see entityMapDiff.ts for the full reasoning about
@@ -785,7 +786,7 @@ export class SceneManager {
     // shows up in telemetry it means handlePageHide tore down a document that
     // then came back — i.e. the iOS bug recurring on some other platform.
     reportTelemetry("recovered", { reason: "pageshow-on-disposed-scene" });
-    window.location.reload();
+    reopen();
   };
 
   private startRenderLoop() {

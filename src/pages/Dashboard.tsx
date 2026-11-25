@@ -251,8 +251,8 @@ export default function Dashboard() {
   // Once-a-day auto-reload safety net (see utils/autoReload.ts) against a slow
   // background memory drift — only fires during its quiet overnight hour AND
   // when nothing's open AND no one's touched the kiosk recently, so it never
-  // interrupts real use. "Nothing's open" is the Back stack's answer
-  // (overlayOpen) — every dismissable surface is on it.
+  // interrupts real use. "Nothing's open" is utils/reopen's (canReopenNow),
+  // asked by autoReload itself; this says only whether anyone is near it.
   const lastInteractionRef = useRef(Date.now());
   useEffect(() => {
     const mark = () => { lastInteractionRef.current = Date.now(); };
@@ -265,9 +265,8 @@ export default function Dashboard() {
       document.removeEventListener("wheel", mark);
     };
   }, []);
-  useEffect(() => installDailyAutoReload(() =>
-    !overlayOpen() && Date.now() - lastInteractionRef.current > 5 * 60_000,
-  ), []);
+  // nobody near it for 5 min (an open window and unsent work are utils/reopen's to wait for)
+  useEffect(() => installDailyAutoReload(() => Date.now() - lastInteractionRef.current > 5 * 60_000), []);
 
   // Auto-connect on load / refresh. We always reach HA through the same-origin
   // Supervisor proxy (token injected server-side), so no credentials are needed.
@@ -1028,8 +1027,6 @@ export default function Dashboard() {
           // was the way in, and was never opened if a device panel was — so
           // there is nothing to restore and nothing to decide.
           onBack={() => closeSurface("configEditor")}
-          // Over Settings, Settings' Save / Cancel own its changes; on its own (a device window's "edit"), its own do
-          withinSettings={shown("settings")}
           viewHeadingDeg={manager ? () => manager.viewHeadingDeg() : undefined}
         />
         </Suspense>

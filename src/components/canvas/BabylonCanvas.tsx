@@ -32,6 +32,7 @@ import { forget3dRecord, note3dOutcome, switchDeviceView } from "@/utils/deviceV
 import { missingImagesMessage } from "@/utils/glbRoomDataExtractor";
 import Button from "@/components/common/Button";
 import { useVillaPictures } from "@/components/canvas/useVillaPictures";
+import { reopen } from "@/utils/reopen";
 
 interface Props {
   onManager: (m: SceneManager | null) => void;
@@ -934,7 +935,7 @@ function VillaScene({
           detail={report}
           actions={
             <>
-              <Button onClick={() => { clearCrashLoop(); forget3dRecord(); location.reload(); }}>
+              <Button onClick={() => { clearCrashLoop(); forget3dRecord(); reopen(); }}>
                 Try once more
               </Button>
               <PicturesButton />

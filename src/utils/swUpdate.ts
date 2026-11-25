@@ -18,6 +18,8 @@
 // The worker parts are passed in, so tests/oracles/sw_update.mjs drives this
 // with fakes; the browser's are the default.
 
+import { reopen } from "./reopen";
+
 type Worker = {
   state: string;
   postMessage(message: unknown): void;
@@ -110,7 +112,7 @@ export function subscribeUpdate(listener: () => void): () => void {
 
 /** The notice's tap: switch to the update now. */
 export function applyUpdate(): void {
-  if (readyReg) void switchToWaiting(readyReg, () => location.reload());
+  if (readyReg) void switchToWaiting(readyReg, reopen);
 }
 
 /**
@@ -124,7 +126,7 @@ export function startServiceWorker(url: string): void {
   // As early as possible: a waiting worker means the app is about to restart
   // anyway, so it should do so before the villa starts loading.
   void sw.getRegistration().then((reg) => {
-    if (reg && reg.waiting && controlled()) void switchToWaiting(reg, () => location.reload());
+    if (reg && reg.waiting && controlled()) void switchToWaiting(reg, reopen);
   }).catch(() => {});
   window.addEventListener("load", () => {
     sw.register(url).then((reg) => {

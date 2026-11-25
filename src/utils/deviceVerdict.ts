@@ -22,7 +22,7 @@
 import { isCrashLooping } from "./diagnostics";
 import { report } from "./telemetry";
 import { readString, removeStored, writeJson, writeString } from "./storedJson";
-import { whenAllClosed } from "@/hooks/useBackToClose";
+import { reopen } from "./reopen";
 
 export type DeviceView = "3d" | "pictures";
 
@@ -175,27 +175,12 @@ export function reportDeviceView(): void {
   report("device-view", { view, reason, gpu, webgl, cores, devMemGb, tv });
 }
 
-/** `href` without the `?view=` that asks for a view (judgeDevice keeps the one it asks for, on every opening). */
-export function withoutViewAsked(href: string): string {
-  const u = new URL(href);
-  u.searchParams.delete("view");
-  return u.toString();
-}
-
-/** Show `view` on this device from now on (Advanced Settings' switch, the slow screen's way out): kept as its override, and the page opened again.
- *  ⚠️ OPENED AGAIN WITHOUT `?view=` (owner, 2026-11-25: "when i click on it: nothing happens"): an address carrying
- *  `?view=3d` set the 3D villa back on every reload, so the switch to the pictures did nothing. */
+/** Show `view` on this device from now on (Advanced Settings' Pictures view, the slow screen's way out): kept as its
+ *  override, and VESTA UI opened again (utils/reopen: once the windows are closed, without `?view=`). */
 export function switchDeviceView(view: DeviceView): void {
   if (view === "3d") forget3dRecord();
   writeString(VIEW_KEY, view);
-  // ⚠️ OPENED AGAIN ONCE THE WINDOWS ARE CLOSED (owner, 2026-11-25: the pictures came only after a refresh): Save
-  // closes Settings, whose step back in history cancelled a reload asked before it. A replace to the same address
-  // with a `#` in it would move within the page and open nothing, so the same address is reloaded.
-  whenAllClosed(() => {
-    const next = withoutViewAsked(location.href);
-    if (next === location.href) location.reload();
-    else location.replace(next);
-  });
+  reopen();
 }
 
 /** How the 3D villa went on this device (BabylonCanvas): the next opening reads it. */

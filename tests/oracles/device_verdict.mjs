@@ -3,7 +3,8 @@
 // opening was slow. Owner, 2026-11-24: a TV took 74s to open the 3D villa; "test the device and automatically switch to
 // the picture view... I don't want to wait for the kiosk to fully load and fail before switching".
 import { ck, done } from "../consistency/check.mjs";
-const { judgeDevice, VIEW_KEY, RECORD_KEY, SLOW_LOAD_MS, withoutViewAsked } = await import("@/utils/deviceVerdict");
+const { judgeDevice, VIEW_KEY, RECORD_KEY, SLOW_LOAD_MS } = await import("@/utils/deviceVerdict");
+const { withoutViewAsked } = await import("@/utils/reopen");
 
 const LAPTOP_UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Safari/537.36";
 const TV_UA = "Mozilla/5.0 (Linux; Android 11; TV-MODEL Build/XYZ; wv) AppleWebKit/537.36 "

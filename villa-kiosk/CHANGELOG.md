@@ -1,3 +1,15 @@
+## 2.496.909
+
+- **Cancel takes back the Pictures view, even after a refused Save.** The view now changes only once Save has
+  fully succeeded: if Save fails on something else (a chat list the villa's system refuses), Cancel leaves the view
+  as it was. Before, the view switched anyway.
+- **Advanced Settings shows the Pictures view you chose, when opened again.** After Back, the switch showed the old
+  value although Settings still held the new one.
+- **Leaving the Dashboard title field no longer sends the chat lists early.** They wait for Save, as every change.
+- **VESTA UI opens itself again one way, everywhere.** The update notice, the 04:00 reopen, the error screen's
+  Reload, "Try once more" and the Pictures view all wait for the windows to close and for a report not yet sent;
+  before, only the 04:00 reopen waited for a report.
+
 ## 2.496.908
 
 - **Save switches the view at once, really.** After Pictures view is turned on or off and Save pressed, VESTA UI now
