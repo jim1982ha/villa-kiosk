@@ -1,3 +1,10 @@
+## 2.496.901
+
+- **Each ceiling fan turns at its own place and size on the villa pictures.** Where one switch drives several fans
+  (a terrace's), they were drawn as one big fan between them. Each fan is now drawn on its own, at its real size, as
+  in the 3D view (2.496.900 drew every fan larger than its badge: undone). The Owner's computer makes the new
+  pictures by itself the next time it opens VESTA UI.
+
 ## 2.496.900
 
 - **A turning ceiling fan can be seen on the villa pictures.** Its blades were drawn at their real size, which on a TV
