@@ -1,3 +1,8 @@
+## 2.496.900
+
+- **A turning ceiling fan can be seen on the villa pictures.** Its blades were drawn at their real size, which on a TV
+  is smaller than the fan's badge drawn over them, so they turned out of sight. They are now drawn around the badge.
+
 ## 2.496.899
 
 - **A ceiling fan turns on the villa pictures.** The red circle is gone: the pictures are now made without the ceiling
