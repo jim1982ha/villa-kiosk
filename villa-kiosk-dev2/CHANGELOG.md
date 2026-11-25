@@ -1,3 +1,9 @@
+## 2.496.902
+
+- **A light that is on shows as in the 3D view on the villa pictures.** Each of its lamps now lights at its own place,
+  a bright bulb with a soft pool of light around it, instead of one glow at the light's badge. The Owner's computer
+  makes the new pictures by itself the next time it opens VESTA UI.
+
 ## 2.496.901
 
 - **Each ceiling fan turns at its own place and size on the villa pictures.** Where one switch drives several fans
