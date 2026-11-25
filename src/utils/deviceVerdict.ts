@@ -22,6 +22,7 @@
 import { isCrashLooping } from "./diagnostics";
 import { report } from "./telemetry";
 import { readString, removeStored, writeJson, writeString } from "./storedJson";
+import { whenAllClosed } from "@/hooks/useBackToClose";
 
 export type DeviceView = "3d" | "pictures";
 
@@ -187,11 +188,14 @@ export function withoutViewAsked(href: string): string {
 export function switchDeviceView(view: DeviceView): void {
   if (view === "3d") forget3dRecord();
   writeString(VIEW_KEY, view);
-  // ⚠️ RELOADED WHEN THE ADDRESS STAYS THE SAME (owner, 2026-11-25: the pictures came only after a refresh): a
-  // replace to the same address with a `#` in it moves within the page and opens nothing again
-  const next = withoutViewAsked(location.href);
-  if (next === location.href) location.reload();
-  else location.replace(next);
+  // ⚠️ OPENED AGAIN ONCE THE WINDOWS ARE CLOSED (owner, 2026-11-25: the pictures came only after a refresh): Save
+  // closes Settings, whose step back in history cancelled a reload asked before it. A replace to the same address
+  // with a `#` in it would move within the page and open nothing, so the same address is reloaded.
+  whenAllClosed(() => {
+    const next = withoutViewAsked(location.href);
+    if (next === location.href) location.reload();
+    else location.replace(next);
+  });
 }
 
 /** How the 3D villa went on this device (BabylonCanvas): the next opening reads it. */

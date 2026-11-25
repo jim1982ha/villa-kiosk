@@ -63,6 +63,8 @@ interface BackStack {
   register(close: () => void): () => void;
   dismissTop(): boolean;
   overlayOpen(): boolean;
+  /** Run `fn` once nothing is open and history is back at the villa (no traversal of ours still under way). */
+  whenClosed(fn: () => void): void;
 }
 
 interface Entry {
@@ -77,6 +79,15 @@ export function createBackStack(port: HistoryPort): BackStack {
   let unwinding = 0;
   let listening = false;
   let queued = false;
+  /** whenClosed's callers, waiting for the stack and history to settle. */
+  const waiting: (() => void)[] = [];
+
+  /** Run what waits for everything to be closed, once it is: nothing open, none of our entries left, no traversal of
+   *  ours under way and no reconciliation queued. */
+  function runIfClosed(): void {
+    if (stack.length > 0 || pushed > 0 || unwinding > 0 || queued) return;
+    for (const fn of waiting.splice(0)) fn();
+  }
 
   /** Make the history depth match the stack. The ONE place history is written. */
   function syncHistory(): void {
@@ -99,6 +110,7 @@ export function createBackStack(port: HistoryPort): BackStack {
       unwinding += 1;
       port.go(-drop);
     }
+    runIfClosed();
   }
 
   /**
@@ -153,7 +165,7 @@ export function createBackStack(port: HistoryPort): BackStack {
   }
 
   function onPopState(): void {
-    if (unwinding > 0) { unwinding -= 1; return; }
+    if (unwinding > 0) { unwinding -= 1; runIfClosed(); return; }
     // The browser just spent one of ours, so the depth is already correct — the
     // close below shrinks the stack to match and the reconciler finds nothing to
     // do. That accounting is what the old `popped` flag was for.
@@ -204,7 +216,17 @@ export function createBackStack(port: HistoryPort): BackStack {
     };
   }
 
-  return { register, dismissTop, overlayOpen };
+  /**
+   * ⚠️ A RELOAD ASKED AS A WINDOW CLOSES WAITS FOR THIS (owner, 2026-11-25: Pictures view saved, and VESTA UI showed
+   * it only after a refresh): the window's close steps history back (`go`), and that traversal cancelled the reload
+   * Save had just asked for.
+   */
+  function whenClosed(fn: () => void): void {
+    waiting.push(fn);
+    runIfClosed();
+  }
+
+  return { register, dismissTop, overlayOpen, whenClosed };
 }
 
 /** The real browser: pushState at the same URL (an add-on ingress path that

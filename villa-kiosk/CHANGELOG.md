@@ -1,3 +1,8 @@
+## 2.496.908
+
+- **Save switches the view at once, really.** After Pictures view is turned on or off and Save pressed, VESTA UI now
+  opens again in the new view by itself. Closing Settings cancelled the reopening, so it took a refresh.
+
 ## 2.496.907
 
 - **Save switches the view at once.** After turning Pictures view on or off in Advanced Settings, Save now opens
