@@ -1,3 +1,10 @@
+## 2.496.910
+
+- **The Lights tile counts every lamp on a wall switch.** Lamps wired to one wall switch with several rockers (the
+  Patio2F and Corridor2F lamps) were counted as one, by the lamp placed first: with that one off, the tile said "All
+  Off" while Patio2F Bottom was on. The Locks and AC tiles, and the Facility's "Lights off before arrival", count the
+  same way now.
+
 ## 2.496.909
 
 - **Cancel takes back the Pictures view, even after a refused Save.** The view now changes only once Save has

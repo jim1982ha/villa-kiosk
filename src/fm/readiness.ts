@@ -158,6 +158,10 @@ export function buildReadiness(
     const e = entities[id] ?? (missingFromHa(entities, id) ? lostDevice(id) : undefined);
     if (e) own[id] = e;
   }
+  // Lamps, locks and AC units: each part of the devices, not the entity a device stands under (VillaDevices.hasPart;
+  // owner, 2026-11-25: three lamps on one wall switch were counted as the first one only)
+  const parts: Record<string, HassEntity> = { ...own };
+  for (const [id, e] of Object.entries(entities)) if (devices.hasPart(id) && !held(id)) parts[id] = e;
 
   // ── No alarm ─────────────────────────────────────────────────────────────
   // ⚠️ AN ALARM MADE THE VILLA "READY, WITH THINGS WORTH FIXING" (architecture review, 2026-10-19 evening): these checks
@@ -167,7 +171,7 @@ export function buildReadiness(
   // ⚠️ A JAMMED LOCK WAS COUNTED TWICE (owner, 2026-10-28): its condition is wrong, so the Cockpit lists it as an alarm,
   // and "Doors locked" below names it "jammed" too: two lines of the recap for one door. A lock is that check's alone;
   // this one keeps every other device in alarm.
-  const locks = lockFacts(own), lockIds = new Set(locks?.ids ?? []);
+  const locks = lockFacts(parts), lockIds = new Set(locks?.ids ?? []);
   const sounding = alarms.filter((a) => a.kind === "alarm" && !(a.entityId && lockIds.has(a.entityId)));
   checks.push({
     id: "alarms",
@@ -261,7 +265,7 @@ export function buildReadiness(
   }
 
   // ── Lights off (a lit empty villa is burned Direct Expense) ──────────────
-  const lights = lightFacts(own);
+  const lights = lightFacts(parts);
   if (lights) {
     const lit = lights.on.length;
     checks.push({
@@ -275,7 +279,7 @@ export function buildReadiness(
   }
 
   // ── Climate reachable ────────────────────────────────────────────────────
-  const climate = climateFacts(own);
+  const climate = climateFacts(parts);
   if (climate) {
     const broken = climate.unreachable;
     checks.push({

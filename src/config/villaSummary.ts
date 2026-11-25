@@ -13,7 +13,9 @@
 // ⚠️ SCOPE IS A PER-DOMAIN RULE, AND "THE VILLA'S DEVICES" IS NOT ALWAYS IT.
 // Locks, lights and AC count only the villa's own devices (villaDevices): a
 // helper, a neighbouring integration or a dismissed entity is not one of this
-// villa's doors. POWER SENSORS count every entity, on
+// villa's doors. They count each PART of those devices (VillaDevices.hasPart),
+// not the entity a device stands under: three lamps on one wall switch are one
+// device, and only the first was counted (owner, 2026-11-25). POWER SENSORS count every entity, on
 // purpose — the villa device set is FOLDED (a multi-entity device appears once,
 // under its primary), so a plug's or a pump's power sensor is usually a member,
 // not a device, and scoping by it would silently drop real draw from the
@@ -149,7 +151,7 @@ export function powerFacts(entities: Record<string, HassEntity>, index?: DomainI
 
 export function villaSummary(input: {
   entities: Record<string, HassEntity>;
-  /** The villa's own devices — scopes locks, lights and AC (see header). */
+  /** The villa's own devices' parts (VillaDevices.hasPart) — scopes locks, lights and AC (see header). */
   devices: Allowed;
   resolvedRooms: Record<string, string>;
 }): VillaSummary {

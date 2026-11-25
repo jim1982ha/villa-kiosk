@@ -199,8 +199,9 @@ function selectableDeviceIds(
   dismissed: ReadonlySet<string>,
   repOf: ReadonlyMap<string, string>,
   isHidden: (entityId: string) => boolean,
-): string[] {
+): { ids: string[]; parts: Set<string> } {
   const reps = new Set<string>();
+  const parts = new Set<string>();
   for (const id of new Set([...mappedEntityIds, ...Object.keys(entityMap)])) {
     if (entityMap[id]?.disabled) continue;
     if (!mappedEntityIds.has(id) && !entities[id]) continue;
@@ -212,8 +213,9 @@ function selectableDeviceIds(
     // entity its device stands under.
     if (isHidden(id)) continue;
     reps.add(rep);
+    parts.add(id);
   }
-  return [...reps];
+  return { ids: [...reps], parts };
 }
 
 /** member entity_id → the entity_id that REPRESENTS it on the map. Covers
@@ -454,6 +456,11 @@ export interface VillaDevices {
   /** Is this entity one of the villa's devices? Provided so callers stop
    *  building their own `Set` from `ids` — five of them did. */
   has(entityId: string): boolean;
+  /** Is this entity one of the placed parts the villa's devices are made of (the same filters as `ids`, before the
+   *  fold)? What a count of lamps, locks or AC units on asks.
+   *  ⚠️ A LAMP IS NOT ITS DEVICE (owner, 2026-11-25: Patio2F Bottom lit on the map, the Lights tile "All Off"): three
+   *  lamps on one wall switch are one device, standing under the one placed first, and the tile read only that one. */
+  hasPart(entityId: string): boolean;
   /** The device `entityId` belongs to (the fold, deviceOf below): what every count "per device" counts by. */
   deviceOf(entityId: string): string;
   /** THE card a record is filed under (recordCardOf): its device, or a card of its own under "Other" for one on no
@@ -476,8 +483,8 @@ export function villaDevices(input: VillaDeviceInput): VillaDevices {
   // included: a check builds the villa the way the app does
   const folding = input.folding ?? deviceFolding(input.entityMap, input.deviceGroups, input.entityDeviceIds, input.deviceUnits);
   const facts = input.facts ?? lookFacts(input, folding);
-  const ids = selectableDeviceIds(input.entityMap, input.mappedEntityIds, input.entities, input.dismissed, folding,
-    facts.isHidden);
+  const { ids, parts } = selectableDeviceIds(input.entityMap, input.mappedEntityIds, input.entities, input.dismissed,
+    folding, facts.isHidden);
   const set = new Set(ids);
   const health = new Map(ids.map((id) => [id, deviceHealth(id, input.entities, facts.partsOf)]));
   const healthOf = (id: string) => health.get(id) ?? deviceHealth(id, input.entities, facts.partsOf);
@@ -496,6 +503,7 @@ export function villaDevices(input: VillaDeviceInput): VillaDevices {
     partlyLost: ids.filter((id) => healthOf(id).kind === "partly"),
     healthOf,
     has: (id) => set.has(id),
+    hasPart: (id) => parts.has(id),
     deviceOf: (id) => deviceOf(folding, id),
     recordCard,
     cardOfRecord: (field) => recordCard({ entityId: field }).opens,
@@ -511,7 +519,7 @@ export function devicesFor(devices: VillaDevices, may: (entityId: string) => boo
   const ids = devices.ids.filter(may);
   const set = new Set(ids);
   return { ...devices, ids, unavailable: devices.unavailable.filter(may), partlyLost: devices.partlyLost.filter(may),
-    has: (id) => set.has(id) };
+    has: (id) => set.has(id), hasPart: (id) => devices.hasPart(id) && may(id) };
 }
 
 // ── One identity for every opener (2.496.260) ──────────────────────────────
