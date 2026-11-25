@@ -354,9 +354,9 @@ export default function PictureView({ onEntityPicked, onEntityLongPressed, onClu
               circle"): the pictures are made without the ceiling fans, so their blades are drawn here, at their size,
               turning while the fan is on as the 3D view turns them; a ventilation fan stays in the picture, still */}
           {(manifest!.fans ?? []).filter((f) => f.floor === floor.floor).map((f) => (
-            <svg key={f.id} className={`picture-fan${entities[f.id]?.state === "on" ? " on" : ""}`} aria-hidden="true"
+            <svg key={`${f.id}@${f.u},${f.v}`} className={`picture-fan${entities[f.id]?.state === "on" ? " on" : ""}`} aria-hidden="true"
               viewBox="-1 -1 2 2" style={{ left: `${f.u * 100}%`, top: `${f.v * 100}%`,
-                width: fanPx(f.r * 2 * rect.w, size), height: fanPx(f.r * 2 * rect.w, size) }}>
+                width: f.r * 2 * rect.w, height: f.r * 2 * rect.w }}>
               <g className="picture-fan-blades">{FAN_BLADES}</g>
             </svg>
           ))}
@@ -393,14 +393,6 @@ const FAN_BLADES = (
     <circle r={0.16} />
   </>
 );
-
-/** ⚠️ A FAN'S BLADES SHOW AROUND ITS BADGE (owner, 2026-11-25: "i don't see the ceiling fan to spin"): at their real
- *  size on a TV (a 1.3 m fan is about 12 px across) they turned hidden under the badge drawn on them. They are drawn
- *  from 1.8 to 2.2 badges wide, their real size when it falls in that range (a fixture whose mesh carries more than
- *  its blades stays at 2.2). */
-function fanPx(realPx: number, badgePx: number): number {
-  return Math.min(badgePx * 2.2, Math.max(badgePx * 1.8, realPx));
-}
 
 /** The sun's or the moon's drawn size, its glow included. */
 const SKY_BODY_PX = 72;

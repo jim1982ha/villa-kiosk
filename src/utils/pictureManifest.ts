@@ -24,7 +24,7 @@ export function pictureFrame(min: { x: number; z: number }, max: { x: number; z:
 }
 
 /** Goes up when the framing changes, so every stored set is made again (configKey). */
-export const FRAMING_RULE = 4;
+export const FRAMING_RULE = 5;
 
 /** ⚠️ THE FRAME IS THE HOUSE, NOT THE GARDEN (owner, 2026-11-24: on a TV the whole plot left each floor small): the
  *  floors' own meshes' extents plus `margin` metres, widened to keep every badge point (with 1 m to spare) on the
@@ -103,7 +103,8 @@ export function configKey(config: PlacementConfig): string {
   }
   return hash53(stableText({
     // how the pictures are made: a set made by an older rule (the whole plot before 2.496.895, curtains as they
-    // were before 2.496.897, ceiling fans in it before 2.496.899) is made again
+    // were before 2.496.897, ceiling fans in it before 2.496.899, one fan per
+    // entity before 2.496.900) is made again
     framing: FRAMING_RULE,
     entityMap,
     meshBindings: config.meshBindings,
@@ -163,7 +164,7 @@ export function buildManifest(input: {
   const fans: PictureFan[] = (input.fans ?? []).filter((f) => shown.has(f.floor)).map((f) => {
     const [u, v] = toUv(frame, f.x, f.z);
     return { id: f.id, floor: f.floor, u, v, r: Math.round((f.r / spanX) * 1e5) / 1e5 };
-  }).sort((a, b) => a.floor - b.floor || a.id.localeCompare(b.id));
+  }).sort((a, b) => a.floor - b.floor || a.id.localeCompare(b.id) || a.u - b.u || a.v - b.v);
   return {
     v: 1,
     model_version: input.source.model_version,

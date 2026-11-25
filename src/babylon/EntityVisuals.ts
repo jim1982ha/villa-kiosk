@@ -1232,19 +1232,26 @@ export class EntityVisuals {
     const fans: CeilingFanCircle[] = [];
     for (const [entityId, meshes] of this.byEntity) {
       if (this.mapping.get(entityId)?.type !== "fan" || !isCeilingFan(entityId) || !meshes.length) continue;
-      const pts: [number, number][] = [];
+      // ⚠️ ONE CIRCLE PER FAN, NOT PER ENTITY (owner, 2026-11-25: one entity drives the terrace's two fans, drawn as
+      // one big fan between them): each mesh is a fan, as fanRigs rigs each mesh on its own axle; meshes of one
+      // fixture (their circles' centres closer than the larger radius) are one fan
+      const circles: { x: number; y: number; r: number; floor: number | null }[] = [];
       for (const m of meshes) {
         const pos = m.getVerticesData(VertexBuffer.PositionKind);
         if (!pos) continue;
         const world = m.computeWorldMatrix(true);
+        const pts: [number, number][] = [];
         for (let i = 0; i < pos.length; i += 3) {
           const p = Vector3.TransformCoordinates(new Vector3(pos[i], pos[i + 1], pos[i + 2]), world);
           pts.push([p.x, p.z]);
         }
+        const c = enclosingCircle(pts);
+        if (!c) continue;
+        const same = circles.find((o) => Math.hypot(o.x - c.x, o.y - c.y) < Math.max(o.r, c.r));
+        if (same) Object.assign(same, { r: Math.max(same.r, c.r) });
+        else circles.push({ ...c, floor: stampedFloor(m) ?? null });
       }
-      const c = enclosingCircle(pts);
-      if (!c) continue;
-      fans.push({ id: entityId, floor: stampedFloor(meshes[0]) ?? null, x: c.x, z: c.y, r: c.r });
+      for (const c of circles) fans.push({ id: entityId, floor: c.floor, x: c.x, z: c.y, r: c.r });
       for (const m of meshes) { was.push([m, m.isVisible]); m.isVisible = false; }
     }
     return { fans, back: () => { for (const [m, v] of was) m.isVisible = v; this.requestRender(); } };

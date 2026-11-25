@@ -56,7 +56,8 @@ export interface PictureCoverPose {
   u0: number; v0: number; u1: number; v1: number;
 }
 
-/** A ceiling fan (hidden on the pictures): its blades drawn live over them, turning while it is on. */
+/** A ceiling fan (hidden on the pictures): its blades drawn live over them, turning while it is on. One entity
+ *  driving several fans has one entry for each. */
 export interface PictureFan {
   id: string;
   floor: number;
