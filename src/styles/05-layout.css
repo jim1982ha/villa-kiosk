@@ -82,7 +82,7 @@
   mix-blend-mode: screen; }
 /* a ceiling fan's blades (pictureFan), turning while it is on, as the 3D view turns them */
 .picture-fan { position: absolute; transform: translate(-50%, -50%); pointer-events: none; overflow: visible; }
-.picture-fan-blades { fill: #f4f1ea; stroke: rgba(0, 0, 0, 0.35); stroke-width: 0.04; }
+.picture-fan-blades { fill: #f4f1ea; stroke: rgba(0, 0, 0, 0.45); stroke-width: 0.05; }
 .picture-fan.on .picture-fan-blades { animation: picture-fan 1.2s linear infinite; }
 @keyframes picture-fan { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 /* a curtain drawn (or part-way): its place on the picture, a fabric-coloured band with an outline */
