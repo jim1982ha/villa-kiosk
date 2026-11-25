@@ -181,14 +181,17 @@ export function withoutViewAsked(href: string): string {
   return u.toString();
 }
 
-/** Show `view` on this device from now on (Advanced Settings' switch, the HUD's way back to 3D, the slow screen's
- *  way out): kept as its override, and the page opened again.
+/** Show `view` on this device from now on (Advanced Settings' switch, the slow screen's way out): kept as its override, and the page opened again.
  *  ⚠️ OPENED AGAIN WITHOUT `?view=` (owner, 2026-11-25: "when i click on it: nothing happens"): an address carrying
  *  `?view=3d` set the 3D villa back on every reload, so the switch to the pictures did nothing. */
 export function switchDeviceView(view: DeviceView): void {
   if (view === "3d") forget3dRecord();
   writeString(VIEW_KEY, view);
-  location.replace(withoutViewAsked(location.href));
+  // ⚠️ RELOADED WHEN THE ADDRESS STAYS THE SAME (owner, 2026-11-25: the pictures came only after a refresh): a
+  // replace to the same address with a `#` in it moves within the page and opens nothing again
+  const next = withoutViewAsked(location.href);
+  if (next === location.href) location.reload();
+  else location.replace(next);
 }
 
 /** How the 3D villa went on this device (BabylonCanvas): the next opening reads it. */

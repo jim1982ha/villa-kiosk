@@ -1,3 +1,10 @@
+## 2.496.907
+
+- **Save switches the view at once.** After turning Pictures view on or off in Advanced Settings, Save now opens
+  VESTA UI again in the new view by itself; it took a refresh before.
+- **"Show the 3D villa" is gone from the menu.** Advanced Settings › Villa › This device › Pictures view is the one
+  switch, both ways.
+
 ## 2.496.906
 
 - **Pictures view waits for Settings' Save.** Turned on in Advanced Settings, then Back, it now lights Settings'

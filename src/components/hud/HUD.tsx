@@ -22,7 +22,6 @@
 
 import PresenceTile from "./PresenceTile";
 import TalkButton from "@/components/messages/TalkButton";
-import { switchDeviceView } from "@/utils/deviceVerdict";
 import { useBackToClose } from "@/hooks/useBackToClose";
 import { useOutsideClose } from "@/hooks/useOutsideClose";
 import { useNow } from "@/hooks/useInterval";
@@ -32,7 +31,7 @@ import {
   // MapIcon, not Map: the bare name shadows the global Map constructor,
   // which this file also uses.
   Settings, Map as MapIcon, PersonStanding,
-  Minus, Plus, CircleHelp, TriangleAlert, Bot, Wrench, LayoutGrid, Power, Search, Box } from "lucide-react";
+  Minus, Plus, CircleHelp, TriangleAlert, Bot, Wrench, LayoutGrid, Power, Search } from "lucide-react";
 import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
 import InfoTip from "@/components/common/InfoTip";
@@ -393,20 +392,6 @@ export default function HUD({
         <LayoutGrid size={18} />
         <span>Rooms</span>
       </button>
-      {/* ⚠️ A WAY BACK TO 3D (owner, 2026-11-24): a device sent to the pictures by its own record (one slow or crashed
-          load) would stay there for good; this asks for the 3D villa on the next opening (deviceVerdict override). The
-          way to the pictures is Advanced Settings' switch (owner, 2026-11-25), whose Save it waits for */}
-      {!has3d && (
-        <button
-          role="menuitem"
-          className="hud-menu-item"
-          data-tip="Try the 3D villa on this device. It may be slow here."
-          onClick={() => { close(); switchDeviceView("3d"); }}
-        >
-          <Box size={18} aria-hidden="true" />
-          <span>Show the 3D villa</span>
-        </button>
-      )}
       {role && (
         <button
           role="menuitem"
