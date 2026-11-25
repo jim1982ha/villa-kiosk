@@ -67,10 +67,23 @@ export interface DraftedSlice<K extends keyof AppConfig> {
 
 const DRAFT = "slice";
 
+/** Every open dialog's pending store, with the order it opened in: a dialog opened over another (Advanced Settings
+ *  over Settings) hands its held changes to the one under it as it goes. */
+const OPEN = new Map<PendingEdits, number>();
+let opened = 0;
+/** The store of the dialog `pending`'s was opened over, if one is still open. */
+function storeUnder(pending: PendingEdits): PendingEdits | null {
+  const mine = OPEN.get(pending) ?? Infinity;
+  let under: PendingEdits | null = null;
+  for (const [p, n] of OPEN) if (n < mine && (!under || n > (OPEN.get(under) ?? -1))) under = p;
+  return under;
+}
+
 export function useDraftedSlice<K extends keyof AppConfig>(keys: readonly K[], delayMs = 500): DraftedSlice<K> {
   const { config, update, editByDialog, onDialogEdit, onRemoteChange } = useConfig();
   // the dialog's writes are its own: recorded in its ledger (and any other open draft's) as they land
   const [pending] = useState(() => new PendingEdits(editByDialog));
+  const [order] = useState(() => opened++);
   pending.write = editByDialog;
   // a number that was none is said where every problem is (the villa view's notices), whichever way it was let go
   const notice = useAppNotice();
@@ -79,7 +92,19 @@ export function useDraftedSlice<K extends keyof AppConfig>(keys: readonly K[], d
   // ⚠️ A VALUE STILL WAITING WHEN THE DIALOG GOES AWAY IS WRITTEN (Back from Advanced Settings over Settings, a
   // close that is not Cancel): directly, never from inside a state updater, which does not run once it is unmounted
   // (useDraftCommit's net, to 2.496.499, never wrote anything).
-  useEffect(() => () => pending.flushAll(), [pending]);
+  // ⚠️ AND A CHANGE HELD FOR SAVE GOES TO THE DIALOG UNDER IT (owner, 2026-11-25: Pictures view turned on, then
+  // Back, and Settings' Save stayed grey: Back sent it past Settings' Save). Opened on its own, it is sent as it goes.
+  const flush = () => {
+    const under = storeUnder(pending);
+    if (under) pending.handHeldTo(under);
+    pending.flushAll();
+  };
+  const flushRef = useRef(flush);
+  flushRef.current = flush;
+  useEffect(() => {
+    OPEN.set(pending, order);
+    return () => { flushRef.current(); OPEN.delete(pending); };
+  }, [pending, order]);
   // ⚠️ THE LEDGER: WHAT THIS DIALOG ITSELF SET, ITEM BY ITEM, and its value before (configSlice recordEdit). Until
   // 2.496.498 the draft was a copy of the slice taken on open, so every write while the dialog was open read as its
   // own: the devices a 3D model just uploaded adds lit Save, and Cancel deleted them on every tablet. Written inside
@@ -162,7 +187,7 @@ export function useDraftedSlice<K extends keyof AppConfig>(keys: readonly K[], d
       update((now) => revertLedger(undo, now));
       return sliceOf({ ...config, ...revertLedger(undo, config) } as AppConfig, keys);
     },
-    flush: () => pending.flushAll(),
+    flush,
     pending,
     replaced,
     dismissReplaced: () => setReplaced([]),

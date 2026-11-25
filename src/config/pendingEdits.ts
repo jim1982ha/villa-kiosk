@@ -129,6 +129,17 @@ export class PendingEdits {
     for (const key of [...this.entries.keys()]) this.commit(key);
   }
 
+  /** Hand every held change to `under`, the dialog this one was opened over (Advanced Settings' Back to Settings):
+   *  its Save sends them, its Cancel drops them. */
+  handHeldTo(under: PendingEdits): void {
+    for (const [key, e] of [...this.entries]) {
+      if (!e.send) continue;
+      this.entries.delete(key);
+      under.hold(key, e.shown, e.send);
+    }
+    this.changed();
+  }
+
   /** Take every value waiting its pause out without writing it, for Save to write as kept (held changes stay: Save
    *  sends them, `held`). `whole` false: one of them had nothing to write and was said (`say`), so Save's window
    *  stays for the line to be read. */

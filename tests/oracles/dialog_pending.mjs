@@ -117,6 +117,22 @@ console.log("\n  Advanced Settings over Settings, a latitude typed, then Back be
   await render(app(null));
 }
 
+console.log("\n  Advanced Settings over Settings, a change held for Save (Pictures view), then Back:");
+for (const close of ["Save", "Cancel"]) {
+  await render(app(h(Settings, { withAdvanced: true })));
+  let sent = 0;
+  await act(() => advanced.pending.hold("device-view", true, async () => { sent++; return null; }));
+  ck(`Advanced Settings' own Save would light for it`, advanced.dirty);
+  await render(app(h(Settings, { withAdvanced: false })));        // Back
+  ck("  ...Back sends nothing (it was sent past Settings' Save, which stayed grey)", sent === 0, { sent });
+  ck("  ...Settings' Save is lit for it", settings.dirty);
+  if (close === "Save") await act(() => settings.save());
+  else await act(() => { settings.discard(); });
+  ck(close === "Save" ? "Settings' Save sends it" : "Settings' Cancel drops it, never sent", sent === (close === "Save" ? 1 : 0) && !settings.dirty, { sent });
+  await render(app(null));
+  ck("  ...and nothing is sent as Settings goes", sent === (close === "Save" ? 1 : 0), { sent });
+}
+
 console.log("\n  a half-typed number writes nothing:");
 {
   await render(app(h(Advanced)));
