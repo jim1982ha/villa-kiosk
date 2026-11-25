@@ -341,14 +341,14 @@ export default function PictureView({ onEntityPicked, onEntityLongPressed, onClu
                 stroke={lit.alarms?.has(roomKey(r.name)) ? STATUS_COLOR.warn : STATUS_COLOR.active} />
             ))}
           </svg>
-          {/* ⚠️ A LAMP ON SHOWS ON THE PICTURE (owner, 2026-11-25: "i can't see the light ON on the villa map"): the
-              picture is taken with every lamp dark (EntityVisuals.lampsOff), so each lamp this profile may see that is
-              on now (the 3D view's own lamp set: entity-map type "light") is a warm pool drawn at its spot */}
-          {manifest!.badges.filter((b) => b.floor === floor.floor && entities[b.id]?.state === "on"
-            && looks.typeOf(b.id) === "light" && panelMapping(b.id, config.entityMap, role, entities[b.id], { control: false }))
-            .map((b) => (
-              <span key={b.id} className="picture-lamp-pool"
-                style={{ left: `${b.u * 100}%`, top: `${b.v * 100}%`, width: size * 1.5, height: size * 1.5 }} />
+          {/* ⚠️ A LAMP ON SHOWS ON THE PICTURE, EACH AT ITS PLACE (owner, 2026-11-25: one glow at the badge, not as the
+              3D view shows it): the picture is taken with every lamp dark (EntityVisuals.lampsOff), so each lamp of a
+              light this profile may see that is on is lit here, its bulb and its pool (EntityVisuals.lampSpots) */}
+          {(manifest!.lamps ?? []).filter((l) => l.floor === floor.floor && entities[l.id]?.state === "on"
+            && panelMapping(l.id, config.entityMap, role, entities[l.id], { control: false }))
+            .map((l) => (
+              <span key={`${l.id}@${l.u},${l.v}`} className="picture-lamp-pool"
+                style={{ left: `${l.u * 100}%`, top: `${l.v * 100}%`, width: l.r * 2 * rect.w, height: l.r * 2 * rect.w }} />
             ))}
           {/* ⚠️ A CEILING FAN TURNS (owner, 2026-11-25: "instead of seeing the ceiling fan spinning, i see this red
               circle"): the pictures are made without the ceiling fans, so their blades are drawn here, at their size,

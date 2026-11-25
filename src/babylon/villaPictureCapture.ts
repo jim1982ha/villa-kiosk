@@ -199,7 +199,8 @@ export async function captureVillaPictures(
     if (interrupted()) throw new CaptureAborted();
     const manifest = buildManifest({ source, madeAt: new Date(), frame, floors: shown, size, anchors, rooms: stage.rooms,
       covers: covers.poses.map((c) => ({ ...c, floor: c.floor ?? lowest })),
-      fans: fans.fans.map((f) => ({ ...f, floor: f.floor ?? lowest })) });
+      fans: fans.fans.map((f) => ({ ...f, floor: f.floor ?? lowest })),
+      lamps: visuals.lampSpots().map((l) => ({ ...l, floor: l.floor ?? lowest })) });
     const files = [...pictures].map(([name, blob]) => ({ name, blob }));
     files.push({ name: "manifest.json", blob: new Blob([JSON.stringify(manifest)], { type: "application/json" }) });
     return { files, manifest, bytes: files.reduce((n, f) => n + f.blob.size, 0) };

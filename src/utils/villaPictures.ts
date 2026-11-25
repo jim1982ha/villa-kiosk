@@ -56,6 +56,15 @@ export interface PictureCoverPose {
   u0: number; v0: number; u1: number; v1: number;
 }
 
+/** One lamp of a light (a light may have several): lit live over the pictures while the light is on. */
+export interface PictureLamp {
+  id: string;
+  floor: number;
+  u: number; v: number;
+  /** Its pool's radius, as a fraction of the picture's width. */
+  r: number;
+}
+
 /** A ceiling fan (hidden on the pictures): its blades drawn live over them, turning while it is on. One entity
  *  driving several fans has one entry for each. */
 export interface PictureFan {
@@ -85,6 +94,8 @@ export interface PicturesManifest {
   covers?: PictureCoverPose[];
   /** Missing in a set made before 2.496.899: the fans are in the picture. */
   fans?: PictureFan[];
+  /** Missing in a set made before 2.496.902: no lamp lit. */
+  lamps?: PictureLamp[];
 }
 
 /** A file's URL under /model/views/, stamped with the manifest's version so a new set is never served from cache. */

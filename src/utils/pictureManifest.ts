@@ -6,7 +6,7 @@
 
 import type { AppConfig } from "@/config/AppConfig";
 import { COSMETIC_MAPPING_FIELDS } from "@/babylon/entityMapDiff";
-import type { PictureBadge, PictureCoverPose, PictureFan, PictureFloor, PictureRoom, PicturesManifest, ViewFile } from "@/utils/villaPictures";
+import type { PictureBadge, PictureCoverPose, PictureFan, PictureLamp, PictureFloor, PictureRoom, PicturesManifest, ViewFile } from "@/utils/villaPictures";
 
 export type PictureFrame = PicturesManifest["frame"];
 export type Look = "day" | "night";
@@ -24,7 +24,7 @@ export function pictureFrame(min: { x: number; z: number }, max: { x: number; z:
 }
 
 /** Goes up when the framing changes, so every stored set is made again (configKey). */
-export const FRAMING_RULE = 5;
+export const FRAMING_RULE = 6;
 
 /** ⚠️ THE FRAME IS THE HOUSE, NOT THE GARDEN (owner, 2026-11-24: on a TV the whole plot left each floor small): the
  *  floors' own meshes' extents plus `margin` metres, widened to keep every badge point (with 1 m to spare) on the
@@ -104,7 +104,7 @@ export function configKey(config: PlacementConfig): string {
   return hash53(stableText({
     // how the pictures are made: a set made by an older rule (the whole plot before 2.496.895, curtains as they
     // were before 2.496.897, ceiling fans in it before 2.496.899, one fan per
-    // entity before 2.496.900) is made again
+    // entity before 2.496.900, no lamp places before 2.496.902) is made again
     framing: FRAMING_RULE,
     entityMap,
     meshBindings: config.meshBindings,
@@ -127,7 +127,8 @@ export function picturesStale(stored: PicturesManifest | null, now: PictureSourc
 export interface WorldAnchor { id: string; x: number; y: number; z: number; floor: number }
 /** A cover pose's ground extents in the world, on its 1-based floor (EntityVisuals.coversOpen). */
 export interface WorldCoverPose { id: string; word: string; floor: number; minX: number; maxX: number; minZ: number; maxZ: number }
-/** A ceiling fan's circle in the world, on its 1-based floor (EntityVisuals.ceilingFansHidden). */
+/** A ceiling fan's circle (EntityVisuals.ceilingFansHidden), or a lamp's pool (EntityVisuals.lampSpots), in the
+ *  world, on its 1-based floor. */
 export interface WorldFan { id: string; floor: number; x: number; z: number; r: number }
 /** A room outline in the world, on its 1-based floor (SceneManager.pictureRooms). */
 export interface WorldOutline { name: string; floor: number; pts: { x: number; z: number }[] }
@@ -144,6 +145,7 @@ export function buildManifest(input: {
   rooms: readonly WorldOutline[];
   covers?: readonly WorldCoverPose[];
   fans?: readonly WorldFan[];
+  lamps?: readonly WorldFan[];
 }): PicturesManifest {
   const { frame, size } = input;
   const floors: PictureFloor[] = input.floors.map((floor) => ({
@@ -165,6 +167,10 @@ export function buildManifest(input: {
     const [u, v] = toUv(frame, f.x, f.z);
     return { id: f.id, floor: f.floor, u, v, r: Math.round((f.r / spanX) * 1e5) / 1e5 };
   }).sort((a, b) => a.floor - b.floor || a.id.localeCompare(b.id) || a.u - b.u || a.v - b.v);
+  const lamps: PictureLamp[] = (input.lamps ?? []).filter((l) => shown.has(l.floor)).map((l) => {
+    const [u, v] = toUv(frame, l.x, l.z);
+    return { id: l.id, floor: l.floor, u, v, r: Math.round((l.r / spanX) * 1e5) / 1e5 };
+  }).sort((a, b) => a.floor - b.floor || a.id.localeCompare(b.id) || a.u - b.u || a.v - b.v);
   return {
     v: 1,
     model_version: input.source.model_version,
@@ -177,5 +183,6 @@ export function buildManifest(input: {
     rooms,
     covers,
     fans,
+    lamps,
   };
 }

@@ -131,6 +131,7 @@ import { RoomFocus } from "./roomFocus";
 import { PlacementCheck } from "./placementCheck";
 import { PlacementTelemetry, passSnapshot, placementReport, type PlacementReport } from "./placementReport";
 import { enclosingCircle, FanRigs, isCeilingFan } from "./fanRigs";
+import { LIGHT_POOL_RADIUS } from "./lightPlacement";
 import {
   PlacementPass, GROUP_OVERLAP_ALLOW_WIDTHS, BADGE_PLACEMENT, cardOf as passCardOf, cellMax, drawnCells,
   roomOfEntity, placementItems as passItems, glassScratch, viewportBudget, cellCapFor, drawableMaxOf,
@@ -1221,6 +1222,33 @@ export class EntityVisuals {
       }
     }
     return { poses, back: () => { for (const [m, v] of was) m.isVisible = v; this.requestRender(); } };
+  }
+
+  /** Where each lamp of every light is, for a villa picture (villaPictureCapture): the picture view lights each one
+   *  that is on with its bulb and its pool (LIGHT_POOL_RADIUS, the 3D view's), as the 3D view lights each bulb of a
+   *  light on its own (bulbSet). A lamp is a mesh's middle seen from above; a strip longer than a pool's radius is a
+   *  row of lamps along it; pieces of one lamp (closer than 30 cm) are one. */
+  lampSpots(): { id: string; floor: number | null; x: number; z: number; r: number }[] {
+    const out: { id: string; floor: number | null; x: number; z: number; r: number }[] = [];
+    for (const [entityId, meshes] of this.byEntity) {
+      if (this.mapping.get(entityId)?.type !== "light") continue;
+      const spots: { x: number; z: number; floor: number | null }[] = [];
+      for (const m of meshes) {
+        m.computeWorldMatrix(true);
+        const b = m.getBoundingInfo().boundingBox;
+        const [x0, x1, z0, z1] = [b.minimumWorld.x, b.maximumWorld.x, b.minimumWorld.z, b.maximumWorld.z];
+        const long = Math.max(x1 - x0, z1 - z0);
+        const n = long > LIGHT_POOL_RADIUS ? Math.ceil(long / LIGHT_POOL_RADIUS) : 1;
+        for (let i = 0; i < n; i++) {
+          const t = (i + 0.5) / n;
+          const [x, z] = x1 - x0 >= z1 - z0 ? [x0 + (x1 - x0) * t, (z0 + z1) / 2] : [(x0 + x1) / 2, z0 + (z1 - z0) * t];
+          if (spots.some((s) => Math.hypot(s.x - x, s.z - z) < 0.3)) continue;
+          spots.push({ x, z, floor: stampedFloor(m) ?? null });
+        }
+      }
+      for (const s of spots) out.push({ id: entityId, ...s, r: LIGHT_POOL_RADIUS });
+    }
+    return out;
   }
 
   /** Every ceiling fan hidden for a villa picture (villaPictureCapture): blades baked into it could never turn, so the
