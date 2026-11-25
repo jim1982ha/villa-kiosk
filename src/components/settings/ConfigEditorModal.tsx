@@ -9,10 +9,10 @@
 import Window, { WindowHeader } from "@/components/common/Window";
 import { roleCan } from "@/auth/permissions";
 import { useState, type ReactNode } from "react";
-import { FIELD_COMMIT_MS, PendingFields, typedNumber, usePendingField, type PendingField } from "@/hooks/usePendingField";
+import { FIELD_COMMIT_MS, PendingFields, typedNumber, usePendingField, usePendingStore, type PendingField } from "@/hooks/usePendingField";
 import type { AppConfig } from "@/config/AppConfig";
 import { villaBounds } from "@/config/villaSettings";
-import { Boxes, CalendarClock, Home, LogOut, Wrench } from "lucide-react";
+import { Boxes, CalendarClock, Home, Image as ImageIcon, LogOut, Wrench } from "lucide-react";
 import SettingRow, { SettingSlider, settingValue } from "@/components/common/SettingRow";
 import ToolGroup from "@/components/common/ToolGroup";
 import InfoTip, { TipTitle } from "@/components/common/InfoTip";
@@ -36,6 +36,8 @@ import { useDraftedSlice } from "@/hooks/useDraftedSlice";
 import { ADVANCED_SETTINGS_KEYS } from "@/config/configSlice";
 import ProblemLine from "@/components/common/ProblemLine";
 import Button from "@/components/common/Button";
+import OnOffToggle from "@/components/common/OnOffToggle";
+import { deviceView, switchDeviceView } from "@/utils/deviceVerdict";
 
 /** ⚠️ EVERY TAB CARRIES TWO PANELS, AND THAT IS A RULE RATHER THAN AN
  *  ACCIDENT. This screen was a stack of six collapsible sections and read as
@@ -168,6 +170,32 @@ function PresenceSensor() {
       <EntityPicker value={config.presenceSensor} domains={["binary_sensor"]} placeholder="Pick the villa's empty / occupied sensor"
         onChange={(id) => update({ presenceSensor: id })} onClear={() => update({ presenceSensor: "" })} />
     </>
+  );
+}
+
+/** The dialog's held change for this device's view. */
+const VIEW_HELD = "device-view";
+
+/** This device shows the villa as pictures rather than in 3D (owner, 2026-11-25: "a toggle in the advanced settings,
+ *  to force display view even if the 3D view is displayed"). This device's choice, never the villa's: held in the
+ *  dialog's pending store (pendingEdits `hold`) so Save lights, Save switches the view (deviceVerdict.switchDeviceView:
+ *  VESTA UI opens again), Cancel drops it. */
+function PicturesOnThisDevice() {
+  const pending = usePendingStore();
+  const now = deviceView() === "pictures";
+  const shown = (pending.shown(VIEW_HELD) as boolean | undefined) ?? now;
+  return (
+    <div className="setting-line">
+      <OnOffToggle ariaLabel="The villa as pictures on this device" title="Show the villa as still pictures on this device"
+        on={shown} icon={<ImageIcon size={16} />} label="Pictures view" tip={<>
+          A still picture of each floor on this device instead of the 3D villa, as a TV shows it. Save opens VESTA UI
+          again. Pictures are made only by a device showing the 3D villa.
+        </>}
+        onChange={(on) => {
+          if (on === now) pending.forget(VIEW_HELD);
+          else pending.hold(VIEW_HELD, on, async () => { switchDeviceView(on ? "pictures" : "3d"); return null; });
+        }} />
+    </div>
   );
 }
 
@@ -318,6 +346,9 @@ export default function ConfigEditorModal({ onBack, withinSettings, focusEntityI
             </div>
 
             <PresenceSensor />
+
+            <TipTitle title="This device" tip="Only this device: every other one keeps its own." />
+            <PicturesOnThisDevice />
           </>
         )}
 

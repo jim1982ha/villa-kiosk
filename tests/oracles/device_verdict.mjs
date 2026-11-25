@@ -3,7 +3,7 @@
 // opening was slow. Owner, 2026-11-24: a TV took 74s to open the 3D villa; "test the device and automatically switch to
 // the picture view... I don't want to wait for the kiosk to fully load and fail before switching".
 import { ck, done } from "../consistency/check.mjs";
-const { judgeDevice, VIEW_KEY, RECORD_KEY, SLOW_LOAD_MS } = await import("@/utils/deviceVerdict");
+const { judgeDevice, VIEW_KEY, RECORD_KEY, SLOW_LOAD_MS, withoutViewAsked } = await import("@/utils/deviceVerdict");
 
 const LAPTOP_UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Safari/537.36";
 const TV_UA = "Mozilla/5.0 (Linux; Android 11; TV-MODEL Build/XYZ; wv) AppleWebKit/537.36 "
@@ -87,6 +87,14 @@ console.log("\n  the override (?view=), kept by the device:");
 {
   const d = device({ crashed: true, search: "?view=3d" });
   ck("the override wins over a crash: the 3D view's own crash screen then shows", d.verdict().view === "3d");
+}
+
+console.log("\n  a switch of view opens the page again without ?view= (owner, 2026-11-25: \"nothing happens\"):");
+{
+  const back = withoutViewAsked("http://localhost:8123/api/hassio_ingress/abc/?view=3d&debug=1#top");
+  const d = device({ ua: LAPTOP_UA, search: new URL(back).search, stored: { [VIEW_KEY]: "pictures" } });
+  ck("an address that asked for 3D, switched to the pictures, opens on the pictures", d.verdict().view === "pictures", back);
+  ck("  ...the rest of the address kept", back === "http://localhost:8123/api/hassio_ingress/abc/?debug=1#top", back);
 }
 
 done("The device verdict: TVs, weak GPUs and slow or crashed openings get the villa pictures; ?view= overrides and is kept");

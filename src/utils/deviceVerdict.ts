@@ -174,10 +174,21 @@ export function reportDeviceView(): void {
   report("device-view", { view, reason, gpu, webgl, cores, devMemGb, tv });
 }
 
-/** Keep `view` as this device's override (null forgets it). The 3D view's "Show the villa as pictures" sets it. */
-export function setViewOverride(view: DeviceView | null): void {
-  if (view) writeString(VIEW_KEY, view);
-  else removeStored(VIEW_KEY);
+/** `href` without the `?view=` that asks for a view (judgeDevice keeps the one it asks for, on every opening). */
+export function withoutViewAsked(href: string): string {
+  const u = new URL(href);
+  u.searchParams.delete("view");
+  return u.toString();
+}
+
+/** Show `view` on this device from now on (Advanced Settings' switch, the HUD's way back to 3D, the slow screen's
+ *  way out): kept as its override, and the page opened again.
+ *  ⚠️ OPENED AGAIN WITHOUT `?view=` (owner, 2026-11-25: "when i click on it: nothing happens"): an address carrying
+ *  `?view=3d` set the 3D villa back on every reload, so the switch to the pictures did nothing. */
+export function switchDeviceView(view: DeviceView): void {
+  if (view === "3d") forget3dRecord();
+  writeString(VIEW_KEY, view);
+  location.replace(withoutViewAsked(location.href));
 }
 
 /** How the 3D villa went on this device (BabylonCanvas): the next opening reads it. */

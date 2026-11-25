@@ -1,3 +1,12 @@
+## 2.496.904
+
+- **The pictures switch is in Advanced Settings.** Advanced Settings › Villa › This device has a "Pictures view"
+  switch: turn it on and press Save, and VESTA UI opens again showing the villa as pictures on this device. Turn it
+  off and Save to go back to the 3D villa. The menu item from 2.496.903 is gone; "Show the 3D villa" stays in the menu
+  of a device showing the pictures.
+- **Switching the view works when the address asks for one.** If VESTA UI's address ended with "?view=3d", switching
+  to the pictures did nothing: the page opened in 3D again. Switching now opens the page without it.
+
 ## 2.496.903
 
 - **The villa pictures follow the 3D view more closely.** An LED strip now lights the floor along its whole length,

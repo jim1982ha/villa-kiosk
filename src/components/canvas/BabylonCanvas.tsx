@@ -28,7 +28,7 @@ import {
   clearCrashLoop, noteContextLoss, captureError, buildReport,
 } from "@/utils/diagnostics";
 import { adoptDetected } from "@/config/mappingEdits";
-import { forget3dRecord, note3dOutcome, setViewOverride } from "@/utils/deviceVerdict";
+import { forget3dRecord, note3dOutcome, switchDeviceView } from "@/utils/deviceVerdict";
 import { missingImagesMessage } from "@/utils/glbRoomDataExtractor";
 import Button from "@/components/common/Button";
 import { useVillaPictures } from "@/components/canvas/useVillaPictures";
@@ -961,7 +961,7 @@ function VillaScene({
  *  this device's view (deviceVerdict's override), at once. */
 function PicturesButton() {
   return (
-    <Button look="main" onClick={() => { setViewOverride("pictures"); location.reload(); }}>
+    <Button look="main" onClick={() => switchDeviceView("pictures")}>
       Show the villa as pictures
     </Button>
   );
