@@ -1,3 +1,12 @@
+## 0.12.542
+
+- **The villa follows the VESTA Agent's settings by itself.** Whom each priority reaches, what "Follow the VESTA
+  Agent" means for each kind of Automation, and the words of the villa's own messages are now sent by the VESTA Agent
+  to the villa's system, which keeps them through restarts. A change to the alert desk reaches the villa's own
+  alerts within 5 minutes: no villa file needs editing any more. With the VESTA Agent stopped, the villa keeps the
+  last values it was given.
+- The alert buttons' words are now checked against the ones VESTA UI shows, so both always say the same.
+
 ## 0.12.541
 
 - **A critical device offline is a P1.** "Follow the VESTA Agent" now gives the critical-devices Automation (CRITICAL
