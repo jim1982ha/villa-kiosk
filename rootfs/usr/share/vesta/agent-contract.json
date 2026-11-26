@@ -875,6 +875,18 @@
     "watch": "✅",
     "closed": "✅"
   },
+  "_alertButtons": "The words of an alert's buttons, by the VESTA Agent's option (owner, 2026-11-26: \"the same button says the same word on Telegram and on VESTA UI\"): the Agent's alert desk offers them on Telegram (its skill.yaml `buttons`, held equal to these by the Agent's test) and VESTA UI draws its own Done, Not a problem, Open Ticket and Need help with them (src/fm/deviceWork.ts). Read from here by both: VESTA UI kept its own copy, so a word changed on one side alone read one way on Telegram and another in VESTA UI.",
+  "alertButtons": {
+    "done": "Done",
+    "not_a_problem": "Not a problem",
+    "open_ticket": "Open Ticket",
+    "need_help": "Need help"
+  },
+  "_layout": "The two words a message's layout is read back by (owner, 2026-11-26): `to`, what starts the line of whom it is for, and `status`, the line its Status follows on. The VESTA Agent writes them (vesta_shared/message_format.py TO, STATUS, and the villa's message template) and VESTA UI reads a villa's message into its parts by them (src/messages/announcements.ts readLayout). Held equal to the Agent's by its test.",
+  "layout": {
+    "to": "To:",
+    "status": "Status:"
+  },
   "_recipients": "Who gets the villa's messages, by role (architecture review round 17, 2026-11-03): the villa's own two lists, each one of its text helpers (`lists`, by role: the owner's and the facility manager's) holding its notify entities (Telegram chats, phone apps) apart by `separator`. Every VESTA blueprint sends to them with no VESTA Agent at all, the VESTA Agent reads them (vesta_shared/villa_recipients.py) and the Kiosk edits them (src/messages/recipients.ts, at `where`). A list's text is READ the same by both: split on `separator`, each part trimmed and lower-cased, kept when it is an id of `domain` (\"<domain>.<name>\"), each id once, in its order; anything else (\"unknown\", another domain, an empty part) names nobody. `maxChars`: what a helper holds at most (its `max`): a longer list is refused, never cut. `where`: the place a person edits them, in the words of the Kiosk's menus, for any text that sends a person there. `languages`: the languages a chat can read VESTA's messages in, code → name, in the menu's order (owner, 2026-11-03: each chat's language is set in the Kiosk beside the chat, never on the VESTA Agent's page; the Kiosk keeps them in the villa's settings and tells the Agent in its heartbeat answer, `chatLanguages`). `examples`: a list's text and the ids it names; both apps drive their reading through every one (tests/oracles/recipients.mjs, and the Agent's own test).",
   "recipients": {
     "lists": {"owner": "input_text.vesta_owner_targets", "fm": "input_text.vesta_fm_targets"},

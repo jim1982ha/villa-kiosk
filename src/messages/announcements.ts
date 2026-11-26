@@ -265,16 +265,22 @@ function plain(html: string): string {
     .split("\n").map((l) => l.trim()).filter(Boolean).join("\n");
 }
 
+/** The words a message's layout is read back by, READ FROM THE AGREEMENT (agent-contract.json `layout`, owner,
+ *  2026-11-26: the Agent writes them, so a word changed there is read here with no copy to follow). */
+const escaped = (w: string): string => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const STATUS_LINE = new RegExp(`\\n\\s*${escaped(AGENT_CONTRACT.layout.status)}\\s*\\n`);
+const TO_LINE = new RegExp(`^\\s*${escaped(AGENT_CONTRACT.layout.to)}\\s*(.*)$`, "m");
+
 /** An announcement's text read into its parts. Pure: tests/oracles/announcements.mjs drives it. */
 export function readLayout(message: string): Pick<Announcement, "title" | "to" | "text" | "status"> {
-  const [head, tail = ""] = message.split(/\n\s*Status:\s*\n/);
+  const [head, tail = ""] = message.split(STATUS_LINE);
   const title = /<b>([\s\S]*?)<\/b>/i.exec(head);
   if (!title) {
     // The plain text an automation sends when the layout is missing: its first line is its title.
     const [first = "", ...rest] = plain(message).split("\n");
     return { title: first, to: "", text: rest.join("\n"), status: "" };
   }
-  const to = /^\s*To:\s*(.*)$/m.exec(head.replace(title[0], ""));
+  const to = TO_LINE.exec(head.replace(title[0], ""));
   const quotes = [...head.matchAll(/<blockquote[^>]*>([\s\S]*?)<\/blockquote>/gi)].map((m) => plain(m[1]));
   return { title: plain(title[1]), to: to ? plain(to[1]) : "", text: quotes.filter(Boolean).join("\n"), status: plain(tail) };
 }

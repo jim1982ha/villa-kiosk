@@ -13,6 +13,7 @@
 
 import type { FmTicket, FmTicketStatus } from "./fmTypes";
 import { helpIsLatest, isTicketOpen, stageOf, standingHelp, type FmStage, type HelpAsked } from "./fmEngine";
+import AGENT_CONTRACT from "../../rootfs/usr/share/vesta/agent-contract.json" with { type: "json" };
 
 // ── One card per device ──────────────────────────────────────────────────────
 
@@ -95,9 +96,12 @@ type WorkStep =
  *  1 word label and icon in the button"; WorkButtons.WorkLabel, 07-facility.css); none when the label is one word. */
 interface WorkActionSpec { label: string; short?: string; step: WorkStep }
 
+/** The words of VESTA's alert buttons, READ FROM THE AGREEMENT (agent-contract.json `alertButtons`, owner, 2026-11-26:
+ *  the same button says the same word on Telegram and in VESTA UI; this was a copy of the Agent's words). */
+const BUTTONS = AGENT_CONTRACT.alertButtons;
 /** The words Done and Need help say on every card, the Inbox's and the Tickets tab's alike. */
-const DONE = "Done";
-export const NEED_HELP = "Need help";
+const DONE = BUTTONS.done;
+export const NEED_HELP = BUTTONS.need_help;
 /** ⚠️ WHAT THE OWNER KNOWS BETTER THAN THE CHECKS (owner, 2026-11-02: a pump stopped on purpose, flagged every night):
  *  closed with nothing done, and never raised again while the problem lasts (FmTicketUpdate.lasting); back after it
  *  ended, it is new. ⚠️ A BUTTON OF ITS OWN (owner, 2026-11-04: "instead of showing the button `Not a problem while it
@@ -105,7 +109,7 @@ export const NEED_HELP = "Need help";
  *  answer to a Done's or a No action needed's question; now it follows Done on every card that offers Done on a
  *  record on the Inbox while none is a ticket (never a ticket's: owner, 2026-11-04; notAProblem), in the order VESTA's own alert offers it on Telegram, its label short ("the button label must be short":
  *  owner, 2026-11-04); pressed, it closes, no question asked (owner, 2026-11-04). */
-export const NOT_A_PROBLEM = "Not a problem";
+export const NOT_A_PROBLEM = BUTTONS.not_a_problem;
 /** A close with nothing done: its button, and how its close is told (faultConfirm.closedTold). */
 export const NO_ACTION_NEEDED = "No action needed";
 /** The one words of Need help, Not a problem and a ticket's button on a narrow row (WorkActionSpec.short). */
@@ -126,9 +130,9 @@ export const WORK_ACTIONS: Record<WorkActionKind, WorkActionSpec> = {
   notAProblem: { label: NOT_A_PROBLEM, short: IGNORE, step: { kind: "close", lasting: true } },
   doneNew: { label: DONE, step: { kind: "raiseThen", then: "done" } },
   helpNew: { label: NEED_HELP, short: HELP, step: { kind: "raiseThen", then: "help" } },
-  openTicket: { label: "Open Ticket", short: TICKET, step: { kind: "stage", to: "in_progress" } },
+  openTicket: { label: BUTTONS.open_ticket, short: TICKET, step: { kind: "stage", to: "in_progress" } },
   // a card with no record yet (only what the villa's system reports): the same words, the ticket form for its device
-  raiseTicket: { label: "Open Ticket", short: TICKET, step: { kind: "raise" } },
+  raiseTicket: { label: BUTTONS.open_ticket, short: TICKET, step: { kind: "raise" } },
   editTicket: { label: "Edit Ticket", short: TICKET, step: { kind: "edit" } },
   // the Tickets tab's work done, its form (what was done, cost, photos). ⚠️ SAID "CLOSE" (owner, 2026-11-04: "in the
   // Ticket card, the `Done` shall be renamed to `Close`"): it said Done, as the Inbox's (2026-10-30), until then
