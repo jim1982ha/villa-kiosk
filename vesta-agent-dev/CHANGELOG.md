@@ -1,3 +1,11 @@
+## 0.12.543
+
+- **"No action needed" is said as pressed.** A Cockpit close with "No action needed" was recorded as "Done in the
+  Cockpit" in the alert's own reply line; it now says "No action needed in the Cockpit".
+- Behind the scenes: what each close button means (Done, No action needed, Not a problem) is now decided in one
+  place, and so is where an alert stands (open, closing, waiting to be checked, held, watched, over). Messages and
+  buttons are otherwise unchanged; the next change to them is quicker and less likely to come back wrong.
+
 ## 0.12.542
 
 - **The villa follows the VESTA Agent's settings by itself.** Whom each priority reaches, what "Follow the VESTA
