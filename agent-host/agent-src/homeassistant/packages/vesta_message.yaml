@@ -74,5 +74,5 @@ template:
           P4: >-
             {{ [] }}
           follow: >-
-            {{ {"blueprints": {"critical_binary_trip": "P1", "critical_condition": "P2", "critical_presence_guard": "P1", "critical_schedule": "P2", "critical_system": "P2", "critical_watchdog": "P2"}, "critical_": "P1", "other": "P2"} }}
+            {{ {"blueprints": {"critical_binary_trip": "P1", "critical_condition": "P2", "critical_presence_guard": "P1", "critical_schedule": "P2", "critical_system": "P2", "critical_watchdog": "P1"}, "critical_": "P1", "other": "P2"} }}
         # END CHATS BY PRIORITY

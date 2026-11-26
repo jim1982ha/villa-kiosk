@@ -1,3 +1,8 @@
+## 0.12.541
+
+- **A critical device offline is a P1.** "Follow the VESTA Agent" now gives the critical-devices Automation (CRITICAL
+  Device offline) priority P1: its alert goes to the owner and the FM, not to the FM only.
+
 ## 0.12.540
 
 - **One message for a critical device offline, the alert's.** When a device the villa's critical-devices Automation

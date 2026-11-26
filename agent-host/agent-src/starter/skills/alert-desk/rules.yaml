@@ -28,7 +28,7 @@ routes:
     cooldown_min: 120  # How long after an alert of a device in a wrong state a repeat on the same device is counted, not sent again.
     check: "Check the device named and put it right."
   - blueprint: critical_watchdog
-    severity: P2
+    severity: P1  # a critical device that stopped answering (a lock, an access point, a leak sensor): owner and FM (owner, 2026-11-26)
     cooldown_min: 240  # How long after an alert of a device that stopped answering a repeat on the same device is counted, not sent again.
     check: "Power and network of the device named, until it is back."
   - blueprint: critical_schedule

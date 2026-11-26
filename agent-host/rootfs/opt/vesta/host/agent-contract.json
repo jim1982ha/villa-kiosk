@@ -849,7 +849,7 @@
       "description": "On-site view: device health, batteries, what needs attention.",
       "formerLabels": ["Facility manager"],
       "reads": {
-        "domains": ["light", "climate", "lock", "camera", "cover", "fan", "binary_sensor", "sensor", "media_player", "switch", "input_boolean", "assist_satellite", "sun", "scene", "weather"],
+        "domains": ["light", "climate", "lock", "camera", "cover", "fan", "binary_sensor", "sensor", "media_player", "switch", "input_boolean", "assist_satellite", "sun", "scene", "weather", "image"],
         "deniedTypes": [],
         "categories": "all",
         "people": false
