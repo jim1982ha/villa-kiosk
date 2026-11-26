@@ -1,3 +1,9 @@
+## 2.496.912
+
+- **Alert buttons say the same words in VESTA UI and on Telegram.** "Done", "Not a problem", "Open Ticket" and "Need
+  help" are now read from the file VESTA UI and the VESTA Agent share, as are the "To:" and "Status:" words VESTA UI
+  reads a villa message by. Nothing changes on screen today; a word changed later changes in both places at once.
+
 ## 2.496.911
 
 - **Pictures from the villa's system open in the camera window.** A picture the villa's system keeps, such as a
