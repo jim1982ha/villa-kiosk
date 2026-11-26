@@ -1062,6 +1062,17 @@ still off; an investigation calling a sensor with no value "stopped reporting").
   read-again: `awaiting`, `read_due`, `read_again`; THE reopening: `reopened`, `came_back`, `not_over`, dropping
   `RUN_NOTES` whichever way; the watch's end: `watches_over`), every moment read aware (`_at`, `moment_key`). The desk
   dispatches on the verdict and keeps every word; the Cockpit's reopen goes through `reopened`.
+- **A person's close: `vesta_shared/close_kind.py`; where an alert's life stands: `alert_watch.stage` (architecture
+  review, 2026-11-26).** Done, No action needed (the Cockpit's) and Not a problem are three `Close` kinds, each saying
+  its promise once: `read_again` (read again after the desk's wait, watched as every close) and `holds` (held while
+  the problem lasts: never watched, repeats recorded only, its Automation told to go quiet, its task NOT_A_PROBLEM).
+  Telegram's and the VESTA UI's buttons hand over `of_button`, the Cockpit's steps `of_step` (`kiosk.gestures`'
+  `close`); `alert_watch.close(by=)`, `Problems.close_incident(by=)`, `person_done(kind=)`, `closed_in_kiosk(kind=)`,
+  `message_format.done_in` and `kiosk_words.closed` take the kind (before: `lasting=` here, `read_again=` there, a
+  `nothing` flag the reply's words never read). `stage` answers OPEN_NOW, CLEARING, AWAITING_READ, HELD, WATCHED or
+  OVER; `closes_at` and `watch_decided` are the faults' and the desk's readings of those notes (no reader outside
+  opens Notes.CLOSES_AT, WATCH_TERMS or WATCH_MINUTES). The watch's end has no "still there" words: a held close is
+  never watched. Tests: `test_close_kinds.py` presses each kind from each place.
 - **When a sensor really last reported: `vesta_shared/offline.reported_since`**, beside `held_since`: its
   last_reported when that moved alone (a real report of the same value), else since when it really holds its state,
   one history read for all of them. The silence check (`nightly.silent_findings`, read again by recheck.py every 5
@@ -1237,7 +1248,8 @@ where a list named no chat (and, round 15, for approvals): two lists of the same
 - **Where a button was pressed is kept** (card 2): note_press records `place`; the Kiosk card's story says "on the
   tablet" (message_format.ON_PLACE, the one place word).
 - Not done: the Cockpit's close still says no watch (its watch words are the desk's, words.yaml; the Cockpit close is
-  the engine's), and card 4, one "kind of close" owning Done / Not a problem, waits for a third kind.
+  the engine's), and card 4, one "kind of close" owning Done / Not a problem, waits for a third kind (done
+  2026-11-26, `close_kind`: the third is the Cockpit's No action needed).
 
 ## What a result recorded, every hand-over, endings by standing, the tablet's language, a close's own line (architecture review 22, 2026-11-05, 0.12.455)
 

@@ -30,6 +30,7 @@ from .messaging import headline, incident_tag, problem_title_chars
 from .store import Incident, Notes, Store, notes_of
 from . import alert_watch, kiosk_words, maintenance, skill_words, visit_state
 from . import message_format as mf
+from . import close_kind as CK
 from .help_link import HelpLink
 from .timeutil import moment
 
@@ -278,20 +279,20 @@ class Problems:
     # and to agree with source_gone() on which states end a Problem. The state decides here, once; the callers get
     # back the fault actions to carry out.
     def close_incident(self, iid: int, state: str, now_iso: str, note: str = "", who: str | None = None, *,
-                       person: str | None = None, can_come_back: bool = True, terms: dict | None = None,
-                       lasting: bool = False, **fields) -> list[dict]:
-        """The incident ends in `state` (closed now), with the watch that follows (alert_watch.close: `person` — a
-        person closed it, as the desk's read-again says it; `can_come_back`; `terms` — the desk's, else those it
+                       by: CK.Close | None = None, person: str | None = None, can_come_back: bool = True,
+                       terms: dict | None = None, **fields) -> list[dict]:
+        """The incident ends in `state` (closed now), with the watch that follows (alert_watch.close: `by` — the kind of
+        a person's close, `person` the words its read-again says; `can_come_back`; `terms` — the desk's, else those it
         carries). When that state ends its Problem (Incident.ANSWERED_OR_CLEARED) its open task closes too — done by a
         person, or cleared — its close saying `note`, by `who` when a person did it (review 29: a Telegram Done showed
         "resolved … by VESTA Agent" on the card). Returns a script's `actions` for it: [result.faults_changed()] when a
         task moved (result.moved)."""
-        alert_watch.close(self.store, iid, state, now_iso, person=person, can_come_back=can_come_back, t=terms,
-                          lasting=lasting, **fields)
-        last = self.store.last_task(f"incident:{int(iid)}") if lasting else None
+        alert_watch.close(self.store, iid, state, now_iso, by=by, person=person, can_come_back=can_come_back, t=terms,
+                          **fields)
+        last = self.store.last_task(f"incident:{int(iid)}") if by and by.holds else None
         if last and last["status"] == "open":
-            # "Not a problem while it lasts" (`lasting`) pressed on Telegram or the tablet: its task closes as the
-            # Cockpit's does (NOT_A_PROBLEM), never read again while the problem lasts
+            # a close that holds while the problem lasts (Not a problem) pressed on Telegram or the VESTA UI: its task
+            # closes as the Cockpit's does (NOT_A_PROBLEM), never read again while the problem lasts
             self.close(last["id"], NOT_A_PROBLEM, note, who)
             moved = [last["id"]]
         else:
@@ -305,31 +306,31 @@ class Problems:
         """The alerts standing for a fault's Need help (vesta_shared.help_link)."""
         return HelpLink(self)
 
-    def person_done(self, iid: int, place: str, *, who: str | None = None, at: str | None = None, said=None,
-                    person: str | None = None, terms: dict | None = None, read_again: bool = True) -> list[dict]:
-        """A person's Done on alert `iid`, wherever it was given (`place`: message_format ON_TELEGRAM, ON_TABLET — the
+    def person_done(self, iid: int, place: str, *, kind: CK.Close = CK.DONE, who: str | None = None,
+                    at: str | None = None, said=None, person: str | None = None,
+                    terms: dict | None = None) -> list[dict]:
+        """A person's close of alert `iid` (`kind`: close_kind's Done, No action needed or Not a problem, each with its
+        promise), wherever it was given (`place`: message_format ON_TELEGRAM, ON_TABLET — the
         tablet's notice — or IN_COCKPIT, the card; `at`: when, now when not said): the one close of an alert by a
         person, read again by the desk (alert_watch.close: `person`, `said` the line it says again — Words for the
         Cockpit's), its reply and its fault's close note the place's words (message_format.done_in: "Done on Telegram
         (JM)"). From Telegram or the tablet its task closes as a Done (close_incident); in the Cockpit the task closed
         already (closed_in_kiosk), and the desk tells it (Notes.KIOSK_CLOSED: every chat's line, with its watch).
-        `read_again` False: "Not a problem while it lasts", the desk does not read it again (its watch for the alert
-        coming back stays), and its rule's repeats while it lasts are recorded only (alert_watch.lasting). Returns a script's `actions` (result.moved).
+        Returns a script's `actions` (result.moved).
 
         ⚠️ ONE DONE, ONE ENTRY (architecture review, 2026-10-30 evening: three closes of an alert each wrote their own
         words — the reports read "Done", "Done (Closed in the Cockpit)" and "Done (Done in the Cockpit)" for one press)."""
-        words = mf.done_in(place, who, lasting=not read_again)
+        words = mf.done_in(place, who, kind)
         when = moment(at)
         now_iso = when.isoformat() if when else self.store.now()
         if place == mf.IN_COCKPIT:
-            alert_watch.close(self.store, iid, Incident.DONE, now_iso, t=terms, lasting=not read_again,
-                              person=kiosk_words.stored(said or words) if read_again else None, reply=words)
+            alert_watch.close(self.store, iid, Incident.DONE, now_iso, t=terms, by=kind,
+                              person=kiosk_words.stored(said or words), reply=words)
             # told by the desk, with the watch this close wrote (Notes.KIOSK_CLOSED: architecture review 23, card 1)
             self.store.note(iid, {Notes.KIOSK_CLOSED: kiosk_words.stored(said or words)})
             return []
-        return self.close_incident(iid, Incident.DONE, now_iso, f"{words}.", who=who, reply=words,
-                                   person=(person or words) if read_again else None, terms=terms,
-                                   lasting=not read_again)
+        return self.close_incident(iid, Incident.DONE, now_iso, f"{words}.", who=who, reply=words, by=kind,
+                                   person=person or words, terms=terms)
 
     def close_finding(self, finding: dict, day: str, note: str = "") -> list[dict]:
         """The night check no longer sees a finding: it closes, its task is cleared (its Kiosk fault follows: the
@@ -593,25 +594,25 @@ class Problems:
         return last["id"]
 
     def closed_in_kiosk(self, task_id: int, said=None, at: str | None = None, who: str | None = None,
-                        lasting: bool = False) -> int | None:
+                        kind: CK.Close = CK.DONE) -> int | None:
         """A person closed the task's fault in the VESTA Kiosk: the task closes, and so does the incident
         it came from (the alert desk stops chasing it). Returns that incident's id, for its messages. `said`: who and
         when, as kiosk_words.closed writes it — the desk's check after it says it again (review 29: "Closed in the
         Kiosk, but …" had lost the person). `at`: when the Kiosk recorded the close (its resolvedAt) — the incident
         closes then, so the desk's watch counts from the person's close, not from when the agent read it (up to a
         Kiosk read later; owner 2026-10-23: the card says "VESTA confirms by …" counted from the close). `who`: the
-        person (the alert's reply, message_format.done_in). `lasting`: closed as "Not a problem while it lasts" — the
-        close holds while the problem lasts: no read again of the alert, no "still there" of a finding (NOT_A_PROBLEM)."""
+        person (the alert's reply, message_format.done_in). `kind`: the kind of close pressed (close_kind) — one that
+        holds (Not a problem) is no read again of the alert, no "still there" of a finding (NOT_A_PROBLEM)."""
         task = self.store.task(task_id)
         # ⚠️ THE PERSON'S CLOSE, KEPT (architecture review 23, card 6): who, when the Kiosk recorded it and its words —
         # a night-check fault read still bad after it said "Done in the Cockpit on <the read's time>, but still there"
         # with no one, and its wait counted from when the agent read the close
-        self.close(task_id, NOT_A_PROBLEM if lasting else CLOSED_IN_KIOSK, str(said or ""), who, at)
-        kind, sid = self.source_of(task)
+        self.close(task_id, NOT_A_PROBLEM if kind.holds else CLOSED_IN_KIOSK, str(said or ""), who, at)
+        src, sid = self.source_of(task)
         # a Done in the Kiosk on a fault whose Need help the owner was asked about: the alert standing for it closes too
-        if kind != "incident" and (standing := self.help.standing(HelpLink.of_task(task_id))):
-            kind, sid = "incident", standing
-        if kind == "incident" and sid:
+        if src != "incident" and (standing := self.help.standing(HelpLink.of_task(task_id))):
+            src, sid = "incident", standing
+        if src == "incident" and sid:
             inc = self.store.incident(sid)
             if inc and not inc.get("closed_at"):
                 # ⚠️ A DONE IS A DONE, WHEREVER IT IS GIVEN (architecture review 24): closed in the Kiosk, a door fault
@@ -619,7 +620,7 @@ class Problems:
                 # desk reads it again once (quiet_after_done), when its rule names its states
                 # `said` kept in every language it knows (kiosk_words.stored, in person_done): the desk's check after
                 # it says it in each chat's (architecture review O); its watch from the person's close
-                self.person_done(sid, mf.IN_COCKPIT, who=who, at=at, said=said, read_again=not lasting)
+                self.person_done(sid, mf.IN_COCKPIT, kind=kind, who=who, at=at, said=said)
                 return sid
         return None
 
@@ -873,7 +874,7 @@ class Problems:
         words = d.get("since_words")
         pattern = title.replace(words, "{since}", 1) if d.get("since") and words and words in title else None
         # when the desk closes it if it stays over (Notes.CLOSES_AT, owner 2026-10-21): the card's "closes at about"
-        closes = notes_of(self.store.incident(sid)).get(Notes.CLOSES_AT) if kind == "incident" else None
+        closes = alert_watch.closes_at(self.store.incident(sid)) if kind == "incident" else None
         confirms_by = self.confirms_by(task, next_night)
         return {"open": task.get("status") == "open", "title": title, "closes_at": closes or None,
                 "confirms_by": confirms_by,
@@ -930,8 +931,7 @@ class Problems:
         for an alert a person closed whose desk's terms are not on it yet (alert_watch.rewatch writes them)."""
         if kind != "incident":
             return True
-        p = notes_of(self.store.incident(sid))
-        return not alert_watch.awaiting_read(self.store.incident(sid)) or bool(p.get(Notes.WATCH_TERMS) or p.get(Notes.WATCH_MINUTES))
+        return alert_watch.watch_decided(self.store.incident(sid))
 
     def confirms_by(self, task: dict, next_night: Callable[[datetime], datetime | None] | None = None,
                     now: datetime | None = None) -> str | None:
@@ -955,7 +955,7 @@ class Problems:
             until = alert_watch.until(inc)
             if until is None:
                 return None
-            pending = alert_watch.awaiting_read(inc)
+            pending = alert_watch.stage(inc, now) == alert_watch.AWAITING_READ
         elif kind == "finding":
             if task.get("status") == NOT_A_PROBLEM:
                 return None                      # known to last: nothing is watched, the card goes to Closed

@@ -10,6 +10,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from vesta_shared import alert_watch as W
+from vesta_shared.close_kind import DONE, NOT_A_PROBLEM
 from vesta_shared.problems import Problems
 from vesta_shared.store import Incident, Store
 
@@ -35,11 +36,11 @@ def opened(store: Store, at=T0, run=1) -> int:
 
 
 def not_a_problem(store: Store, iid: int, at=T0) -> None:
-    W.close(store, iid, Incident.DONE, at.isoformat(), lasting=True, reply="Not a problem on Telegram (JM)")
+    W.close(store, iid, Incident.DONE, at.isoformat(), by=NOT_A_PROBLEM, reply="Not a problem on Telegram (JM)")
 
 
 def done(store: Store, iid: int, at=T0) -> None:
-    W.close(store, iid, Incident.DONE, at.isoformat(), person="Done (JM)", reply="Done on Telegram (JM)")
+    W.close(store, iid, Incident.DONE, at.isoformat(), by=DONE, person="Done (JM)", reply="Done on Telegram (JM)")
 
 
 def cleared(store: Store, iid: int, at=T0) -> None:
@@ -154,7 +155,7 @@ def test_a_cockpit_reopen_ends_not_a_problem(tmp_path):
     pb = Problems(store)
     iid = opened(store)
     task, _ = pb.reopen_task("incident", iid, RULE, DOOR, "Door unlocked")
-    pb.close_incident(iid, Incident.DONE, T0.isoformat(), "Not a problem on Telegram (JM).", lasting=True, terms=TERMS)
+    pb.close_incident(iid, Incident.DONE, T0.isoformat(), "Not a problem on Telegram (JM).", by=NOT_A_PROBLEM, terms=TERMS)
     assert verdict(store, event(), T0 + timedelta(minutes=5)) == (W.LASTING, iid)
     # a person reopens its fault in the Cockpit: open again, the problem no longer accepted
     assert pb.reopened_in_kiosk(task, by="JM") == iid

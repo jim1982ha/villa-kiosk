@@ -26,7 +26,7 @@ from datetime import datetime, timedelta, timezone
 
 import aiohttp
 
-from vesta_shared import agreement, profiles
+from vesta_shared import agreement, close_kind, profiles
 from vesta_shared.ha_client import error_short_chars
 from vesta_shared.messaging import problem_title_chars
 from vesta_shared.limits import limit
@@ -240,7 +240,8 @@ CLOSE, REOPEN, TAKE, ASK_HELP = "close", "reopen", "take", "help"
 
 
 def gestures(ups: list[dict]) -> list[dict]:
-    """A person's presses on a fault's card, oldest first: {kind (CLOSE, REOPEN, TAKE, ASK_HELP), at, by, lasting} — a
+    """A person's presses on a fault's card, oldest first: {kind (CLOSE, REOPEN, TAKE, ASK_HELP), at, by, close (a
+    close's kind, close_kind; None for any other press)} — a
     close is a person's step that RESOLVED it (the agreement's status changes: never a rename or a Telegram line written
     after), a reopening their "Reopen fault", a take-on the agreement's takenStep, a help their Need help. The agent's
     own steps are never a person's press. Pure.
@@ -265,11 +266,10 @@ def gestures(ups: list[dict]) -> list[dict]:
             continue
         # who: the name typed on the step, else its profile in today's words (profiles.step_by); a help names the profile
         by = str((profiles.step_by(u) or u.get("who")) if kind == ASK_HELP else (u.get("who") or profiles.step_by(u)) or "")
-        lasting = bool(u.get("lasting")) and kind == CLOSE
-        # `nothing`: "No action needed", a person's close with no work done (the agreement's cleared step)
+        # a close's kind (close_kind): "Not a problem", "No action needed" (the agreement's cleared step) or a Done
+        close = close_kind.of_step(bool(u.get("lasting")), cleared_step(u)) if kind == CLOSE else None
         out.append((moment(u.get("at")) or NEVER, i, {"kind": kind, "at": str(u.get("at") or ""), "by": by,
-                                                    "lasting": lasting,
-                                                    "nothing": kind == CLOSE and not lasting and cleared_step(u)}))
+                                                    "close": close}))
     return [g for *_, g in sorted(out, key=lambda x: (x[0], x[1]))]
 
 

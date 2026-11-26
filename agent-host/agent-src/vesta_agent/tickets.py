@@ -326,16 +326,16 @@ class Tickets:
             # who and when, as a button's footer says it (owner, 2026-10-10): the Kiosk's own record of the close, told
             # by the alert desk in each chat's language with the watch it wrote (Notes.KIOSK_CLOSED; architecture review
             # 23, card 1: told here, it said no watch and read "(closed)")
-            said = kiosk_words.closed(by, at, self.timezone, lasting=g["lasting"], nothing=bool(g.get("nothing")))
+            said = kiosk_words.closed(by, at, self.timezone, kind=g["close"])
             if task and task["status"] == "open" and not before(at, task.get("reopened_at")):
-                iid = problems.closed_in_kiosk(task["id"], said, at=at, who=by or None, lasting=g["lasting"])
+                iid = problems.closed_in_kiosk(task["id"], said, at=at, who=by or None, kind=g["close"])
                 log.info("Kiosk fault %s closed by a person: its task closed with it", uid)
                 return int(bool(iid))
             if not uid.startswith(MINE) and (iid := link.standing(link.of_ticket(uid))):
                 # a person closed their own ticket in the Kiosk: the alert standing for its Need help closes, as their
                 # Done in the Cockpit — or their "Not a problem" (architecture review 23, card 2: said "Done" and read
                 # again)
-                problems.person_done(iid, IN_COCKPIT, who=by or None, at=at, said=said, read_again=not g["lasting"])
+                problems.person_done(iid, IN_COCKPIT, kind=g["close"], who=by or None, at=at, said=said)
                 return 1
         elif kind == REOPEN:
             # ⚠️ A PERSON'S REOPENING IS THEIRS (architecture review 25), WHATEVER THE FAULT'S AGE (review 29): its task

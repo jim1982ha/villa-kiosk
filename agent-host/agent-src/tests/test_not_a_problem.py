@@ -15,7 +15,7 @@ from datetime import datetime, timedelta, timezone
 from ha_fake import FakeHA
 from helpers import STARTER_SKILLS
 from vesta_agent import kiosk
-from vesta_shared import alert_watch
+from vesta_shared import alert_watch, close_kind
 from vesta_shared.problems import CLOSED_IN_KIOSK, NOT_A_PROBLEM, Problems
 from vesta_shared.store import Store
 
@@ -69,7 +69,7 @@ def _finding(pb: Problems):
 def test_a_close_that_lasts_is_never_read_again_still_there(tmp_path):
     pb = Problems(Store(str(tmp_path / "s.sqlite")))
     fid, tid = _finding(pb)
-    pb.closed_in_kiosk(tid, lasting=True)
+    pb.closed_in_kiosk(tid, kind=close_kind.NOT_A_PROBLEM)
     assert pb.store.task(tid)["status"] == NOT_A_PROBLEM
     later = (datetime.now(timezone.utc) + timedelta(hours=2)).isoformat()
     pb.seen(fid, later, 60)                                        # read still bad well past the settle time
@@ -91,7 +91,7 @@ def test_an_alert_closed_as_not_a_problem_is_not_read_again(tmp_path):
     iid = pb.store.new_incident("k", "automation.example_door", "lock.example_door", "P2", {"message": "Door open"})
     pb.store.update_incident(iid, state="asked")
     tid, _ = pb.open_task("incident", iid, "automation.example_door", "lock.example_door", "Door open")
-    assert pb.closed_in_kiosk(tid, lasting=True) == iid
+    assert pb.closed_in_kiosk(tid, kind=close_kind.NOT_A_PROBLEM) == iid
     assert pb.store.task(tid)["status"] == NOT_A_PROBLEM and not alert_watch.awaiting_read(pb.store.incident(iid))
     other = pb.store.new_incident("k2", "automation.example_gate", "lock.example_gate", "P2", {"message": "Gate open"})
     pb.store.update_incident(other, state="asked")
@@ -105,4 +105,5 @@ def test_the_kiosk_close_says_it_lasts():
     held = kiosk.fault_of({"id": "va-1", "title": "x", "status": "resolved", "resolvedAt": step["at"], "updates": [step]})
     plain = kiosk.fault_of({"id": "va-2", "title": "x", "status": "resolved", "resolvedAt": step["at"],
                             "updates": [{**step, "lasting": None}]})
-    assert [g["lasting"] for g in held["gestures"]] == [True] and [g["lasting"] for g in plain["gestures"]] == [False]
+    assert [g["close"] for g in held["gestures"]] == [close_kind.NOT_A_PROBLEM]
+    assert [g["close"] for g in plain["gestures"]] == [close_kind.NOTHING]       # a cleared step: No action needed

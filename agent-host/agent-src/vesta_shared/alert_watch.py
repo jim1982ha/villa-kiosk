@@ -3,7 +3,9 @@ to (`standing`: open, accepted while it lasts, back within its watch, closed bef
 every note its life writes — its open run's clearing (clear_since, silent_told), THE close and the watch that follows
 (how a close carries or drops it, until when it lasts, whether an alert now reopens a closed one, whether its watch is
 over), its "Not a problem" while it lasts, the read-again after a person's close, and THE reopening that ends a run's
-notes. The desk dispatches on the verdict and keeps every word.
+notes — and where its life stands now (`stage`), the one reading of those notes for every reader outside. A person's
+close comes with its kind (close_kind), which says what it promises. The desk dispatches on the verdict and keeps
+every word.
 
 ⚠️ FIVE LOOKUPS, ONE ANSWER (architecture review, 2026-11-20): the desk found an event's incident five ways, each its own
 scan — by Home Assistant's run (with and without a late window, its moments parsed naive), open by key, back by a scan
@@ -28,6 +30,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
+from .close_kind import Close
 from .limits import limit
 from .store import Notes, Store, alerted_states, notes_of
 from .timeutil import moment
@@ -270,30 +273,31 @@ def length(t: dict | None, read_again: bool) -> float:
     return max(reopen, float(t.get("read_again_minutes") or 0) if read_again else 0.0)
 
 
-def close(store: Store, iid: int, state: str, now_iso: str, *, person: str | None = None,
-          can_come_back: bool = True, t: dict | None = None, lasting: bool = False, **fields) -> None:
-    """THE close of an alert (Problems.close_incident, Problems.closed_in_kiosk): incident `iid` ends in `state` at
-    `now_iso`, its other columns `fields`, and carries the watch that follows — or none. `person`: a person closed it
-    (a Done, the Cockpit's Close), said as the desk's read-again says it ("Done (JM)"): the desk reads it again after its
-    wait. `can_come_back`: False for an end that cannot come back as this number (its automation gone; the villa back
-    online, whose next outage is a new alert) — no watch. `t`: the terms (the desk's); else those carried on it.
-    `lasting`: a person's "Not a problem", which holds while the problem lasts (Notes.LASTING: `lasting`).
+def close(store: Store, iid: int, state: str, now_iso: str, *, by: Close | None = None, person: str | None = None,
+          can_come_back: bool = True, t: dict | None = None, **fields) -> None:
+    """THE close of an alert (Problems.close_incident, Problems.person_done): incident `iid` ends in `state` at
+    `now_iso`, its other columns `fields`, and carries the watch that follows — or none. `by`: the kind of a person's
+    close (close_kind), None for the desk's or the villa's: one that reads again (a Done, No action needed) is read
+    again after the desk's wait, `person` the words that read-again says ("Done (JM)"); one that holds (Not a problem)
+    holds while the problem lasts (Notes.LASTING: `lasting`). `can_come_back`: False for an end that cannot come back
+    as this number (its automation gone; the villa back online, whose next outage is a new alert) — no watch. `t`: the
+    terms (the desk's); else those carried on it.
 
     ⚠️ FORMATS OUTLIVE THEIR WRITER: an incident an older desk carried only a length for (Notes.WATCH_MINUTES, before
     0.6.350) keeps that length."""
     p = notes_of(store.incident(iid))
     t = t or p.get(Notes.WATCH_TERMS)
+    holds, reads = bool(by and by.holds), bool(by and by.read_again)
     minutes = None
     # ⚠️ NOT A PROBLEM IS CLOSED AT ONCE (owner, 2026-11-21, #210: "Shouldn't it become closed directly?"): the
     # Cockpit put its fault under Closed while Telegram said "(watch)" for 1h. Its repeats are the problem lasting
-    # (`lasting`), never a coming back: no watch
-    if can_come_back and not lasting:
-        minutes = length(t, person is not None and can_read_again(store.incident(iid))) if t \
-            else p.get(Notes.WATCH_MINUTES)
+    # (`holds`), never a coming back: no watch
+    if can_come_back and not holds:
+        minutes = length(t, reads and can_read_again(store.incident(iid))) if t else p.get(Notes.WATCH_MINUTES)
     keep = {Notes.WATCH_MINUTES: minutes} if minutes else {}
-    held = {Notes.LASTING: {"since": now_iso, "seen": now_iso}} if lasting else {}
-    store.note(iid, {**keep, **held, **({CHECK: person} if person is not None else {})},
-               drop=(() if minutes else (Notes.WATCH_MINUTES,)) + (() if lasting else (Notes.LASTING,)),
+    held = {Notes.LASTING: {"since": now_iso, "seen": now_iso}} if holds else {}
+    store.note(iid, {**keep, **held, **({CHECK: person or str(by)} if reads else {})},
+               drop=(() if minutes else (Notes.WATCH_MINUTES,)) + (() if holds else (Notes.LASTING,)),
                state=state, closed_at=now_iso, **fields)
 
 
@@ -425,6 +429,46 @@ def not_over(store: Store, iid: int) -> dict:
     """Closed `iid` read again still there: the same run open again, Home Assistant no longer watching it (the desk does:
     ABANDONED). Its notes as written."""
     return reopened(store, iid, {ABANDONED: True}, closed_at=None, reply=None)
+
+
+# ------------------------------------------------------------------------------------------------ where its life stands
+#: What `stage` answers. Open: OPEN, or CLEARING — what it claims reads over, it closes at `closes_at` if it stays so
+OPEN_NOW, CLEARING = "open", "clearing"
+#: Closed by a person and not read again yet (a Done, No action needed): the desk reads it after its wait
+AWAITING_READ = "awaiting_read"
+#: Closed "Not a problem" and its problem still lasts: its repeats are recorded only
+HELD = "held"
+#: Closed and watched: back within its watch, it reopens under its own number
+WATCHED = "watched"
+#: Closed for good: not watched, its watch's last word said, or a watch nobody ended long past
+OVER = "over"
+
+
+def stage(inc, now: datetime) -> str:
+    """Where alert `inc`'s life stands at `now` — ONE answer (architecture review, 2026-11-26: the faults list, the
+    fault card and the desk each worked it out from the notes this module writes): OPEN_NOW, CLEARING, AWAITING_READ,
+    HELD, WATCHED or OVER. A person's close waiting for its read-again is AWAITING_READ, whatever its watch."""
+    inc = dict(inc) if inc is not None else {}
+    if not inc.get("closed_at"):
+        return CLEARING if closes_at(inc) else OPEN_NOW
+    if lasting(inc, now):
+        return HELD
+    if awaiting_read(inc):
+        return AWAITING_READ
+    return WATCHED if watching(inc, now) else OVER
+
+
+def closes_at(inc) -> str | None:
+    """When open alert `inc` closes if what it claims stays over (the Cockpit card's "closes at about"), as the desk's
+    read-again wrote it (clearing, clears_at), ISO; None when nobody can say."""
+    return notes_of(dict(inc) if inc is not None else {}).get(Notes.CLOSES_AT) or None
+
+
+def watch_decided(inc) -> bool:
+    """Is closed `inc`'s watch decided — is "not watched" an answer, not "not known yet"? Not for a person's close
+    waiting for its read-again before the desk carried its terms on it (rewatch writes them at its next tick)."""
+    p = notes_of(dict(inc) if inc is not None else {})
+    return not awaiting_read(inc) or bool(p.get(Notes.WATCH_TERMS) or p.get(Notes.WATCH_MINUTES))
 
 
 # ---------------------------------------------------------------------------------------------------- the watch's end

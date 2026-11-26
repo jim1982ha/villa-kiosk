@@ -32,6 +32,7 @@ import re
 from typing import NamedTuple
 
 from . import agreement, profiles
+from .close_kind import DONE, Close
 from .messaging import tg_len
 
 TO = "To: "
@@ -183,11 +184,16 @@ NOTHING_IN = {IN_COCKPIT: COCKPIT["nothing"]}
 TAKEN_IN = {ON_TELEGRAM: f"Ticket opened {ON_PLACE[ON_TELEGRAM]}", IN_COCKPIT: COCKPIT["taken"]}
 
 
-def done_in(place: str, who: str | None = None, lasting: bool = False) -> str:
-    """A person's Done as the reports and the fault's close name it: "Done on Telegram (JM)", "Done in the Cockpit (JM)"
-    — no full stop; "Done" alone for a place not known. `lasting`: their "Not a problem" (while it lasts: "Not a problem on
-    Telegram (JM)")."""
-    what = (LASTING_IN if lasting else DONE_IN).get(place, "Not a problem" if lasting else "Done")
+#: Each kind of close (close_kind, by its `words`) by place, and said alone where the place is not known
+CLOSE_IN = {"closed": (DONE_IN, "Done"), "lasting": (LASTING_IN, "Not a problem"), "nothing": (NOTHING_IN, "No action needed")}
+
+
+def done_in(place: str, who: str | None = None, kind: Close = DONE) -> str:
+    """A person's close as the reports and the fault's close name it: "Done on Telegram (JM)", "Done in the Cockpit (JM)"
+    — no full stop; "Done" alone for a place not known. `kind`: what was pressed (close_kind): "Not a problem on
+    Telegram (JM)", "No action needed in the Cockpit (JM)"."""
+    table, alone = CLOSE_IN[kind.words]
+    what = table.get(place, alone)
     return f"{what} ({who})" if who else what
 
 

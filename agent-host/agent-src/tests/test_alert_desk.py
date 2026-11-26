@@ -13,6 +13,7 @@ from helpers import PYTHONPATH, STARTER_SKILLS
 from villa_timeline import TimelineVilla
 from vesta_shared.store import Store
 from vesta_shared.problems import Problems
+from vesta_shared.close_kind import NOT_A_PROBLEM
 from vesta_shared import result as R
 
 spec = importlib.util.spec_from_file_location("desk", os.path.join(STARTER_SKILLS, "alert-desk", "scripts", "desk.py"))
@@ -419,7 +420,7 @@ def test_after_the_all_clear_of_a_problem_accepted_it_comes_back_as_a_new_alert(
 
 def test_not_a_problem_in_the_cockpit_holds_while_it_lasts_too(store):
     iid = desk.intake(store, event(), T0, occupancy_reader=lambda: "occupied")["incident_id"]
-    Problems(store).closed_in_kiosk(store.last_task(f"incident:{iid}")["id"], lasting=True,
+    Problems(store).closed_in_kiosk(store.last_task(f"incident:{iid}")["id"], kind=NOT_A_PROBLEM,
                                     at=(T0 + timedelta(minutes=7)).isoformat(), who="Owner")
     res = desk.intake(store, event(), T0 + timedelta(minutes=30), occupancy_reader=lambda: "occupied")
     assert res["decision"] == "lasting" and _quiet(res)
