@@ -210,8 +210,10 @@ export default function SummaryBar({ onOpenEntity, scenes }: Props) {
   // What this profile's lists cover — the SAME set the list a tile opens
   // shows (SummaryGroupPanel), so a guest's tile cannot count an off-map
   // device their list leaves out.
+  // Each PART of those devices (VillaDevices.hasPart): a tile counts lamps, locks and AC units, and three lamps on one
+  // wall switch are one device (owner, 2026-11-25: Patio2F Bottom on, the Lights tile "All Off").
   const villaDeviceSet = useMemo(
-    () => listedDevices(role, visibleDevices, mappedEntityIds), [role, visibleDevices, mappedEntityIds]);
+    () => listedDevices(role, { has: visibleDevices.hasPart }, mappedEntityIds), [role, visibleDevices, mappedEntityIds]);
 
   // The station the Weather tile opens — the same derivation the tile used.
   // ⚠️ STABLE WHILE THE STATION IS THE SAME. `visibleEntities` changes on every

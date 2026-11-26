@@ -16,7 +16,7 @@
 
 import type { Category, EntityMapping, EntityType } from "@/types/scene.types";
 import { ENTITY_DOMAINS } from "@/types/ha.types";
-import { domainOf } from "@/utils/entityDomain";
+import { domainOf, isPicture } from "@/utils/entityDomain";
 
 export type { EntityMapping, EntityType };
 
@@ -62,6 +62,7 @@ export function deviceTypeOf(entityId: string, drawn?: { type: EntityType } | nu
 }
 
 export function inferTypeFromEntityId(entityId: string): EntityType | null {
+  if (isPicture(entityId)) return "camera";
   const domain = domainOf(entityId);
   return (ENTITY_DOMAINS as readonly string[]).includes(domain) ? (domain as EntityType) : null;
 }

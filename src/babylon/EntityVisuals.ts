@@ -130,7 +130,9 @@ import { solveRoomZoom } from "./roomZoomSolver";
 import { RoomFocus } from "./roomFocus";
 import { PlacementCheck } from "./placementCheck";
 import { PlacementTelemetry, passSnapshot, placementReport, type PlacementReport } from "./placementReport";
-import { FanRigs } from "./fanRigs";
+import { fanAxle, FanRigs } from "./fanRigs";
+import { isCeilingFan } from "./fanSpin";
+import { LIGHT_POOL_RADIUS } from "./lightPlacement";
 import {
   PlacementPass, GROUP_OVERLAP_ALLOW_WIDTHS, BADGE_PLACEMENT, cardOf as passCardOf, cellMax, drawnCells,
   roomOfEntity, placementItems as passItems, glassScratch, viewportBudget, cellCapFor, drawableMaxOf,
@@ -1172,6 +1174,96 @@ export class EntityVisuals {
 
   mappedEntityIds(): string[] {
     return [...this.byEntity.keys()];
+  }
+
+  /** Every badge's anchor in the world with the floor it is drawn on (null: unstamped, drawn on every floor), for
+   *  the villa pictures' manifest (villaPictureCapture). Every badge the map has, whatever this profile hides: the
+   *  pictures are shared, and the picture view filters for the profile reading them. */
+  anchorSnapshot(): { id: string; x: number; y: number; z: number; floor: number | null }[] {
+    const out: { id: string; x: number; y: number; z: number; floor: number | null }[] = [];
+    for (const [id, lbl] of this.labels) {
+      lbl.anchor.computeWorldMatrix(true);
+      const p = lbl.anchor.getAbsolutePosition();
+      // the bound mesh first, as badgeEligible reads it (a fan's anchor sits on a container no floor is stamped on)
+      out.push({ id, x: p.x, y: p.y, z: p.z, floor: stampedFloor(this.byEntity.get(id)?.[0], lbl.anchor) ?? null });
+    }
+    return out;
+  }
+
+  /** Every lamp dark for a villa picture (villaPictureCapture): a lamp on when the picture was taken would stay lit
+   *  in it for good, while the picture view draws the live ones over it. The returned function lights them as they
+   *  are again (BulbSet.darkForPicture says how, without a shader recompiling). */
+  lampsOff(): () => void {
+    const back = this.bulbs.darkForPicture(this.lightEntityMeshes());
+    return () => { back(); this.requestRender(); };
+  }
+
+  /** Every cover in its open pose for a villa picture (villaPictureCapture): a curtain drawn when the picture was
+   *  taken would stay drawn in it for good, while the picture view draws the live ones over it. Returns, for each
+   *  cover with poses, where each of its other poses lies (the ground extents of its meshes, its floor), and the
+   *  function that puts every pose back as it was. */
+  coversOpen(): { back: () => void; poses: CoverPoseExtent[] } {
+    const was: [AbstractMesh, boolean][] = [];
+    const poses: CoverPoseExtent[] = [];
+    for (const [entityId, byWord] of this.meshVariants) {
+      if (!entityId.startsWith("cover.") || byWord.size < 2) continue;
+      const open = pickNearestVariant(orderVariantWords(byWord.keys()), "open", byWord.keys());
+      for (const [word, meshes] of byWord) {
+        if (word !== open && meshes.length) {
+          let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+          for (const m of meshes) {
+            m.computeWorldMatrix(true);
+            const b = m.getBoundingInfo().boundingBox;
+            minX = Math.min(minX, b.minimumWorld.x); maxX = Math.max(maxX, b.maximumWorld.x);
+            minZ = Math.min(minZ, b.minimumWorld.z); maxZ = Math.max(maxZ, b.maximumWorld.z);
+          }
+          poses.push({ id: entityId, word, floor: stampedFloor(meshes[0]) ?? null, minX, maxX, minZ, maxZ });
+        }
+        for (const m of meshes) { was.push([m, m.isVisible]); m.isVisible = word === open; }
+      }
+    }
+    return { poses, back: () => { for (const [m, v] of was) m.isVisible = v; this.requestRender(); } };
+  }
+
+  /** Where each lamp of every light is, for a villa picture (villaPictureCapture): the picture view lights each one
+   *  that is on with its bulb and its pool. The 3D view's own spots (BulbSet.lampSpots: a compact fixture's middle, a
+   *  strip's row of pools, each its share of the strip's light), so both views light a lamp at the same place. */
+  lampSpots(): LampSpot[] {
+    const lightOf = new Map<number, string>();
+    for (const [entityId, meshes] of this.byEntity) {
+      if (this.mapping.get(entityId)?.type === "light") for (const m of meshes) lightOf.set(m.uniqueId, entityId);
+    }
+    return this.bulbs.lampSpots().flatMap(({ mesh, x, z, scale }) => {
+      const id = lightOf.get(mesh.uniqueId);
+      return id ? [{ id, floor: stampedFloor(mesh) ?? null, x, z, r: LIGHT_POOL_RADIUS, s: scale }] : [];
+    });
+  }
+
+  /** Every ceiling fan hidden for a villa picture (villaPictureCapture): blades baked into it could never turn, so the
+   *  picture view draws them, turning while the fan is on (fanRigs.isCeilingFan: a ventilation fan stays in the
+   *  picture and never turns). Returns each one's circle (its blade tips seen from above, as fanRigs finds its axle)
+   *  and floor, and the function that shows them again. */
+  ceilingFansHidden(): { back: () => void; fans: CeilingFanCircle[] } {
+    const was: [AbstractMesh, boolean][] = [];
+    const fans: CeilingFanCircle[] = [];
+    for (const [entityId, meshes] of this.byEntity) {
+      if (this.mapping.get(entityId)?.type !== "fan" || !isCeilingFan(entityId) || !meshes.length) continue;
+      // ⚠️ ONE CIRCLE PER FAN, NOT PER ENTITY (owner, 2026-11-25: one entity drives the terrace's two fans, drawn as
+      // one big fan between them): each mesh is a fan, as fanRigs rigs each mesh on its own axle; meshes of one
+      // fixture (their circles' centres closer than the larger radius) are one fan
+      const circles: { x: number; z: number; r: number; floor: number | null }[] = [];
+      for (const m of meshes) {
+        // the axle the 3D view turns this mesh round (fanRigs.fanAxle)
+        const c = fanAxle(m);
+        if (!c) continue;
+        const same = circles.find((o) => Math.hypot(o.x - c.x, o.z - c.z) < Math.max(o.r, c.r));
+        if (same) Object.assign(same, { r: Math.max(same.r, c.r) });
+        else circles.push({ x: c.x, z: c.z, r: c.r, floor: stampedFloor(m) ?? null });
+      }
+      for (const c of circles) fans.push({ id: entityId, floor: c.floor, x: c.x, z: c.z, r: c.r });
+      for (const m of meshes) { was.push([m, m.isVisible]); m.isVisible = false; }
+    }
+    return { fans, back: () => { for (const [m, v] of was) m.isVisible = v; this.requestRender(); } };
   }
 
   /** Copy the cosmetic (non-structural) fields of every cached mapping across
@@ -5287,7 +5379,7 @@ export class EntityVisuals {
       c.displayName = model.displayName;
       c.roomNames = model.roomNames;
       c.lineRooms = model.lines.map((l) => ({ room: l.room, entityIds: l.entityIds }));
-      c.node.position.copyFrom(chip.centre);
+      c.node.position.set(chip.centre.x, chip.centre.y, chip.centre.z);
       // The chip's frame: always the resting one. No "something is on"
       // border (owner, 2026-11-14: no device badge has one) and never red:
       // whether the room is all right is the COUNT's job
@@ -5965,3 +6057,11 @@ export class EntityVisuals {
 
 
 }
+
+/** A cover pose's place on the ground (EntityVisuals.coversOpen): metres, the scene's x and z. */
+export interface CoverPoseExtent { id: string; word: string; floor: number | null; minX: number; maxX: number; minZ: number; maxZ: number }
+/** One lamp's spot on the ground (EntityVisuals.lampSpots): metres, the scene's x and z; `r` its pool's reach, `s`
+ *  its share of its fixture's light (a strip's pools share it). */
+export interface LampSpot { id: string; floor: number | null; x: number; z: number; r: number; s: number }
+/** A ceiling fan's circle on the ground (EntityVisuals.ceilingFansHidden): metres, the scene's x and z. */
+export interface CeilingFanCircle { id: string; floor: number | null; x: number; z: number; r: number }

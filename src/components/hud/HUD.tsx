@@ -31,8 +31,7 @@ import {
   // MapIcon, not Map: the bare name shadows the global Map constructor,
   // which this file also uses.
   Settings, Map as MapIcon, PersonStanding,
-  Minus, Plus, CircleHelp, TriangleAlert, Bot, Wrench, LayoutGrid, Power, Search,
-} from "lucide-react";
+  Minus, Plus, CircleHelp, TriangleAlert, Bot, Wrench, LayoutGrid, Power, Search } from "lucide-react";
 import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
 import InfoTip from "@/components/common/InfoTip";
@@ -119,6 +118,9 @@ interface Props {
   families?: ReadonlySet<Category> | null;
   /** Asks the Dashboard to open the villa's presence window (why it counts as empty or occupied). */
   onOpenPresence: () => void;
+  /** False on a device shown the villa pictures (deviceVerdict): no floor to switch (both are on screen), no
+   *  first-person view and no joystick. Absent: the 3D villa. */
+  has3d?: boolean;
 }
 
 function useClock(): string {
@@ -141,7 +143,7 @@ export default function HUD({
   doors, onOpenSettings, onMove,
   viewMode, onToggleViewMode,
   hasOverviewDefault, onApplyOverviewDefault, onSaveOverviewDefault,
-  onOpenCockpit, onAskVesta, onOpenCategory, onOpenPresence, onShowTips, onOpenSearch, families,
+  onOpenCockpit, onAskVesta, onOpenCategory, onOpenPresence, onShowTips, onOpenSearch, families, has3d = true,
 }: Props) {
   const { connection, haConfig } = useHA();
   const { config, update } = useConfig();
@@ -770,14 +772,14 @@ export default function HUD({
                 </div>
                 {/* Same view switch as the inline row's, immediately before
                     Settings so the pairing matches the desktop layout. */}
-                <button
+                {has3d && <button
                   role="menuitem"
                   className="hud-menu-item"
                   onClick={() => { setMenuOpen(false); onToggleViewMode(); }}
                 >
                   {viewMode === "overview" ? <PersonStanding size={18} /> : <MapIcon size={18} />}
                   <span>{viewMode === "overview" ? "First-person view" : "Bird's-eye view"}</span>
-                </button>
+                </button>}
                 {/* Settings, then Logout — the rows the desktop's account
                     menu holds too (accountRows). */}
                 {accountRows(() => setMenuOpen(false), false)}
@@ -812,7 +814,7 @@ export default function HUD({
           bar (kept free for the tiles + joystick) nor the top bar (already
           tight on a phone) had room for a clearly-labelled home. */}
       <div className="hud-left-col">
-        <div className="hud-stack">
+        {has3d && <div className="hud-stack">
           {availFloors.map((f) => (
             <Button
               key={f} on="map" lit={currentFloor === f || radial?.floor === f}
@@ -840,7 +842,7 @@ export default function HUD({
               query, the same breakpoints as .hud-right-inline). */}
           <span className="hud-stack-sep hud-view-btn" aria-hidden="true" />
           <ViewControls className="hud-view-btn" viewMode={viewMode} onToggleViewMode={onToggleViewMode} />
-        </div>
+        </div>}
         {/* Is the villa seen as empty or occupied — its own section, on every screen (owner, 2026-10-18) */}
         <PresenceTile onOpen={onOpenPresence} />
       </div>
@@ -849,7 +851,7 @@ export default function HUD({
         {/* Bottom-right: the first-person movement joystick — the ONLY thing
             left in this bar now that the view-mode toggle moved to the left
             column (see hud-left-col). */}
-        {viewMode === "first-person" && <VirtualJoystick onMove={onMove} />}
+        {has3d && viewMode === "first-person" && <VirtualJoystick onMove={onMove} />}
       </div>
     </>
   );

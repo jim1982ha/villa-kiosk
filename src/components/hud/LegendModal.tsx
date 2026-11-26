@@ -14,7 +14,7 @@ import { useResolvedTheme } from "@/hooks/useResolvedTheme";
 import { NOT_KEPT_COLOR, STATUS_COLOR } from "@/utils/stateColors";
 import { useConfig } from "@/config/ConfigContext";
 import { overviewKeyHelp } from "@/babylon/overviewKeys";
-import { healthPill } from "@/babylon/colors";
+import { healthPill } from "@/babylon/healthPill";
 import type { RoomHealth } from "@/babylon/summaryLook";
 import ModalFooter from "@/components/common/ModalFooter";
 import IconButton from "@/components/common/IconButton";

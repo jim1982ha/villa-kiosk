@@ -46,6 +46,7 @@ import { forgetBrowserModel } from "./localModel";
 import type { LoadedModelInfo } from "./modelInfo";
 import { fmtBytes } from "./modelUpload";
 import { fmtDuration } from "@/components/panels/chartUtils";
+import { deviceView } from "./deviceVerdict";
 
 /**
  * Above this size the model is not loaded: the "too heavy" screen says so,
@@ -84,14 +85,20 @@ export type ModelState =
   /** `addon`: the add-on's own answer for the model was an error (fix the add-on, not the file). */
   | { kind: "error"; code: string; message: string; addon: boolean };
 
+/** The "too heavy" screen's title. ⚠️ A SLOW UNPACK IS THE DEVICE, NOT THE FILE (owner, 2026-11-24: a TV gave up on
+ *  the villa's 28 MB model that a laptop opens in 4 s, and was told to export the model again): a model under the
+ *  size limit that is still unpacking is a device too slow for it, and no upload helps. */
+export function tooHeavyTitle(state: Extract<ModelState, { kind: "too-heavy" }>): string {
+  return state.slow ? "This device is too slow to show the 3D villa." : "This 3D model is too heavy to load.";
+}
+
 /** The "too heavy" screen's line: the model's size against the limit, or how
  *  long its unpack ran, both from their constants (modelLifecycle). */
 export function tooHeavyLine(state: Extract<ModelState, { kind: "too-heavy" }>): string {
   const size = state.bytes !== null ? fmtBytes(state.bytes) : null;
   if (state.slow) {
-    return size
-      ? `It is ${size}, and it was still unpacking after ${fmtDuration(MODEL_UNPACK_LIMIT_MS)}.`
-      : `It was still unpacking after ${fmtDuration(MODEL_UNPACK_LIMIT_MS)}.`;
+    return `It was still unpacking the villa's model${size ? ` (${size})` : ""} after ${fmtDuration(MODEL_UNPACK_LIMIT_MS)}. `
+      + "It opens on a faster device.";
   }
   return `It is ${size ?? "too big"}. The VESTA UI loads models up to ${fmtBytes(MODEL_TOO_HEAVY_BYTES)}.`;
 }
@@ -124,6 +131,9 @@ export interface ModelLifecycleDeps {
   wait(ms: number): Promise<void>;
   /** A one-shot timer; returns its cancel. */
   setTimer(fn: () => void, ms: number): () => void;
+  /** Whether this device shows the 3D villa at all (deviceVerdict): a device given the villa pictures never
+   *  downloads the model, whoever asks (the page's start, the profile screen, a sign-in). Absent: it does. */
+  shows3d?(): boolean;
 }
 
 /** What a load hands back to the canvas: on success what it needs for its
@@ -211,7 +221,7 @@ export function createModelLifecycle(deps: ModelLifecycleDeps): ModelLifecycle {
   const tooHeavy = (bytes: number | null) => bytes !== null && bytes > MODEL_TOO_HEAVY_BYTES;
 
   const prefetch = () => {
-    if (prefetching || started) return;
+    if (prefetching || started || deps.shows3d?.() === false) return;
     prefetching = true;
     void answer().then((got) => {
       if (!got.ok || !got.cfg.model_path || tooHeavy(sizeFromVersion(got.cfg.model_version))) return;
@@ -323,6 +333,8 @@ export function createModelLifecycle(deps: ModelLifecycleDeps): ModelLifecycle {
       return { ok: true, result, cfg, url, data, prefetched, kept };
     } catch (error) {
       if (stale()) return { ok: false, reason: "cancelled" };
+      // the unpack ended by the slow screen itself (BabylonCanvas frees the scene there): that screen stays
+      if (snap.state.kind === "too-heavy") return { ok: false, reason: "too-heavy" };
       const message = (error as Error)?.message ?? String(error);
       state({ kind: "error", code, message, addon: false });
       return { ok: false, reason: "error", code, error };
@@ -384,6 +396,7 @@ export const modelLifecycle: ModelLifecycle = createModelLifecycle({
   forgetBrowserModel,
   wait: (ms) => new Promise((r) => setTimeout(r, ms)),
   setTimer: (fn, ms) => { const t = setTimeout(fn, ms); return () => clearTimeout(t); },
+  shows3d: () => deviceView() === "3d",
 });
 
 /** The model's state, for a screen (re-renders on every change). */

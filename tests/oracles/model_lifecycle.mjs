@@ -3,7 +3,7 @@
 // download, no browser: what each screen shows, and that "replaced" reloads once. Owner, 2026-11-16: a 125 MB model
 // (geometry not compressed) left every screen on "Loading the villa…" for ever.
 import { ck, done } from "../consistency/check.mjs";
-const { createModelLifecycle, tooHeavyLine, MODEL_TOO_HEAVY_BYTES, MODEL_UNPACK_LIMIT_MS } =
+const { createModelLifecycle, tooHeavyLine, tooHeavyTitle, MODEL_TOO_HEAVY_BYTES, MODEL_UNPACK_LIMIT_MS } =
   await import("@/utils/modelLifecycle");
 
 const MB = 1_000_000;
@@ -14,7 +14,7 @@ const holding = (bytes, mtime = 0x6730a000) => ({
 
 /** An invented add-on and network. `answers`: what each ask of the add-on gets (the last one repeats). `bytes(url)`
  *  is what the download returns; `announce` the length it announces, when there is no version stamp. */
-function rig({ answers, announce = null, httpStatus = null }) {
+function rig({ answers, announce = null, httpStatus = null, shows3d }) {
   const asks = [], downloads = [], timers = [];
   const deps = {
     readAddonConfig: async () => {
@@ -34,6 +34,7 @@ function rig({ answers, announce = null, httpStatus = null }) {
     forgetBrowserModel: async () => {},
     wait: async () => {},
     setTimer: (fn, ms) => { const t = { fn, ms, live: true }; timers.push(t); return () => { t.live = false; }; },
+    ...(shows3d ? { shows3d } : {}),
   };
   const life = createModelLifecycle(deps);
   const seen = [];
@@ -101,10 +102,22 @@ console.log("\n  a model too heavy to load:");
   guard.fn();
   const s = r.life.snapshot().state;
   ck("  ...an unpack still running past it: the \"too heavy\" screen with the size, not the spinner",
-     s.kind === "too-heavy" && s.slow && s.bytes > 0 && /still unpacking/.test(tooHeavyLine(s)), s);
+     s.kind === "too-heavy" && s.slow && s.bytes > 0 && /still unpacking/.test(tooHeavyLine(s))
+     && /device is too slow/.test(tooHeavyTitle(s)), s);
   finish({ meshes: 1 });
   await p;
   ck("  ...and when it does finish after all, the villa is shown", r.life.snapshot().state.kind === "ready");
+}
+{
+  const r = rig({ answers: [ok(holding(20 * MB))] });
+  let fail;
+  const p = r.life.load(() => new Promise((_, rej) => { fail = rej; }));
+  await new Promise((res) => setTimeout(res, 0));
+  r.timers.find((t) => t.live).fn();
+  fail(new Error("Scene has been disposed"));
+  const got = await p;
+  ck("an unpack stopped by the slow screen (its scene freed): that screen stays, no error screen",
+     !got.ok && got.reason === "too-heavy" && r.life.snapshot().state.kind === "too-heavy", r.life.snapshot().state);
 }
 
 console.log("\n  the add-on unreachable, then answering:");
@@ -150,6 +163,17 @@ console.log("\n  the background download started on the profile screen:");
   r.life.prefetch();
   ck("the load uses it (one download, not two), and a later prefetch starts none",
      got.ok && got.prefetched && r.downloads.length === 1, r.downloads);
+}
+
+{
+  // owner, 2026-11-24: a TV took 74s to open the villa; a device given the villa pictures never downloads the model
+  const r = rig({ answers: [ok(holding(20 * MB))], shows3d: () => false });
+  r.life.prefetch();
+  await new Promise((res) => setTimeout(res, 0));
+  r.life.prefetch();
+  await new Promise((res) => setTimeout(res, 0));
+  ck("a device shown the villa pictures: no prefetch asks the add-on or downloads the model, however often it is asked",
+     r.downloads.length === 0 && r.asks.length === 0, { downloads: r.downloads, asks: r.asks.length });
 }
 
 done("The villa model's lifecycle: ready, none, too heavy with its size, reconnecting, one reload per replacement");

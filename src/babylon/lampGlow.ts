@@ -173,6 +173,7 @@ export class LampGlowState {
   /** Write the lamps to show — more than fit are merged (fitLamps). Returns
    *  whether anything changed. Pure apart from the arrays it fills. */
   set(lamps: readonly GlowLamp[]): boolean {
+    if (this.suspended) return false;
     const on = lamps.filter((l) => l.amount > 0 && l.radius > 0);
     // Keyed on the lamps AS GIVEN, so a caller may hand them every frame: the
     // same lamps cost a string, never a merge (fitLamps).
@@ -194,11 +195,22 @@ export class LampGlowState {
   }
 
   /** Show no lamps until the returned function is called — the probe's clean
-   *  A/B: a uniform, so no shader recompiles and the row measures the loop. */
+   *  A/B, and a villa picture's dark lamps (BulbSet.darkForPicture): a uniform,
+   *  so no shader recompiles and the row measures the loop. Held against set()
+   *  too: the lamps sent before every frame change with the floor shown, and a
+   *  new set of them undid the suspension for the 2F pictures. Released, the
+   *  next set() writes the lamps as they are then. */
+  private suspended = 0;
+
   suspend(): () => void {
-    const count = this.count;
+    this.suspended++;
     this.count = 0;
-    return () => { this.count = count; };
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      if (--this.suspended === 0) this.key = "";
+    };
   }
 }
 

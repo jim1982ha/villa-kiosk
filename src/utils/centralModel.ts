@@ -31,6 +31,8 @@ export interface AddonConfig {
    *  "" when the file does not exist — see modelUrl. */
   model_version?: string;
   rooms_version?: string;
+  /** The villa pictures' manifest version (villaPictures.ts), "" when none were made yet. */
+  views_version?: string;
 }
 
 /** The room-data sidecar URL that sits next to the central GLB (model_path

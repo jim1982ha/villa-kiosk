@@ -49,6 +49,69 @@
 @keyframes spin { to { transform: rotate(360deg); } }
 @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
 
+/* --- The villa pictures (canvas/PictureView: a device too weak for the 3D villa, owner 2026-11-24) ---
+   Where the 3D canvas sits, under the HUD: every floor's picture is placed by its own box (pictureLayout), the rooms'
+   glow and the badges over it. The empty screen keeps the HUD usable around it (no backdrop over the bars). */
+/* z-index 0: its own stacking layer, so nothing drawn in it (badges never overlap: pictureLayout.groupBadges) is ever
+   lifted over the HUD, a device window or a notice. */
+.picture-view { position: absolute; inset: 0; z-index: 0; overflow: hidden; background: var(--bg-base); }
+.picture-view-empty {
+  position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 10px; text-align: center; padding: calc(var(--hud-bar-h) + var(--safe-top) + 24px) 24px 24px;
+}
+.picture-floor { position: absolute; }
+.picture-floor-image {
+  position: absolute; inset: 0; width: 100%; height: 100%; display: block; object-fit: fill;
+  user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+}
+.picture-rooms { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+/* a lit room glows as the 3D floor glow does: the status colour, breathing (RoomHighlight's pulse) */
+.picture-room-glow { opacity: 0.6; stroke-width: 3px; vector-effect: non-scaling-stroke; stroke-linejoin: round;
+  animation: picture-glow 2.4s ease-in-out infinite; }
+/* ⚠️ SEEN FROM ACROSS THE ROOM (owner, 2026-11-24: the glow was barely visible on a TV): a solid outline and a strong
+   fill, breathing between the two */
+@keyframes picture-glow { 0%, 100% { opacity: 0.7; } 50% { opacity: 0.4; } }
+/* the sky's sun or moon (pictureLayout.pictureSky), behind the floors */
+.picture-sky-body { position: absolute; transform: translate(-50%, -50%); pointer-events: none; overflow: visible; }
+.picture-sky-body.sun circle { fill: #ffd85a; filter: drop-shadow(0 0 10px rgba(255, 210, 80, 0.9)); }
+.picture-sky-body .moon-dark { fill: rgba(255, 255, 255, 0.08); }
+.picture-sky-body .moon-lit { fill: #f1efe2; filter: drop-shadow(0 0 6px rgba(240, 236, 210, 0.6)); }
+/* a lamp on: its bulb and a warm pool of light around it, as the 3D view lights each lamp */
+.picture-lamp-pool { position: absolute; transform: translate(-50%, -50%); border-radius: 50%; pointer-events: none;
+  background: radial-gradient(circle, #fffbea 0%, #fff3cf 6%, rgba(255, 232, 170, 0.55) 12%, rgba(255, 214, 140, 0.28) 40%, rgba(255, 200, 120, 0) 70%);
+  mix-blend-mode: screen; }
+/* a ceiling fan's blades (pictureFan), turning while it is on, as the 3D view turns them */
+.picture-fan { position: absolute; transform: translate(-50%, -50%); pointer-events: none; overflow: visible; }
+.picture-fan-blades { fill: #f4f1ea; stroke: rgba(0, 0, 0, 0.45); stroke-width: 0.05; }
+.picture-fan.on .picture-fan-blades { animation: picture-fan 1.2s linear infinite; }
+@keyframes picture-fan { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+/* a curtain drawn (or part-way): its place on the picture, a fabric-coloured band with an outline */
+.picture-cover { fill: #c9b79c; fill-opacity: 0.85; stroke: #6b5a45; stroke-width: 2px; vector-effect: non-scaling-stroke; }
+.picture-floor-label {
+  position: absolute; left: 6px; top: 6px; padding: 2px 8px; border-radius: var(--radius-pill);
+  background: var(--chip-bg); color: var(--text-primary); font-size: var(--text-sm); font-weight: 600; pointer-events: none;
+}
+.picture-badge {
+  position: absolute; padding: 0; border: 0; background: none; cursor: pointer; border-radius: var(--radius-squircle);
+  touch-action: manipulation; -webkit-tap-highlight-color: transparent; -webkit-touch-callout: none; user-select: none;
+}
+.picture-badge img { width: 100%; height: 100%; display: block; pointer-events: none; }
+/* a group badge (pictureLayout.groupBadges): a resting badge's square, its count pill centred, its worst mark on the
+   corner a badge wears one (inset and sizes from PictureView, the badge picture's own proportions) */
+.picture-group-square {
+  position: absolute; display: flex; align-items: center; justify-content: center; pointer-events: none;
+  border: 1px solid; box-sizing: border-box;
+}
+.picture-badge .picture-group-mark { position: absolute; height: auto; }
+/* a remote's focus: plainly visible from across a room */
+.picture-badge:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+/* an alarm or a critical device silent breathes, as on the 3D map (isUrgent) */
+.picture-badge.urgent > img, .picture-badge.urgent .picture-group-square { animation: picture-urgent 1.2s ease-in-out infinite; }
+@keyframes picture-urgent { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.12); } }
+@media (prefers-reduced-motion: reduce) {
+  .picture-room-glow, .picture-fan.on .picture-fan-blades, .picture-badge.urgent > img, .picture-badge.urgent .picture-group-square { animation: none; }
+}
+
 /* --- Central .sh3d background-refresh failure banner --- */
 
 .muted { color: var(--text-secondary); }

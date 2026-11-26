@@ -9,10 +9,10 @@
 import Window, { WindowHeader } from "@/components/common/Window";
 import { roleCan } from "@/auth/permissions";
 import { useState, type ReactNode } from "react";
-import { FIELD_COMMIT_MS, PendingFields, typedNumber, usePendingField, type PendingField } from "@/hooks/usePendingField";
+import { FIELD_COMMIT_MS, PendingFields, typedNumber, useChoiceAfterSave, usePendingField, type PendingField } from "@/hooks/usePendingField";
 import type { AppConfig } from "@/config/AppConfig";
 import { villaBounds } from "@/config/villaSettings";
-import { Boxes, CalendarClock, Home, LogOut, Wrench } from "lucide-react";
+import { Boxes, CalendarClock, Home, Image as ImageIcon, LogOut, Wrench } from "lucide-react";
 import SettingRow, { SettingSlider, settingValue } from "@/components/common/SettingRow";
 import ToolGroup from "@/components/common/ToolGroup";
 import InfoTip, { TipTitle } from "@/components/common/InfoTip";
@@ -36,6 +36,8 @@ import { useDraftedSlice } from "@/hooks/useDraftedSlice";
 import { ADVANCED_SETTINGS_KEYS } from "@/config/configSlice";
 import ProblemLine from "@/components/common/ProblemLine";
 import Button from "@/components/common/Button";
+import OnOffToggle from "@/components/common/OnOffToggle";
+import { deviceView, switchDeviceView } from "@/utils/deviceVerdict";
 
 /** ⚠️ EVERY TAB CARRIES TWO PANELS, AND THAT IS A RULE RATHER THAN AN
  *  ACCIDENT. This screen was a stack of six collapsible sections and read as
@@ -64,10 +66,6 @@ const TABS: (ModalTab<SettingsTab> & { owner?: true })[] = [
 interface Props {
   /** Return to the Settings modal this was opened from. */
   onBack: () => void;
-  /** Settings is open underneath (the way in from its footer): ITS draft owns every change made here — Close returns
-   *  to it, and its Save / Cancel keep or undo them. Opened on its own (a device window's "edit"), this dialog owns
-   *  the same draft itself, with its own Save / Cancel (owner, 2026-10-22: Advanced Settings joins Save / Cancel). */
-  withinSettings: boolean;
   /** When opened from a device panel's edit shortcut, pre-filter the entity
    *  table to this entity_id so its row is right there. */
   focusEntityId?: string;
@@ -171,6 +169,22 @@ function PresenceSensor() {
   );
 }
 
+/** This device shows the villa as pictures rather than in 3D (owner, 2026-11-25: "a toggle in the advanced settings,
+ *  to force display view even if the 3D view is displayed"). This device's choice, never the villa's, applied once
+ *  Save has succeeded (useChoiceAfterSave): VESTA UI then opens again in it (deviceVerdict.switchDeviceView). */
+function PicturesOnThisDevice() {
+  const [on, set] = useChoiceAfterSave("device-view", deviceView() === "pictures",
+    (pictures) => switchDeviceView(pictures ? "pictures" : "3d"));
+  return (
+    // its own line, the switch at its end, as Maintenance mode (owner, 2026-11-25)
+    <OnOffToggle ariaLabel="The villa as pictures on this device" title="Show the villa as still pictures on this device"
+      on={on} onChange={set} icon={<ImageIcon size={16} />} label="Pictures view" tip={<>
+        A still picture of each floor on this device instead of the 3D villa, as a TV shows it. Save opens VESTA UI
+        again. Pictures are made only by a device showing the 3D villa.
+      </>} />
+  );
+}
+
 /** The days the field takes: the bounds of the setting's row (villa-settings.json `recordsKeptDays`), the ones the
  *  server keeps a saved value within. */
 const DAYS_KEPT = villaBounds("recordsKeptDays");
@@ -243,17 +257,19 @@ export function HeaderActions({ glbUpload, logout }: {
   );
 }
 
-export default function ConfigEditorModal({ onBack, withinSettings, focusEntityId, viewHeadingDeg }: Props) {
+export default function ConfigEditorModal({ onBack, focusEntityId, viewHeadingDeg }: Props) {
   // ⚠️ ONE DRAFT FOR WHAT THIS DIALOG EDITS (configSlice.ADVANCED_SETTINGS_KEYS). Every edit below applies live through
   // ConfigContext.update and reaches every tablet; the draft records what this dialog itself changed, item by item. Over
   // Settings, Settings' draft records the same changes and this dialog just closes back to it; on its own, it is this
   // one's: Save keeps, Cancel (and Escape, and the backdrop) puts them back — the passing notices of every other dialog.
+  // Opened over Settings (the way in from its footer), Settings' Save / Cancel are this dialog's (`own.nested`); on its
+  // own (a device window's "edit"), it draws its own (owner, 2026-10-22: Advanced Settings joins Save / Cancel).
   const own = useDraftedSlice(ADVANCED_SETTINGS_KEYS);
   const notice = useAppNotice();
-  const commit = withinSettings ? undefined : { dirty: own.dirty, save: own.save, discard: () => { own.discard(); } };
-  // Over Settings, closing back writes what is still being typed here (as this dialog's): Settings' Save / Cancel then
-  // own it like every other change made here.
-  const back = () => { own.flush(); onBack(); };
+  const commit = own.nested ? undefined : { dirty: own.dirty, save: own.save, discard: () => { own.discard(); } };
+  // Back: what is still being typed is written, and over Settings every change waiting for Save is handed to it
+  // (DraftedSlice.close), where Settings' Save / Cancel own it like every other change made here.
+  const back = () => { own.close(); onBack(); };
   const exit = commit ? footerExits(commit, onBack, notice).cancel : back;
   // Focus trap + Escape + focus restore (see useModalA11y).
   const { role } = useProfile();
@@ -318,6 +334,9 @@ export default function ConfigEditorModal({ onBack, withinSettings, focusEntityI
             </div>
 
             <PresenceSensor />
+
+            <TipTitle title="This device" tip="Only this device: every other one keeps its own." />
+            <PicturesOnThisDevice />
           </>
         )}
 
@@ -380,8 +399,8 @@ export default function ConfigEditorModal({ onBack, withinSettings, focusEntityI
       {/* Every tab applies LIVE through `ConfigContext`, so a tab switch loses nothing. Over Settings: Close, back to
           Settings, whose Save / Cancel own these changes; on its own: this dialog's Save / Cancel (`commit`). */}
       <RemoteReplacedNote replaced={own.replaced} onDismiss={own.dismissReplaced} />
-      <ModalFooter onClose={back} commit={commit} back={{ go: exit, to: withinSettings ? "Settings" : undefined }}
-        actions={withinSettings ? <span /> : undefined} />
+      <ModalFooter onClose={back} commit={commit} back={{ go: exit, to: own.nested ? "Settings" : undefined }}
+        actions={own.nested ? <span /> : undefined} />
     </Window>
     </PendingFields>
     </DialogEdits>

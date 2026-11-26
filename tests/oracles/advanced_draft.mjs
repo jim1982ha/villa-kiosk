@@ -66,11 +66,13 @@ console.log("\n  the wiring:");
   const { SETTINGS_KEYS } = await import("@/config/configSlice");
   ck("Settings' one draft holds Advanced Settings' keys", KEYS.every((k) => SETTINGS_KEYS.includes(k)) && /useDraftedSlice\(SETTINGS_KEYS\)/.test(st)
      && /import \{ SETTINGS_KEYS \} from "@\/config\/configSlice";/.test(st));
+  // whether it is opened over Settings is its draft's own answer (DraftedSlice.nested), driven by value in
+  // dialog_pending.mjs; here, only that the footer reads it
   ck("Advanced Settings over Settings closes back to it; on its own, the same draft is its own Save / Cancel",
      /const own = useDraftedSlice\(ADVANCED_SETTINGS_KEYS\);/.test(adv)
-     && /const commit = withinSettings \? undefined : \{ dirty: own\.dirty, save: own\.save, discard: \(\) => \{ own\.discard\(\); \} \};/.test(adv)
+     && /const commit = own\.nested \? undefined : \{ dirty: own\.dirty, save: own\.save, discard: \(\) => \{ own\.discard\(\); \} \};/.test(adv)
      && /<ModalFooter onClose=\{back\} commit=\{commit\}/.test(adv) && /<Window kind="content" label="Advanced Settings" onClose=\{exit\}/.test(adv)
-     && /withinSettings=\{shown\("settings"\)\}/.test(db));
+     && !/withinSettings/.test(adv + db));
   ck("its controls write as the dialog (what the drafts record), the model upload's rooms do not",
      /return \(\s*<DialogEdits>\s*<PendingFields pending=\{own\.pending\}>\s*<Window\b/.test(adv)
      && /<\/Window>\s*<\/PendingFields>\s*<\/DialogEdits>/.test(adv)

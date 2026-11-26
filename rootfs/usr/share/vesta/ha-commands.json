@@ -32,10 +32,10 @@
   "villaLists": {"domains": ["input_text"], "reads": ["input_text", "notify"], "capability": "editConfig"},
   "_homeassistantServices": "homeassistant.* also holds system services (restart, stop, set_location…); only these.",
   "homeassistantServices": ["toggle"],
-  "_readDomains": "The entity domains a non-owner session may READ at all — states, state_changed events, history and the entity registry are narrowed to these by the proxy. Everything the kiosk draws or scans: ENTITY_DOMAINS (src/types/ha.types.ts) plus sun, scene and weather. A person, a tracker, an alarm panel, a calendar never leaves the add-on for a guest or ops session; camera states go only to a profile that may view cameras.",
+  "_readDomains": "The entity domains a non-owner session may READ at all — states, state_changed events, history and the entity registry are narrowed to these by the proxy. Everything the kiosk draws or scans: ENTITY_DOMAINS (src/types/ha.types.ts) plus sun, scene and weather, and image (a picture, shown as a camera). A person, a tracker, an alarm panel, a calendar never leaves the add-on for a guest or ops session; camera and image states go only to a profile that may view cameras.",
   "readDomains": [
     "light", "climate", "lock", "camera", "cover", "fan",
     "binary_sensor", "sensor", "media_player", "switch", "input_boolean",
-    "assist_satellite", "sun", "scene", "weather"
+    "assist_satellite", "sun", "scene", "weather", "image"
   ]
 }

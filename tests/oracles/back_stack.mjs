@@ -61,6 +61,21 @@ console.log("  open and Back:");
   ck("Back with nothing open is the platform's: the press leaves the app, nothing is closed", w.exited && a.closed === 1);
 }
 
+console.log("\n  a reload asked as Settings saves waits for its close (owner, 2026-11-25: shown only after a refresh):");
+{
+  const w = world(); const settings = w.open("Settings"); const advanced = w.open("Advanced"); w.settle();
+  advanced.off(); w.settle();                                     // Back to Settings
+  let reloads = 0, depthThen = null;
+  w.stack.whenClosed(() => { reloads += 1; depthThen = w.depth; }); // Save asks for it, Settings still open
+  ck("nothing while Settings is open", reloads === 0);
+  settings.off();                                                  // Save closes Settings: its step back is queued
+  ck("  ...nor as it closes, while its step back is under way (that step cancelled the reload)", reloads === 0);
+  w.settle();
+  ck("  ...once, after history is back at the villa", reloads === 1 && depthThen === 0, { reloads, depthThen });
+  w.stack.whenClosed(() => { reloads += 1; });
+  ck("with nothing open it runs at once (the slow screen's button)", reloads === 2);
+}
+
 console.log("\n  nesting:");
 {
   const w = world(); const log = [];

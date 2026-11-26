@@ -8,14 +8,14 @@
 // further live-heap diagnosis on a fielded kiosk carries its own risk (a
 // DevTools heap snapshot crashed the tab outright once already, at ~800MB).
 //
-// Reload is a plain location.reload(): the profile role lives in
+// Reload is utils/reopen, as every reopen: the profile role lives in
 // sessionStorage (survives a same-tab reload) and the model/app shell are
 // service-worker cached, so this comes back fast with no re-login needed —
 // safe to fire unattended overnight.
 
 import { wallClock } from "./villaClock";
 import { readString, writeString } from "./storedJson";
-import { unsentWorkHeld } from "./syncedDocument";
+import { canReopenNow, reopen } from "./reopen";
 const RELOAD_HOUR = 4; // 04:00 local device time — a quiet window for a villa kiosk
 const CHECK_INTERVAL_MS = 60_000;
 const GUARD_KEY = "villa-kiosk:last-auto-reload-date";
@@ -93,11 +93,10 @@ export function installDailyAutoReload(isSafeToReload: () => boolean): () => voi
     const pressure = !daily && pressureDue(now.getTime());
     if (!daily && !pressure) return;
     if (!isSafeToReload()) return; // busy — retry next minute
-    // ⚠️ NEVER OVER WORK THE ADD-ON HAS NOT GOT (architecture review i_k3, 2026-10-23): a fault reported while it could
-    // not be reached lived in the page alone, and the 04:00 reload dropped it. The Facility store now keeps its own
-    // across a reload (fmApi fmUnsentKeeper), unless storage is refused; a store with a write out or failed (either
-    // one) holds the reload until it lands — retry next minute, here for every caller.
-    if (unsentWorkHeld()) return;
+    // ⚠️ NEVER OVER AN OPEN WINDOW OR WORK THE ADD-ON HAS NOT GOT (architecture review i_k3, 2026-10-23: a fault reported
+    // while it could not be reached lived in the page alone, and the 04:00 reload dropped it): asked minute by minute
+    // here, so the reopen below never waits holding the page (utils/reopen waits for the same two, for every caller).
+    if (!canReopenNow()) return;
     try {
       if (daily) writeString(GUARD_KEY, todayKey(now));
       // Stamped for BOTH triggers: a daily reload resets the heap just as a
@@ -106,7 +105,7 @@ export function installDailyAutoReload(isSafeToReload: () => boolean): () => voi
       // reload twice in quick succession for the same accumulated memory.
       writeString(PRESSURE_GUARD_KEY, String(now.getTime()));
     } catch { /* best-effort */ }
-    location.reload();
+    reopen();
   };
   const id = setInterval(tick, CHECK_INTERVAL_MS);
   return () => clearInterval(id);

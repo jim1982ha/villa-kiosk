@@ -40,7 +40,7 @@
 import { MapPin } from "lucide-react";
 import BasePanel from "@/components/panels/BasePanel";
 import type { roomLook } from "@/babylon/summaryLook";
-import { healthPill } from "@/babylon/colors";
+import { healthPill } from "@/babylon/healthPill";
 import { countOf } from "@/utils/countOf";
 
 /** One room a merged chip stands for. `health` is what that room's own chip

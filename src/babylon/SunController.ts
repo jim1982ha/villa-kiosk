@@ -145,6 +145,16 @@ export class SunController {
     this.applyRealSun();
   }
 
+  /** The villa pictures' look (villaPictureCapture), over Settings' day/night preview while it is set; null hands
+   *  the villa back to the preview and the real clock. A field, never a config edit: the config is the device's
+   *  saved settings, and a capture must not write them. */
+  private forcedLook: "day" | "night" | null = null;
+
+  forceLook(look: "day" | "night" | null): void {
+    this.forcedLook = look;
+    this.applyRealSun();
+  }
+
   /**
    * Light the villa and set the sky for right now, from the villa's
    * coordinates and the clock (skyMoment): Settings' day/night preview lights
@@ -155,7 +165,7 @@ export class SunController {
    * moon sensor has no position at all (see utils/sunCalc).
    */
   applyRealSun(date = skyNow()): void {
-    const preview = this.config.render?.dayNightPreview ?? "auto";
+    const preview = this.forcedLook ?? this.config.render?.dayNightPreview ?? "auto";
     const m = skyMoment(date, this.config, preview);
     this.applyDayNight(m);
 
@@ -232,7 +242,7 @@ export class SunController {
     // silently undo the override on the next sun.sun state event. No real
     // azimuth/altitude from the binary state: a made-up sun (skyMoment's
     // guessedMoment), and no moon.
-    const preview = this.config.render?.dayNightPreview ?? "auto";
+    const preview = this.forcedLook ?? this.config.render?.dayNightPreview ?? "auto";
     const m = guessedMoment(state === "above_horizon", preview);
     this.applyDayNight(m);
     // Report from here too — this branch never reaches applyRealSun, and a

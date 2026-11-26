@@ -138,13 +138,15 @@ export default defineConfig(({ command }) => {
       target: "es2020",
       outDir: "dist",
       chunkSizeWarningLimit: 2000,
-      rollupOptions: {
+      rolldownOptions: {
         output: {
           // Babylon is large — split it so the React shell can paint first.
-          // Function form: Vite 8's rolldown bundler dropped the object form
-          // ("manualChunks is not a function" build error).
-          manualChunks(id: string) {
-            if (id.includes("node_modules/@babylonjs/")) return "babylon";
+          // ⚠️ ONLY BABYLON'S OWN FILES (owner, 2026-11-24): a group takes every module its files import by default
+          // (includeDependenciesRecursively), and the bundler's lazy-import loader is one of them, so it lived in
+          // this chunk and every page imported the 2.7 MB 3D engine to open any lazy file. A device shown the villa
+          // pictures (deviceVerdict) must never download it.
+          codeSplitting: {
+            groups: [{ name: "babylon", test: /node_modules[\\/]@babylonjs[\\/]/, includeDependenciesRecursively: false }],
           },
         },
       },
@@ -174,7 +176,7 @@ export default defineConfig(({ command }) => {
               // developer would assume was wired. Kept in the same order as
               // nginx's own locations; `tests/routes.py` fails the build if
               // this list and the proxy's routes disagree.
-              ["/core", "/auth", "/addon-config", "/model", "/model-upload",
+              ["/core", "/auth", "/addon-config", "/model", "/model-upload", "/model-views",
                "/device-config", "/fm-data", "/fm-evidence", "/fm-document", "/telemetry",
                "/agent-status", "/announcements", "/announcement-photo", "/announcement-press", "/message-erase", "/vesta-messages", "/vesta-ask", "/vesta-conversation", "/vesta-speech", "/vesta-press", "/kiosk-rooms", "/critical-devices", "/agent"].map((p) => [
                 p,

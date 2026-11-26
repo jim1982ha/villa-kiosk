@@ -23,7 +23,7 @@
 // a key not in the list is a type error — the key would otherwise be
 // silently un-revertable (Discard restores its siblings and leaves it).
 
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { AppConfig } from "@/config/AppConfig";
 import { useConfig } from "@/config/ConfigContext";
 import { PendingEdits } from "@/config/pendingEdits";
@@ -43,8 +43,8 @@ export interface DraftedSlice<K extends keyof AppConfig> {
   set: (shown: Partial<Slice<K>>, opts?: { now?: boolean; stored?: Partial<Slice<K>> }) => void;
   /** Anything THIS dialog changed since it opened (or was last saved) and has not put back; no other write is one. */
   dirty: boolean;
-  /** Keep the changes: write what is waiting, send what is held for the villa (pendingEdits `hold`), and forget what
-   *  was changed. `true` at once with nothing held; else once every held change landed, `false` when one did not
+  /** Keep the changes: write what is waiting, send what is held for the villa (pendingEdits `hold`), apply the choices
+   *  that wait for a successful Save (pendingEdits `afterSave`) once all of that landed, and forget what was changed. `true` at once with nothing held; else once every held change landed, `false` when one did not
    *  (it stays held, said in `problem`, for Save again or Cancel), or when a number typed was none (said as it is let
    *  go, pendingEdits `say`: the window stays for the line to be read). */
   save: () => boolean | Promise<boolean>;
@@ -55,8 +55,15 @@ export interface DraftedSlice<K extends keyof AppConfig> {
   /** Put back exactly what this dialog changed — written, so the scene and every tablet follow — and return the
    *  slice as it then is, for the caller to re-apply anything it drives directly. */
   discard: () => Slice<K>;
-  /** Write what is waiting now (before closing). */
+  /** Opened over another dialog that is still open (Advanced Settings over Settings): that dialog's Save and Cancel
+   *  are this one's, so it draws none of its own. */
+  nested: boolean;
+  /** Write the slice's typed value now (leaving its field): nothing held or chosen goes with it. */
   flush: () => void;
+  /** The dialog goes away without Save or Cancel (Back): what is being typed is written, and nested, every change
+   *  waiting for Save is handed to the dialog under it; on its own, those are kept (sent, applied). Also run as it
+   *  unmounts. */
+  close: () => void;
   /** The dialog's one pending store, for its fields (PendingFields / usePendingField). */
   pending: PendingEdits;
   /** This dialog's changes another tablet has since replaced (configSlice ledgerOnRemote), for the dialog to say
@@ -67,10 +74,27 @@ export interface DraftedSlice<K extends keyof AppConfig> {
 
 const DRAFT = "slice";
 
+/** ⚠️ WHICH DIALOG A DIALOG IS OPENED OVER, ONE ANSWER (architecture review, 2026-11-25): Advanced Settings over
+ *  Settings was told four ways (Settings shown, the order dialogs opened in, its keys inside Settings' list, a Back
+ *  written by hand), and a Save-only change made in it was sent at Back past Settings' Save. Every open dialog's store,
+ *  with the order it opened in; the one under a dialog is the latest opened before it. */
+const OPEN = new Map<PendingEdits, number>();
+const openHeard = new Set<() => void>();
+const openChanged = () => { for (const l of openHeard) l(); };
+const subscribeOpen = (l: () => void) => { openHeard.add(l); return () => { openHeard.delete(l); }; };
+let opened = 0;
+/** The store of the dialog opened as `order` was opened over, if one is still open. */
+function storeUnder(order: number): PendingEdits | null {
+  let under: PendingEdits | null = null, at = -1;
+  for (const [p, n] of OPEN) if (n < order && n > at) { under = p; at = n; }
+  return under;
+}
+
 export function useDraftedSlice<K extends keyof AppConfig>(keys: readonly K[], delayMs = 500): DraftedSlice<K> {
   const { config, update, editByDialog, onDialogEdit, onRemoteChange } = useConfig();
   // the dialog's writes are its own: recorded in its ledger (and any other open draft's) as they land
   const [pending] = useState(() => new PendingEdits(editByDialog));
+  const [order] = useState(() => opened++);
   pending.write = editByDialog;
   // a number that was none is said where every problem is (the villa view's notices), whichever way it was let go
   const notice = useAppNotice();
@@ -79,7 +103,23 @@ export function useDraftedSlice<K extends keyof AppConfig>(keys: readonly K[], d
   // ⚠️ A VALUE STILL WAITING WHEN THE DIALOG GOES AWAY IS WRITTEN (Back from Advanced Settings over Settings, a
   // close that is not Cancel): directly, never from inside a state updater, which does not run once it is unmounted
   // (useDraftCommit's net, to 2.496.499, never wrote anything).
-  useEffect(() => () => pending.flushAll(), [pending]);
+  // ⚠️ AND A CHANGE WAITING FOR SAVE GOES TO THE DIALOG UNDER IT (owner, 2026-11-25: Pictures view turned on, then
+  // Back, and Settings' Save stayed grey: Back sent it past Settings' Save). Opened on its own, it is kept as it goes.
+  // Re-read as dialogs open and close: one opened in the same commit as the one under it registers after it.
+  const under = useSyncExternalStore(subscribeOpen, () => storeUnder(order));
+  pending.under = under;
+  const close = () => {
+    const below = storeUnder(order);
+    if (below) pending.handOver(below);
+    pending.flushAll();
+  };
+  const closeRef = useRef(close);
+  closeRef.current = close;
+  useLayoutEffect(() => {
+    OPEN.set(pending, order);
+    openChanged();
+    return () => { closeRef.current(); OPEN.delete(pending); openChanged(); };
+  }, [pending, order]);
   // ⚠️ THE LEDGER: WHAT THIS DIALOG ITSELF SET, ITEM BY ITEM, and its value before (configSlice recordEdit). Until
   // 2.496.498 the draft was a copy of the slice taken on open, so every write while the dialog was open read as its
   // own: the devices a 3D model just uploaded adds lit Save, and Cancel deleted them on every tablet. Written inside
@@ -136,7 +176,10 @@ export function useDraftedSlice<K extends keyof AppConfig>(keys: readonly K[], d
       setHeard((n) => n + 1);
       const held = pending.held();
       setProblem(null);
-      if (held.length === 0) return whole;
+      if (held.length === 0) {
+        if (whole) pending.applySaved();
+        return whole;
+      }
       setSaving(true);
       return Promise.all(held.map(async ([key, send]) => {
         const said = await send().catch(() => "It could not be saved: try again.");
@@ -146,7 +189,10 @@ export function useDraftedSlice<K extends keyof AppConfig>(keys: readonly K[], d
         const problems = said.filter((s): s is string => s !== null);
         setSaving(false);
         setProblem(problems.length > 0 ? problems.join(" ") : null);
-        return problems.length === 0 && whole;
+        // a choice waits for every send: after a refused one, Cancel can still take it back
+        const kept = problems.length === 0 && whole;
+        if (kept) pending.applySaved();
+        return kept;
       });
     },
     problem,
@@ -162,7 +208,10 @@ export function useDraftedSlice<K extends keyof AppConfig>(keys: readonly K[], d
       update((now) => revertLedger(undo, now));
       return sliceOf({ ...config, ...revertLedger(undo, config) } as AppConfig, keys);
     },
-    flush: () => pending.flushAll(),
+    nested: under !== null,
+    // ⚠️ THE TYPED VALUE ONLY: it was every waiting change, so leaving the title field sent the chat lists held for Save
+    flush: () => pending.commit(DRAFT),
+    close,
     pending,
     replaced,
     dismissReplaced: () => setReplaced([]),

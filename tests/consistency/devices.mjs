@@ -18,6 +18,8 @@ export function devicesOf({ ids = [], unavailable = [], folding = new Map(), cri
     partlyLost: Object.keys(partlyLost),
     healthOf: (id) => (unavailable.includes(id) ? { kind: "lost" } : partlyLost[id] ? { kind: "partly", lost: partlyLost[id] } : { kind: "alive" }),
     has: (id) => set.has(id),
+    // each part of those devices: the device itself, or an entity folded onto one (VillaDevices.hasPart)
+    hasPart: (id) => !isHidden(id) && set.has(of(id)),
     deviceOf: of,
     recordCard,
     // a hidden device's record is a card of its own (VillaDevices.cardOfRecord)

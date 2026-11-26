@@ -114,6 +114,17 @@ ck("  ...and the strip gives the light it always did: two lamps' worth", Math.ab
 ck("  ...its patches stop half a step in from its ends, so two strips meeting at a corner do not double it",
    Math.min(...stripLamps.map((l) => l.x)) > 2.5 + 0.2 && Math.max(...stripLamps.map((l) => l.x)) < 5.5 - 0.2, stripLamps.map((l) => l.x));
 
+{
+  // the villa pictures light each lamp at the 3D view's own pool spots (BulbSet.lampSpots, EntityVisuals.lampSpots)
+  const spots = bulbs.lampSpots();
+  const at = (p) => spots.filter((s) => Math.abs(s.x - p.x) < 1e-6 && Math.abs(s.z - p.z) < 1e-6);
+  const stripSpots = spots.filter((s) => s.mesh === strip);
+  ck("the villa pictures light a strip where its pools are, each with its share of the light",
+     stripSpots.length === stripLamps.length && stripLamps.every((l) => at(l).length === 1)
+     && Math.abs(stripSpots.reduce((a, s) => a + s.scale, 0) - 2) < 1e-9, stripSpots.map((s) => [s.x, s.scale]));
+  ck("  ...and a pendant of three materials once, under the whole lamp", at({ x: 3, z: 1.5 }).length === 1, spots.map((s) => [s.x, s.z]));
+}
+
 console.log("\n  a wall light whose marker sits in the end wall:");
 const farPool = pools.find((m) => m.name.includes("<light>_d"));
 const balconyBits = near(3, 1.5)[0].room;

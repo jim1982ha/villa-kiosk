@@ -12,6 +12,10 @@
 // the messages" was written to the villa at once while Save stayed grey): such a change is HELD here (`hold`), with no
 // pause, and sent by Save only; Cancel drops it like a value being typed. One store, so Save lights for it too.
 //
+// ⚠️ AND A CHOICE APPLIED ONLY ONCE SAVE HAS SUCCEEDED (`afterSave`; architecture review, 2026-11-25): this device's
+// Pictures view was a held "send" that switched the view at once, so after a Save refused on something else, Cancel
+// could not take it back. It now runs only when every held send has landed.
+//
 // Pure, no React: hooks/useDraftedSlice subscribes to it (useSyncExternalStore); tests/oracles/dialog_pending.mjs,
 // tests/oracles/settings_save.mjs.
 
@@ -34,6 +38,10 @@ interface Entry {
   unwritable?: string;
   /** A held change's send (`hold`): no timer, sent by Save only. */
   send?: VillaSend;
+  /** A choice applied once the dialog's Save has fully succeeded (`afterSave`): no timer, never sent on its own. */
+  apply?: () => void;
+  /** A choice set back to what it is, in a dialog opened over another: handed over, it clears the other's choice. */
+  clears?: true;
   timer?: ReturnType<typeof setTimeout>;
 }
 
@@ -47,6 +55,10 @@ export class PendingEdits {
    *  ⚠️ IT WAS SILENT (owner, 2026-11-10: a save that did not happen says so): a latitude, a number of days or of
    *  seconds that was no number went back to the one before with no word, and Save closed the window as if kept. */
   say: (line: string) => void = () => {};
+
+  /** The store of the dialog this one was opened over, while it is open (hooks/useDraftedSlice): where its changes
+   *  waiting for Save go on Back, and what a choice shows until it is changed here. */
+  under: PendingEdits | null = null;
 
   constructor(write: (w: PendingWrite) => void) {
     this.write = write;
@@ -86,7 +98,7 @@ export class PendingEdits {
   /** `e` is let go: whether it had something to write; said when it had not and has words for it. */
   private writable(e: Entry): e is Entry & { write: PendingWrite } {
     if (e.write) return true;
-    if (!e.send && e.unwritable) this.say(e.unwritable);
+    if (!e.send && !e.apply && !e.clears && e.unwritable) this.say(e.unwritable);
     return false;
   }
 
@@ -95,6 +107,34 @@ export class PendingEdits {
     const was = this.entries.get(key);
     if (was) clearTimeout(was.timer);
     this.entries.set(key, { shown, write: null, send });
+    this.changed();
+  }
+
+  /** A choice applied only once Save has succeeded, every held send landed (this device's view): shown at once, Save
+   *  lights, Cancel drops it. `apply` null: set back to what it is, so nothing waits (here, and in the dialog under
+   *  this one once handed over). */
+  afterSave(key: string, shown: unknown, apply: (() => void) | null): void {
+    const was = this.entries.get(key);
+    if (was) clearTimeout(was.timer);
+    if (apply) this.entries.set(key, { shown, write: null, apply });
+    else if (this.under?.chosen(key) !== undefined) this.entries.set(key, { shown, write: null, clears: true });
+    else this.entries.delete(key);
+    this.changed();
+  }
+
+  /** What a choice (`afterSave`) shows: set here, else waiting in the dialog under this one; undefined when none. */
+  chosen(key: string): unknown {
+    const e = this.entries.get(key);
+    return e && (e.apply || e.clears) ? e.shown : this.under?.chosen(key);
+  }
+
+  /** Run every choice waiting for a successful Save, and forget it. */
+  applySaved(): void {
+    for (const [key, e] of [...this.entries]) {
+      if (!e.apply && !e.clears) continue;
+      this.entries.delete(key);
+      e.apply?.();
+    }
     this.changed();
   }
 
@@ -120,23 +160,36 @@ export class PendingEdits {
     this.entries.delete(key);
     if (this.writable(e)) this.write(e.write);
     if (e.send) void e.send();
+    e.apply?.();
     this.changed();
   }
 
-  /** Write every waiting value now: the dialog goes away without Save or Cancel. Its held changes are sent, as every
-   *  change of a dialog closed that way is kept. */
+  /** Write every waiting value now: the dialog goes away without Save or Cancel. Its held changes are sent and its
+   *  choices applied, as every change of a dialog closed that way is kept. */
   flushAll(): void {
     for (const key of [...this.entries.keys()]) this.commit(key);
   }
 
-  /** Take every value waiting its pause out without writing it, for Save to write as kept (held changes stay: Save
-   *  sends them, `held`). `whole` false: one of them had nothing to write and was said (`say`), so Save's window
+  /** Hand every change that waits for Save (held sends, choices) to `under`, the dialog this one was opened over
+   *  (Advanced Settings' Back to Settings): its Save sends and applies them, its Cancel drops them. */
+  handOver(under: PendingEdits): void {
+    for (const [key, e] of [...this.entries]) {
+      if (e.send) under.hold(key, e.shown, e.send);
+      else if (e.apply || e.clears) under.afterSave(key, e.shown, e.apply ?? null);
+      else continue;
+      this.entries.delete(key);
+    }
+    this.changed();
+  }
+
+  /** Take every value waiting its pause out without writing it, for Save to write as kept (held changes and choices
+   *  stay: Save sends them, `held`, then applies them, `applySaved`). `whole` false: one of them had nothing to write and was said (`say`), so Save's window
    *  stays for the line to be read. */
   take(): { writes: PendingWrite[]; whole: boolean } {
     const writes: PendingWrite[] = [];
     let whole = true;
     for (const [key, e] of [...this.entries]) {
-      if (e.send) continue;
+      if (e.send || e.apply || e.clears) continue;
       clearTimeout(e.timer);
       if (this.writable(e)) writes.push(e.write);
       else if (e.unwritable) whole = false;

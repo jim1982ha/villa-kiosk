@@ -1,3 +1,171 @@
+## 2.496.911
+
+- **Pictures from the villa's system open in the camera window.** A picture the villa's system keeps, such as a
+  doorbell's latest snapshot, can now be placed on the map like a camera. Tapping it opens the camera window with that
+  picture, and the window shows the new picture each time one is taken. Profiles that may not see cameras do not see
+  these pictures either.
+
+## 2.496.910
+
+- **The Lights tile counts every lamp on a wall switch.** Lamps wired to one wall switch with several rockers (the
+  Patio2F and Corridor2F lamps) were counted as one, by the lamp placed first: with that one off, the tile said "All
+  Off" while Patio2F Bottom was on. The Locks and AC tiles, and the Facility's "Lights off before arrival", count the
+  same way now.
+
+## 2.496.909
+
+- **Cancel takes back the Pictures view, even after a refused Save.** The view now changes only once Save has
+  fully succeeded: if Save fails on something else (a chat list the villa's system refuses), Cancel leaves the view
+  as it was. Before, the view switched anyway.
+- **Advanced Settings shows the Pictures view you chose, when opened again.** After Back, the switch showed the old
+  value although Settings still held the new one.
+- **Leaving the Dashboard title field no longer sends the chat lists early.** They wait for Save, as every change.
+- **VESTA UI opens itself again one way, everywhere.** The update notice, the 04:00 reopen, the error screen's
+  Reload, "Try once more" and the Pictures view all wait for the windows to close and for a report not yet sent;
+  before, only the 04:00 reopen waited for a report.
+
+## 2.496.908
+
+- **Save switches the view at once, really.** After Pictures view is turned on or off and Save pressed, VESTA UI now
+  opens again in the new view by itself. Closing Settings cancelled the reopening, so it took a refresh.
+
+## 2.496.907
+
+- **Save switches the view at once.** After turning Pictures view on or off in Advanced Settings, Save now opens
+  VESTA UI again in the new view by itself; it took a refresh before.
+- **"Show the 3D villa" is gone from the menu.** Advanced Settings › Villa › This device › Pictures view is the one
+  switch, both ways.
+
+## 2.496.906
+
+- **Pictures view waits for Settings' Save.** Turned on in Advanced Settings, then Back, it now lights Settings'
+  Save: Save switches this device to the pictures, Cancel drops it. Before, Save stayed grey.
+
+## 2.496.905
+
+- **Pictures view's On / Off sits at the end of its line,** as Maintenance mode's does, instead of under its name.
+
+## 2.496.904
+
+- **The pictures switch is in Advanced Settings.** Advanced Settings › Villa › This device has a "Pictures view"
+  switch: turn it on and press Save, and VESTA UI opens again showing the villa as pictures on this device. Turn it
+  off and Save to go back to the 3D villa. The menu item from 2.496.903 is gone; "Show the 3D villa" stays in the menu
+  of a device showing the pictures.
+- **Switching the view works when the address asks for one.** If VESTA UI's address ended with "?view=3d", switching
+  to the pictures did nothing: the page opened in 3D again. Switching now opens the page without it.
+
+## 2.496.903
+
+- **The villa pictures follow the 3D view more closely.** An LED strip now lights the floor along its whole length,
+  as in the 3D view, instead of in a few spots. A ceiling fan turns at the speed it is set to, slow when it is slow.
+  A fan that a profile may not see is drawn still for that profile, as its lamps and curtains already were. The
+  Owner's computer makes the new pictures by itself the next time it opens VESTA UI.
+- **Show the villa as pictures on any device.** The menu has a new item, "Show the villa as pictures", on a device
+  that shows the 3D villa. "Show the 3D villa" in the same menu goes back.
+
+## 2.496.902
+
+- **A light that is on shows as in the 3D view on the villa pictures.** Each of its lamps now lights at its own place,
+  a bright bulb with a soft pool of light around it, instead of one glow at the light's badge. The Owner's computer
+  makes the new pictures by itself the next time it opens VESTA UI.
+
+## 2.496.901
+
+- **Each ceiling fan turns at its own place and size on the villa pictures.** Where one switch drives several fans
+  (a terrace's), they were drawn as one big fan between them. Each fan is now drawn on its own, at its real size, as
+  in the 3D view (2.496.900 drew every fan larger than its badge: undone). The Owner's computer makes the new
+  pictures by itself the next time it opens VESTA UI.
+
+## 2.496.900
+
+- **A turning ceiling fan can be seen on the villa pictures.** Its blades were drawn at their real size, which on a TV
+  is smaller than the fan's badge drawn over them, so they turned out of sight. They are now drawn around the badge.
+
+## 2.496.899
+
+- **A ceiling fan turns on the villa pictures.** The red circle is gone: the pictures are now made without the ceiling
+  fans, and their blades are drawn at their real size, turning while the fan is on, as in the 3D view. A ventilation
+  fan stays as it is in the picture and never turns. The Owner's computer makes the new pictures by itself the next
+  time it opens VESTA UI.
+- **The light of a lamp that is on is smaller**, a soft glow just around its place.
+
+## 2.496.898
+
+- **The villa pictures have a sky.** Around the floors, the sky now takes the colour of the moment: blue by day,
+  warm at dusk and dawn, dark at night (and follows the Day or Night preview in Settings). The sun by day and the moon
+  by night, in its real phase, sit where they really are, seen from above with north up. Nothing heavy is loaded.
+
+## 2.496.897
+
+- **A fan that is on and a drawn curtain now show on the villa pictures.** A fan that is on has a turning ring around
+  its badge. The pictures are now made with every curtain open, and a curtain that is closed (or part-way) is drawn
+  over them at its place, as the 3D view shows it. The Owner's computer makes the new pictures by itself the next
+  time it opens VESTA UI.
+
+## 2.496.896
+
+- **A lamp that is on now shows on the villa pictures.** The pictures are taken with every lamp off, and nothing drew
+  the lamps that are on over them. Each lamp that is on now shows as a warm pool of light at its place, as the 3D view
+  lights it.
+
+## 2.496.895
+
+- **The villa pictures show the house larger.** They are now framed on the house instead of the whole plot, so each
+  floor fills more of the screen. The next time the Owner opens VESTA UI on a computer, new pictures are made by
+  themselves.
+- **A room glow can be seen from across the room.** On the pictures, a room in use or needing attention now has a
+  solid outline and a stronger colour.
+- **The summary tiles stay before any pictures exist.** Until the first pictures are made, every device placed on the
+  map counts, as before.
+- **A way back to the 3D villa.** On a device that shows the pictures, the menu has "Show the 3D villa". It tries the
+  3D villa on the next opening (it may be slow on that device).
+- **A TV is recognised in more cases** (a browser that says "Smart TV").
+
+## 2.496.894
+
+- **The two floors sit side by side on a wide screen.** On a TV or a computer the pictures show 1F on the left and
+  2F on the right, so each floor is larger. On a phone held upright they stay stacked, 2F over 1F.
+- **No Display profile any more.** VESTA UI has its three profiles again: Owner, Facility Manager and Guest. A device
+  that cannot show the 3D villa shows the pictures whichever profile is signed in, with that profile's usual rights.
+
+## 2.496.893
+
+- **A device too weak for the 3D villa shows pictures of it instead.** As VESTA UI opens, it checks the device first
+  (a TV, a weak graphics chip, little memory, or a past crash or slow 3D load on that device). Such a device never
+  loads the 3D villa: it shows a picture of each floor from above, 2F over 1F, with every badge live on it and rooms
+  glowing as on the 3D map. Tapping a badge opens the device. Badges that would overlap become one group badge with
+  a count. On a TV, the remote's arrows move between badges and OK opens one.
+- **The pictures are made by themselves.** When the Owner opens VESTA UI on a computer or Android phone and leaves
+  it still for a moment, it takes the pictures of both floors, by day and by night, and keeps them for every other
+  device. A new model or a moved device makes new ones. Until the first set is made, the pictures screen says so.
+- **New profile: Display.** It shows the villa and every device but switches nothing, opens no ticket and changes no
+  setting. It needs no passcode, and opens only inside the villa's system. A device that shows the pictures opens
+  as Display by itself.
+
+## 2.496.892
+
+- **Opening the villa can no longer crash a slow device twice.** If a device stopped in the middle of opening the 3D
+  villa (it ran out of memory, or the whole device crashed), VESTA no longer tries again the next time it opens. It
+  says so, with a "Try once more" button. Until now it took two such stops in a row within 90 seconds.
+- **A device still opening the villa after 3 minutes stops trying.** It frees its memory at once instead of carrying
+  on in the background, which is what crashed a TV.
+- **Both cases report how far the device got** (Settings › Advanced › Device telemetry), even when the device
+  crashed: it keeps its progress as it goes.
+
+## 2.496.891
+
+- **A device too slow for the 3D villa reports how far it got.** When the villa's model is still opening after 3
+  minutes, the device now sends a report: how many shapes and textures it had opened, its graphics chip, and its
+  processor and memory. It shows in Settings › Advanced › Device telemetry. This tells what to make lighter for a
+  slow screen such as a TV.
+
+## 2.496.890
+
+- **A device too slow for the 3D villa says so.** When a device was still opening the villa's model after 3 minutes,
+  it said the model was too heavy and offered to upload a lighter one. When the model is within the size limit, the
+  device is what is too slow (a TV, for example) and another file would not help. It now says "This device is too
+  slow to show the 3D villa", how long it tried, and that the villa opens on a faster device. No upload is offered.
+
 ## 2.496.889
 
 - **Colours back as they were in 2.496.887.** Usual is green again and in use is red, on every device, in every

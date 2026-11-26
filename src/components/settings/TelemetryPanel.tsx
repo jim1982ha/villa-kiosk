@@ -297,6 +297,15 @@ function summarise(e: TelemetryEvent): string {
         ? `repainted, rebuild blocked ${ms(e.blockedMs)}`
         : `context restored after ${ms(e.deadMs)} dead`
           + ` · ${e.meshes ?? "?"} meshes, ${e.textures ?? "?"} textures to re-upload`;
+    case "load-slow":
+      return `${e.outcome === "page died" ? `page died at ${e.phase || "?"} after` : "still unpacking after"} ${ms(e.runMs)}:`
+        + ` ${e.glMeshes ?? "?"} meshes, ${e.glTextures ?? "?"} textures`
+        + `${typeof e.importMs === "number" ? `, import done in ${ms(e.importMs)}` : ""} · ${e.gpu || "GPU unknown"}`
+        + ` · ${e.cores ?? "?"} cores, ${e.devMemGb || "?"} GB`;
+    case "device-view":
+      return `${e.view === "pictures" ? "villa pictures" : "3D villa"} (${e.reason ?? "?"})`
+        + ` · ${e.gpu || "GPU unknown"} · ${e.webgl ?? "?"}${e.tv ? " · TV browser" : ""}`
+        + ` · ${e.cores ?? "?"} cores, ${e.devMemGb ?? "?"} GB`;
     default:
       return "";
   }

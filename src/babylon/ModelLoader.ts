@@ -342,6 +342,30 @@ function looksLikeGlass(names: (string | undefined)[], hints: string[]): boolean
  * config, without a code change. Identify the name from the pane-candidate console
  * log below.
  */
+/** The import running now, for a load still unpacking past modelLifecycle.MODEL_UNPACK_LIMIT_MS (owner, 2026-11-24: a
+ *  TV gave up on the villa and its log could not say how far it got, as `load` is sent only once a model is open). */
+let liveImport: { gl: Record<string, number>; t0: number; scene: Scene; importMs?: number } | null = null;
+
+/** What the import running now has reached, and the device that runs it: the `load-slow` telemetry. */
+export function importSoFar(): Record<string, number | string> | null {
+  if (!liveImport) return null;
+  const { gl, t0, scene, importMs } = liveImport;
+  const engine = scene.getEngine() as { webGLVersion?: number; getCaps?: () => { maxTextureSize?: number };
+    getGlInfo?: () => { renderer?: string } };
+  const nav = navigator as Navigator & { deviceMemory?: number };
+  return {
+    ...gl,
+    runMs: Math.round(performance.now() - t0),
+    // the glTF import itself finished: what is left is VESTA's own pass over the meshes
+    ...(importMs !== undefined ? { importMs: Math.round(importMs) } : {}),
+    gpu: String(engine.getGlInfo?.()?.renderer ?? "").slice(0, 96),
+    webgl: engine.webGLVersion ?? 0,
+    maxTex: engine.getCaps?.()?.maxTextureSize ?? 0,
+    cores: nav.hardwareConcurrency ?? 0,
+    devMemGb: nav.deviceMemory ?? 0,
+  };
+}
+
 export async function loadModelInto(
   scene: Scene,
   data: ArrayBuffer,
@@ -370,6 +394,7 @@ export async function loadModelInto(
     // total) and the observer is removed again below, so nothing accumulates
     // across the re-loads this app does constantly.
     const gl: Record<string, number> = { glMeshes: 0, glTextures: 0, glMaterials: 0 };
+    const live = liveImport = { gl, t0: tImportStart, scene } as NonNullable<typeof liveImport>;
     // Raw pixels, converted to megapixels ONCE at the end. Accumulating in
     // rounded megapixels instead would round every individual texture to zero
     // (a 512×512 image is 0.26MP) and report a total of 0 forever.
@@ -464,6 +489,7 @@ export async function loadModelInto(
       SceneLoader.OnPluginActivatedObservable.remove(pluginObserver);
     }
     const importMs = performance.now() - tImportStart;
+    live.importMs = importMs;
     // The geometry workload's SIZE, to sit beside the texture megapixels above:
     // whichever phase owns the tail, the fix depends on whether the villa is
     // heavy in triangles or heavy in images, and those have opposite remedies.

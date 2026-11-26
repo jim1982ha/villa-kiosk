@@ -115,6 +115,22 @@ ck("the light's sliders and the cover's follow the device (useLiveDraft, one set
        .test(readFileSync(new URL("../../src/components/panels/CameraPanel.tsx", import.meta.url), "utf8")));
 }
 
+// owner, 2026-11-26: a doorbell's latest snapshot (an image entity) opens in the camera window. Placed on the map, it
+// is one of the pictures the window steps through; not placed, it is not (a camera device is listed by itself).
+{
+  const devices = { deviceOf: (id) => id, has: () => true, isHidden: () => false };
+  const ids = ["camera.gate", "image.bell_snapshot", "image.weather_map"];
+  const got = R.cameraChoices(ids, "camera.gate", devices, (id) => id === "image.bell_snapshot").sort().join();
+  ck("a picture placed on the map is listed with the cameras; one not placed is not",
+     got === "camera.gate,image.bell_snapshot", got);
+  const { inferTypeFromEntityId } = await import("@/config/EntityMap");
+  ck("  ...and a picture is a camera: its window is the camera's", inferTypeFromEntityId("image.bell_snapshot") === "camera");
+  const { classifyDeviceActivity } = await import("@/utils/deviceActivity");
+  const act = (state) => classifyDeviceActivity({ type: "camera", entity: { entity_id: "image.bell_snapshot", state, attributes: {} } });
+  ck("  ...in use once it holds a picture (its state is when it was taken), resting before any",
+     act("2026-11-24T19:09:55+00:00") === "on" && act("unknown") === "off", [act("2026-11-24T19:09:55+00:00"), act("unknown")]);
+}
+
 // A Missing device's advice (owner, 2026-10-25: "i don't have any devices named light.gym_light in the GLB file"): the 3D
 // model is named only when it has the object; a deleted device opened from its Cockpit card says where it went.
 // (owner, 2026-10-31: "the door lock entity should exist, no?"): a device the villa's system HAD, and dropped, is never

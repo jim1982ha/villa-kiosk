@@ -5,6 +5,7 @@ import Notice from "@/components/hud/Notice";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle } from "lucide-react";
 import { SceneManager } from "@/babylon/SceneManager";
+import { importSoFar } from "@/babylon/ModelLoader";
 import { sceneHandle } from "@/babylon/sceneHandle";
 import { formatProbe, registerProbeRunner } from "@/babylon/perfProbe";
 import { useConfig } from "@/config/ConfigContext";
@@ -12,7 +13,7 @@ import { useProfile } from "@/auth/ProfileContext";
 import { filterConfigForRole, roleCan } from "@/auth/permissions";
 import { useHAActions } from "@/ha/HAStateStore";
 import { centralRoomsUrl, roomsPathFor } from "@/utils/centralModel";
-import { modelLifecycle, useModel, tooHeavyLine } from "@/utils/modelLifecycle";
+import { modelLifecycle, useModel, tooHeavyLine, tooHeavyTitle } from "@/utils/modelLifecycle";
 import { sha256Hex } from "@/utils/modelInfo";
 import { fetchRoomData, roomDataPatch, type RoomDataFetch } from "@/config/roomData";
 import { report as reportTelemetry } from "@/utils/telemetry";
@@ -23,12 +24,15 @@ import { watchDisposed, staleDisposed } from "@/utils/leakWatch";
 import ModelUploader from "@/components/settings/ModelUploader";
 import ErrorReport from "@/components/ErrorReport";
 import {
-  isCrashLooping, crashLoopInfo, startLoadAttempt, noteLoadPhase, noteModel,
+  isCrashLooping, crashLoopInfo, startLoadAttempt, noteLoadPhase, noteLoadProgress, lastLoad, noteModel,
   clearCrashLoop, noteContextLoss, captureError, buildReport,
 } from "@/utils/diagnostics";
 import { adoptDetected } from "@/config/mappingEdits";
+import { forget3dRecord, note3dOutcome, switchDeviceView } from "@/utils/deviceVerdict";
 import { missingImagesMessage } from "@/utils/glbRoomDataExtractor";
 import Button from "@/components/common/Button";
+import { useVillaPictures } from "@/components/canvas/useVillaPictures";
+import { reopen } from "@/utils/reopen";
 
 interface Props {
   onManager: (m: SceneManager | null) => void;
@@ -130,6 +134,16 @@ function VillaScene({
   // do: no WebGL, a lost GPU context, or a crash loop. Either wins the screen.
   const model = useModel().state;
   const [sceneFail, setSceneFail] = useState<null | "error" | "crash-loop">(null);
+  // a device too slow for the model says how far it got (ModelLoader.importSoFar), once per load, then its scene is
+  // freed: ⚠️ AN UNPACK LEFT RUNNING CRASHED A TV (owner, 2026-11-24), as it went on filling the device's memory
+  const slow = model.kind === "too-heavy" && model.slow;
+  useEffect(() => {
+    if (!slow) return;
+    reportTelemetry("load-slow", { outcome: "still unpacking", ...(importSoFar() ?? {}) });
+    // the next opening of this device shows the villa pictures (deviceVerdict), before any 3D work
+    note3dOutcome({ kind: "slow" });
+    managerRef.current?.dispose();
+  }, [slow]);
   // Full copyable diagnostics report shown on the error / crash-loop screens.
   const [report, setReport] = useState("");
   // The central SH3D refresh below runs silently in the background by design
@@ -150,6 +164,9 @@ function VillaScene({
     // which tears the page down before any try/catch can run.
     if (isCrashLooping()) {
       const { count, sinceMs } = crashLoopInfo();
+      // what the killed page reached, once per opening that stops here
+      const last = lastLoad();
+      reportTelemetry("load-slow", { outcome: "page died", phase: last.phase ?? "", ...(last.progress ?? {}) });
       const cap = captureError(
         "SCENE_LOAD_CRASH_LOOP",
         new Error(
@@ -286,7 +303,7 @@ function VillaScene({
         const roomsSync: { promise: Promise<RoomDataFetch> | null } = { promise: null };
         let tConfigDone = tConfigStart;
         // Stamped inside the unpack step below, read after it (holders, as above).
-        const t = { fetchDone: 0, roomsDone: 0, parseDone: 0, meshNames: 0, statesPainted: 0 };
+        const t = { fetchDone: 0, hiddenAtBytes: 0, roomsDone: 0, parseDone: 0, meshNames: 0, statesPainted: 0 };
         const names: { list: string[] } = { list: [] };
         const sha: { promise: Promise<string> } = { promise: Promise.resolve("") };
         // WHICH model, its download and how it ended: utils/modelLifecycle,
@@ -296,6 +313,7 @@ function VillaScene({
         const got = await modelLifecycle.load(async (data, url, cfg) => {
           noteModel({ bytes: data.byteLength });
           t.fetchDone = performance.now();
+          t.hiddenAtBytes = hiddenMsTotal();
           // Diagnostic-only (Settings' "which file is loaded" fingerprint) and
           // needed by nothing downstream — started now, alongside the bytes
           // it hashes, instead of after loadModel resolves, so it runs in the
@@ -324,7 +342,9 @@ function VillaScene({
           try {
             // The versioned URL is the geometry's identity: it changes the instant a
             // different GLB is uploaded, so cached probes cannot outlive their model.
-            result = await manager.loadModel(data, url);
+            // kept every 2 s: a page killed mid-import (out of memory) still leaves how far it got
+            const keep = setInterval(() => noteLoadProgress(importSoFar()), 2000);
+            try { result = await manager.loadModel(data, url); } finally { clearInterval(keep); }
           } catch (err) {
             // the 3D view's own words for a texture without its image are an index ("/textures/364/source"): name
             // the material instead, as the upload does (a model uploaded before it refused those can still be one)
@@ -632,6 +652,10 @@ function VillaScene({
             done = true;
             releasePin();
             const tPaint = performance.now();
+            // What this device's own work took, bytes in hand to the villa drawn, hidden time out (a slow link is not
+            // a slow device): over deviceVerdict.SLOW_LOAD_MS, the next opening shows the villa pictures (owner,
+            // 2026-11-24: a TV took 74s). A painted load only: one that never drew says nothing of its speed.
+            if (painted) note3dOutcome({ kind: "ready", ms: tPaint - t.fetchDone - (hiddenMsTotal() - t.hiddenAtBytes) });
             sendLoadTelemetry(tReady - tParseDone, tReady, {
               rvMeshNames: Math.round(tMeshNames - tParseDone),
               rvStates: Math.round(tStatesPainted - tMeshNames),
@@ -742,6 +766,10 @@ function VillaScene({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // The villa pictures for the devices too weak for this view, made here when they are missing or stale (after the
+  // mount effect above, which sets the manager it reads).
+  useVillaPictures(managerRef, canManageModel, configRef);
 
   // Re-apply entity map + mesh bindings + markers to the live scene whenever
   // config edits happen (binding an object, dropping a marker, changing a
@@ -870,11 +898,13 @@ function VillaScene({
       )}
       {!sceneFail && model.kind === "too-heavy" && (
         <div className="center-overlay" role="alert">
-          <div className="body-text">This 3D model is too heavy to load.</div>
+          <div className="body-text">{tooHeavyTitle(model)}</div>
           <div className="muted body-text">{tooHeavyLine(model)}</div>
-          <ModelOffer canManageModel={canManageModel} beginSwitch={beginSwitch}
+          {/* a device too slow: no other file helps, so no upload is offered */}
+          {!model.slow && <ModelOffer canManageModel={canManageModel} beginSwitch={beginSwitch}
             ask="Ask the owner to upload a lighter model."
-            offer="Export it again with its geometry compressed, then upload it here." />
+            offer="Export it again with its geometry compressed, then upload it here." />}
+          {model.slow && <PicturesButton />}
         </div>
       )}
       {(sceneFail === "error" || (!sceneFail && model.kind === "error")) && (
@@ -894,11 +924,10 @@ function VillaScene({
           title="The villa couldn't be displayed on this device"
           hint={
             <>
-              The 3D view failed to load several times in a row, so it was stopped
-              to avoid an endless reload loop. This almost always means the device
-              (typically an iPhone) ran out of memory for this model, a heavier
-              GLB (more geometry/textures) can exceed iOS Safari's per-tab limit
-              even when the same file works fine on a computer or Android phone.
+              The last try to open the 3D villa on this device stopped before it
+              finished, almost always because the device ran out of memory for this
+              model. So that it does not happen again, VESTA did not try again. The
+              same model can work on a computer or another phone.
               {canManageModel && " An Owner can upload a lighter model from Advanced Settings."}
               {" "}For troubleshooting, tap &ldquo;Show technical details&rdquo; below to copy a report.
             </>
@@ -906,9 +935,10 @@ function VillaScene({
           detail={report}
           actions={
             <>
-              <Button onClick={() => { clearCrashLoop(); location.reload(); }}>
+              <Button onClick={() => { clearCrashLoop(); forget3dRecord(); reopen(); }}>
                 Try once more
               </Button>
+              <PicturesButton />
               {canManageModel && (
                 <Button onClick={() => { clearCrashLoop(); cbRef.current.onNeedModel(); }}>
                   Upload a lighter model
@@ -925,6 +955,16 @@ function VillaScene({
         </Notice>
       )}
     </>
+  );
+}
+
+/** The way out of a 3D view this device cannot open (the crash screen, the slow screen): the villa pictures, kept as
+ *  this device's view (deviceVerdict's override), at once. */
+function PicturesButton() {
+  return (
+    <Button look="main" onClick={() => switchDeviceView("pictures")}>
+      Show the villa as pictures
+    </Button>
   );
 }
 

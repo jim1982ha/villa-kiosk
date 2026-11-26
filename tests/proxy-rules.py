@@ -492,6 +492,10 @@ for line in disagree:
     print(f"          {line}")
 ck("guest cannot fetch a camera image over REST",
    not proxy._rest_call_allowed("guest", "camera_proxy/camera.any"))
+ck("a picture (an image entity, shown as a camera) is served and read exactly where a camera is",
+   all(proxy._rest_call_allowed(r, "image_proxy/image.any") == proxy._rest_call_allowed(r, "camera_proxy/camera.any")
+       and proxy._read_allowed(r, "image.any") == proxy._read_allowed(r, "camera.any") for r in proxy.AUTH_ROLES)
+   and not proxy._rest_call_allowed("guest", "image_proxy/image.any"))
 ck("guest can still read history (the charts)",
    proxy._rest_call_allowed("guest", "history/period/2026-01-01T00:00:00+08:00"))
 
@@ -1194,7 +1198,7 @@ DOORS = {
     ("GET", "/healthz"): "public", ("GET", "/auth/roles"): "public", ("GET", "/auth/session"): "public",
     ("POST", "/auth/verify"): "public", ("POST", "/auth/logout"): "public", ("GET", "/auth/check"): "probe",
     ("GET", "/addon-config"): "model",
-    ("POST", "/model-upload"): "session:manageModel",
+    ("POST", "/model-upload"): "session:manageModel", ("POST", "/model-views"): "session:manageModel",
     ("GET", "/device-config"): "session", ("PUT", "/device-config"): "session:editConfig",
     ("GET", "/fm-data"): "session", ("PUT", "/fm-data"): "session:reportFault",
     ("POST", "/fm-evidence"): "session:reportFault", ("GET", "/fm-evidence/{id}"): "session:manageFacility",
@@ -1313,6 +1317,34 @@ async def _over_http() -> None:
     status, _ = await ask("GET", "/agent/v1/info", bearer)
     ck("the Agent's routes are not there (404) while it is not connected", status == 404, status)
     (data / "options.json").write_text(_hjson.dumps(options))
+
+    print("\n  the villa pictures:")
+    owner = cookie("owner")
+    webp = b"RIFF\x10\0\0\0WEBPVP8 " + b"\0" * 64
+    views = data / "www" / "views"
+    status, _ = await ask("POST", "/model-views?name=f1-day.webp", owner, webp)
+    ck("a picture is stored under views/, where /model/ serves it", status == 200 and (views / "f1-day.webp").read_bytes() == webp, status)
+    refused = {name: (await ask("POST", f"/model-views?name={name}", owner, webp))[0]
+               for name in ("villa.glb", "f3-day.webp", "../villa.glb", "..%2Fvilla.glb", "", "views/f1-day.webp")}
+    ck("  ...only by one of its five names: any other, or a path out of views/, is refused (400)",
+       set(refused.values()) == {400} and not (data / "www" / "villa.glb").exists(), refused)
+    wrong = [(await ask("POST", "/model-views?name=f1-night.webp", owner, b"glTF" + b"\0" * 64))[0],
+             (await ask("POST", "/model-views?name=manifest.json", owner, webp))[0],
+             (await ask("POST", "/model-views?name=f1-night.webp", owner, b"{}"))[0]]
+    ck("  ...and a body that is not what its name says (a model as a picture, a picture as the manifest) too",
+       wrong == [400, 400, 400] and not (views / "f1-night.webp").exists(), wrong)
+    status, _ = await ask("POST", "/model-views?name=f2-day.webp", owner, b"RIFF\0\0\0\0WEBP" + b"\0" * (http.VIEW_MAX_BYTES))
+    ck("  ...as is one over the size cap (413)", status == 413 and not (views / "f2-day.webp").exists(), status)
+    _, before = await ask("GET", "/addon-config", owner, None)
+    status, _ = await ask("POST", "/model-views?name=manifest.json", owner, b'{"v": 1}')
+    _, after = await ask("GET", "/addon-config", owner, None)
+    ck("the add-on reports the pictures' version: none before the manifest, its version after",
+       status == 200 and before.get("views_version") == "" and after.get("views_version", "").endswith("-8"),
+       (before.get("views_version"), after.get("views_version")))
+    status, _ = await ask("POST", "/model-upload?kind=rooms", owner, b'{"rooms": []}')
+    _, gone = await ask("GET", "/addon-config", owner, None)
+    ck("  ...and a new room-data upload removes the pictures made from the old one",
+       status == 200 and gone.get("views_version") == "" and not any(views.iterdir()), status)
 
     print("\n  which bucket a wrong secret charges:")
 

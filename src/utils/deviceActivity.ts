@@ -24,7 +24,7 @@ import { statusRule, TRANSITIONAL_STATES, lockBolt, type StatusKey, type StatusR
 import { devicePower } from "@/utils/devicePower";
 import type { SwitchPosition } from "@/utils/entityState";
 import { phantomEntity } from "@/utils/phantomEntity";
-import { domainOf } from "./entityDomain";
+import { domainOf, isPicture } from "./entityDomain";
 import { shownAsleep } from "@/ha/unavailableByDesign";
 import { lostParts, NO_PARTS, type PartsOf } from "./deviceHealth";
 
@@ -292,7 +292,9 @@ export function classifyDeviceActivity({ type, entity: s, condition }: DeviceRea
     // for "off". Treating it as off left every working camera drawn in the
     // resting grey, so the map never showed its cameras as live. A camera that
     // is genuinely down is `unavailable`, which callers resolve before this.
+    // A picture (isPicture) reads the time it was taken: one there is in use, none yet ("unknown") rests.
     case "camera":
+      if (isPicture(s.entity_id)) return s.state === "unknown" ? "off" : "on";
       return s.state === "idle" || s.state === "recording" || s.state === "streaming"
         ? "on" : "off";
     case "assist_satellite": return s.state === "idle" ? "off" : "on"; // listening/processing/responding

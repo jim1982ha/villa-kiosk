@@ -64,9 +64,11 @@ import { onActiveFloor, stampedFloor } from "./floorOf";
 import { ModelKeyedStore } from "./modelStore";
 import { cameraFrame } from "./cameraFrame";
 import { roomShot } from "./roomShot";
+import type { WorldOutline } from "@/utils/pictureManifest";
 // Babylon prototype patches this module depends on — see babylonSideEffects.
 import "./babylonSideEffects";
 import { isDomain } from "@/utils/entityDomain";
+import { reopen } from "@/utils/reopen";
 
 // Cosmetic-vs-structural entityMap diffing lives in its own pure module (no
 // Babylon, no scene state) — see entityMapDiff.ts for the full reasoning about
@@ -784,7 +786,7 @@ export class SceneManager {
     // shows up in telemetry it means handlePageHide tore down a document that
     // then came back — i.e. the iOS bug recurring on some other platform.
     reportTelemetry("recovered", { reason: "pageshow-on-disposed-scene" });
-    window.location.reload();
+    reopen();
   };
 
   private startRenderLoop() {
@@ -794,6 +796,9 @@ export class SceneManager {
       // not a guarantee. Cheap, unconditional insurance that a kiosk left on a
       // side monitor for weeks never pays for frames nobody can see.
       if (document.hidden) return;
+      // A villa picture is being taken (picturesStage): the canvas keeps the last frame drawn, never the floor or the
+      // look the picture is taken in.
+      if (this.framesHeld) return;
       const now = performance.now();
 
       // Whether to draw, at which resolution, and whether to time it is ONE
@@ -2280,6 +2285,58 @@ export class SceneManager {
         this.requestRender();
       }
     }
+  }
+
+  /** Set while a villa picture is taken: the render loop draws nothing (startRenderLoop). */
+  private framesHeld = false;
+
+  /**
+   * The scene made ready for the villa pictures (villaPictureCapture), or null with no model or while another one
+   * holds it: the canvas stops drawing (it keeps its last frame), the ceilings are off as in the overview, the GUI
+   * layer and every clickable outline and overlay are off, so none is baked into a picture. It hands over the
+   * model's own meshes, the only ones a picture draws (the sky, the light pools, the room glows and the camera
+   * beams are separate meshes), the model's extents and the plan's rooms. `release` puts every part back and asks
+   * for a frame. The sun's look, the floor and the lamps are the capture's (SunController.forceLook,
+   * FloorManager.showForPicture, EntityVisuals.lampsOff).
+   */
+  picturesStage(): { meshes: AbstractMesh[]; min: Vector3; max: Vector3; house: { min: Vector3; max: Vector3 };
+    rooms: WorldOutline[]; release: () => void; } | null {
+    if (this.disposed || this.framesHeld || !this.loadedMeshes.length) return null;
+    this.framesHeld = true;
+    const ext = this.worldExtends(this.loadedMeshes);
+    // the floors' own meshes, without the always-on exterior (ground, garden): what the pictures are framed on
+    const houseMeshes = this.floors.getFloorsDetected().flatMap((f) => this.floors.getFloorMeshes(f)).filter((m) => !m.isDisposed());
+    const house = houseMeshes.length ? this.worldExtends(houseMeshes) : ext;
+    this.structure.setView("overview");
+    const layers = this.scene.layers.filter((l) => l.isEnabled);
+    for (const l of layers) l.isEnabled = false;
+    const marked = this.scene.meshes.filter((m) => m.renderOutline || m.renderOverlay)
+      .map((m) => ({ m, outline: m.renderOutline, overlay: m.renderOverlay }));
+    for (const { m } of marked) { m.renderOutline = false; m.renderOverlay = false; }
+    return {
+      meshes: this.loadedMeshes.filter((m) => !m.isDisposed()),
+      min: ext.min,
+      max: ext.max,
+      house: { min: house.min, max: house.max },
+      rooms: this.pictureRooms(),
+      release: () => {
+        for (const { m, outline, overlay } of marked) { m.renderOutline = outline; m.renderOverlay = overlay; }
+        for (const l of layers) l.isEnabled = true;
+        this.structure.setView(this.viewMode);
+        this.framesHeld = false;
+        if (!this.disposed) this.requestRender(600);
+      },
+    };
+  }
+
+  /** The plan's rooms in the world, each on its 1-based floor: the storeys in height order, as FloorManager counts
+   *  them (Storeys.levelAt). */
+  private pictureRooms(): WorldOutline[] {
+    const storeys = [...new Set(this.plan.rooms.map((r) => this.plan.storeyOf(r)).filter((s): s is number => s !== null))]
+      .sort((a, b) => this.plan.floorY(a) - this.plan.floorY(b));
+    return this.plan.rooms.map((r) => ({
+      name: r.name, floor: storeys.indexOf(this.plan.storeyOf(r) ?? storeys[0]) + 1, pts: r.pts.map((p) => ({ x: p.x, z: p.z })),
+    }));
   }
 
   /** Entities that resolved to real geometry in the loaded model — the devices

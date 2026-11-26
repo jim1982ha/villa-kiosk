@@ -23,9 +23,8 @@ startLoadAttempt().end("left");
 ck("two loads left by the page (a reload, the app closed): no crash loop", !isCrashLooping(), crashLoopInfo());
 fresh();
 startLoadAttempt();
-startLoadAttempt();
-ck("two loads that never ended (the page was killed): the third opening stops", isCrashLooping(), crashLoopInfo());
-ck("  ...and says two loads", crashLoopInfo().count === 2, crashLoopInfo());
+ck("one load that never ended (the page was killed): the next opening stops", isCrashLooping(), crashLoopInfo());
+ck("  ...and says one load", crashLoopInfo().count === 1, crashLoopInfo());
 clearCrashLoop();
 ck("  ...\"Try once more\" lets the next one run", !isCrashLooping(), crashLoopInfo());
 
@@ -35,8 +34,7 @@ const a = startLoadAttempt();
 const b = startLoadAttempt();
 a.end("left");
 ck("ending one attempt leaves the other standing", crashLoopInfo().count === 1 && !b.ended, crashLoopInfo());
-startLoadAttempt();
-ck("  ...so with a third never ended, two stand: a crash loop", isCrashLooping(), crashLoopInfo());
+ck("  ...and the one standing stops the next opening", isCrashLooping(), crashLoopInfo());
 fresh();
 const c = startLoadAttempt();
 ck("the first end ends it", c.end("failed") === true && c.ended);
@@ -56,7 +54,7 @@ store.set("villa-kiosk:diag", JSON.stringify({ attempts: [now - 1000, "x", null,
 ck("  ...unusable entries are skipped, not thrown on", crashLoopInfo().count === 1, crashLoopInfo());
 store.set("villa-kiosk:diag", "{not json");
 ck("  ...an unreadable value is no attempts", !isCrashLooping() && crashLoopInfo().count === 0, crashLoopInfo());
-store.set("villa-kiosk:diag", JSON.stringify({ attempts: [now - 200_000, now - 150_000] }));
-ck("  ...loads from long ago do not count", !isCrashLooping(), crashLoopInfo());
+store.set("villa-kiosk:diag", JSON.stringify({ attempts: [now - 7 * 3600_000] }));
+ck("  ...a load killed on another day does not count", !isCrashLooping(), crashLoopInfo());
 
 done("Only a load whose page was killed counts towards the crash loop");

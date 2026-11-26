@@ -23,6 +23,10 @@ export const dismissTop = (): boolean => backStack.dismissTop();
  */
 export const overlayOpen = (): boolean => backStack.overlayOpen();
 
+/** Run `fn` once every surface is closed and history is back at the villa (backStack whenClosed): a reload asked
+ *  while a window closes would be cancelled by the close's own step back. */
+export const whenAllClosed = (fn: () => void): void => backStack.whenClosed(fn);
+
 /**
  * Swallow one back press to close this surface.
  *

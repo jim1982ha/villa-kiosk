@@ -19,6 +19,8 @@ It also serves local helper routes (no Supervisor token involved):
        (GLB) or its room-data sidecar (.rooms.json) under the add-on's own
        persistent /data volume (atomic overwrite), so the kiosk can be re-skinned
        from its own Settings UI instead of SSH/Samba.
+  POST /model-views?name=<file> -> stores one of the villa pictures (a .webp, or
+       their manifest.json) under views/, next to the model (villaPictures.ts).
   GET  /auth/roles    -> which kiosk profiles require a passcode (booleans only).
   POST /auth/verify   -> server-side profile passcode check. The configured PINs
        (guest_pin/owner_pin/ops_pin add-on options) never leave this process:
@@ -517,10 +519,12 @@ def _call_targets(obj: dict) -> list[str] | None:
 # The entity domains a non-owner session may read — see the docstring's
 # "What a non-owner session can READ". FAIL CLOSED like the rest of the table.
 READ_DOMAINS = frozenset(HA_COMMANDS.get("readDomains", ()))
+# Read only by a profile that may view cameras: a camera, and a picture (an `image.` entity, shown as a camera).
+_CAMERA_DOMAINS = frozenset({"camera", "image"})
 
 def _read_allowed(role: str, entity_id: str) -> bool:
     """Whether this role may see this entity at all. Owner is exempt; everyone
-    else is held to READ_DOMAINS, and to `viewCameras` for a camera."""
+    else is held to READ_DOMAINS, and to `viewCameras` for a camera or a picture."""
     if _may(role, "administer"):
         return True
     if _scene_select(entity_id):
@@ -528,7 +532,7 @@ def _read_allowed(role: str, entity_id: str) -> bool:
     domain = str(entity_id).partition(".")[0]
     if domain not in READ_DOMAINS:
         return False
-    return domain != "camera" or _may(role, "viewCameras")
+    return domain not in _CAMERA_DOMAINS or _may(role, "viewCameras")
 
 
 def _relay_to_client(role: str, text: str) -> str | None:
@@ -764,6 +768,15 @@ UPLOAD_MAGIC = {
     "rooms": (b"{", b"\xef\xbb\xbf{"),
 }
 
+# THE VILLA PICTURES (owner, 2026-11-24): a device too weak for the 3D villa shows a still picture of each floor,
+# made on a capable device of a profile that may manage the model and stored here, under views/ next to the model,
+# served by nginx's /model/ like the model itself. Only these names, nothing else (the frontend's VIEW_FILES), each
+# checked for what it claims to be: the same defence as the model upload, so this door cannot publish an arbitrary
+# file. A picture is a 1600 px webp, well under the cap; the cap only bounds a bad body.
+VIEWS_DIR = "views"
+VIEW_FILES = ("manifest.json", "f1-day.webp", "f1-night.webp", "f2-day.webp", "f2-night.webp")
+VIEW_MAX_BYTES = 8 * 1024 * 1024
+
 # Headers that must not be copied verbatim when relaying a proxied response.
 HOP_BY_HOP = {
     "connection", "keep-alive", "proxy-authenticate", "proxy-authorization",
@@ -892,7 +905,10 @@ _SAFE_TAIL_RE = re.compile(r"^[A-Za-z0-9_\-./:+]+$")
 # The ONLY non-service REST paths the kiosk itself requests (see
 # src/ha/HAHistoryAPI.ts and HACameraProxy.ts). Everything else a non-owner
 # might ask for is denied by default.
-_NON_OWNER_REST_PREFIXES = ("history/period/", "camera_proxy/", "camera_proxy_stream/")
+_NON_OWNER_REST_PREFIXES = ("history/period/", "camera_proxy/", "camera_proxy_stream/", "image_proxy/")
+# What only a profile that may view cameras reaches: a camera's feed and a picture's (an `image.` entity, shown in the
+# camera window: src/utils/entityDomain.ts isPicture).
+_CAMERA_REST_PREFIXES = ("camera_proxy/", "camera_proxy_stream/", "image_proxy/")
 # Guests unlock doors — deliberately. A guest is the person staying in the
 # villa, and permissions.ts puts access_control in their categories for exactly
 # that reason. The guest profile is PIN-protected in this deployment, so the
@@ -1021,7 +1037,7 @@ def _rest_call_allowed(role: str, tail: str) -> bool:
         # HA's REST API accepts POST /api/services/<domain>/<service> as an
         # exact equivalent of the websocket's call_service — same allowlist.
         return _service_call_allowed(role, m.group(1), m.group(2))
-    if t.startswith(("camera_proxy/", "camera_proxy_stream/")) and not _may(role, "viewCameras"):
+    if t.startswith(_CAMERA_REST_PREFIXES) and not _may(role, "viewCameras"):
         # The same capability the websocket's camera commands ask for — see
         # _ws_frame_refusal. permissions.ts hides cameras from such a role,
         # but that is a render filter; this is the refusal.
@@ -1270,12 +1286,30 @@ async def _cleanup_stale_options(session: ClientSession) -> None:
 
 
 def _remove_model_files() -> list[str]:
-    """Delete the uploaded model, its room-data sidecar and their upload records; the names actually removed. The
-    kiosk then shows its "No 3D model loaded yet" screen with the uploader."""
+    """Delete the uploaded model, its room-data sidecar, their upload records and the villa pictures made from them;
+    the names actually removed. The kiosk then shows its "No 3D model loaded yet" screen with the uploader."""
     www = _data(WWW_NAME)
     glb = MANAGED_PATH["glb"]
     gone = []
     for rel in (glb, glb + ".upload.json", _rooms_rel(glb), _rooms_rel(glb) + ".upload.json"):
+        try:
+            os.remove(os.path.join(www, rel))
+            gone.append(rel)
+        except FileNotFoundError:
+            pass
+        except OSError as err:
+            print(f"[supervisor-proxy] could not remove {rel}: {err}", flush=True)
+    return gone + _remove_views()
+
+
+def _remove_views() -> list[str]:
+    """Delete the villa pictures (views/); the names actually removed. Called whenever the model or its room data is
+    replaced or removed: a picture of the previous model would show badges on walls that moved, and the picture view
+    reads a missing manifest as "no pictures yet" until a capable device makes new ones."""
+    www = _data(WWW_NAME)
+    gone = []
+    for name in VIEW_FILES:
+        rel = f"{VIEWS_DIR}/{name}"
         try:
             os.remove(os.path.join(www, rel))
             gone.append(rel)
@@ -1383,6 +1417,8 @@ def _effective_paths() -> dict:
         "rooms_upload": _upload_meta(_rooms_rel(model_rel)) if model_rel else None,
         "model_version": _file_version(model_rel) if model_rel else "",
         "rooms_version": _file_version(_rooms_rel(model_rel)) if model_rel else "",
+        # The pictures' manifest is written LAST of its set, so its version stamps the whole set (villaPictures.ts).
+        "views_version": _file_version(f"{VIEWS_DIR}/manifest.json"),
     }
 
 
@@ -1414,6 +1450,46 @@ def _resolve_upload_target(kind: str) -> str:
     if dest != root and not dest.startswith(root + os.sep):
         raise ValueError("resolved path escapes the data root")
     return dest
+
+
+def _resolve_view_target(name: str) -> str:
+    """Absolute, traversal-checked destination of one villa picture file; ValueError for a name outside VIEW_FILES
+    or a path that escapes views/ (a symlinked views/ pointing elsewhere, say)."""
+    if name not in VIEW_FILES:
+        raise ValueError("not a villa picture file")
+    www = os.path.realpath(_data(WWW_NAME))
+    dest = os.path.realpath(os.path.join(www, VIEWS_DIR, name))
+    if dest != os.path.join(www, VIEWS_DIR, name):
+        raise ValueError("resolved path escapes the views folder")
+    return dest
+
+
+def _view_body_ok(name: str, body: bytes) -> bool:
+    """A picture is a webp (RIFF....WEBP), the manifest a JSON object."""
+    if name.endswith(".webp"):
+        return len(body) >= 12 and body[:4] == b"RIFF" and body[8:12] == b"WEBP"
+    return body.lstrip()[:1] == b"{"
+
+
+async def model_views_handler(request: web.Request) -> web.Response:
+    """Store one villa picture file (villaPictures.ts): the device that made the set posts the four pictures, then
+    the manifest LAST, so a reader never sees a manifest pointing at pictures not yet written. Atomic like every
+    write here: a reader gets the old file or the new one."""
+    name = request.query.get("name", "")
+    try:
+        dest = _resolve_view_target(name)
+    except ValueError as err:
+        print(f"[supervisor-proxy] view target rejected: {err}", flush=True)
+        return web.json_response({"error": "not a villa picture file"}, status=400)
+    body = bytearray()
+    async for chunk in request.content.iter_chunked(64 * 1024):
+        body.extend(chunk)
+        if len(body) > VIEW_MAX_BYTES:
+            return web.json_response({"error": "picture too large"}, status=413)
+    if not _view_body_ok(name, bytes(body)):
+        return web.json_response({"error": "not a picture of that kind"}, status=400)
+    await asyncio.to_thread(atomic_write, dest, lambda out: out.write(body))
+    return web.json_response({"ok": True, "name": name, "bytes": len(body)})
 
 
 async def addon_config_handler(request: web.Request) -> web.Response:
@@ -2675,6 +2751,7 @@ async def _chunked_upload(request: web.Request, kind: str, dest: str,
         # See the single-shot handler for why 0644 before the atomic replace.
         os.chmod(part, 0o644)
         os.replace(part, dest)
+        _remove_views()
     except web.HTTPException:
         # REFUSED (not a GLB, over the size cap, an empty piece): the upload
         # is over, and its pieces go with it.
@@ -2736,6 +2813,8 @@ async def model_upload_handler(request: web.Request) -> web.Response:
         return total
 
     total = await atomic_write_async(dest, _stream)
+    # The pictures were made from the file just replaced: they go with it (_remove_views).
+    _remove_views()
 
     _write_upload_sidecar(request, dest)
     rel = os.path.relpath(dest, os.path.realpath(_data(WWW_NAME)))
@@ -5817,6 +5896,9 @@ def _routes() -> tuple:
         # overwrite the villa model every kiosk loads.
         ("POST", "/model-upload", _profiles("manageModel", "Only the owner profile may upload a model."),
          model_upload_handler),
+        # the villa pictures are made where the model is managed, and read by everyone through /model/views/
+        ("POST", "/model-views", _profiles("manageModel", "Only a profile that may manage the model may store its pictures."),
+         model_views_handler),
         # a guest still reads the device config, to see the right badges and rooms at all
         ("GET", "/device-config", SIGNED_IN, device_config_get_handler),
         ("PUT", "/device-config", _store_editors("editConfig", "device configuration"), device_config_put_handler),

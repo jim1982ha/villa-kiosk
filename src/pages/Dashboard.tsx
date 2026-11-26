@@ -6,7 +6,8 @@ import { overlayOpen } from "@/hooks/useBackToClose";
 import { keyIsForCamera } from "@/babylon/overviewKeys";
 import { useInterval } from "@/hooks/useInterval";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
-import BabylonCanvas from "@/components/canvas/BabylonCanvas";
+import PictureView, { type PicturePlaces } from "@/components/canvas/PictureView";
+import { deviceView, reportDeviceView } from "@/utils/deviceVerdict";
 import SummaryGroupPanel from "@/components/panels/SummaryGroupPanel";
 import { Layers } from "lucide-react";
 import HUD from "@/components/hud/HUD";
@@ -69,6 +70,10 @@ import { readSceneMirror } from "./sceneMirror";
 const SettingsModal = lazy(() => import("@/components/settings/SettingsModal"));
 const ConfigEditorModal = lazy(() => import("@/components/settings/ConfigEditorModal"));
 const CockpitModal = lazy(() => import("@/components/cockpit/CockpitModal"));
+// ⚠️ THE 3D VIEW IS ITS OWN FILE, FETCHED ONLY WHERE IT IS SHOWN (owner, 2026-11-24): a device given the villa
+// pictures (deviceVerdict) never downloads the 3D engine (2.7 MB) nor the model. A device that shows it starts the
+// fetch as the page opens (main.tsx), so it is in hand by the time this page mounts.
+const BabylonCanvas = lazy(() => import("@/components/canvas/BabylonCanvas"));
 const OPENING = (
   <DialogLayer className="modal-backdrop">
     <div className="spinner" role="status" aria-label="Opening…" style={{ margin: "auto" }} />
@@ -104,7 +109,13 @@ export default function Dashboard() {
   resolvedRoomsRef.current = resolvedRooms;
 
   // The canvas's view of its scene (babylon/sceneHandle): once that scene is torn down, a call on it does nothing.
+  // Null for good on a device shown the villa pictures: every use below reads it as "no scene".
   const [manager, setManager] = useState<SceneManager | null>(null);
+  // The 3D villa or its pictures, decided once for this device before any 3D work (utils/deviceVerdict).
+  const [view] = useState(deviceView);
+  useEffect(() => { reportDeviceView(); }, []);
+  // What the pictures say of the devices they draw (PictureView): "on the map" and the room of one with no area.
+  const [places, setPlaces] = useState<PicturePlaces | null>(null);
   // WHAT IS ON SCREEN — the windows, the open device panel and where its Back
   // goes, the open room or category list, the Cockpit's tab, the fault and
   // guest report to start, Advanced Settings' focus — and every move between
@@ -159,6 +170,13 @@ export default function Dashboard() {
   // linked and motion entity, dismissed ones out), which are dismissed, and
   // which a profile can see at all — decided once, by the villa model
   // (config/villaVisibility.ts), and read here as by every surface below.
+  // On the pictures, the devices they draw stand for the model's objects (PictureView's places). ⚠️ BEFORE ANY
+  // PICTURES EXIST every mapped device does (owner, 2026-11-24: with none made yet the summary tiles all vanished, as
+  // nothing counted as on the map).
+  useEffect(() => {
+    if (places) setSceneEntityIds(places.mapped);
+    else if (view === "pictures") setSceneEntityIds(new Set(Object.keys(config.entityMap)));
+  }, [places, view, config.entityMap]);
   const villaSets = useVillaSets(sceneEntityIds);
   // the villa model, built once here and handed down (VillaModelProvider below): this page reads the same value
   const villa = useVillaModelValue(villaSets);
@@ -233,8 +251,8 @@ export default function Dashboard() {
   // Once-a-day auto-reload safety net (see utils/autoReload.ts) against a slow
   // background memory drift — only fires during its quiet overnight hour AND
   // when nothing's open AND no one's touched the kiosk recently, so it never
-  // interrupts real use. "Nothing's open" is the Back stack's answer
-  // (overlayOpen) — every dismissable surface is on it.
+  // interrupts real use. "Nothing's open" is utils/reopen's (canReopenNow),
+  // asked by autoReload itself; this says only whether anyone is near it.
   const lastInteractionRef = useRef(Date.now());
   useEffect(() => {
     const mark = () => { lastInteractionRef.current = Date.now(); };
@@ -247,9 +265,8 @@ export default function Dashboard() {
       document.removeEventListener("wheel", mark);
     };
   }, []);
-  useEffect(() => installDailyAutoReload(() =>
-    !overlayOpen() && Date.now() - lastInteractionRef.current > 5 * 60_000,
-  ), []);
+  // nobody near it for 5 min (an open window and unsent work are utils/reopen's to wait for)
+  useEffect(() => installDailyAutoReload(() => Date.now() - lastInteractionRef.current > 5 * 60_000), []);
 
   // Auto-connect on load / refresh. We always reach HA through the same-origin
   // Supervisor proxy (token injected server-side), so no credentials are needed.
@@ -586,8 +603,15 @@ export default function Dashboard() {
   // panel reads useConfig().resolvedRooms) and Babylon (SceneManager.
   // setResolvedRooms — badge grouping and motion-routing's room-highlight
   // read it there) so the two layers can never disagree.
+  // ⚠️ NO SCENE IS NOT NO ROOMS (owner, 2026-11-24): with no 3D view (the villa pictures, or the scene still
+  // loading) the villa's system's areas answer alone, the pictures' own outlines standing in for the scene's "which
+  // drawn room" (PictureView's places), else nothing: every list, toast and glow still has its rooms.
   useEffect(() => {
-    if (!manager) return;
+    if (!manager) {
+      const ids = roomIdSet(haIdsKey, mappedEntityIds, config.entityMap);
+      setResolvedRooms(resolveRooms(ids, entityAreaNames, (id) => places?.roomOf(id) ?? null));
+      return;
+    }
     const recompute = () => {
       // EVERY entity Home Assistant has, on the map or stored (devicePlace.roomIdSet
       // says why the set is the union), by the one rule; the scene is the rule's
@@ -601,11 +625,17 @@ export default function Dashboard() {
     // no replay, since it has just run.
     recompute();
     return manager.onScene(recompute, false);
-  }, [manager, entityAreaNames, config.entityMap, mappedEntityIds, haIdsKey, setResolvedRooms]);
+  }, [manager, places, entityAreaNames, config.entityMap, mappedEntityIds, haIdsKey, setResolvedRooms]);
 
   const handleTeleport = useCallback(
     (point: TeleportPoint) => {
-      if (!manager) return;
+      // no scene to fly (the villa pictures): the room's devices instead, what holding its chip lists
+      if (!manager) {
+        if (view === "3d") return;
+        closeSurface("rooms");
+        go({ type: "openList", list: { kind: "room", room: point.name, entityIds: roomDevices(point.name) } });
+        return;
+      }
       // Switch floors in BOTH camera modes: floor visibility is real now
       // (split-structure GLBs hide the upper storey), so panning the
       // bird's-eye camera to a 2F room must also reveal the 2F.
@@ -615,7 +645,7 @@ export default function Dashboard() {
       manager.navigateTo(point);
       closeSurface("rooms");
     },
-    [manager, currentFloor, onFloorChange, closeSurface],
+    [manager, view, currentFloor, onFloorChange, closeSurface, go, roomDevices],
   );
 
   // Tapping a room-cluster chip on the map does the SAME thing tapping that
@@ -758,24 +788,32 @@ export default function Dashboard() {
     <AnnouncementsProvider>
     {/* ...and on this profile's conversation with VESTA: the robot, Messages' pinned thread and "Ask VESTA" read it */}
     <ConversationProvider>
-      <BabylonCanvas
-        onManager={setManager}
-        onEntityPicked={onEntityPicked}
-        onEntityLongPressed={onEntityLongPressed}
-        onClusterPicked={handleClusterHeld}
-        onClusterTapped={handleClusterTapped}
-        onFloorChange={(f) => setCurrentFloor(f)}
-        onRoomChange={setRoom}
-        // straight to where the upload button is (it opened Settings on General, which has none: UI scan, 2026-11-10)
-        onNeedModel={() => openSurface("configEditor")}
-      />
+      {view === "pictures" ? (
+        <PictureView onEntityPicked={onEntityPicked} onEntityLongPressed={onEntityLongPressed}
+          onClusterPicked={handleClusterHeld} marks={marks}
+          cover={mapCover} onPlaces={setPlaces} />
+      ) : (
+        <Suspense fallback={<div className="center-overlay center-overlay-loading"><div className="spinner" aria-hidden="true" /></div>}>
+          <BabylonCanvas
+            onManager={setManager}
+            onEntityPicked={onEntityPicked}
+            onEntityLongPressed={onEntityLongPressed}
+            onClusterPicked={handleClusterHeld}
+            onClusterTapped={handleClusterTapped}
+            onFloorChange={(f) => setCurrentFloor(f)}
+            onRoomChange={setRoom}
+            // straight to where the upload button is (it opened Settings on General, which has none: UI scan, 2026-11-10)
+            onNeedModel={() => openSurface("configEditor")}
+          />
+        </Suspense>
+      )}
 
       <RoomLabel room={room} />
 
       <TapRipple ripples={ripples} />
 
       {role && showFirstRunTips && (
-        <FirstRunTips onClose={() => setShowFirstRunTips(false)} />
+        <FirstRunTips onClose={() => setShowFirstRunTips(false)} has3d={view === "3d"} />
       )}
 
       {/* EVERY notice of the villa view, in one column under the top bar, drawn by one piece (Notice) — the most
@@ -812,6 +850,7 @@ export default function Dashboard() {
         onOpenSearch={() => setSearchOpen(true)}
         families={families}
         onOpenPresence={() => openSurface("presence")}
+        has3d={view === "3d"}
       />
 
       {/* Bottom dashboard strip — scene / quick-action / summary tiles,
@@ -988,8 +1027,6 @@ export default function Dashboard() {
           // was the way in, and was never opened if a device panel was — so
           // there is nothing to restore and nothing to decide.
           onBack={() => closeSurface("configEditor")}
-          // Over Settings, Settings' Save / Cancel own its changes; on its own (a device window's "edit"), its own do
-          withinSettings={shown("settings")}
           viewHeadingDeg={manager ? () => manager.viewHeadingDeg() : undefined}
         />
         </Suspense>
