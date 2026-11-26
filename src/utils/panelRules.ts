@@ -9,7 +9,7 @@
 // tests/oracles/panel_rules.mjs.
 
 import { hsToRgb } from "./colorUtils";
-import { isDomain } from "@/utils/entityDomain";
+import { isDomain, isPicture } from "@/utils/entityDomain";
 
 /** Labels for a fan with N discrete speeds (HA's percentage_step). */
 const SPEED_LABELS: Record<number, string[]> = {
@@ -196,7 +196,8 @@ export function cameraChoices(
 ): string[] {
   const byDevice = new Map<string, string[]>();
   for (const id of [...ids].sort()) {
-    if (!isDomain(id, "camera")) continue;
+    // a picture (isPicture) is listed only where it is placed: a camera device is one of the villa's cameras by itself
+    if (!isDomain(id, "camera") && !(isPicture(id) && placed(id))) continue;
     const dev = devices.deviceOf(id);
     // ⚠️ A CAMERA PLACED ON THE MAP IS LISTED, HIDDEN OR NOT (owner, 2026-10-21: "why don't I see the Tapo Server Room
     // camera … while it's well defined in the Kiosk configuration"): its placed stream was hidden in the villa's

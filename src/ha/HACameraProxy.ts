@@ -54,3 +54,9 @@ export async function cameraHlsUrl(ws: HAWebSocket, entityId: string): Promise<s
   });
   return `${ingressApiBase()}${url.replace(/^\/api/, "")}`;
 }
+
+/** A picture's URL (an `image.` entity, isPicture): the one picture the villa's system keeps for it. `at` (its state,
+ *  the time it was taken) makes each new picture a new address, so the browser never shows the one before. */
+export function pictureUrl(entityId: string, at: string): string {
+  return `${ingressApiBase()}/image_proxy/${entityId}?_=${encodeURIComponent(at)}`;
+}

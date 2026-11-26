@@ -13,10 +13,14 @@
 //     HLS only for browsers without MSE (real iOS Safari).
 //  2. MJPEG (camera_proxy_stream) — for cameras without stream support.
 //  3. Still-image polling (camera_proxy) — works for essentially any camera.
+//
+// A picture (an `image.` entity, isPicture) has no feed: its one way is its picture, asked again when the villa's
+// system takes another (`pictureAt`, its state).
 
 import type Hls from "hls.js";
 import type { HAWebSocket } from "@/ha/HAWebSocket";
-import { cameraStreamUrl, cameraSnapshotUrl, cameraHlsUrl } from "@/ha/HACameraProxy";
+import { cameraStreamUrl, cameraSnapshotUrl, cameraHlsUrl, pictureUrl } from "@/ha/HACameraProxy";
+import { isPicture } from "@/utils/entityDomain";
 import { cameraSupportsWebRtc, startCameraWebRtc } from "@/ha/HACameraWebRTC";
 import type { CameraTier } from "./cameraPlayer";
 
@@ -41,7 +45,8 @@ const STREAM_WATCHDOG_MS = 6000;
 const SNAPSHOT_INTERVAL_MS = 800;
 const SNAPSHOT_MAX_ERRORS = 3;
 
-export function cameraTiers(ws: HAWebSocket, entityId: string): CameraTier[] {
+export function cameraTiers(ws: HAWebSocket, entityId: string, pictureAt = ""): CameraTier[] {
+  if (isPicture(entityId)) return [pictureTier(entityId, pictureAt)];
   return [
     {
       mode: "webrtc", element: "video",
@@ -194,4 +199,23 @@ export function cameraTiers(ws: HAWebSocket, entityId: string): CameraTier[] {
       },
     },
   ];
+}
+
+/** A picture's one tier: its picture, once (cameraTiers). */
+function pictureTier(entityId: string, at: string): CameraTier {
+  return {
+    mode: "snapshot", element: "img", watchdogMs: STREAM_WATCHDOG_MS,
+    start(el, report) {
+      const img = el as HTMLImageElement;
+      const onLoad = () => report.frame();
+      const onError = () => report.fail("picture failed");
+      img.addEventListener("load", onLoad);
+      img.addEventListener("error", onError);
+      img.src = pictureUrl(entityId, at);
+      return () => {
+        img.removeEventListener("load", onLoad);
+        img.removeEventListener("error", onError);
+      };
+    },
+  };
 }

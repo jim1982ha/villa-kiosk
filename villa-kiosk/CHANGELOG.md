@@ -1,3 +1,10 @@
+## 2.496.911
+
+- **Pictures from the villa's system open in the camera window.** A picture the villa's system keeps, such as a
+  doorbell's latest snapshot, can now be placed on the map like a camera. Tapping it opens the camera window with that
+  picture, and the window shows the new picture each time one is taken. Profiles that may not see cameras do not see
+  these pictures either.
+
 ## 2.496.910
 
 - **The Lights tile counts every lamp on a wall switch.** Lamps wired to one wall switch with several rockers (the

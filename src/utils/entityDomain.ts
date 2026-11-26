@@ -13,3 +13,11 @@ export function domainOf(entityId: string): string {
 export function isDomain(entityId: string, domain: string): boolean {
   return entityId.startsWith(domain + ".");
 }
+
+/** Is `entityId` a picture the villa's system keeps (an `image.` entity: a doorbell's latest snapshot, a camera
+ *  system's last event). ⚠️ SHOWN AS A CAMERA (owner, 2026-11-26): its type is "camera" (EntityMap
+ *  inferTypeFromEntityId) and its window the camera's, holding that one picture, new each time the villa's system
+ *  takes another (cameraTiers). */
+export function isPicture(entityId: string): boolean {
+  return isDomain(entityId, "image");
+}

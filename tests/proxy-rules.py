@@ -492,6 +492,10 @@ for line in disagree:
     print(f"          {line}")
 ck("guest cannot fetch a camera image over REST",
    not proxy._rest_call_allowed("guest", "camera_proxy/camera.any"))
+ck("a picture (an image entity, shown as a camera) is served and read exactly where a camera is",
+   all(proxy._rest_call_allowed(r, "image_proxy/image.any") == proxy._rest_call_allowed(r, "camera_proxy/camera.any")
+       and proxy._read_allowed(r, "image.any") == proxy._read_allowed(r, "camera.any") for r in proxy.AUTH_ROLES)
+   and not proxy._rest_call_allowed("guest", "image_proxy/image.any"))
 ck("guest can still read history (the charts)",
    proxy._rest_call_allowed("guest", "history/period/2026-01-01T00:00:00+08:00"))
 

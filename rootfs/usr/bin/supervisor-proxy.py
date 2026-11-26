@@ -519,10 +519,12 @@ def _call_targets(obj: dict) -> list[str] | None:
 # The entity domains a non-owner session may read — see the docstring's
 # "What a non-owner session can READ". FAIL CLOSED like the rest of the table.
 READ_DOMAINS = frozenset(HA_COMMANDS.get("readDomains", ()))
+# Read only by a profile that may view cameras: a camera, and a picture (an `image.` entity, shown as a camera).
+_CAMERA_DOMAINS = frozenset({"camera", "image"})
 
 def _read_allowed(role: str, entity_id: str) -> bool:
     """Whether this role may see this entity at all. Owner is exempt; everyone
-    else is held to READ_DOMAINS, and to `viewCameras` for a camera."""
+    else is held to READ_DOMAINS, and to `viewCameras` for a camera or a picture."""
     if _may(role, "administer"):
         return True
     if _scene_select(entity_id):
@@ -530,7 +532,7 @@ def _read_allowed(role: str, entity_id: str) -> bool:
     domain = str(entity_id).partition(".")[0]
     if domain not in READ_DOMAINS:
         return False
-    return domain != "camera" or _may(role, "viewCameras")
+    return domain not in _CAMERA_DOMAINS or _may(role, "viewCameras")
 
 
 def _relay_to_client(role: str, text: str) -> str | None:
@@ -903,7 +905,10 @@ _SAFE_TAIL_RE = re.compile(r"^[A-Za-z0-9_\-./:+]+$")
 # The ONLY non-service REST paths the kiosk itself requests (see
 # src/ha/HAHistoryAPI.ts and HACameraProxy.ts). Everything else a non-owner
 # might ask for is denied by default.
-_NON_OWNER_REST_PREFIXES = ("history/period/", "camera_proxy/", "camera_proxy_stream/")
+_NON_OWNER_REST_PREFIXES = ("history/period/", "camera_proxy/", "camera_proxy_stream/", "image_proxy/")
+# What only a profile that may view cameras reaches: a camera's feed and a picture's (an `image.` entity, shown in the
+# camera window: src/utils/entityDomain.ts isPicture).
+_CAMERA_REST_PREFIXES = ("camera_proxy/", "camera_proxy_stream/", "image_proxy/")
 # Guests unlock doors — deliberately. A guest is the person staying in the
 # villa, and permissions.ts puts access_control in their categories for exactly
 # that reason. The guest profile is PIN-protected in this deployment, so the
@@ -1032,7 +1037,7 @@ def _rest_call_allowed(role: str, tail: str) -> bool:
         # HA's REST API accepts POST /api/services/<domain>/<service> as an
         # exact equivalent of the websocket's call_service — same allowlist.
         return _service_call_allowed(role, m.group(1), m.group(2))
-    if t.startswith(("camera_proxy/", "camera_proxy_stream/")) and not _may(role, "viewCameras"):
+    if t.startswith(_CAMERA_REST_PREFIXES) and not _may(role, "viewCameras"):
         # The same capability the websocket's camera commands ask for — see
         # _ws_frame_refusal. permissions.ts hides cameras from such a role,
         # but that is a render filter; this is the refusal.

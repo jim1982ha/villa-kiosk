@@ -42,6 +42,7 @@ import { readingOf, stateWords } from "@/config/reading";
 import { historyStateColor } from "@/utils/stateColors";
 import { useArrowStep } from "@/hooks/useArrowStep";
 import { feedHasSound } from "./feedSound";
+import { isPicture } from "@/utils/entityDomain";
 import Button from "@/components/common/Button";
 
 interface Props extends PanelProps {
@@ -108,11 +109,13 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
   const [owned, setOwned] = useState<{ entityId: string; player: CameraPlayer } | null>(null);
   // "Try again" on a feed that gave up: a new player, from the first tier (a player that failed stays failed).
   const [attempt, setAttempt] = useState(0);
+  // A picture (isPicture) is asked again each time the villa's system takes another: its state is when it was taken.
+  const pictureAt = isPicture(mapping.entityId) ? entities[mapping.entityId]?.state ?? "" : "";
   useEffect(() => {
-    const p = createCameraPlayer(cameraTiers(ws, mapping.entityId), { log: tapDebug });
+    const p = createCameraPlayer(cameraTiers(ws, mapping.entityId, pictureAt), { log: tapDebug });
     setOwned({ entityId: mapping.entityId, player: p });
     return () => p.dispose();
-  }, [ws, mapping.entityId, attempt]);
+  }, [ws, mapping.entityId, attempt, pictureAt]);
   const player = owned?.entityId === mapping.entityId ? owned.player : null;
   const subscribeFeed = useCallback(
     (l: () => void) => (player ? player.subscribe(l) : () => {}), [player]);
