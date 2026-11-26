@@ -418,6 +418,10 @@ step numbers the scripts' messages cite (page.py: "SKILL.md step 6").
 - **One set of words for the villa's own alerts** — the words block of
   `homeassistant/custom_templates/vesta_message.jinja` is written by `message_format.jinja_words`
   (`python -m vesta_shared.message_format`), and a test fails when it differs or a word is written by hand outside it.
+  Those blocks (and the chats and visit words in the two packages) are only the first-install values: the agent tells
+  the villa its live ones (`message_format.villa_values`, from the villa's alert desk) with the event
+  `vesta_agent_values` into `sensor.vesta_agent_values`, read back every 5 minutes (`Vesta.tell_villa_values`), and
+  every villa template reads that sensor first (owner, 2026-11-26: no villa file pasted for a changed value).
   "To:" there says roles as an alert card does ("Owner & FM"), read from any of their words separated by ",". The
   template itself stays: an alert never waits on the agent. Its tests render it in an immutable sandbox, as the
   villa's system does.

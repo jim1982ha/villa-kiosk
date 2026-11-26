@@ -23,10 +23,11 @@
     joined by "&", the helper missing — is every role.
 
     The words themselves (roles, whom each priority reaches, stage icons and words, how a moment is written) are the
-    agent's: the block between
-    WORDS and END WORDS is written by vesta_shared.message_format.jinja_words — run
-    `python -m vesta_shared.message_format` after changing them there; never edit it here (architecture review,
-    2026-10-17: this file kept "Facility Manager" after alert cards said "FM").
+    agent's: each is the one the VESTA Agent last told the villa (sensor.vesta_agent_values `layout`, kept across a
+    restart), else the shipped one written in the block between WORDS and END WORDS, for a villa the Agent never told.
+    That block is written by vesta_shared.message_format.jinja_words; never edit it here (architecture review,
+    2026-10-17: this file kept "Facility Manager" after alert cards said "FM"; owner, 2026-11-26: a changed value
+    needs no new copy of this file).
 
     The bottom line is said by its STAGE, in the agent's own words (architecture review, 2026-10-13). A rule sets
     vm_stage — 'new', 'existing' or 'closed' — and this file writes its icon (message_format.STAGE_ICONS) before
@@ -54,6 +55,16 @@
 {%- set vm_time_format = "%d/%m/%Y %H:%M" -%}
 {%- set vm_status_break = "\n" -%}
 {%- set vm_over_title = " (closed)" -%}
+{%- set vm_told = state_attr('sensor.vesta_agent_values', 'layout') if state_attr is defined else none -%}
+{%- set vm_v = vm_told.get('role_of') if vm_told is mapping else none -%}{%- set vm_role_of = vm_v if vm_v is mapping else vm_role_of -%}
+{%- set vm_v = vm_told.get('role_words') if vm_told is mapping else none -%}{%- set vm_role_words = vm_v if (vm_v is iterable and vm_v is not string and vm_v is not mapping) else vm_role_words -%}
+{%- set vm_v = vm_told.get('and') if vm_told is mapping else none -%}{%- set vm_and = vm_v if vm_v is string else vm_and -%}
+{%- set vm_v = vm_told.get('priority_to') if vm_told is mapping else none -%}{%- set vm_priority_to = vm_v if vm_v is mapping else vm_priority_to -%}
+{%- set vm_v = vm_told.get('icons') if vm_told is mapping else none -%}{%- set vm_icons = vm_v if vm_v is mapping else vm_icons -%}
+{%- set vm_v = vm_told.get('words') if vm_told is mapping else none -%}{%- set vm_words = vm_v if vm_v is mapping else vm_words -%}
+{%- set vm_v = vm_told.get('time_format') if vm_told is mapping else none -%}{%- set vm_time_format = vm_v if vm_v is string else vm_time_format -%}
+{%- set vm_v = vm_told.get('status_break') if vm_told is mapping else none -%}{%- set vm_status_break = vm_v if vm_v is string else vm_status_break -%}
+{%- set vm_v = vm_told.get('over_title') if vm_told is mapping else none -%}{%- set vm_over_title = vm_v if vm_v is string else vm_over_title -%}
 {#- END WORDS -#}
 {%- set vm_by = vm_priority_to.get(vm_priority | default('', true) | string | trim | upper) -%}
 {%- set vm_r = vm_to | default('', true) | string | trim -%}

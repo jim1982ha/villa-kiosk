@@ -53,11 +53,32 @@ template:
           {%- set expected = '<b>T &lt;1&gt;</b>' ~ '\n' ~ 'To: Owner' ~ '\n' ~ '<blockquote>A &amp; B</blockquote>'
                              ~ '\n' ~ 'Status:' ~ '\n' ~ '<blockquote><i>S</i></blockquote>' -%}
           {{ 'ok' if out == expected else ('missing' if out | trim == '' else 'changed') }}
-  # The chats each VESTA priority reaches (P1 both lists, P2 the facility manager's, P3 and P4 no chat: the tablet
-  # only; a P1 or P2 with nobody in its lists goes to every Telegram chat of the villa), and `follow`: the priority a
-  # rule set to "Follow the VESTA Agent skill" takes. Both written from the VESTA Agent's alert desk (people_roles,
-  # routes, unrouted) and read by every VESTA blueprint, so the villa sends to the right chats with or without the
-  # Agent (owner, 2026-11-04). This sensor missing, each blueprint sends as a P1, to every Telegram chat.
+  # The VESTA Agent's values the villa sends its own messages with (owner, 2026-11-26: "why do we need to edit the
+  # packages/vesta_message.yaml every time we do a change here?"): whom each priority reaches (`chats`, by role), what
+  # "Follow the VESTA Agent" means (`follow`), the words of the layout (`layout`, read by vesta_message.jinja) and of a
+  # visit (`visit`, read by sensor.vesta_visit_words). Told by the Agent with the event vesta_agent_values whenever
+  # its alert desk's settings differ from what this sensor holds (its state: their fingerprint); kept across a
+  # restart and a reload (trigger-based), so the villa sends as the Agent last said with the Agent stopped. Never
+  # told (no Agent yet): every reader uses the values shipped in this file.
+  - triggers:
+      - trigger: event
+        event_type: vesta_agent_values
+    sensor:
+      - name: VESTA agent values
+        unique_id: vesta_agent_values
+        default_entity_id: sensor.vesta_agent_values
+        icon: mdi:sync
+        state: "{{ trigger.event.data.fingerprint | default(this.state, true) }}"
+        attributes:
+          chats: "{{ trigger.event.data.chats if trigger.event.data.chats is mapping else this.attributes.get('chats') }}"
+          follow: "{{ trigger.event.data.follow if trigger.event.data.follow is mapping else this.attributes.get('follow') }}"
+          layout: "{{ trigger.event.data.layout if trigger.event.data.layout is mapping else this.attributes.get('layout') }}"
+          visit: "{{ trigger.event.data.visit if trigger.event.data.visit is mapping else this.attributes.get('visit') }}"
+  # The chats each VESTA priority reaches (as shipped: P1 both lists, P2 the facility manager's, P3 and P4 no chat,
+  # VESTA UI only; a P1 or P2 with nobody in its lists goes to every Telegram chat of the villa), and `follow`: the
+  # priority a rule set to "Follow the VESTA Agent" takes. Both read from the VESTA Agent's values above (its alert
+  # desk's people_roles, routes, unrouted), and by every VESTA blueprint, so the villa sends to the right chats with
+  # or without the Agent (owner, 2026-11-04). This sensor missing, each blueprint sends as a P1, to every Telegram chat.
   - sensor:
       - name: VESTA chats by priority
         unique_id: vesta_chats_by_priority
@@ -66,13 +87,13 @@ template:
         attributes:
         # CHATS BY PRIORITY: written by vesta_shared.message_format.package_chats — python -m vesta_shared.message_format
           P1: >-
-            {%- set ns = namespace(t=[]) -%}{%- for h in ["input_text.vesta_owner_targets", "input_text.vesta_fm_targets"] -%}{%- set ns.t = ns.t + ((states(h) | default('', true) | string).split(',') | map('trim') | map('lower') | select('match', '^notify[.]') | list) -%}{%- endfor -%}{%- set t = ns.t | select('in', states.notify | map(attribute='entity_id') | list) | unique | list -%}{{ t if t else (integration_entities('telegram_bot') | select('match', '^notify[.]') | list) }}
+            {%- set a = state_attr('sensor.vesta_agent_values', 'chats') -%}{%- set roles = a.get('P1') if a is mapping and a.get('P1') is list else ["owner", "fm"] -%}{%- set hs = {"owner": "input_text.vesta_owner_targets", "fm": "input_text.vesta_fm_targets"} -%}{%- set ns = namespace(t=[]) -%}{%- for r in roles if r in hs -%}{%- set ns.t = ns.t + ((states(hs[r]) | default('', true) | string).split(',') | map('trim') | map('lower') | select('match', '^notify[.]') | list) -%}{%- endfor -%}{%- set t = ns.t | select('in', states.notify | map(attribute='entity_id') | list) | unique | list -%}{{ [] if not (roles | select('in', hs) | list) else (t if t else (integration_entities('telegram_bot') | select('match', '^notify[.]') | list)) }}
           P2: >-
-            {%- set ns = namespace(t=[]) -%}{%- for h in ["input_text.vesta_fm_targets"] -%}{%- set ns.t = ns.t + ((states(h) | default('', true) | string).split(',') | map('trim') | map('lower') | select('match', '^notify[.]') | list) -%}{%- endfor -%}{%- set t = ns.t | select('in', states.notify | map(attribute='entity_id') | list) | unique | list -%}{{ t if t else (integration_entities('telegram_bot') | select('match', '^notify[.]') | list) }}
+            {%- set a = state_attr('sensor.vesta_agent_values', 'chats') -%}{%- set roles = a.get('P2') if a is mapping and a.get('P2') is list else ["fm"] -%}{%- set hs = {"owner": "input_text.vesta_owner_targets", "fm": "input_text.vesta_fm_targets"} -%}{%- set ns = namespace(t=[]) -%}{%- for r in roles if r in hs -%}{%- set ns.t = ns.t + ((states(hs[r]) | default('', true) | string).split(',') | map('trim') | map('lower') | select('match', '^notify[.]') | list) -%}{%- endfor -%}{%- set t = ns.t | select('in', states.notify | map(attribute='entity_id') | list) | unique | list -%}{{ [] if not (roles | select('in', hs) | list) else (t if t else (integration_entities('telegram_bot') | select('match', '^notify[.]') | list)) }}
           P3: >-
-            {{ [] }}
+            {%- set a = state_attr('sensor.vesta_agent_values', 'chats') -%}{%- set roles = a.get('P3') if a is mapping and a.get('P3') is list else [] -%}{%- set hs = {"owner": "input_text.vesta_owner_targets", "fm": "input_text.vesta_fm_targets"} -%}{%- set ns = namespace(t=[]) -%}{%- for r in roles if r in hs -%}{%- set ns.t = ns.t + ((states(hs[r]) | default('', true) | string).split(',') | map('trim') | map('lower') | select('match', '^notify[.]') | list) -%}{%- endfor -%}{%- set t = ns.t | select('in', states.notify | map(attribute='entity_id') | list) | unique | list -%}{{ [] if not (roles | select('in', hs) | list) else (t if t else (integration_entities('telegram_bot') | select('match', '^notify[.]') | list)) }}
           P4: >-
-            {{ [] }}
+            {%- set a = state_attr('sensor.vesta_agent_values', 'chats') -%}{%- set roles = a.get('P4') if a is mapping and a.get('P4') is list else [] -%}{%- set hs = {"owner": "input_text.vesta_owner_targets", "fm": "input_text.vesta_fm_targets"} -%}{%- set ns = namespace(t=[]) -%}{%- for r in roles if r in hs -%}{%- set ns.t = ns.t + ((states(hs[r]) | default('', true) | string).split(',') | map('trim') | map('lower') | select('match', '^notify[.]') | list) -%}{%- endfor -%}{%- set t = ns.t | select('in', states.notify | map(attribute='entity_id') | list) | unique | list -%}{{ [] if not (roles | select('in', hs) | list) else (t if t else (integration_entities('telegram_bot') | select('match', '^notify[.]') | list)) }}
           follow: >-
-            {{ {"blueprints": {"critical_binary_trip": "P1", "critical_condition": "P2", "critical_presence_guard": "P1", "critical_schedule": "P2", "critical_system": "P2", "critical_watchdog": "P1"}, "critical_": "P1", "other": "P2"} }}
+            {%- set f = state_attr('sensor.vesta_agent_values', 'follow') -%}{{ f if f is mapping else {"blueprints": {"critical_binary_trip": "P1", "critical_condition": "P2", "critical_presence_guard": "P1", "critical_schedule": "P2", "critical_system": "P2", "critical_watchdog": "P1"}, "critical_": "P1", "other": "P2"} }}
         # END CHATS BY PRIORITY

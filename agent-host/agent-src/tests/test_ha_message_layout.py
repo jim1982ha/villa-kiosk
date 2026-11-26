@@ -204,6 +204,21 @@ def test_to_follows_the_priority_by_the_alert_desks_own_table():
                               "{% include 'vesta_message.jinja' ignore missing %}").render().split("\n")[1] == "To: Owner"
 
 
+def test_the_villas_own_message_says_what_the_agent_last_told_the_villa():
+    # owner, 2026-11-26 ("why do we need to edit the packages/vesta_message.yaml every time we do a change here?"): a
+    # desk whose P2 reaches the owner too, its words told, is read in the villa's "To:" with no new copy of the file
+    from vesta_shared.message_format import VALUES_SENSOR, shipped_values
+    layout = dict(shipped_values()["layout"], priority_to={"P1": "Owner", "P2": "Owner & FM"}, over_title=" (fini)")
+    src = ("{%- set vm_title, vm_to, vm_text, vm_status = 'T', '', 'x', '' -%}{%- set vm_priority = p -%}"
+           "{%- set vm_struck = k -%}{% include 'vesta_message.jinja' ignore missing %}")
+    t = _env().from_string(src)
+    held = lambda told: (lambda e, a: told if e == VALUES_SENSOR and a == "layout" else None)
+    assert t.render(p="P2", k=False, state_attr=held(layout)).split("\n")[1] == "To: Owner &amp; FM"
+    assert t.render(p="P2", k=True, state_attr=held(layout)).split("\n")[0] == "<b>T (fini)</b>"
+    assert t.render(p="P2", k=False, state_attr=held(None)).split("\n")[1] == "To: FM", "never told: as shipped"
+    assert t.render(p="P2", k=False, state_attr=held({"priority_to": "P2"})).split("\n")[1] == "To: FM"
+
+
 def test_the_priority_table_is_read_from_the_alert_desks_settings_never_typed(tmp_path, monkeypatch):
     # skills before code: a villa whose desk sends P2 to the owner too reads it so in the template's words
     import vesta_shared.message_format as mf
@@ -234,7 +249,7 @@ def test_every_rule_sends_to_the_chats_of_its_priority_written_once_from_the_ale
     # skill" kept): 8 blueprints kept their own "P1 the owner and the facility manager" table. The villa's sensor holds
     # each priority's chats and what Follow means, written from the desk's people_roles and routes
     from vesta_shared import villa_recipients
-    from vesta_shared.message_format import FOLLOW_PRIORITY, PACKAGE_BEGIN, PACKAGE_END, package_chats
+    from vesta_shared.message_format import FOLLOW_PRIORITY, PACKAGE_BEGIN, PACKAGE_END, VALUES_SENSOR, package_chats
     path = os.path.join(HA, "packages", "vesta_message.yaml")
     with open(path, encoding="utf-8") as f:
         src = f.read()
@@ -252,9 +267,12 @@ def test_every_rule_sends_to_the_chats_of_its_priority_written_once_from_the_ale
             return lists.get(e, "unknown")
     env = _env()
     env.tests["match"] = lambda v, pattern: re.match(pattern, str(v)) is not None      # Home Assistant's own test
+    env.tests["list"] = lambda v: isinstance(v, list)                                  # and its `is list`
     env.globals["integration_entities"] = lambda d: ["notify.example_group", "notify.example_a", "sensor.x"] \
         if d == "telegram_bot" else []
-    render = lambda p: env.from_string(sensor["attributes"][p]).render(states=States())
+    told: dict = {}                                            # the Agent's values the villa holds: none yet
+    held = lambda e, a: told.get(a) if e == VALUES_SENSOR else None
+    render = lambda p: env.from_string(sensor["attributes"][p]).render(states=States(), state_attr=held)
     desk = _desk()
     assert desk.recipients("P1") == ["owner", "fm"] and desk.recipients("P2") == ["fm"]
     assert [render(p) for p in ("P1", "P2", "P3", "P4")] == [
@@ -264,14 +282,24 @@ def test_every_rule_sends_to_the_chats_of_its_priority_written_once_from_the_ale
     assert render("P2") == "['notify.example_group', 'notify.example_a']"
     lists.clear()
     assert render("P1") == render("P2") == "['notify.example_group', 'notify.example_a']"
+    # ⚠️ AS THE AGENT TOLD THE VILLA, NO FILE PASTED (owner, 2026-11-26): a desk that sends P2 to the owner too and P3
+    # to the facility manager is read so the moment the villa holds it; a role the villa has no list of names nobody
+    lists[owner], lists[fm] = "notify.example_group", "notify.example_a"
+    told["chats"] = {"P1": ["owner"], "P2": ["owner", "fm"], "P3": ["fm", "guest"], "P4": ["guest"]}
+    assert [render(p) for p in ("P1", "P2", "P3", "P4")] == [
+        "['notify.example_group']", "['notify.example_group', 'notify.example_a']", "['notify.example_a']", "[]"]
+    told.clear()
     # ⚠️ NEITHER THE KIOSK APP NOR THE AGENT IN AN ALERT'S PATH (owner, 2026-11-04: "I am concerned … that makes VESTA
     # KIOSK in the critical path"): the sensor reads the villa's two lists, its notify entities and its Telegram chats
-    read = set(re.findall(r"[a-z_]+\.[a-z0-9_]+", " ".join(v for k, v in sensor["attributes"].items() if k != "follow")))
-    assert read - {"ns.t", "states.notify"} <= {owner, fm}, read
+    read = set(re.findall(r"['\"]([a-z_]+\.[a-z0-9_]+)['\"]", " ".join(sensor["attributes"].values())))
+    assert read <= {owner, fm, VALUES_SENSOR}, read
     # "Follow the VESTA Agent skill": the villa's answer is the desk's (route_for), for every kind and by name; its own
     # P1-P4 wins; the sensor missing, P1 (everyone)
     import ast
-    follow = ast.literal_eval(env.from_string(sensor["attributes"]["follow"]).render())
+    follow = ast.literal_eval(render("follow"))
+    told["follow"] = {"blueprints": {"critical_watchdog": "P3"}, "critical_": "P2", "other": "P4"}
+    assert ast.literal_eval(render("follow")) == told["follow"], "the Agent's table, once the villa holds it"
+    told.clear()
 
     class This:
         def __init__(self, eid):
@@ -308,7 +336,11 @@ def test_the_villas_visit_words_are_the_desks_written_once_into_the_visit_packag
             return ast.literal_eval(text)
         except (ValueError, SyntaxError):
             return text
-    got = {k: native(_env().from_string(v).render()) for k, v in sensor["attributes"].items()}
+    from vesta_shared.message_format import VALUES_SENSOR
+    told: dict = {}
+    held = lambda e, a: told.get(a) if e == VALUES_SENSOR else None
+    read = lambda: {k: native(_env().from_string(v).render(state_attr=held)) for k, v in sensor["attributes"].items()}
+    got = read()
     skills = os.path.join(os.path.dirname(__file__), "..", "starter", "skills", "alert-desk")
     with open(os.path.join(skills, "words.yaml"), encoding="utf-8") as f:
         words = yaml.safe_load(f)
@@ -321,6 +353,12 @@ def test_the_villas_visit_words_are_the_desks_written_once_into_the_visit_packag
     assert got["pressed"] == {"done": "Done on Telegram", "not_a_problem": "Not a problem on Telegram",
                               "open_ticket": "Ticket opened on Telegram", "need_help": "Need help on Telegram"}
     assert got["moment"] == TIME_FORMAT == "%H:%M", "a press said at its time alone (owner, 2026-11-07, #140)"
+    # as the Agent last told the villa (owner, 2026-11-26): its words win; a value of the wrong shape is the shipped one
+    told["visit"] = {"words": {"visit_seen": "Vu à {places}"}, "buttons": [["done", "Fait"]], "closes": "done",
+                     "moment": "%H.%M"}
+    now = read()
+    assert now["words"] == {"visit_seen": "Vu à {places}"} and now["buttons"] == [["done", "Fait"]]
+    assert now["closes"] == got["closes"] and now["pressed"] == got["pressed"] and now["moment"] == "%H.%M"
     # ONE mechanism: the template no longer carries a copy the blueprint could never read
     with open(os.path.join(HA, "custom_templates", "vesta_message.jinja"), encoding="utf-8") as f:
         jinja = f.read()

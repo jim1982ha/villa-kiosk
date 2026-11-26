@@ -454,6 +454,21 @@ class Actions:
                                       "error": str(e)[:error_short_chars()]})
             return False
 
+    async def tell_villa_values(self, values: dict, fingerprint: str) -> bool:
+        """The villa told the values its own messages are sent with (message_format.villa_values: whom each priority
+        reaches, what "Follow the VESTA Agent" means, the layout's and a visit's words): ONE event,
+        message_format.VALUES_EVENT, which only the villa's sensor of them hears. It acts on no device; recorded like
+        every other call."""
+        from vesta_shared.message_format import VALUES_EVENT
+        try:
+            await asyncio.to_thread(self.writer_factory().fire_event, VALUES_EVENT,
+                                    {**values, "fingerprint": fingerprint})
+            self.state.log("executed", {"system": True, "event": VALUES_EVENT, "fingerprint": fingerprint})
+            return True
+        except Exception as e:  # noqa: BLE001 — the villa keeps what it was told; told again at the next look
+            self.state.log("failed", {"system": True, "event": VALUES_EVENT, "error": str(e)[:error_short_chars()]})
+            return False
+
     async def set_villa_setting(self, entity_id: str, value: float, names: set[str]) -> bool:
         """A behaviour's villa value (input_number.vesta_<name>, `name` one of `names`: a skill's behaviour) set to
         `value`, asked on the VESTA Agent page by its administrator (the Limits tab): the one value the skills and the

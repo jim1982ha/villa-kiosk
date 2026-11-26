@@ -291,6 +291,7 @@ class Vesta:
         # KIOSK_EVERY_S, the first at once (cadence.Every: a 0.0 start waited 5 minutes on a machine up for less)
         self.kiosk_faults_every, self.recipients_every = Every(KIOSK_EVERY_S), Every(KIOSK_EVERY_S)
         self._records = None              # the wake's read of the Kiosk's faults: running, and pressed again since
+        self._values_said: str | None = None   # tell_villa_values: what the log last said
         self.scheduler: Scheduler | None = None
         self._pack = None
         self._pack_mtime = None
@@ -578,6 +579,36 @@ class Vesta:
         got = villa_recipients.read(self.reader)
         if got is not None and villa_recipients.save(self.s.pack_path, got):
             log.info("%s", villa_recipients.says(got))
+
+    async def tell_villa_values(self) -> None:
+        """The values the villa sends its own messages with (message_format.villa_values, from the villa's alert desk
+        as it is now), told to the villa when the ones it holds differ (its sensor's state: their fingerprint).
+
+        ⚠️ NEVER A VALUE PASTED INTO A VILLA FILE (owner, 2026-11-26: "why do we need to edit the
+        packages/vesta_message.yaml every time we do a change here?"): making one rule P1 took an Agent release and a
+        hand edit of the villa's file, and nothing noticed a villa left behind. Read back every 5 minutes, as the
+        villa's lists are: an edited alert desk reaches the villa's own alerts within 5 minutes, and a villa without
+        the sensor is said once in the log."""
+        from vesta_shared import message_format
+        values = message_format.values_now()
+        if values is None:
+            return
+        fp = message_format.fingerprint(values)
+        try:
+            # asked as a list: a sensor the villa lacks is left out, never an error (ha_client.not_found)
+            held = await asyncio.to_thread(self.reader.states,
+                                           [message_format.VALUES_SENSOR, message_format.CHATS_SENSOR])
+        except Exception:  # noqa: BLE001 — unread: told again, the villa keeps the last one it holds
+            held = {}
+        if (held.get(message_format.VALUES_SENSOR) or {}).get("state") == fp:
+            return
+        if held and message_format.VALUES_SENSOR not in held and self._values_said != "absent":
+            self._values_said = "absent"
+            log.warning("The villa has no %s yet: its own alerts use the values shipped in its files until "
+                        "packages/vesta_message.yaml of this version is installed", message_format.VALUES_SENSOR)
+        if await self.actions.tell_villa_values(values, fp) and self._values_said != fp:
+            self._values_said = fp
+            log.info("The villa told the alert desk's values for its own messages (%s)", fp)
 
     def devices_changed(self, settle: float | None = None) -> None:
         """The villa's devices changed (ha_events.REGISTRY_EVENTS): read them again once they have been still for
@@ -1127,6 +1158,7 @@ class Vesta:
         # the agent's next alert within 5 minutes (villa_recipients)
         if self.recipients_every.due():
             await self._safe(asyncio.to_thread(self.read_recipients))
+            await self._safe(self.tell_villa_values())
         # a request for approval nobody answered says so, in every chat, and loses its buttons (approvals.py)
         await self._safe(self.approvals.expire())
         # a copy Telegram did not take the last change of (a network blip): tried again (incident_thread.py)

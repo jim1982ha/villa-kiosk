@@ -10,6 +10,7 @@ vesta_agent.skills.Skills.folder — none for a skill switched off, refused or d
 whenever it changes.
 
     words(skill, key)   entry `key` of the skill's words.yaml, by language ({} when it has none, or the skill is off)
+    file(skill, name)   any of the skill's files as it is now; folder(skill): where the skill is
     use(locate)         the engine, at start: a skill's name -> its folder, None when the villa has it not on
 """
 from __future__ import annotations
@@ -43,13 +44,18 @@ def use(locate: Callable[[str], str | None] | None) -> None:
     _locate = locate or _in_skills_dir
 
 
+def folder(skill: str) -> str | None:
+    """The villa's `skill`'s folder now (None when the villa has it not on)."""
+    return _locate(skill)
+
+
 def file(skill: str, name: str = WORDS) -> dict:
     """File `name` of the villa's `skill` as it is now ({} when the skill is not on, or the file is absent or not a
     mapping). ⚠️ A BROKEN EDIT IS SAID, NEVER GUESSED AROUND: logged once per change of the file, read as {}."""
-    folder = _locate(skill)
-    if not folder:
+    where = _locate(skill)
+    if not where:
         return {}
-    path = os.path.join(folder, name)
+    path = os.path.join(where, name)
     try:
         st = os.stat(path)
     except OSError:

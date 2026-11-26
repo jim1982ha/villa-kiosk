@@ -11,9 +11,10 @@
 #                               restart and a reload (trigger-based). Not recorded in the history (state, not history:
 #                               large attributes), from the next restart on.
 #   sensor.vesta_visit_words    the English words the villa writes a visit with while VESTA is away (VESTA writes its
-#                               own, in each chat's language). Written by the VESTA Agent's
-#                               `python -m vesta_shared.message_format`: never edit the block by hand. It also names
-#                               the script below and the "VESTA reminder after" setting, for the blueprint.
+#                               own, in each chat's language): as the VESTA Agent last told the villa
+#                               (sensor.vesta_agent_values `visit`, packages/vesta_message.yaml), else the shipped
+#                               ones in the block below (written by `python -m vesta_shared.message_format`, never by
+#                               hand). It also names the script below and the "VESTA reminder after" setting.
 #   script.vesta_visit_tell     how the VESTA Agent tells the villa what it did: it holds the visit, its number, the
 #                               cards it shows in each chat, the step it has told, an answer, a reminder sent, the
 #                               photos of a step's burst it deleted once it kept the best one.
@@ -80,15 +81,15 @@ template:
         attributes:
         # VISIT WORDS: written by vesta_shared.message_format.package_visit_words — python -m vesta_shared.message_format
           words: >-
-            {{ {"visit_seen": "Seen at {places}, {span}", "visit_lock_here": "{name} unlocked, not by the villa's system, {time}", "visit_lock_app": "{name} opened from the app ({who}), {time}", "visit_lock_app_plain": "{name} opened from the app, {time}", "visit_opened": "{name} opened, {time}", "visit_locked_again": ", locked again {time}", "visit_inside": "Someone is inside ({room}) at {time}", "visit_person": "Person seen in the {room} at {time}", "visit_changed_lock": "{name} was opened at {time}.", "visit_changed_door": "{name} opened at {time}.", "visit_changed_inside": "Someone went inside at {time}.", "visit_changed_motion": "Seen at {place} at {time}.", "visit_changed_person": "A person was seen in the {room} at {time}.", "visit_expected": "Was this visit expected?", "visit_ended": "no further signal for {quiet}", "visit_home": "Expected: {name} came home at {time}", "no_answer": "No answer after {after}", "visit_title_opened": "{name} opened while the villa is empty", "visit_title_opened_waiting": "{name} opened while the villa waits for indoor quiet", "visit_noted": "VESTA acts on it when it is back", "visit_noise": "Sound heard in the {room} at {time}", "visit_changed_noise": "A sound was heard in the {room} at {time}.", "visit_drill": "TEST: {title}", "visit_monitoring": "monitoring until {time}"} }}
+            {%- set v = state_attr('sensor.vesta_agent_values', 'visit') -%}{%- set v = v.get('words') if v is mapping else none -%}{{ v if v is mapping else {"visit_seen": "Seen at {places}, {span}", "visit_lock_here": "{name} unlocked, not by the villa's system, {time}", "visit_lock_app": "{name} opened from the app ({who}), {time}", "visit_lock_app_plain": "{name} opened from the app, {time}", "visit_opened": "{name} opened, {time}", "visit_locked_again": ", locked again {time}", "visit_inside": "Someone is inside ({room}) at {time}", "visit_person": "Person seen in the {room} at {time}", "visit_changed_lock": "{name} was opened at {time}.", "visit_changed_door": "{name} opened at {time}.", "visit_changed_inside": "Someone went inside at {time}.", "visit_changed_motion": "Seen at {place} at {time}.", "visit_changed_person": "A person was seen in the {room} at {time}.", "visit_expected": "Was this visit expected?", "visit_ended": "no further signal for {quiet}", "visit_home": "Expected: {name} came home at {time}", "no_answer": "No answer after {after}", "visit_title_opened": "{name} opened while the villa is empty", "visit_title_opened_waiting": "{name} opened while the villa waits for indoor quiet", "visit_noted": "VESTA acts on it when it is back", "visit_noise": "Sound heard in the {room} at {time}", "visit_changed_noise": "A sound was heard in the {room} at {time}.", "visit_drill": "TEST: {title}", "visit_monitoring": "monitoring until {time}"} }}
           buttons: >-
-            {{ [["done", "Done"], ["not_a_problem", "Not a problem"], ["open_ticket", "Open Ticket"], ["need_help", "Need help"]] }}
+            {%- set v = state_attr('sensor.vesta_agent_values', 'visit') -%}{%- set v = v.get('buttons') if v is mapping else none -%}{{ v if (v is iterable and v is not string and v is not mapping) else [["done", "Done"], ["not_a_problem", "Not a problem"], ["open_ticket", "Open Ticket"], ["need_help", "Need help"]] }}
           pressed: >-
-            {{ {"done": "Done on Telegram", "not_a_problem": "Not a problem on Telegram", "open_ticket": "Ticket opened on Telegram", "need_help": "Need help on Telegram"} }}
+            {%- set v = state_attr('sensor.vesta_agent_values', 'visit') -%}{%- set v = v.get('pressed') if v is mapping else none -%}{{ v if v is mapping else {"done": "Done on Telegram", "not_a_problem": "Not a problem on Telegram", "open_ticket": "Ticket opened on Telegram", "need_help": "Need help on Telegram"} }}
           closes: >-
-            {{ ["done", "not_a_problem"] }}
+            {%- set v = state_attr('sensor.vesta_agent_values', 'visit') -%}{%- set v = v.get('closes') if v is mapping else none -%}{{ v if (v is iterable and v is not string and v is not mapping) else ["done", "not_a_problem"] }}
           moment: >-
-            {{ "%H:%M" }}
+            {%- set v = state_attr('sensor.vesta_agent_values', 'visit') -%}{%- set v = v.get('moment') if v is mapping else none -%}{{ v if v is string else "%H:%M" }}
         # END VISIT WORDS
           # the package's own wiring, read by the CRITICAL Presence Guard (owner, 2026-11-14: no blueprint field for what
           # is always the same): the script the VESTA Agent tells the villa with, and the "VESTA reminder after" setting

@@ -699,6 +699,67 @@ def priority_to(rules: dict) -> dict[str, str]:
     return out
 
 
+#: The villa's sensor of the VESTA Agent's values (homeassistant/packages/vesta_message.yaml), filled by VALUES_EVENT:
+#: what the villa's own messages are sent with — whom each priority reaches (`chats`), what "Follow the VESTA Agent
+#: skill" means (`follow`), the words of the layout (`layout`) and of a visit (`visit`). Its state is the values'
+#: fingerprint, which the Agent reads back to tell them again when they differ.
+VALUES_SENSOR = "sensor.vesta_agent_values"
+VALUES_EVENT = "vesta_agent_values"
+#: The layout's values, as vesta_message.jinja names them (vm_<key>)
+LAYOUT_KEYS = ("role_of", "role_words", "and", "priority_to", "icons", "words", "time_format", "status_break",
+               "over_title")
+
+
+#: How a villa template tells a told value has the shape of its shipped one
+_IS = {str: "v is string", dict: "v is mapping", list: "(v is iterable and v is not string and v is not mapping)"}
+
+
+def villa_values(rules: dict, said: dict, buttons: list) -> dict:
+    """The values the villa sends its own messages with, from the alert desk's settings (`rules`: its rules.yaml),
+    words (`said`: its words.yaml) and `buttons` (its skill.yaml): one dict, `chats`, `follow`, `layout`, `visit`.
+
+    ⚠️ TOLD, NEVER WRITTEN INTO A FILE (owner, 2026-11-26): these were blocks of text in three villa files, pasted by
+    hand after each release that changed one. The Agent tells them (VALUES_EVENT) from the villa's own skill; the
+    files keep the shipped ones (shipped_values) for a villa the Agent never told."""
+    from . import villa_recipients
+    from .timeutil import MOMENT_FORMAT
+    roles = rules.get("people_roles") or {}
+    names = {w.lower(): r for words in (ROLE_WORDS, ROLE_SHORT) for r, w in words.items()}
+    layout = {"role_of": names, "role_words": [[r, w] for r, w in ROLE_SHORT.items()], "and": AND,
+              "priority_to": priority_to(rules), "icons": STAGE_ICONS, "words": STAGE_WORDS,
+              "time_format": MOMENT_FORMAT, "status_break": STATUS_BREAK, "over_title": title_with("", OVER_WORD)}
+    return {"chats": {p: [r for r in roles if r in villa_recipients.HELPERS and p in (roles.get(r) or [])]
+                      for p in ("P1", "P2", "P3", "P4")},
+            "follow": follow_table(rules), "layout": layout, "visit": visit_words(said, buttons)}
+
+
+def shipped_values() -> dict:
+    """villa_values of the released alert desk (the starter folder): the first-install values the villa's files hold."""
+    import yaml
+    read = {}
+    for key, path in (("rules", ALERT_DESK_RULES), ("said", ALERT_DESK_WORDS), ("skill", ALERT_DESK_SKILL)):
+        with open(path, encoding="utf-8") as f:
+            read[key] = yaml.safe_load(f) or {}
+    return villa_values(read["rules"], read["said"], read["skill"].get("buttons") or [])
+
+
+def values_now() -> dict | None:
+    """villa_values of the villa's alert desk as it is now (its folder, rules.yaml with villa.rules.yaml on top); None
+    when the villa has it not on — the villa keeps what it was told last."""
+    from . import skill_settings, skill_words
+    folder = skill_words.folder(ALERT_DESK)
+    if not folder:
+        return None
+    rules = skill_settings.load(folder, "rules.yaml", first=("routes",))
+    return villa_values(rules, skill_words.file(ALERT_DESK), skill_words.file(ALERT_DESK, "skill.yaml").get("buttons") or [])
+
+
+def fingerprint(values: dict) -> str:
+    """The values' short fingerprint: VALUES_SENSOR's state once the villa holds them."""
+    import hashlib
+    return hashlib.sha256(json.dumps(values, sort_keys=True, ensure_ascii=False).encode()).hexdigest()[:16]
+
+
 def jinja_words() -> str:
     """The agent's words as the villa's own alert template reads them: the roles (every way a "To:" may name one, and
     how an alert card says it), whom each priority reaches (the alert desk's table), the stages' icons and words, and
@@ -711,26 +772,18 @@ def jinja_words() -> str:
 
     ⚠️ "TO:" BY PRIORITY IS THE DESK'S TABLE (owner, 2026-10-19, recommended and approved): every critical blueprint
     wrote "P1 → Owner, Facility Manager, else Facility Manager" by hand, so a changed people_roles made the villa's own
-    message say one "To:" and the agent's rewrite another a second later. A rule now passes its priority (vm_priority)."""
-    import yaml
-    from .timeutil import MOMENT_FORMAT
-    with open(ALERT_DESK_RULES, encoding="utf-8") as f:
-        rules = yaml.safe_load(f) or {}
-    lit = lambda v: json.dumps(v, ensure_ascii=False)
-    names = {w.lower(): r for words in (ROLE_WORDS, ROLE_SHORT) for r, w in words.items()}
-    return "\n".join([
-        JINJA_BEGIN,
-        f"{{%- set vm_role_of = {lit(names)} -%}}",
-        f"{{%- set vm_role_words = {lit([[r, w] for r, w in ROLE_SHORT.items()])} -%}}",
-        f"{{%- set vm_and = {lit(AND)} -%}}",
-        f"{{%- set vm_priority_to = {lit(priority_to(rules))} -%}}",
-        f"{{%- set vm_icons = {lit(STAGE_ICONS)} -%}}",
-        f"{{%- set vm_words = {lit(STAGE_WORDS)} -%}}",
-        f"{{%- set vm_time_format = {lit(MOMENT_FORMAT)} -%}}",
-        f"{{%- set vm_status_break = {lit(STATUS_BREAK)} -%}}",
-        f"{{%- set vm_over_title = {lit(title_with('', OVER_WORD))} -%}}",
-        JINJA_END,
-    ])
+    message say one "To:" and the agent's rewrite another a second later. A rule now passes its priority (vm_priority).
+
+    ⚠️ AS THE AGENT LAST TOLD THE VILLA (owner, 2026-11-26): each value is the shipped one (a villa the Agent never
+    told), then the one VALUES_SENSOR holds — so a changed people_roles reaches the villa's "To:" with no file pasted."""
+    lit = lambda v: json.dumps(v, ensure_ascii=False)   # noqa: E731
+    layout = shipped_values()["layout"]
+    told = ["{%- set vm_told = state_attr('" + VALUES_SENSOR + "', 'layout') if state_attr is defined else none -%}"]
+    for k in LAYOUT_KEYS:
+        told.append("{%- set vm_v = vm_told.get('" + k + "') if vm_told is mapping else none -%}"
+                    "{%- set vm_" + k + " = vm_v if " + _IS[type(layout[k])].replace("v is", "vm_v is")
+                    + " else vm_" + k + " -%}")
+    return "\n".join([JINJA_BEGIN] + [f"{{%- set vm_{k} = {lit(layout[k])} -%}}" for k in LAYOUT_KEYS] + told + [JINJA_END])
 
 
 def write_jinja(path: str = JINJA_FILE) -> bool:
@@ -758,7 +811,11 @@ def follow_table(rules: dict) -> dict:
     priority of each kind of rule (its blueprint's route), else by the rule's name (`unrouted`: critical_…, other) —
     desk.route_for's answer for an event naming its blueprint, as data the villa reads (package_chats)."""
     sev = (rules.get("defaults") or {}).get("severity")
-    kinds = {str(r["blueprint"]): str(r.get("severity") or sev) for r in rules.get("routes") or [] if r.get("blueprint")}
+    kinds: dict[str, str] = {}
+    for r in rules.get("routes") or []:
+        if isinstance(r, dict) and r.get("blueprint"):
+            # the first route of a kind wins, as desk.route_for reads them: a villa's own route comes first
+            kinds.setdefault(str(r["blueprint"]), str(r.get("severity") or sev))
     by_name = rules.get("unrouted") or {}
     return {"blueprints": kinds, "critical_": str(by_name.get("critical_") or sev), "other": str(by_name.get("other") or sev)}
 
@@ -777,37 +834,42 @@ FOLLOW_PRIORITY = ("{%- set p = (vesta_priority | default('', true) | string | u
 
 def package_chats() -> str:
     """The attributes of the villa's "VESTA chats by priority" sensor: for each priority, the notify entities of the
-    lists of the roles it reaches (the alert desk's people_roles; each role's list is the agreement's helper), once
-    each and only those the villa has; and `follow`, what "Follow the VESTA Agent skill" means (follow_table).
+    lists of the roles it reaches (VALUES_SENSOR `chats`; each role's list is the agreement's helper), once each and
+    only those the villa has; and `follow`, what "Follow the VESTA Agent skill" means (VALUES_SENSOR `follow`). Each
+    reads the Agent's value the villa keeps, and the shipped one (follow_table, the starter alert desk) only on a villa
+    the Agent never told.
 
     ⚠️ THE VILLA KNOWS, WITH OR WITHOUT THE AGENT (owner, 2026-11-04: every critical alert reaches Telegram and the
     tablet "with or without a running/configured agent"; "Follow VESTA Agent skill" kept, the villa holding its copy):
     8 rules kept their own copy of "P1 the owner and the facility manager, P2 the facility manager" and 4 a second
-    field for a notice's people. They read this sensor now; the tables stay the alert desk's, as the template's "To:"
-    words are (jinja_words), written here by `python -m vesta_shared.message_format`."""
-    import yaml
+    field for a notice's people. They read this sensor now.
+
+    ⚠️ A VALUE IS NEVER WRITTEN INTO A VILLA FILE (owner, 2026-11-26: "why do we need to edit the
+    packages/vesta_message.yaml every time we do a change here?"): the table was this block's text, so making one rule
+    P1 took an Agent release AND a hand edit of the villa's file. The Agent now tells the villa its values
+    (VALUES_EVENT, villa_values); the block holds only the first-install ones."""
     from . import villa_recipients
-    with open(ALERT_DESK_RULES, encoding="utf-8") as f:
-        rules = yaml.safe_load(f) or {}
-    roles = rules.get("people_roles") or {}
+    values = shipped_values()
+    helpers = json.dumps({r: villa_recipients.HELPERS[r] for r in ROLES if r in villa_recipients.HELPERS})
     lines = [PACKAGE_BEGIN]
-    listed = [r for r in roles if r in villa_recipients.HELPERS]
     for p in ("P1", "P2", "P3", "P4"):
-        mine = [villa_recipients.HELPERS[r] for r in listed if p in (roles.get(r) or [])]
-        # a priority that reaches a list reads its lists, and with nobody in them every Telegram chat of the villa;
-        # one that reaches none (P3, P4: the tablet only) sends to no chat
+        # the roles the priority reaches (the Agent's, else the shipped), each role's list read; with nobody in them
+        # every Telegram chat of the villa; a priority that reaches no list (P3, P4: VESTA UI only) sends to no chat
         lines.append(f"          {p}: >-")
-        if not mine:
-            lines.append("            {{ [] }}")
-            continue
-        lines.append("            {%- set ns = namespace(t=[]) -%}{%- for h in " + json.dumps(mine) + " -%}"
-                     "{%- set ns.t = ns.t + ((states(h) | default('', true) | string).split(',') | map('trim')"
+        lines.append("            {%- set a = state_attr('" + VALUES_SENSOR + "', 'chats') -%}"
+                     "{%- set roles = a.get('" + p + "') if a is mapping and a.get('" + p + "') is list else "
+                     + json.dumps(values["chats"][p]) + " -%}"
+                     "{%- set hs = " + helpers + " -%}"
+                     "{%- set ns = namespace(t=[]) -%}{%- for r in roles if r in hs -%}"
+                     "{%- set ns.t = ns.t + ((states(hs[r]) | default('', true) | string).split(',') | map('trim')"
                      " | map('lower') | select('match', '^notify[.]') | list) -%}{%- endfor -%}"
                      "{%- set t = ns.t | select('in', states.notify | map(attribute='entity_id') | list) | unique"
                      " | list -%}"
-                     "{{ t if t else (integration_entities('telegram_bot') | select('match', '^notify[.]') | list) }}")
+                     "{{ [] if not (roles | select('in', hs) | list) else (t if t else"
+                     " (integration_entities('telegram_bot') | select('match', '^notify[.]') | list)) }}")
     lines.append("          follow: >-")
-    lines.append("            {{ " + json.dumps(follow_table(rules), sort_keys=True) + " }}")
+    lines.append("            {%- set f = state_attr('" + VALUES_SENSOR + "', 'follow') -%}"
+                 "{{ f if f is mapping else " + json.dumps(values["follow"], sort_keys=True) + " }}")
     lines.append(PACKAGE_END)
     return "\n".join(lines)
 
@@ -832,35 +894,40 @@ VISIT_END = "        # END VISIT WORDS"
 PRESSED_ON_TELEGRAM = {"done": DONE_IN, "not_a_problem": LASTING_IN}
 
 
-def package_visit_words() -> str:
-    """The attributes of the villa's "VESTA visit words" sensor (packages/vesta_visit.yaml): the English the villa's
-    presence automation writes a visit with while VESTA is away — `words` (words.yaml's English of VISIT_WORDS),
-    `buttons` (the alert desk's [option, label], in its order), `pressed` (each press as a line says it, pressed on
-    Telegram), `closes` (the options that close an alert) and `moment` (timeutil.TIME_FORMAT, "Done on Telegram at
-    08:53 (Jm)": a press is said on the alert's own day, its time alone, as VESTA says it — owner, 2026-11-07, #140).
-
-    ⚠️ A BLUEPRINT CANNOT READ A TEMPLATE'S VARIABLE (phase C of one visit, one story, 2026-11-06): the words were a
-    `vm_visit_words` set inside vesta_message.jinja, which a blueprint's own templates never see (a variable set in an
-    included file stays there), and the villa's installed copy of the template is not updated by any tool. A sensor's
-    attributes are read by every template; the words stay the desk's, written here, never by hand."""
-    import yaml
+def visit_words(said: dict, buttons: list) -> dict:
+    """What the villa's presence automation writes a visit with while VESTA is away, from the alert desk's words
+    (`said`, its words.yaml) and `buttons` (its skill.yaml): `words` (the English of VISIT_WORDS), `buttons` (the
+    desk's [option, label], in its order), `pressed` (each press as a line says it, pressed on Telegram), `closes`
+    (the options that close an alert) and `moment` (timeutil.TIME_FORMAT, "Done on Telegram at 08:53 (Jm)": a press is
+    said on the alert's own day, its time alone, as VESTA says it — owner, 2026-11-07, #140)."""
     from .timeutil import TIME_FORMAT
-    with open(ALERT_DESK_WORDS, encoding="utf-8") as f:
-        said = yaml.safe_load(f) or {}
-    with open(ALERT_DESK_SKILL, encoding="utf-8") as f:
-        buttons = [b for b in (yaml.safe_load(f) or {}).get("buttons") or [] if isinstance(b, dict) and b.get("option")]
-    lit = lambda v: json.dumps(v, ensure_ascii=False)   # noqa: E731
+    buttons = [b for b in buttons or [] if isinstance(b, dict) and b.get("option")]
 
     def pressed(b: dict) -> str:
         place = TAKEN_IN if b.get("takes") else PRESSED_ON_TELEGRAM.get(str(b["option"]))
         return place[ON_TELEGRAM] if place else f"{b['label']} {ON_PLACE[ON_TELEGRAM]}"
+    return {"words": {k: str((said.get(k) or {}).get("en") or "") for k in VISIT_WORDS},
+            "buttons": [[str(b["option"]), str(b["label"])] for b in buttons],
+            "pressed": {str(b["option"]): pressed(b) for b in buttons},
+            "closes": [str(b["option"]) for b in buttons if b.get("closes")],
+            "moment": TIME_FORMAT}
+
+
+def package_visit_words() -> str:
+    """The attributes of the villa's "VESTA visit words" sensor (packages/vesta_visit.yaml): visit_words, as the
+    Agent last told the villa (VALUES_SENSOR `visit`), else as shipped (a villa the Agent never told).
+
+    ⚠️ A BLUEPRINT CANNOT READ A TEMPLATE'S VARIABLE (phase C of one visit, one story, 2026-11-06): the words were a
+    `vm_visit_words` set inside vesta_message.jinja, which a blueprint's own templates never see (a variable set in an
+    included file stays there). A sensor's attributes are read by every template; the words stay the desk's, told by
+    the Agent (owner, 2026-11-26: never a value written into a villa file)."""
+    lit = lambda v: json.dumps(v, ensure_ascii=False)   # noqa: E731
     lines = [VISIT_BEGIN]
-    for key, value in (("words", {k: said[k]["en"] for k in VISIT_WORDS}),
-                       ("buttons", [[str(b["option"]), str(b["label"])] for b in buttons]),
-                       ("pressed", {str(b["option"]): pressed(b) for b in buttons}),
-                       ("closes", [str(b["option"]) for b in buttons if b.get("closes")]),
-                       ("moment", TIME_FORMAT)):
-        lines += [f"          {key}: >-", f"            {{{{ {lit(value)} }}}}"]
+    for key, value in shipped_values()["visit"].items():
+        lines += [f"          {key}: >-",
+                  "            {%- set v = state_attr('" + VALUES_SENSOR + "', 'visit') -%}"
+                  "{%- set v = v.get('" + key + "') if v is mapping else none -%}"
+                  "{{ v if " + _IS[type(value)] + " else " + lit(value) + " }}"]
     lines.append(VISIT_END)
     return "\n".join(lines)
 
