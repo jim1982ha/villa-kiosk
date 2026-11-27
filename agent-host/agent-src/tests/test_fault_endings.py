@@ -231,6 +231,9 @@ def test_a_hidden_device_fault_is_never_handed_to_a_missing_device():
     device the villa no longer has), never followed by the missing fault."""
     f = {"id": 1, "rule_id": "PM-HIDDEN-IN-RULE", "entity_id": WATCH,
          "detail": json.dumps({"name": "Example watch", "kind": "automation", "hidden": [LOCK]})}
-    r = E.read(None, [f], missing={("PM-HIDDEN-IN-RULE", WATCH): "Followed by: Example door is missing."})
+    gone = {"id": 2, "rule_id": "PM-MISSING", "entity_id": LOCK, "summary": "Example door is missing.",
+            "detail": json.dumps({"entities": [LOCK]})}
+    r = E.read(None, [f], missing=[gone])
+    assert r.missing, "the missing device's hand-over is read for it"
     assert E.entities_of(f) == [LOCK]
     assert E.ending(f, r) is None

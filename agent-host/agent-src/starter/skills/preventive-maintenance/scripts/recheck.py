@@ -29,7 +29,7 @@ every 5 minutes, and once all are back online (`back_online_minutes`), it closes
 
 ⚠️ AN ALERT TAKES IT OVER AT ONCE (architecture review N, 2026-10-27): a device offline at 5 minutes got its fault here,
 the villa's own alert took it up at 10, and both stood in the Cockpit until the night check handed the fault over at
-02:00. back_online hands it over now, by the night's own rule (nightly.handed_to_alerts), and its message says so.
+02:00. back_online hands it over now, by the night's own rule (endings.handed_to_alerts), and its message says so.
 
 ⚠️ A DEVICE DELETED FROM HOME ASSISTANT (owner, 2026-10-14): its fault stayed open until 02:00, then closed "Cleared:
 the nightly check no longer sees it" — as if it had come back. Any open finding whose every entity Home Assistant
@@ -84,16 +84,14 @@ def back_online(store, client, now: datetime, minutes: float, zone: str, pack=No
     """{closed: [finding ids], gone: [the ones whose devices no longer exist], handed: {finding id: its note, for the
     faults another problem now follows}, actions: [the Kiosk faults to resolve]}: each open fault (a missing one's own
     end is gone_missing's) asked how it ended (endings.ending: the night check asks the same table) — its devices
-    read now, the alerts that follow an offline device (nightly.handed_to_alerts) and the missing faults that follow a
-    device gone (nightly.missing_hands, gone_missing run first). `client()`: Home Assistant, asked for only when a
+    read now, the alerts that follow an offline device (endings.handed_to_alerts) and the missing faults that follow a
+    device gone (endings.missing_hands, gone_missing run first). `client()`: Home Assistant, asked for only when a
     finding is open."""
     rows = store.findings(status="open")
     if not rows or client() is None:
         return {"closed": [], "gone": [], "handed": {}, "actions": []}
     asked = [f for f in rows if f["rule_id"] != MISSING_RULE]
-    r = E.read(client(), asked, pack=pack, now=now, minutes=minutes, missing=N.missing_hands(rows, rows),
-               alerts=N.handed_to_alerts(store, pack, N.alerted_offline(store, pack)) if pack is not None else {},
-               offline=E.offline_hands(rows))
+    r = E.read(client(), asked, store=store, pack=pack, now=now, minutes=minutes)
     day = now.astimezone(ZoneInfo(zone)).date().isoformat()
     closed, deleted, moved, handed = [], [], [], {}
     for f in asked:
@@ -126,9 +124,8 @@ def gone_offline(store, pack, client, now: datetime, params, zone: str, settle_m
     found, moved, restated = [], [], []
     # since when each device is offline, from the past kept between ticks (HISTORY_KEPT): read again whole on every
     # tick, that was the recheck's 41.9 s, then 89.6 s (owner, 2026-10-30)
-    for f in N.offline_findings(pack, client().states(ids), at, params, set(N.alerted_offline(store, pack)),
-                                history=remembered(client(), store, HISTORY_KEPT, now), states_of=client().states,
-                                told=N.offline_open(store)):
+    for f in N.offline_findings(pack, client().states(ids), at, params, E.holders(store, pack),
+                                history=remembered(client(), store, HISTORY_KEPT, now), states_of=client().states):
         row = store.open_finding(f.rule_id, f.entity_id)
         if row:
             moved += Problems(store).seen(row["id"], now.isoformat(), settle_minutes)
@@ -455,9 +452,8 @@ def recheck_open(store, pack, client, now: datetime, params, zone: str, settle_m
     # device hidden or asleep since, an automation deleted, a hidden device back, each read "no longer sees it")
     rec = Problems(store).record_rechecked(
         read, seen, day, now.isoformat(), note=E.cleared_note(now, zone), settle_minutes=settle_minutes,
-        ended=lambda rows: E.endings(rows, E.read(client(), rows, pack=pack, now=now,
-                                                  minutes=params.behaviour("back_online_minutes"), battery=moved_step,
-                                                  offline=E.offline_hands(store.findings(status="open")))))
+        ended=lambda rows: E.endings(rows, E.read(client(), rows, store=store, pack=pack, now=now,
+                                                  minutes=params.behaviour("back_online_minutes"), battery=moved_step)))
     if rec["closed"] or rec["handed"]:
         store.audit("preventive-maintenance", "recheck", {"read": read, "closed": rec["closed"], "handed": rec["handed"]})
     send, task_ids = [], rec["task_ids"]

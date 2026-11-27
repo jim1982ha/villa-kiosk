@@ -1,3 +1,10 @@
+## 0.12.544
+
+- Behind the scenes, nothing you see changes. Whether a device that is offline belongs to the critical-devices
+  Automation's alert or to the maintenance check is now decided in one place, for the 02:00 check and the 5-minute
+  check alike, so one offline device keeps one message. Whom each priority reaches is now read one way for VESTA's
+  messages and for the villa's own, so both always say the same "To:".
+
 ## 0.12.543
 
 - **"No action needed" is said as pressed.** A Cockpit close with "No action needed" was recorded as "Done in the

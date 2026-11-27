@@ -42,8 +42,8 @@ def test_a_numeric_rule_is_not_about_its_states_a_state_rule_or_one_with_no_mode
 
 def test_the_night_check_opens_the_meters_offline_fault_while_its_overload_alert_is_open(tmp_path):
     sys.path.insert(0, os.path.join(SKILL, "scripts"))
-    import nightly
-    got = nightly.alerted_offline(_store(tmp_path, OVERLOAD, WATCHED, STATE), _Pack())
+    import endings
+    got = endings.alerted_offline(_store(tmp_path, OVERLOAD, WATCHED, STATE), _Pack())
     assert "dev_meter" not in got                          # the overload alert does not follow the meter going offline
     assert set(got) == {"dev_front", "dev_back"}           # an alert about states that include "unavailable" does
 

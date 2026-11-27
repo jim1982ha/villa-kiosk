@@ -4,6 +4,7 @@ check (nightly.py) before either says "no longer sees it".
   ending(fault, reading)  → None (still there, or nothing explains why it is gone) | Ended(name, note, handed)
   endings(faults, reading) → {fault id: Ended} for those that ended
   read(client, faults, …)  → the reading: what the villa's system says now of their devices, and what follows them
+  holders(store, pack)     → who has each offline device now: an open alert, an open offline fault
 
 `note` is the sentence the Cockpit's fault and its Telegram message say; `handed`: another problem follows it now (an
 alert, the device's missing fault, the battery's other step) — closed, never counted cleared.
@@ -27,10 +28,13 @@ from vesta_shared import automation_words as AW  # an automation named by its ow
 from vesta_shared.device_state import ANSWERS, ASLEEP_NOW, NO_VALUE_NOW, OFFLINE, out_of, out_for, reading  # "is it back"
 from vesta_shared import restart  # the settle time: a value-less state younger than it is still loading
 from vesta_shared.offline import device_answers  # a device that answers is not offline
+from vesta_shared.problems import alert_name  # "#41", as every message names an alert
+from vesta_shared.store import alerted_states  # which states an alert is about: the desk's reading
 from vesta_shared.timeutil import clock
 import rules as R  # every rule described once (rules.RULES)
 
 OFFLINE_RULE = "PM-UNAVAILABLE"
+MISSING_RULE = R.MISSING
 #: The rules whose reading leaves out a device asleep between its reports (nightly.silent_findings,
 #: reconnect_findings): a fault of theirs about a device listed asleep since ends saying so. A battery is read on its
 #: last real charge (vesta_shared.asleep), so its fault is not one of them.
@@ -88,13 +92,95 @@ def offline_hands(open_rows) -> dict[tuple[str, str], str]:
     return out
 
 
+def missing_hands(open_rows, missing) -> dict[tuple[str, str], str]:
+    """The open faults of another rule (offline, a battery…) about a device now missing (`missing`: PM-MISSING findings
+    or open rows), each (rule, entity) → the note it closes with: "Followed by: Example door is missing from …". Its
+    every entity among the missing one's. ⚠️ NEVER CLOSED AS IF IT CAME BACK (owner, 2026-10-31): a device gone from
+    the villa's system closed its offline fault "this device no longer exists", and nothing else was said."""
+    def parts(m):
+        if isinstance(m, dict):
+            return m["rule_id"], set(entities_of(m)), m.get("summary") or ""
+        return m.rule_id, set(m.detail.get("entities") or [m.entity_id]), m.summary
+    gone = [(es, summary) for rule, es, summary in map(parts, missing) if rule == MISSING_RULE]
+    out = {}
+    for o in open_rows:
+        if o["rule_id"] == MISSING_RULE:
+            continue
+        es = set(entities_of(o))
+        said = next((summary for ges, summary in gone if es and es <= ges), None)
+        if said:
+            out[(o["rule_id"], o["entity_id"])] = f"Followed by: {said}"
+    return out
+
+
+def alerted_offline(store, pack) -> dict[str, int]:
+    """The devices (pack.device_id_of, else the entity) an open alert already follows for being offline, each with that
+    alert's number: an alert whose bad states hold "unavailable" (the alert desk's incidents).
+
+    ⚠️ ONE PROBLEM, ONE FAULT (architecture review, offline devices #3, 2026-10-18): a lock the villa's own rule alerted
+    on at 10 minutes (#, Telegram card, its Kiosk fault) got a second fault "offline for …" from this check, with its
+    own message at 02:00 — and, once recheck.py opened faults every 5 minutes, at the same minute.
+
+    ⚠️ ONLY AN ALERT ABOUT STATES (2026-10-20): a numeric rule's events carry its blueprint's default bad_states
+    ["unavailable"] — an open OVERLOAD alert on the main meter hid that meter's offline fault. Which states an alert is
+    about is the alert desk's reading (vesta_shared.store.alerted_states), not the payload's raw list."""
+    out: dict[str, int] = {}
+    for inc in store.incidents(open_only=True):
+        said = alerted_states(inc)
+        if not said or "unavailable" not in said[1]:
+            continue
+        p = json.loads(inc.get("payload") or "{}")
+        for e in (p.get("entities") or []) + [inc.get("entity_id")]:
+            if e:
+                out.setdefault(pack.physical_device_of(e) or e, int(inc["id"]))   # its whole device: a phase is its meter's
+    return out
+
+
+def handed_to_alerts(store, pack, alerted: dict[str, int]) -> dict[tuple[str, str], str]:
+    """The open offline faults (PM-UNAVAILABLE) whose device an open alert now follows (`alerted`: Holders.alerted),
+    each (rule, entity) → the note it closes with: "Followed by alert #41, which says when it is back." ONE owner of the
+    hand-over: the night check and recheck.py (every 5 minutes) both close by it.
+
+    ⚠️ NOT AT 02:00 ONLY (architecture review N, 2026-10-27): a device offline at 5 minutes got its fault from the
+    recheck, the villa's own alert took it up at 10 — and both stood in the Cockpit's Open issues until the night check
+    handed the fault over, because only the night did."""
+    return {(o["rule_id"], o["entity_id"]): f"Followed by alert {alert_name(store, alerted[dev])}, which says when it is back."
+            for o in store.findings(status="open") if o["rule_id"] == OFFLINE_RULE
+            for dev in [pack.physical_device_of(o["entity_id"]) or o["entity_id"]] if dev in alerted}
+
+
+def offline_open(store) -> set[str]:
+    """The entities the open offline faults (PM-UNAVAILABLE) stand under: Holders.told."""
+    return {o["entity_id"] for o in store.findings(status="open") if o["rule_id"] == OFFLINE_RULE}
+
+
+class Holders(NamedTuple):
+    """Who has each offline device now, as the store says it: `alerted`, the devices an open alert follows for being
+    offline, each with that alert's number (alerted_offline); `told`, the entities whose offline fault is open
+    (offline_open). The night check and recheck.py ask it alike, before opening an offline fault (nightly.offline_findings)
+    and before closing one (read).
+
+    ⚠️ ONE ANSWER, ASKED, NEVER PASSED IN PIECES (architecture review, 2026-11-27): each call site built "the alert's or
+    the check's" itself and handed the endings a different subset (the night four, back_online three, the recheck two);
+    0.12.541 had to add `told` at two call sites after one offline device got two messages (villa, 2026-11-25)."""
+    alerted: dict[str, int]
+    told: set[str]
+
+
+def holders(store, pack) -> Holders:
+    """The store's Holders now; none known without the store or the pack."""
+    if store is None or pack is None:
+        return Holders({}, set())
+    return Holders(alerted_offline(store, pack), offline_open(store))
+
+
 class Reading(NamedTuple):
     """What is read now for the faults asked about. `client`: the villa's system (None: nothing was read, as the
     recheck's reading of a rule other than the offline one — its devices were read by back_online the same tick);
     `states` of their entities and those the villa's system answers "not found" for (`gone`); `pack`; `now`; `minutes`
     (back_online_minutes: how long a device must be back). What follows a fault now, each (rule, entity) → its note:
-    `missing` (nightly.missing_hands), `alerts` (nightly.handed_to_alerts), `battery` (vesta_shared.battery.judge),
-    `offline` (offline_hands)."""
+    `missing` (missing_hands), `alerts` (handed_to_alerts), `battery` (vesta_shared.battery.judge), `offline`
+    (offline_hands) — all but `battery` read by `read` itself from the store."""
     client: object | None
     states: dict
     gone: set
@@ -112,10 +198,13 @@ def _read_ids(f: dict) -> list[str]:
     return entities_of(f) + ([f["entity_id"]] if f.get("rule_id") == R.HIDDEN_IN_RULE else [])
 
 
-def read(client, faults, *, pack=None, now: datetime | None = None, minutes: float | None = None,
-         missing: dict | None = None, alerts: dict | None = None, battery: dict | None = None,
-         offline: dict | None = None) -> Reading:
-    """The reading for `faults`: their entities' states and which of them the villa's system no longer has, read once.
+def read(client, faults, *, store=None, pack=None, now: datetime | None = None, minutes: float | None = None,
+         missing=None, battery: dict | None = None) -> Reading:
+    """The reading for `faults`: their entities' states and which of them the villa's system no longer has, read once,
+    and what follows each now, from `store` (its open faults and alerts): the alert that took an offline device
+    (Holders), the offline fault of a device that must answer, the missing fault of a device gone — `missing`: the
+    PM-MISSING findings read now (the night's own reading), else the store's open ones. `battery`: the battery steps
+    judged this run (vesta_shared.battery.judge), the one thing a caller hands in.
     ⚠️ NOT READ IS NOT GONE: only Home Assistant's own "not found" makes a device gone; a read that fails reads nothing
     (named on stderr), and no ending that needs it holds."""
     ids = sorted({e for f in faults for e in _read_ids(f) if ENTITY_ID.match(str(e))})
@@ -129,8 +218,12 @@ def read(client, faults, *, pack=None, now: datetime | None = None, minutes: flo
             print(f"preventive-maintenance: the devices of {len(faults)} fault(s) could not be read "
                   f"({type(e).__name__})", file=sys.stderr)
             states, gone = {}, set()
-    return Reading(client, states, gone, pack, now, minutes, dict(missing or {}), dict(alerts or {}), dict(battery or {}),
-                   dict(offline or {}))
+    rows = [dict(o) for o in store.findings(status="open")] if store is not None else []
+    known = {o["id"] for o in rows}
+    rows += [dict(f) for f in faults if f.get("id") not in known]          # the faults asked, open or being closed
+    alerts = handed_to_alerts(store, pack, holders(store, pack).alerted) if store is not None and pack is not None else {}
+    return Reading(client, states, gone, pack, now, minutes, missing_hands(rows, rows if missing is None else missing),
+                   alerts, dict(battery or {}), offline_hands(rows))
 
 
 class Ending(NamedTuple):
@@ -242,7 +335,7 @@ ENDS = (
     # its stream and Wi-Fi report; opened under the older reading, it closes, saying why
     Ending("answers", _offline, lambda f, es, r: r.pack is not None and r.client is not None and bool(es)
            and device_answers(r.pack, es, r.client.states), lambda f, es, r: ANSWERS_NOTE),
-    # still off, and the villa's own alert follows it now: one problem, the alert's (nightly.handed_to_alerts)
+    # still off, and the villa's own alert follows it now: one problem, the alert's (handed_to_alerts)
     Ending("alert", _offline, lambda f, es, r: _key(f) in r.alerts, lambda f, es, r: r.alerts[_key(f)], handed=True),
     # its device went offline since, and its offline fault follows it now (offline_hands)
     Ending("offline", _needs_answer, lambda f, es, r: _key(f) in r.offline, lambda f, es, r: r.offline[_key(f)],

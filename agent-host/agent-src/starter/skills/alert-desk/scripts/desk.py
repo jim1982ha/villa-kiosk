@@ -44,6 +44,7 @@ from vesta_shared.maintenance import takes_up  # noqa: E402  (the villa's mainte
 from vesta_shared.timeutil import clock, day_time_label, moment, moment_key, moment_label, villa_time  # noqa: E402
 from vesta_shared.problems import AGAIN_DAYS, Problems, again_days, incident_runs, problem_name  # noqa: E402  (a problem's lifecycle: one owner)
 from vesta_shared import result as R  # noqa: E402  (what the engine is asked to do: its shape)
+from vesta_shared import alert_routes as routes  # noqa: E402  (whom an alert reaches: the villa's values read it alike)
 from vesta_shared import script  # noqa: E402  (client, store, settings, zone: one set-up)
 from vesta_shared import skill_settings  # noqa: E402  (rules.yaml, the villa's on top)
 from vesta_shared.messaging import incident_tag  # noqa: E402
@@ -257,24 +258,8 @@ def now_utc(fake: str | None = None) -> datetime:
 
 
 def route_for(rule_id: str, blueprint: str | None = None) -> dict:
-    """A route by the rule's blueprint first (the live event names it), then by rule id prefix; a VESTA rule (it names
-    a blueprint) that neither matches takes rules.yaml `unrouted`, by its name.
-
-    ⚠️ AN UNCLASSIFIED ALERT IS NOT A DIGEST LINE (owner, 2026-10-19): a rule of a kind with no route fell to the
-    defaults' P3 — kept for the next morning's digest. Now its name decides: `critical_…` is P1, any other P2."""
-    r = dict(RULES["defaults"])
-    for cand in RULES["routes"]:
-        if (blueprint and cand.get("blueprint") == blueprint) or \
-                (cand.get("prefix") and rule_id.startswith(cand["prefix"])):
-            r.update(cand)
-            return r
-    if blueprint:
-        by_name = RULES.get("unrouted") or {}
-        name = rule_id.removeprefix("automation.")
-        said = by_name.get("critical_") if name.startswith("critical_") else by_name.get("other")
-        if said:                                     # a villa file without it: the defaults', never a guess
-            r["severity"] = said
-    return r
+    """The alert's route in rules.yaml (vesta_shared.alert_routes.route: the villa's own values read it alike)."""
+    return routes.route(RULES, rule_id, blueprint)
 
 
 #: The priorities an alert can carry: what people_roles routes (vesta_shared.result's one list).
@@ -295,7 +280,7 @@ def priority(ev: dict, route: dict) -> str:
 
 
 def recipients(severity: str) -> list[str]:
-    return [role for role, sevs in RULES["people_roles"].items() if severity in sevs and role != "digest"]
+    return routes.reaches(RULES, severity)
 
 
 # The chase (rules.yaml `chase`): who is asked to answer (Done / Need help) and who hears when nobody does.

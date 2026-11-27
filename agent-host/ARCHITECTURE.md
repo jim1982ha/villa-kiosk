@@ -1073,6 +1073,16 @@ still off; an investigation calling a sensor with no value "stopped reporting").
   OVER; `closes_at` and `watch_decided` are the faults' and the desk's readings of those notes (no reader outside
   opens Notes.CLOSES_AT, WATCH_TERMS or WATCH_MINUTES). The watch's end has no "still there" words: a held close is
   never watched. Tests: `test_close_kinds.py` presses each kind from each place.
+- **Whom an alert reaches: `vesta_shared/alert_routes.py`; who has an offline device: preventive-maintenance
+  `endings.holders` (architecture review, 2026-11-27).** `route`, `reaches` and `follow` read the alert desk's routes
+  and people_roles once: the desk (`route_for`, `recipients`) and the villa's values (`message_format.villa_values`:
+  `chats`, `priority_to`, `follow`, which replaced `follow_table`) ask them alike, so a villa's own rules give the
+  villa's message and VESTA's copy the same priority and "To:" (`test_ha_message_layout`). `endings.Holders` (the open
+  alerts following an offline device, the open offline faults) is asked by `nightly.offline_findings(held=)` before
+  opening an offline fault, and `endings.read(store=)` reads every hand-over itself (alert, offline, missing); only the
+  run's battery steps and the night's fresh missing reading are handed in. `alerted_offline`, `handed_to_alerts`,
+  `offline_open` and `missing_hands` moved from nightly.py to endings.py. `alert_wait_minutes` is still a setting:
+  the critical-devices Automation's wait is not read from it yet.
 - **When a sensor really last reported: `vesta_shared/offline.reported_since`**, beside `held_since`: its
   last_reported when that moved alone (a real report of the same value), else since when it really holds its state,
   one history read for all of them. The silence check (`nightly.silent_findings`, read again by recheck.py every 5
@@ -1115,7 +1125,7 @@ still off; an investigation calling a sensor with no value "stopped reporting").
 - **How a fault ends: preventive-maintenance `scripts/endings.py`** (card 2). `ENDS` is every way: missing (followed by
   the device's missing fault), gone (every entity "not found"), hidden, asleep, back online, answers, an alert follows
   it, a battery that moved a step — each with its rules (`about`), its test and its sentence, in that order.
-  `read(client, faults, …)` reads the faults' devices once (a failed read reads nothing); `ending(f, reading)` /
+  `read(client, faults, store=, …)` reads the faults' devices once (a failed read reads nothing) and what follows each; `ending(f, reading)` /
   `endings(faults, reading)` answer. Asked by recheck.back_online (every open fault but a missing one),
   recheck.recheck_open (what a rule's own reading no longer finds: its battery step) and the night
   (`Problems.record_night(ended=)` for what closes tonight); `Problems.record_rechecked(ended=)` likewise. Only what no

@@ -316,6 +316,37 @@ def test_every_rule_sends_to_the_chats_of_its_priority_written_once_from_the_ale
     assert villa("follow", "critical_condition", "automation.x", None) == "P1"
 
 
+def test_a_villas_own_routes_reach_the_same_people_in_its_own_message_and_in_vestas():
+    # architecture review, 2026-11-27: the villa's values and the desk read the alert desk's rules through one reader,
+    # so a villa's own rules (its route first, its own names, its own people_roles) give the villa's message, sent
+    # while VESTA is away, the priority and the "To:" of VESTA's copy a second later
+    import copy
+    from vesta_shared import alert_routes
+    from vesta_shared.message_format import FOLLOW_PRIORITY, villa_values
+    desk = _desk()
+    rules = copy.deepcopy(desk.RULES)
+    rules["routes"] = [{"blueprint": "critical_condition", "severity": "P3"}, {"prefix": "automation.", "severity": "P4"}
+                       ] + rules["routes"]
+    rules["unrouted"] = {"critical_": "P2", "other": "P4"}
+    rules["people_roles"] = {"owner": ["P1", "P3"], "fm": ["P1", "P2"], "digest": ["P3", "P4"]}
+    told = villa_values(rules, {}, [])
+
+    class This:
+        def __init__(self, eid):
+            self.entity_id = eid
+    env = _env()
+    for bp in [r["blueprint"] for r in rules["routes"] if r.get("blueprint")] + ["a_kind_with_no_route"]:
+        for rule in (f"automation.{bp}---x", "automation.critical_other---x", "automation.other---x"):
+            villa = env.from_string(FOLLOW_PRIORITY.replace("{blueprint}", bp)).render(
+                vesta_priority="follow", this=This(rule), state_attr=lambda e, a: told["follow"])
+            vesta = alert_routes.route(rules, rule, bp)["severity"]
+            assert villa == vesta, (bp, rule)
+            assert told["layout"]["priority_to"][villa] == (
+                " & ".join({"owner": "Owner", "fm": "FM"}[r] for r in alert_routes.reaches(rules, villa)) or
+                rules["priority_does"].get(villa, "log")), (bp, rule)
+    assert told["chats"]["P3"] == ["owner"] and told["chats"]["P4"] == []
+
+
 def test_the_villas_visit_words_are_the_desks_written_once_into_the_visit_package():
     # owner, 2026-11-06 (one visit, one story): while VESTA is away the villa's presence automation writes a visit
     # itself, in the desk's English. A blueprint cannot read a variable set inside the template it includes, so the

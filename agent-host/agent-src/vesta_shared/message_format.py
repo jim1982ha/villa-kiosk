@@ -697,12 +697,9 @@ def priority_to(rules: dict) -> dict[str, str]:
     """What an alert card's "To:" says for each priority, by the alert desk's `rules` (its rules.yaml): the roles of
     people_roles that priority reaches, short ("Owner & FM", "FM") — none, what the priority does instead
     (priority_does: "digest", "log"; "log" when it says nothing), as the agent's own card says it (desk.reaches)."""
-    roles, does = rules.get("people_roles") or {}, rules.get("priority_does") or {}
-    out = {}
-    for p in ("P1", "P2", "P3", "P4"):
-        reached = [r for r, sevs in roles.items() if r != "digest" and p in (sevs or [])]
-        out[p] = audience(reached) or does.get(p, "log")
-    return out
+    from . import alert_routes
+    does = rules.get("priority_does") or {}
+    return {p: audience(alert_routes.reaches(rules, p)) or does.get(p, "log") for p in alert_routes.PRIORITIES}
 
 
 #: The villa's sensor of the VESTA Agent's values (homeassistant/packages/vesta_message.yaml), filled by VALUES_EVENT:
@@ -727,16 +724,15 @@ def villa_values(rules: dict, said: dict, buttons: list) -> dict:
     ⚠️ TOLD, NEVER WRITTEN INTO A FILE (owner, 2026-11-26): these were blocks of text in three villa files, pasted by
     hand after each release that changed one. The Agent tells them (VALUES_EVENT) from the villa's own skill; the
     files keep the shipped ones (shipped_values) for a villa the Agent never told."""
-    from . import villa_recipients
+    from . import alert_routes, villa_recipients
     from .timeutil import MOMENT_FORMAT
-    roles = rules.get("people_roles") or {}
     names = {w.lower(): r for words in (ROLE_WORDS, ROLE_SHORT) for r, w in words.items()}
     layout = {"role_of": names, "role_words": [[r, w] for r, w in ROLE_SHORT.items()], "and": AND,
               "priority_to": priority_to(rules), "icons": STAGE_ICONS, "words": STAGE_WORDS,
               "time_format": MOMENT_FORMAT, "status_break": STATUS_BREAK, "over_title": title_with("", OVER_WORD)}
-    return {"chats": {p: [r for r in roles if r in villa_recipients.HELPERS and p in (roles.get(r) or [])]
-                      for p in ("P1", "P2", "P3", "P4")},
-            "follow": follow_table(rules), "layout": layout, "visit": visit_words(said, buttons)}
+    return {"chats": {p: [r for r in alert_routes.reaches(rules, p) if r in villa_recipients.HELPERS]
+                      for p in alert_routes.PRIORITIES},
+            "follow": alert_routes.follow(rules), "layout": layout, "visit": visit_words(said, buttons)}
 
 
 def shipped_values() -> dict:
@@ -812,20 +808,6 @@ PACKAGE_END = "        # END CHATS BY PRIORITY"
 CHATS_SENSOR = "sensor.vesta_chats_by_priority"
 
 
-def follow_table(rules: dict) -> dict:
-    """What "Follow the VESTA Agent skill" means for a VESTA rule, by the alert desk's `rules` (its rules.yaml): the
-    priority of each kind of rule (its blueprint's route), else by the rule's name (`unrouted`: critical_…, other) —
-    desk.route_for's answer for an event naming its blueprint, as data the villa reads (package_chats)."""
-    sev = (rules.get("defaults") or {}).get("severity")
-    kinds: dict[str, str] = {}
-    for r in rules.get("routes") or []:
-        if isinstance(r, dict) and r.get("blueprint"):
-            # the first route of a kind wins, as desk.route_for reads them: a villa's own route comes first
-            kinds.setdefault(str(r["blueprint"]), str(r.get("severity") or sev))
-    by_name = rules.get("unrouted") or {}
-    return {"blueprints": kinds, "critical_": str(by_name.get("critical_") or sev), "other": str(by_name.get("other") or sev)}
-
-
 #: How a VESTA blueprint turns its "VESTA priority" input into the priority it sends with: its own P1–P4, else
 #: ("Follow the VESTA Agent skill") the villa's copy of the alert desk's table (package_chats `follow`), else P1 —
 #: the sensor missing reaches everyone, never no one. `{blueprint}`: the blueprint's file name. Each blueprint holds
@@ -842,7 +824,7 @@ def package_chats() -> str:
     """The attributes of the villa's "VESTA chats by priority" sensor: for each priority, the notify entities of the
     lists of the roles it reaches (VALUES_SENSOR `chats`; each role's list is the agreement's helper), once each and
     only those the villa has; and `follow`, what "Follow the VESTA Agent skill" means (VALUES_SENSOR `follow`). Each
-    reads the Agent's value the villa keeps, and the shipped one (follow_table, the starter alert desk) only on a villa
+    reads the Agent's value the villa keeps, and the shipped one (alert_routes.follow, the starter alert desk) only on a villa
     the Agent never told.
 
     ⚠️ THE VILLA KNOWS, WITH OR WITHOUT THE AGENT (owner, 2026-11-04: every critical alert reaches Telegram and the

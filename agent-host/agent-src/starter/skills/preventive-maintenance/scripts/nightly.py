@@ -44,10 +44,9 @@ from vesta_shared.device_state import ABSENT, ANSWERS  # noqa: E402
 from vesta_shared import restart  # noqa: E402  (is the villa's system restarting, was a drop the restart's: one answer)
 from vesta_shared.asleep import last_value, read_states, unheard  # noqa: E402  (a sleeping device reads its last real state)
 from vesta_shared.offline import device_answers, devices_offline, reported_since, watched_kinds  # noqa: E402  (offline now; when it last REALLY reported)
-from vesta_shared.store import alerted_states  # noqa: E402  (which states an alert is about: the desk's reading)
 from vesta_shared import automation_words as AW  # noqa: E402  (an automation in words: one writer)
 from vesta_shared.limits import limit  # noqa: E402  (every limit, set on the Limits tab)
-from vesta_shared.problems import JUDGED_DAY, Problems, alert_name, problem_name  # noqa: E402  (a problem's lifecycle: one owner)
+from vesta_shared.problems import JUDGED_DAY, Problems, problem_name  # noqa: E402  (a problem's lifecycle: one owner)
 from vesta_shared import result  # noqa: E402  (what the engine is asked to do: its shape; R is rules.py)
 from vesta_shared.result import FAULT_LOG, NIGHT_CHECK, RUN_AGAIN_AT  # noqa: E402  (run's `result` is its dict)
 from vesta_shared import daily  # noqa: E402  (a device's day: the one running threshold)
@@ -150,12 +149,10 @@ def run(args) -> dict:
     # the level every page shows is the one judged here, kept with its time (battery.keep_judged)
     findings += battery_findings(pack, states, params, today, bat_stats, store=store, best=best, at=now_ref)
 
-    alerted = alerted_offline(store, pack)
-    findings += offline_findings(pack, states, now_ref, params, set(alerted), history=cli.history, states_of=cli.states,
-                                 told=offline_open(store))
-    # an offline fault open from before its alert: closed as handed over, never "cleared" while the device is still off
-    # (endings.py) — the same hand-over recheck.py makes every 5 minutes
-    alerts = handed_to_alerts(store, pack, alerted)
+    # an offline fault open from before its alert is closed as handed over, never "cleared" while the device is still
+    # off: endings.read asks the store, as recheck.py does every 5 minutes
+    findings += offline_findings(pack, states, now_ref, params, E.holders(store, pack), history=cli.history,
+                                 states_of=cli.states)
     # the reconnect loops' logbook, read once: it also says when the villa's system restarted, so the silence check
     # reads past a restart's stamp only for the sensors stamped by one (or after what was read)
     try:
@@ -186,7 +183,7 @@ def run(args) -> dict:
         return rested_night(args, faults, today, pack)
     # a person's Done on one first: it was removed on purpose, never found again (forget_dismissed)
     forget_dismissed(store, today.isoformat())
-    night = persist_night(ctx, findings, today, now_ref, alerts, notes)
+    night = persist_night(ctx, findings, today, now_ref, notes)
     new, still_open, closed, tasks = night["new"], night["still_open"], night["closed"], night["task_ids"]
     again = night["again"]
     resolved = night["resolved"]
@@ -228,18 +225,15 @@ def rested_night(args, faults, today: date, pack) -> dict:
     return result
 
 
-def persist_night(ctx, findings: list, today: date, now_ref: datetime, alerts: dict, notes: list[str]) -> dict:
+def persist_night(ctx, findings: list, today: date, now_ref: datetime, notes: list[str]) -> dict:
     """The night's findings written (Problems.record_night), the missing devices read first: Problems.record_night's
-    answer. `alerts`: the offline faults an alert took over (handed_to_alerts); `notes` gets what a failed read says."""
+    answer. `notes` gets what a failed read says."""
     cli, store, pack, params = ctx.client, ctx.store, ctx.pack, ctx.params
     found, said, back = missing_night(store, pack, cli, now_ref, ctx.zone)
     findings = findings + found
     notes += said
     for f in back:
         Problems(store).close_finding(f, today.isoformat(), BACK_NOTE)
-    # its other faults (offline, a battery) follow the missing one, never "cleared" while it is gone
-    missing = missing_hands(store.findings(status="open"), found)
-
     # a battery that moved a step ("within the week" → "replace now", or back) is handed to its new fault, never cleared
     moved = battery_moved(store.findings(status="open"), findings)
 
@@ -252,10 +246,10 @@ def persist_night(ctx, findings: list, today: date, now_ref: datetime, alerts: d
         findings, today.isoformat(), state_rules=STATE_RULES,
         event_rules=EVENT_RULES, worsened_step=params.behaviour("worsened_step_pct"),
         resolved_note=cleared_note(),
-        ended=lambda rows: E.endings(rows, E.read(cli, rows, pack=pack, now=now_ref,
+        # its other faults (offline, a battery) follow a missing one (`found`: tonight's reading), never "cleared"
+        ended=lambda rows: E.endings(rows, E.read(cli, rows, store=store, pack=pack, now=now_ref,
                                                   minutes=params.behaviour("back_online_minutes"),
-                                                  missing=missing, alerts=alerts, battery=moved,
-                                                  offline=E.offline_hands(store.findings(status="open")))),
+                                                  missing=found, battery=moved)),
         settle_minutes=still_there_minutes(ctx.settings))
 
 
@@ -659,27 +653,6 @@ def missing_night(store, pack, cli, now: datetime, zone: str) -> tuple[list, lis
                       "nothing changed."], []
 
 
-def missing_hands(open_rows, missing) -> dict[tuple[str, str], str]:
-    """The open faults of another rule (offline, a battery…) about a device now missing (`missing`: PM-MISSING findings
-    or open rows), each (rule, entity) → the note it closes with: "Followed by: Example door is missing from …". Its
-    every entity among the missing one's. ⚠️ NEVER CLOSED AS IF IT CAME BACK (owner, 2026-10-31): a device gone from
-    the villa's system closed its offline fault "this device no longer exists", and nothing else was said."""
-    def parts(m):
-        if isinstance(m, dict):
-            return m["rule_id"], set(E.entities_of(m)), m.get("summary") or ""
-        return m.rule_id, set(m.detail.get("entities") or [m.entity_id]), m.summary
-    gone = [(es, summary) for rule, es, summary in map(parts, missing) if rule == R.MISSING]
-    out = {}
-    for o in open_rows:
-        if o["rule_id"] == R.MISSING:
-            continue
-        es = set(E.entities_of(o))
-        said = next((summary for ges, summary in gone if es and es <= ges), None)
-        if said:
-            out[(o["rule_id"], o["entity_id"])] = f"Followed by: {said}"
-    return out
-
-
 #: the alert desk, beside this skill: its clear_minutes is how long a close is held (one rule with it)
 DESK = os.path.join(os.path.dirname(os.path.dirname(HERE)), "alert-desk")
 
@@ -893,49 +866,8 @@ def silent_findings(cli, pack, states: dict, now_ref: datetime, params, Z, rows:
     return out
 
 
-def alerted_offline(store, pack) -> dict[str, int]:
-    """The devices (pack.device_id_of, else the entity) an open alert already follows for being offline, each with that
-    alert's number: an alert whose bad states hold "unavailable" (the alert desk's incidents).
-
-    ⚠️ ONE PROBLEM, ONE FAULT (architecture review, offline devices #3, 2026-10-18): a lock the villa's own rule alerted
-    on at 10 minutes (#, Telegram card, its Kiosk fault) got a second fault "offline for …" from this check, with its
-    own message at 02:00 — and, once recheck.py opened faults every 5 minutes, at the same minute.
-
-    ⚠️ ONLY AN ALERT ABOUT STATES (2026-10-20): a numeric rule's events carry its blueprint's default bad_states
-    ["unavailable"] — an open OVERLOAD alert on the main meter hid that meter's offline fault. Which states an alert is
-    about is the alert desk's reading (vesta_shared.store.alerted_states), not the payload's raw list."""
-    out: dict[str, int] = {}
-    for inc in store.incidents(open_only=True):
-        said = alerted_states(inc)
-        if not said or "unavailable" not in said[1]:
-            continue
-        p = json.loads(inc.get("payload") or "{}")
-        for e in (p.get("entities") or []) + [inc.get("entity_id")]:
-            if e:
-                out.setdefault(pack.physical_device_of(e) or e, int(inc["id"]))   # its whole device: a phase is its meter's
-    return out
-
-
-def handed_to_alerts(store, pack, alerted: dict[str, int]) -> dict[tuple[str, str], str]:
-    """The open offline faults (PM-UNAVAILABLE) whose device an open alert now follows (`alerted`: alerted_offline),
-    each (rule, entity) → the note it closes with: "Followed by alert #41, which says when it is back." ONE owner of the
-    hand-over: the night check and recheck.py (every 5 minutes) both close by it.
-
-    ⚠️ NOT AT 02:00 ONLY (architecture review N, 2026-10-27): a device offline at 5 minutes got its fault from the
-    recheck, the villa's own alert took it up at 10 — and both stood in the Cockpit's Open issues until the night check
-    handed the fault over, because only the night did."""
-    return {(o["rule_id"], o["entity_id"]): f"Followed by alert {alert_name(store, alerted[dev])}, which says when it is back."
-            for o in store.findings(status="open") if o["rule_id"] == "PM-UNAVAILABLE"
-            for dev in [pack.physical_device_of(o["entity_id"]) or o["entity_id"]] if dev in alerted}
-
-
-def offline_open(store) -> set[str]:
-    """The entities the open offline faults (PM-UNAVAILABLE) stand under: offline_findings' `told`."""
-    return {o["entity_id"] for o in store.findings(status="open") if o["rule_id"] == "PM-UNAVAILABLE"}
-
-
-def offline_findings(pack, states: dict, now: datetime, params, alerted: set[str] = frozenset(), history=None,
-                     states_of=None, told: set[str] = frozenset()) -> list:
+def offline_findings(pack, states: dict, now: datetime, params, held: E.Holders = E.Holders({}, set()), history=None,
+                     states_of=None) -> list:
     """The devices offline now, as PM-UNAVAILABLE findings — for the night check and for recheck.py every 5 minutes,
     from the ONE reading of "offline now" (vesta_shared.offline.devices_offline, the reports' and the concierge's too)
     over the kinds watched for it (vesta_shared.offline.watched_kinds, the reports' and the chat's too), with its settings: `unavailable_minutes`, `integration_down_devices`. One
@@ -956,18 +888,18 @@ def offline_findings(pack, states: dict, now: datetime, params, alerted: set[str
     Automation counted from the relay itself (back for 83 s, gone again at 01:49) and alerted at 01:59: two messages for
     one problem. A device that Automation watches (pack.critical, read from the Automation itself) is left to its alert
     for `alert_wait_minutes`, counted as the Automation counts (Group.watched_since); its alert, once open, takes it
-    (`alerted`). Past that wait with no alert (the Automation off, or not running then), this check tells it. A device
-    whose fault is open already (`told`: offline_open) is never held: the fault stays while it is offline."""
+    (`held.alerted`). Past that wait with no alert (the Automation off, or not running then), this check tells it. A device
+    whose fault is open already (`held.told`) is never held: the fault stays while it is offline."""
     out = []
     # since when each is REALLY offline (`history`: the client's, read back past a restart), and an integration down
     # only for its devices gone together (`integration_down_window_minutes`): villa, 2026-10-25
     for g in devices_offline(pack, states, now, watched_kinds(), min_minutes=params.behaviour("unavailable_minutes"),
-                             alerted=frozenset(alerted), integration_min=params.behaviour("integration_down_devices"),
+                             alerted=frozenset(held.alerted), integration_min=params.behaviour("integration_down_devices"),
                              together_minutes=params.behaviour("integration_down_window_minutes"), history=history):
         if states_of is not None and not g.integration and device_answers(pack, g.entity_ids, states_of):
             continue
         went = g.watched_since or g.since
-        if g.critical and not g.integration and g.entity_id not in told and went is not None \
+        if g.critical and not g.integration and g.entity_id not in held.told and went is not None \
                 and (now - went).total_seconds() < params.behaviour("alert_wait_minutes") * 60:
             continue                         # the villa's own alert's, for now
         if g.integration:
@@ -1175,7 +1107,7 @@ def told_cleared(store, closed_ids, at: datetime, zone: str, settings: dict,
     say so — as an UPDATE of the existing message, never a new message"): each cleared item marked cleared at {time},
     watched until {until} (status_words.watched; the next night check: Problems.confirms_by, the Cockpit's Watched),
     never a bare "back to normal" while it is still watched (architecture review N, 2026-10-27) —;
-    each one an alert now follows (`handed`: finding id → its close note, nightly.handed_to_alerts) with that note. The
+    each one an alert now follows (`handed`: finding id → its close note, endings.handed_to_alerts) with that note. The
     title `all_title` once every item of the message is back (TOLD_BACK). Nothing when `tell` is off."""
     words = settings.get("told_cleared") or {}
     if not words.get("tell"):

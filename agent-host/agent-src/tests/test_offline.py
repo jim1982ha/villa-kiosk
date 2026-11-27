@@ -118,7 +118,7 @@ def test_the_three_callers_read_the_one_list_and_the_one_reading(tmp_path, monke
         ("PM-UNAVAILABLE", "sensor.spa_pump_power", "Spa Plug has been offline for 5h."),
         ("PM-UNAVAILABLE", "sensor.ap_rx", "Unnamed Ubiquiti U6 Lite has been offline for 2h.")]
     # the alert that follows the plug takes it
-    assert [f.entity_id for f in nightly.offline_findings(pack, STATES, NOW, params, {"plug"})] == ["sensor.ap_rx"]
+    assert [f.entity_id for f in nightly.offline_findings(pack, STATES, NOW, params, nightly.E.Holders({"plug": 7}, set()))] == ["sensor.ap_rx"]
 
 
 def test_a_restart_is_not_a_new_outage_and_three_unrelated_drops_are_not_an_integration_down():
